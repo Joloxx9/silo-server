@@ -47,9 +47,18 @@ export default function SeasonCarousel({ seasons }: SeasonCarouselProps) {
                 !isCompleted &&
                 userData != null &&
                 (userData.watched_count > 0 || userData.in_progress_count > 0);
+              // Denominator is the rollup's own total (watched + unplayed),
+              // not episode_count: with placeholders on, episode_count only
+              // counts in-library episodes, while watched_count can include
+              // an aired-but-missing episode watched before its file was
+              // lost. Dividing by episode_count there could exceed 100% or
+              // divide by zero for a fully-missing season with watch history.
+              const rollupTotal = userData
+                ? userData.watched_count + userData.unplayed_count
+                : 0;
               const progressPercent =
-                hasProgress && season.episode_count > 0
-                  ? Math.round((userData.watched_count / season.episode_count) * 100)
+                hasProgress && rollupTotal > 0
+                  ? Math.round((userData.watched_count / rollupTotal) * 100)
                   : 0;
 
               return (
@@ -120,7 +129,7 @@ export default function SeasonCarousel({ seasons }: SeasonCarouselProps) {
                       </div>
                       <div className="text-muted-foreground text-xs">
                         {hasProgress
-                          ? `${userData.watched_count} of ${season.episode_count} episodes`
+                          ? `${userData.watched_count} of ${rollupTotal} episodes`
                           : formatSeasonMeta(season)}
                       </div>
                     </ViewTransitionLink>

@@ -1966,16 +1966,20 @@ func episodeContentIDs(episodes []*models.Episode) []string {
 	return ids
 }
 
-// inLibraryEpisodes drops placeholder rows (Availability "missing"/"unaired")
-// before computing a watch-progress rollup, so a season with unaired or
-// undownloaded episodes doesn't read as partially unwatched, or lose a
-// "completed" state, because of episodes nobody could have watched. Rows
-// with no Availability set (the non-placeholder read path) always pass
-// through unchanged.
-func inLibraryEpisodes(episodes []*models.Episode) []*models.Episode {
+// rollupEligibleEpisodes drops only "unaired" placeholder rows before
+// computing a watch-progress rollup: an episode that hasn't aired yet cannot
+// possibly have been watched, so counting it as unwatched would make an
+// otherwise fully-watched season read as perpetually incomplete. A "missing"
+// episode (aired, no file) is deliberately kept — whether the viewer watched
+// it, e.g. before its file was lost, is exactly what should decide the
+// season's completion state, and its watch state (if any) already lives in
+// progressMap independent of whether the file still exists. Rows with no
+// Availability set (the non-placeholder read path) always pass through
+// unchanged.
+func rollupEligibleEpisodes(episodes []*models.Episode) []*models.Episode {
 	filtered := make([]*models.Episode, 0, len(episodes))
 	for _, ep := range episodes {
-		if ep == nil || ep.Availability == "missing" || ep.Availability == "unaired" {
+		if ep == nil || ep.Availability == "unaired" {
 			continue
 		}
 		filtered = append(filtered, ep)

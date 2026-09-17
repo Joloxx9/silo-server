@@ -556,7 +556,7 @@ func (h *CatalogResourceHandler) seriesSeasons(ctx context.Context, v ItemViewer
 				}
 				var userData *catalog.SeasonUserData
 				if hasProgressMap {
-					userData = catalog.EpisodeRollupUserData(inLibraryEpisodes(episodes), progressMap)
+					userData = catalog.EpisodeRollupUserData(rollupEligibleEpisodes(episodes), progressMap)
 				}
 				// Construct metadata without resolving each season again.
 				season := *s
@@ -592,7 +592,7 @@ func (h *CatalogResourceHandler) seriesSeasons(ctx context.Context, v ItemViewer
 				EpisodeCount:      s.EpisodeCount,
 				TotalEpisodeCount: &total,
 				Title:             title,
-				UserData:          h.items.getAggregateUserData(ctx, v, inLibraryEpisodes(episodes)),
+				UserData:          h.items.getAggregateUserData(ctx, v, rollupEligibleEpisodes(episodes)),
 			})
 		}
 		h.items.enrichSeasonPlayTargets(ctx, v, id, resp)
@@ -649,7 +649,7 @@ func (h *CatalogResourceHandler) SeriesSeason(ctx context.Context, v ItemViewer,
 				}
 			}
 			h.items.maybeRequestStaleSeasonMetadataRefresh(ctx, season.ContentID, episodes)
-			resp := h.items.toSeasonResponseFromEpisodes(ctx, v, id, season, episodes, h.items.getAggregateUserData(ctx, v, inLibraryEpisodes(episodes)), v.Access.ImageSize, placeholders)
+			resp := h.items.toSeasonResponseFromEpisodes(ctx, v, id, season, episodes, h.items.getAggregateUserData(ctx, v, rollupEligibleEpisodes(episodes)), v.Access.ImageSize, placeholders)
 			h.items.resolveSeasonPlayTarget(ctx, v, id, &resp)
 			return resp, nil
 		case !errors.Is(err, catalog.ErrSeasonNotFound):
@@ -693,7 +693,7 @@ func (h *CatalogResourceHandler) SeriesSeason(ctx context.Context, v ItemViewer,
 		Title:             title,
 		EpisodeCount:      episodeCount,
 		TotalEpisodeCount: totalEpisodeCount,
-		UserData:          h.items.getAggregateUserData(ctx, v, inLibraryEpisodes(episodes)),
+		UserData:          h.items.getAggregateUserData(ctx, v, rollupEligibleEpisodes(episodes)),
 	}
 	h.items.resolveSeasonPlayTarget(ctx, v, id, &resp)
 	return resp, nil
