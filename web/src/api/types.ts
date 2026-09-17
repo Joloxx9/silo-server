@@ -121,12 +121,7 @@ export interface AuthSession {
 }
 
 export type JellyfinCompatWebState =
-  | "missing"
-  | "installing"
-  | "removing"
-  | "installed"
-  | "failed"
-  | "update_available";
+  "missing" | "installing" | "removing" | "installed" | "failed" | "update_available";
 
 export interface JellyfinCompatInstallerPrerequisite {
   name: string;
@@ -716,6 +711,12 @@ export interface Season {
   overview: string;
   air_date: string | null;
   episode_count: number;
+  /**
+   * Metadata episode total for the season. Present only when the owning
+   * library has placeholder episodes enabled; episode_count always means
+   * "in library" regardless.
+   */
+  total_episode_count?: number | null;
   poster_url: string;
   poster_thumbhash: string;
   user_data?: SeasonUserData;
@@ -1252,6 +1253,12 @@ export interface EpisodeListItem {
   user_data?: LeafItemUserData;
   files: EpisodeFile[];
   overlay_summary?: OverlaySummary | null;
+  /**
+   * Set only when the owning library has placeholder episodes enabled:
+   * "in_library", "missing" (aired, no file), or "unaired". Undefined
+   * otherwise, which always means the episode is in the library.
+   */
+  availability?: "in_library" | "missing" | "unaired";
 }
 
 export interface EpisodesResponse {
@@ -2589,12 +2596,7 @@ export interface DiagnosticStatus {
 
 export type DiagnosticReportState = "receiving" | "ready" | "failed";
 export type DiagnosticReportType =
-  | "crash"
-  | "anr"
-  | "native_crash"
-  | "hang"
-  | "abnormal_exit"
-  | "manual";
+  "crash" | "anr" | "native_crash" | "hang" | "abnormal_exit" | "manual";
 export type DiagnosticPlatform = "android" | "android-tv" | "ios" | "tvos";
 
 export interface ClientDiagnosticManifest {
@@ -2899,10 +2901,7 @@ export interface NotificationCapability {
 }
 
 export type NotificationChannelMode =
-  | "off"
-  | "per_episode"
-  | "daily_digest"
-  | "per_episode_and_digest";
+  "off" | "per_episode" | "daily_digest" | "per_episode_and_digest";
 export type NotificationEmailMode = NotificationChannelMode;
 export type NotificationDiscordMode = NotificationChannelMode;
 
@@ -3013,9 +3012,7 @@ export type EventsStreamMessage =
   | EventsErrorMessage;
 
 export type AdminLogStreamMessage =
-  | AdminLogSnapshotMessage
-  | AdminLogAppendMessage
-  | AdminLogErrorMessage;
+  AdminLogSnapshotMessage | AdminLogAppendMessage | AdminLogErrorMessage;
 
 export interface AdminPlaybackHistoryItem {
   session_id: string;
@@ -3127,6 +3124,8 @@ export interface Library {
   chapter_thumbnails_enabled: boolean;
   chapter_thumbnails_supported: boolean;
   intro_detection_enabled: boolean;
+  /** Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired. */
+  placeholder_episodes_enabled: boolean;
   /** Allow-list of video kinds fetched during metadata refresh; empty disables. */
   trailer_kinds: string[];
   sort_order: number;
@@ -3267,6 +3266,7 @@ export interface CreateLibraryRequest {
   auto_translate_metadata?: boolean;
   chapter_thumbnails_enabled?: boolean;
   intro_detection_enabled?: boolean;
+  placeholder_episodes_enabled?: boolean;
   trailer_kinds?: string[];
 }
 

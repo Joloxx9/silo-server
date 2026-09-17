@@ -358,6 +358,7 @@ export function episodeFromV2(episode: EpisodeV2): EpisodeListItem {
     user_data: episode.user_data ? watchRollupFromV2(episode.user_data) : undefined,
     files: (episode.files ?? []).map(episodeFileFromV2),
     overlay_summary: episode.overlay_summary,
+    availability: episode.availability,
   };
 }
 
@@ -371,6 +372,7 @@ export function seasonFromV2(season: SeasonV2): Season {
     overview: season.overview ?? "",
     air_date: season.air_date ?? null,
     episode_count: season.episode_count,
+    total_episode_count: season.total_episode_count,
     poster_url: season.poster_url ?? "",
     poster_thumbhash: season.poster_thumbhash ?? "",
     user_data: season.user_data ? watchRollupFromV2(season.user_data) : undefined,

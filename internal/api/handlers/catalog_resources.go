@@ -213,6 +213,7 @@ func (h *CatalogResourceHandler) syntheticSeasonDetail(ctx context.Context, v It
 		episodes,
 		h.items.getAggregateUserData(ctx, v, episodes),
 		filter.ImageSize,
+		false,
 	)
 	return &catalog.ItemDetail{
 		ContentID:         seasonID,

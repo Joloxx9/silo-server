@@ -15,15 +15,16 @@ const (
 
 // MediaFolder represents a row in the media_folders table.
 type MediaFolder struct {
-	ID                       int
-	Paths                    []string // from media_folder_paths child table
-	Type                     string   // movies, series, mixed
-	Name                     string
-	Enabled                  bool
-	MetadataLanguage         string // ISO 639-1 code (e.g. "en", "ja")
-	AutoTranslateMetadata    bool   // AI-translate descriptions when providers lack this language
-	ChapterThumbnailsEnabled bool
-	IntroDetectionEnabled    bool
+	ID                         int
+	Paths                      []string // from media_folder_paths child table
+	Type                       string   // movies, series, mixed
+	Name                       string
+	Enabled                    bool
+	MetadataLanguage           string // ISO 639-1 code (e.g. "en", "ja")
+	AutoTranslateMetadata      bool   // AI-translate descriptions when providers lack this language
+	ChapterThumbnailsEnabled   bool
+	IntroDetectionEnabled      bool
+	PlaceholderEpisodesEnabled bool
 	// TrailerKinds is the allow-list of remote video kinds (ExtraKind values)
 	// fetched during metadata refresh for this library. Empty disables remote
 	// videos entirely.
@@ -688,6 +689,11 @@ type Episode struct {
 	MetadataSource          string
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
+	// Availability is set only by the *ForDisplay repo methods used for
+	// season/episode display when placeholder episodes are enabled for the
+	// requesting library: "in_library", "missing", or "unaired". Every other
+	// read path leaves this at its zero value ("").
+	Availability string
 }
 
 // MediaItemRoot represents a row in the media_item_roots table.

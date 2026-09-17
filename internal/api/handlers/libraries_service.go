@@ -101,13 +101,14 @@ func (h *LibraryHandler) CreateLibrary(ctx context.Context, req LibraryCreateReq
 	}
 
 	folder, err := h.folderRepo.Create(ctx, catalog.CreateFolderInput{
-		Paths:                    req.Paths,
-		Type:                     req.Type,
-		Name:                     req.Name,
-		MetadataLanguage:         req.MetadataLanguage,
-		ChapterThumbnailsEnabled: req.ChapterThumbnailsEnabled,
-		IntroDetectionEnabled:    req.IntroDetectionEnabled,
-		TrailerKinds:             req.TrailerKinds,
+		Paths:                      req.Paths,
+		Type:                       req.Type,
+		Name:                       req.Name,
+		MetadataLanguage:           req.MetadataLanguage,
+		ChapterThumbnailsEnabled:   req.ChapterThumbnailsEnabled,
+		IntroDetectionEnabled:      req.IntroDetectionEnabled,
+		PlaceholderEpisodesEnabled: req.PlaceholderEpisodesEnabled,
+		TrailerKinds:               req.TrailerKinds,
 	})
 	if err != nil {
 		if errors.Is(err, catalog.ErrDuplicatePath) {
@@ -189,15 +190,16 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 	}
 
 	err = h.folderRepo.Update(ctx, id, catalog.UpdateFolderInput{
-		Paths:                    req.Paths,
-		Type:                     req.Type,
-		Name:                     req.Name,
-		Enabled:                  req.Enabled,
-		MetadataLanguage:         req.MetadataLanguage,
-		AutoTranslateMetadata:    req.AutoTranslateMetadata,
-		ChapterThumbnailsEnabled: req.ChapterThumbnailsEnabled,
-		IntroDetectionEnabled:    req.IntroDetectionEnabled,
-		TrailerKinds:             req.TrailerKinds,
+		Paths:                      req.Paths,
+		Type:                       req.Type,
+		Name:                       req.Name,
+		Enabled:                    req.Enabled,
+		MetadataLanguage:           req.MetadataLanguage,
+		AutoTranslateMetadata:      req.AutoTranslateMetadata,
+		ChapterThumbnailsEnabled:   req.ChapterThumbnailsEnabled,
+		IntroDetectionEnabled:      req.IntroDetectionEnabled,
+		PlaceholderEpisodesEnabled: req.PlaceholderEpisodesEnabled,
+		TrailerKinds:               req.TrailerKinds,
 	})
 	if err != nil {
 		if errors.Is(err, catalog.ErrFolderNotFound) {

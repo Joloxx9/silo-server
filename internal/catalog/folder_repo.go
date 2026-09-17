@@ -91,12 +91,13 @@ var (
 
 // CreateFolderInput contains the fields required to create a new media folder.
 type CreateFolderInput struct {
-	Paths                    []string
-	Type                     string
-	Name                     string
-	MetadataLanguage         string // ISO 639-1 code; defaults to "en" if empty
-	ChapterThumbnailsEnabled bool
-	IntroDetectionEnabled    bool
+	Paths                      []string
+	Type                       string
+	Name                       string
+	MetadataLanguage           string // ISO 639-1 code; defaults to "en" if empty
+	ChapterThumbnailsEnabled   bool
+	IntroDetectionEnabled      bool
+	PlaceholderEpisodesEnabled bool
 	// TrailerKinds is the allow-list of remote video kinds fetched during
 	// metadata refresh; nil applies the default (all provider kinds), an
 	// empty slice disables remote videos.
@@ -112,15 +113,16 @@ type FolderReorderEntry struct {
 // UpdateFolderInput contains optional fields for a partial update. Only non-nil
 // fields are written to the database.
 type UpdateFolderInput struct {
-	Paths                    *[]string // nil = no change, non-nil = replace all paths
-	Type                     *string
-	Name                     *string
-	Enabled                  *bool
-	MetadataLanguage         *string
-	AutoTranslateMetadata    *bool
-	ChapterThumbnailsEnabled *bool
-	IntroDetectionEnabled    *bool
-	TrailerKinds             *[]string // nil = no change; empty slice disables remote videos
+	Paths                      *[]string // nil = no change, non-nil = replace all paths
+	Type                       *string
+	Name                       *string
+	Enabled                    *bool
+	MetadataLanguage           *string
+	AutoTranslateMetadata      *bool
+	ChapterThumbnailsEnabled   *bool
+	IntroDetectionEnabled      *bool
+	PlaceholderEpisodesEnabled *bool
+	TrailerKinds               *[]string // nil = no change; empty slice disables remote videos
 }
 
 // FolderRepository provides CRUD operations for the media_folders table.
@@ -185,7 +187,7 @@ func normalizeTrailerKindsInput(kinds []string) []string {
 
 // folderColumns is the list of columns returned by all SELECT queries.
 // Kept in one place so scanFolder stays in sync.
-const folderColumns = `id, type, name, enabled, metadata_language, auto_translate_metadata, chapter_thumbnails_enabled, intro_detection_enabled, trailer_kinds, poster_path, last_scanned_at,
+const folderColumns = `id, type, name, enabled, metadata_language, auto_translate_metadata, chapter_thumbnails_enabled, intro_detection_enabled, placeholder_episodes_enabled, trailer_kinds, poster_path, last_scanned_at,
 	scan_warning_code, scan_warning_message, scan_warning_at, allow_empty_cleanup_once, sort_order`
 
 // scanFolder scans a single row into a *models.MediaFolder.
@@ -201,6 +203,7 @@ func scanFolder(row pgx.Row) (*models.MediaFolder, error) {
 		&f.AutoTranslateMetadata,
 		&f.ChapterThumbnailsEnabled,
 		&f.IntroDetectionEnabled,
+		&f.PlaceholderEpisodesEnabled,
 		&f.TrailerKinds,
 		&f.PosterPath,
 		&f.LastScannedAt,
@@ -235,6 +238,7 @@ func scanFolders(rows pgx.Rows) ([]*models.MediaFolder, error) {
 			&f.AutoTranslateMetadata,
 			&f.ChapterThumbnailsEnabled,
 			&f.IntroDetectionEnabled,
+			&f.PlaceholderEpisodesEnabled,
 			&f.TrailerKinds,
 			&f.PosterPath,
 			&f.LastScannedAt,
@@ -312,8 +316,8 @@ func (r *FolderRepository) Create(ctx context.Context, input CreateFolderInput) 
 		trailerKinds = normalizeTrailerKindsInput(trailerKinds)
 	}
 
-	query := `INSERT INTO media_folders (type, name, metadata_language, chapter_thumbnails_enabled, intro_detection_enabled, trailer_kinds, sort_order)
-		VALUES ($1, $2, $3, $4, $5, $6, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM media_folders))
+	query := `INSERT INTO media_folders (type, name, metadata_language, chapter_thumbnails_enabled, intro_detection_enabled, placeholder_episodes_enabled, trailer_kinds, sort_order)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM media_folders))
 		RETURNING ` + folderColumns
 
 	row := tx.QueryRow(ctx, query,
@@ -322,6 +326,7 @@ func (r *FolderRepository) Create(ctx context.Context, input CreateFolderInput) 
 		metaLang,
 		input.ChapterThumbnailsEnabled,
 		input.IntroDetectionEnabled,
+		input.PlaceholderEpisodesEnabled,
 		trailerKinds,
 	)
 
@@ -493,6 +498,11 @@ func (r *FolderRepository) Update(ctx context.Context, id int, input UpdateFolde
 	if input.IntroDetectionEnabled != nil {
 		setClauses = append(setClauses, fmt.Sprintf("intro_detection_enabled = $%d", argIndex))
 		args = append(args, *input.IntroDetectionEnabled)
+		argIndex++
+	}
+	if input.PlaceholderEpisodesEnabled != nil {
+		setClauses = append(setClauses, fmt.Sprintf("placeholder_episodes_enabled = $%d", argIndex))
+		args = append(args, *input.PlaceholderEpisodesEnabled)
 		argIndex++
 	}
 	if input.TrailerKinds != nil {
@@ -1122,6 +1132,46 @@ func (r *FolderRepository) LibraryRootsForContent(ctx context.Context, contentID
 		paths = append(paths, path)
 	}
 	return paths, rows.Err()
+}
+
+// PlaceholderEpisodesEnabledForContent reports whether placeholder episodes
+// should be shown for a series' season/episode views, and the IDs of the
+// owning libraries that decision (and episode-availability classification)
+// should be scoped to. When presentationLibraryID is non-nil, only that
+// owning library is consulted (the caller resolved it from a request's
+// library_id). Otherwise every library the content belongs to is considered:
+// enabled is true if any of them has the setting on, and folderIDs lists all
+// of them, so a caller classifying an episode as "in library" treats it as
+// such if it's in any of those libraries.
+func (r *FolderRepository) PlaceholderEpisodesEnabledForContent(ctx context.Context, contentID string, presentationLibraryID *int) (enabled bool, folderIDs []int, err error) {
+	query := `
+		SELECT mf.id, mf.placeholder_episodes_enabled
+		FROM media_item_libraries mil
+		JOIN media_folders mf ON mf.id = mil.media_folder_id
+		WHERE mil.content_id = $1`
+	args := []any{contentID}
+	if presentationLibraryID != nil {
+		query += ` AND mf.id = $2`
+		args = append(args, *presentationLibraryID)
+	}
+
+	rows, queryErr := r.pool.Query(ctx, query, args...)
+	if queryErr != nil {
+		return false, nil, fmt.Errorf("checking placeholder episodes setting for content %q: %w", contentID, queryErr)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		var folderEnabled bool
+		if scanErr := rows.Scan(&id, &folderEnabled); scanErr != nil {
+			return false, nil, fmt.Errorf("scanning placeholder episodes setting row: %w", scanErr)
+		}
+		folderIDs = append(folderIDs, id)
+		if folderEnabled {
+			enabled = true
+		}
+	}
+	return enabled, folderIDs, rows.Err()
 }
 
 func (r *FolderRepository) UpdateLastScanned(ctx context.Context, id int, scannedAt time.Time) error {

@@ -427,7 +427,12 @@ func (h *CatalogResourceHandler) ItemEpisodes(ctx context.Context, v ItemViewer,
 		if err := h.ensureSeriesVisible(ctx, v, seriesID, failed); err != nil {
 			return nil, err
 		}
-		episodes, err := h.items.episodeRepo.ListBySeason(ctx, seriesID, seasonNum)
+		var episodes []*models.Episode
+		if placeholders, folderIDs := h.resolvePlaceholderEpisodes(ctx, v, seriesID); placeholders {
+			episodes, err = h.items.episodeRepo.ListBySeasonForDisplay(ctx, seriesID, seasonNum, folderIDs)
+		} else {
+			episodes, err = h.items.episodeRepo.ListBySeason(ctx, seriesID, seasonNum)
+		}
 		if err != nil {
 			return nil, apiError(http.StatusInternalServerError, "internal_error", failed)
 		}
@@ -439,12 +444,35 @@ func (h *CatalogResourceHandler) ItemEpisodes(ctx context.Context, v ItemViewer,
 	if err := h.ensureSeriesVisible(ctx, v, season.SeriesID, failed); err != nil {
 		return nil, err
 	}
-	episodes, err := h.items.episodeRepo.ListBySeasonID(ctx, season.ContentID)
+	var episodes []*models.Episode
+	if placeholders, folderIDs := h.resolvePlaceholderEpisodes(ctx, v, season.SeriesID); placeholders {
+		episodes, err = h.items.episodeRepo.ListBySeasonIDForDisplay(ctx, season.ContentID, folderIDs)
+	} else {
+		episodes, err = h.items.episodeRepo.ListBySeasonID(ctx, season.ContentID)
+	}
 	if err != nil {
 		return nil, apiError(http.StatusInternalServerError, "internal_error", failed)
 	}
 	h.items.maybeRequestStaleSeasonMetadataRefresh(ctx, season.ContentID, episodes)
 	return h.items.buildEpisodeResponses(ctx, v, episodes), nil
+}
+
+// resolvePlaceholderEpisodes reports whether placeholder episodes (metadata
+// episodes not in the library, shown as non-playable placeholders) should be
+// included in seriesID's season/episode views, and the owning library IDs
+// the availability classification should be scoped to. It degrades to
+// (false, nil) — today's behavior — when the folder repository isn't wired
+// or the lookup fails, rather than failing the request over a display-only
+// feature.
+func (h *CatalogResourceHandler) resolvePlaceholderEpisodes(ctx context.Context, v ItemViewer, seriesID string) (bool, []int) {
+	if h.items.folderRepo == nil {
+		return false, nil
+	}
+	enabled, folderIDs, err := h.items.folderRepo.PlaceholderEpisodesEnabledForContent(ctx, seriesID, v.Access.PresentationLibraryID)
+	if err != nil {
+		return false, nil
+	}
+	return enabled, folderIDs
 }
 
 // ensureSeriesVisible is the access and presentation-library check every
@@ -480,6 +508,7 @@ func (h *CatalogResourceHandler) seriesSeasons(ctx context.Context, v ItemViewer
 		return nil, err
 	}
 	filter := v.Access
+	placeholders, folderIDs := h.resolvePlaceholderEpisodes(ctx, v, id)
 	if h.items.seasonRepo != nil {
 		seasons, err := h.items.seasonRepo.ListBySeries(ctx, id)
 		if err != nil {
@@ -491,7 +520,12 @@ func (h *CatalogResourceHandler) seriesSeasons(ctx context.Context, v ItemViewer
 					seasons = localized
 				}
 			}
-			episodesBySeason, err := h.items.episodeRepo.ListBySeriesGroupedBySeason(ctx, id)
+			var episodesBySeason map[int][]*models.Episode
+			if placeholders {
+				episodesBySeason, err = h.items.episodeRepo.ListBySeriesGroupedBySeasonForDisplay(ctx, id, folderIDs)
+			} else {
+				episodesBySeason, err = h.items.episodeRepo.ListBySeriesGroupedBySeason(ctx, id)
+			}
 			if err != nil {
 				return nil, apiError(http.StatusInternalServerError, "internal_error", failed)
 			}
@@ -503,7 +537,7 @@ func (h *CatalogResourceHandler) seriesSeasons(ctx context.Context, v ItemViewer
 			if includeArtwork && h.items.detailSvc != nil {
 				paths := make([]string, 0, len(seasons))
 				for _, season := range seasons {
-					if len(episodesBySeason[season.SeasonNumber]) > 0 && season.PosterPath != "" {
+					if (len(episodesBySeason[season.SeasonNumber]) > 0 || placeholders) && season.PosterPath != "" {
 						paths = append(paths, sizedPosterPath(season.PosterPath, filter.ImageSize))
 					}
 				}
@@ -512,12 +546,17 @@ func (h *CatalogResourceHandler) seriesSeasons(ctx context.Context, v ItemViewer
 			resp := make([]seasonResponse, 0, len(seasons))
 			for _, s := range seasons {
 				episodes := episodesBySeason[s.SeasonNumber]
-				if len(episodes) == 0 {
+				// With placeholders off, a season with no in-library episodes
+				// is indistinguishable from one that doesn't exist yet, so it
+				// stays hidden. With placeholders on, an unpublished season
+				// (0 episodes in metadata too) still shows as an empty 0/0
+				// entry, matching what a season picker would show.
+				if len(episodes) == 0 && !placeholders {
 					continue
 				}
 				var userData *catalog.SeasonUserData
 				if hasProgressMap {
-					userData = catalog.EpisodeRollupUserData(episodes, progressMap)
+					userData = catalog.EpisodeRollupUserData(inLibraryEpisodes(episodes), progressMap)
 				}
 				// Construct metadata without resolving each season again.
 				season := *s
@@ -525,13 +564,39 @@ func (h *CatalogResourceHandler) seriesSeasons(ctx context.Context, v ItemViewer
 				if !includeArtwork {
 					season.PosterThumbhash = ""
 				}
-				sr := h.items.seasonResponseFromEpisodes(ctx, v, &season, episodes, userData, filter.ImageSize)
+				sr := h.items.seasonResponseFromEpisodes(ctx, v, &season, episodes, userData, filter.ImageSize, placeholders)
 				sr.PosterURL = posterURLs[sizedPosterPath(s.PosterPath, filter.ImageSize)].URL
 				resp = append(resp, sr)
 			}
 			h.items.enrichSeasonPlayTargets(ctx, v, id, resp)
 			return resp, nil
 		}
+	}
+	if placeholders {
+		summaries, err := h.items.episodeRepo.ListSeasonsForDisplay(ctx, id, folderIDs)
+		if err != nil {
+			return nil, apiError(http.StatusInternalServerError, "internal_error", failed)
+		}
+		resp := make([]seasonResponse, 0, len(summaries))
+		for _, s := range summaries {
+			title := "Season " + strconv.Itoa(s.SeasonNumber)
+			if s.SeasonNumber == 0 {
+				title = specialsSeasonTitle
+			}
+			episodes, _ := h.items.episodeRepo.ListBySeasonForDisplay(ctx, id, s.SeasonNumber, folderIDs)
+			total := s.TotalEpisodeCount
+			resp = append(resp, seasonResponse{
+				ContentID:         fmt.Sprintf("%s-S%02d", id, s.SeasonNumber),
+				SeasonNumber:      s.SeasonNumber,
+				IsSpecials:        s.SeasonNumber == 0,
+				EpisodeCount:      s.EpisodeCount,
+				TotalEpisodeCount: &total,
+				Title:             title,
+				UserData:          h.items.getAggregateUserData(ctx, v, inLibraryEpisodes(episodes)),
+			})
+		}
+		h.items.enrichSeasonPlayTargets(ctx, v, id, resp)
+		return resp, nil
 	}
 	summaries, err := h.items.episodeRepo.ListSeasons(ctx, id)
 	if err != nil {
@@ -563,29 +628,41 @@ func (h *CatalogResourceHandler) SeriesSeason(ctx context.Context, v ItemViewer,
 	if err := h.ensureSeriesVisible(ctx, v, id, failed); err != nil {
 		return SeasonView{}, err
 	}
+	placeholders, folderIDs := h.resolvePlaceholderEpisodes(ctx, v, id)
 	if h.items.seasonRepo != nil {
 		season, err := h.items.seasonRepo.GetBySeriesAndNumber(ctx, id, num)
 		switch {
 		case err == nil:
-			episodes, err := h.items.episodeRepo.ListBySeasonID(ctx, season.ContentID)
+			var episodes []*models.Episode
+			if placeholders {
+				episodes, err = h.items.episodeRepo.ListBySeasonIDForDisplay(ctx, season.ContentID, folderIDs)
+			} else {
+				episodes, err = h.items.episodeRepo.ListBySeasonID(ctx, season.ContentID)
+			}
 			if err != nil {
 				return SeasonView{}, apiError(http.StatusInternalServerError, "internal_error", failed)
 			}
-			if len(episodes) == 0 {
+			if len(episodes) == 0 && !placeholders {
 				episodes, err = h.items.episodeRepo.ListBySeason(ctx, id, season.SeasonNumber)
 				if err != nil {
 					return SeasonView{}, apiError(http.StatusInternalServerError, "internal_error", failed)
 				}
 			}
 			h.items.maybeRequestStaleSeasonMetadataRefresh(ctx, season.ContentID, episodes)
-			resp := h.items.toSeasonResponseFromEpisodes(ctx, v, id, season, episodes, h.items.getAggregateUserData(ctx, v, episodes), v.Access.ImageSize)
+			resp := h.items.toSeasonResponseFromEpisodes(ctx, v, id, season, episodes, h.items.getAggregateUserData(ctx, v, inLibraryEpisodes(episodes)), v.Access.ImageSize, placeholders)
 			h.items.resolveSeasonPlayTarget(ctx, v, id, &resp)
 			return resp, nil
 		case !errors.Is(err, catalog.ErrSeasonNotFound):
 			return SeasonView{}, apiError(http.StatusInternalServerError, "internal_error", failed)
 		}
 	}
-	episodes, err := h.items.episodeRepo.ListBySeason(ctx, id, num)
+	var episodes []*models.Episode
+	var err error
+	if placeholders {
+		episodes, err = h.items.episodeRepo.ListBySeasonForDisplay(ctx, id, num, folderIDs)
+	} else {
+		episodes, err = h.items.episodeRepo.ListBySeason(ctx, id, num)
+	}
 	if err != nil {
 		return SeasonView{}, apiError(http.StatusInternalServerError, "internal_error", failed)
 	}
@@ -596,13 +673,27 @@ func (h *CatalogResourceHandler) SeriesSeason(ctx context.Context, v ItemViewer,
 	if num == 0 {
 		title = specialsSeasonTitle
 	}
+	episodeCount := len(episodes)
+	var totalEpisodeCount *int
+	if placeholders {
+		inLibrary := 0
+		for _, ep := range episodes {
+			if ep != nil && ep.Availability == "in_library" {
+				inLibrary++
+			}
+		}
+		total := len(episodes)
+		episodeCount = inLibrary
+		totalEpisodeCount = &total
+	}
 	resp := seasonResponse{
-		ContentID:    fmt.Sprintf("%s-S%02d", id, num),
-		SeasonNumber: num,
-		IsSpecials:   num == 0,
-		Title:        title,
-		EpisodeCount: len(episodes),
-		UserData:     h.items.getAggregateUserData(ctx, v, episodes),
+		ContentID:         fmt.Sprintf("%s-S%02d", id, num),
+		SeasonNumber:      num,
+		IsSpecials:        num == 0,
+		Title:             title,
+		EpisodeCount:      episodeCount,
+		TotalEpisodeCount: totalEpisodeCount,
+		UserData:          h.items.getAggregateUserData(ctx, v, inLibraryEpisodes(episodes)),
 	}
 	h.items.resolveSeasonPlayTarget(ctx, v, id, &resp)
 	return resp, nil
@@ -614,7 +705,13 @@ func (h *CatalogResourceHandler) SeasonEpisodes(ctx context.Context, v ItemViewe
 	if err := h.ensureSeriesVisible(ctx, v, id, failed); err != nil {
 		return nil, err
 	}
-	episodes, err := h.items.episodeRepo.ListBySeason(ctx, id, num)
+	var episodes []*models.Episode
+	var err error
+	if placeholders, folderIDs := h.resolvePlaceholderEpisodes(ctx, v, id); placeholders {
+		episodes, err = h.items.episodeRepo.ListBySeasonForDisplay(ctx, id, num, folderIDs)
+	} else {
+		episodes, err = h.items.episodeRepo.ListBySeason(ctx, id, num)
+	}
 	if err != nil {
 		return nil, apiError(http.StatusInternalServerError, "internal_error", failed)
 	}

@@ -164,4 +164,65 @@ describe("SeasonEpisodeGrid", () => {
     // keeps its natural height rather than showing an inert scrollport.
     expect((grid as HTMLElement).style.maxHeight).toBe("");
   });
+
+  it("renders an aired-but-missing episode as a dimmed, non-clickable placeholder", () => {
+    render(
+      <MemoryRouter>
+        <SeasonEpisodeGrid
+          isLoading={false}
+          episodes={[
+            {
+              content_id: "ep-1",
+              season_number: 1,
+              episode_number: 3,
+              title: "The Vault",
+              overview: "Not downloaded yet.",
+              air_date: "2024-01-05",
+              runtime: 42,
+              still_url: "https://example.com/still.jpg",
+              still_thumbhash: "",
+              files: [],
+              availability: "missing",
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Not in library")).toBeInTheDocument();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(capturedMenuProps).toHaveLength(0);
+    const image = screen.getByAltText("The Vault");
+    expect(image).toHaveClass("grayscale", "opacity-50");
+  });
+
+  it("renders an unaired episode as an empty placeholder with the air date, no still image", () => {
+    render(
+      <MemoryRouter>
+        <SeasonEpisodeGrid
+          isLoading={false}
+          episodes={[
+            {
+              content_id: "ep-2",
+              season_number: 1,
+              episode_number: 4,
+              title: "Future Episode",
+              overview: "",
+              air_date: "2099-09-23",
+              runtime: 0,
+              still_url: "",
+              still_thumbhash: "",
+              files: [],
+              availability: "unaired",
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Airs/)).toBeInTheDocument();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(capturedMenuProps).toHaveLength(0);
+    expect(screen.queryByAltText("Future Episode")).toBeNull();
+  });
 });

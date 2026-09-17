@@ -34,6 +34,7 @@ type Library struct {
 	ChapterThumbnailsEnabled   bool     `json:"chapter_thumbnails_enabled" example:"false"`
 	ChapterThumbnailsSupported bool     `json:"chapter_thumbnails_supported" doc:"Whether the server can produce chapter thumbnails (public asset storage is configured)" example:"true"`
 	IntroDetectionEnabled      bool     `json:"intro_detection_enabled" example:"false"`
+	PlaceholderEpisodesEnabled bool     `json:"placeholder_episodes_enabled" doc:"Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired" example:"false"`
 	TrailerKinds               []string `json:"trailer_kinds" doc:"Remote video kinds fetched during metadata refresh; empty disables them" example:"[\"trailer\"]"`
 	SortOrder                  int      `json:"sort_order" doc:"Position among libraries, lowest first" example:"0"`
 	PosterURL                  string   `json:"poster_url,omitempty" doc:"Presigned poster URL; absent when the library has no poster"`
@@ -45,27 +46,29 @@ type Library struct {
 
 // LibraryCreate is the createLibrary body.
 type LibraryCreate struct {
-	Paths                    []string `json:"paths" minItems:"1" doc:"Root directories the library scans" example:"[\"/media/movies\"]"`
-	Type                     string   `json:"type" minLength:"1" doc:"Library kind (movies, series, mixed, audiobooks, ebooks, podcasts, manga)" example:"movies"`
-	Name                     string   `json:"name" minLength:"1" example:"Movies"`
-	MetadataLanguage         string   `json:"metadata_language,omitempty" doc:"ISO 639-1 code; default en" example:"en"`
-	ChapterThumbnailsEnabled bool     `json:"chapter_thumbnails_enabled,omitempty" doc:"Requires public asset storage" example:"false"`
-	IntroDetectionEnabled    bool     `json:"intro_detection_enabled,omitempty" example:"false"`
-	TrailerKinds             []string `json:"trailer_kinds,omitempty" doc:"Remote video kinds to fetch; omitted applies the default (every provider kind), empty disables them" example:"[\"trailer\"]"`
+	Paths                      []string `json:"paths" minItems:"1" doc:"Root directories the library scans" example:"[\"/media/movies\"]"`
+	Type                       string   `json:"type" minLength:"1" doc:"Library kind (movies, series, mixed, audiobooks, ebooks, podcasts, manga)" example:"movies"`
+	Name                       string   `json:"name" minLength:"1" example:"Movies"`
+	MetadataLanguage           string   `json:"metadata_language,omitempty" doc:"ISO 639-1 code; default en" example:"en"`
+	ChapterThumbnailsEnabled   bool     `json:"chapter_thumbnails_enabled,omitempty" doc:"Requires public asset storage" example:"false"`
+	IntroDetectionEnabled      bool     `json:"intro_detection_enabled,omitempty" example:"false"`
+	PlaceholderEpisodesEnabled bool     `json:"placeholder_episodes_enabled,omitempty" doc:"Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired" example:"false"`
+	TrailerKinds               []string `json:"trailer_kinds,omitempty" doc:"Remote video kinds to fetch; omitted applies the default (every provider kind), empty disables them" example:"[\"trailer\"]"`
 }
 
 // LibraryUpdate is the updateLibrary body; omitted members are unchanged
 // and no member admits null.
 type LibraryUpdate struct {
-	Paths                    *[]string `json:"paths,omitempty" nullable:"false" minItems:"1" doc:"Replaces every root; a changed set queues a rescan" example:"[\"/media/movies\"]"`
-	Type                     *string   `json:"type,omitempty" nullable:"false" minLength:"1" example:"movies"`
-	Name                     *string   `json:"name,omitempty" nullable:"false" minLength:"1" example:"Movies"`
-	Enabled                  *bool     `json:"enabled,omitempty" nullable:"false" example:"true"`
-	MetadataLanguage         *string   `json:"metadata_language,omitempty" nullable:"false" doc:"ISO 639-1 code; a change queues a quick metadata refresh" example:"en"`
-	AutoTranslateMetadata    *bool     `json:"auto_translate_metadata,omitempty" nullable:"false" example:"false"`
-	ChapterThumbnailsEnabled *bool     `json:"chapter_thumbnails_enabled,omitempty" nullable:"false" example:"false"`
-	IntroDetectionEnabled    *bool     `json:"intro_detection_enabled,omitempty" nullable:"false" example:"false"`
-	TrailerKinds             *[]string `json:"trailer_kinds,omitempty" nullable:"false" doc:"Replaces the allow-list; empty disables remote videos" example:"[\"trailer\"]"`
+	Paths                      *[]string `json:"paths,omitempty" nullable:"false" minItems:"1" doc:"Replaces every root; a changed set queues a rescan" example:"[\"/media/movies\"]"`
+	Type                       *string   `json:"type,omitempty" nullable:"false" minLength:"1" example:"movies"`
+	Name                       *string   `json:"name,omitempty" nullable:"false" minLength:"1" example:"Movies"`
+	Enabled                    *bool     `json:"enabled,omitempty" nullable:"false" example:"true"`
+	MetadataLanguage           *string   `json:"metadata_language,omitempty" nullable:"false" doc:"ISO 639-1 code; a change queues a quick metadata refresh" example:"en"`
+	AutoTranslateMetadata      *bool     `json:"auto_translate_metadata,omitempty" nullable:"false" example:"false"`
+	ChapterThumbnailsEnabled   *bool     `json:"chapter_thumbnails_enabled,omitempty" nullable:"false" example:"false"`
+	IntroDetectionEnabled      *bool     `json:"intro_detection_enabled,omitempty" nullable:"false" example:"false"`
+	PlaceholderEpisodesEnabled *bool     `json:"placeholder_episodes_enabled,omitempty" nullable:"false" doc:"Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired" example:"false"`
+	TrailerKinds               *[]string `json:"trailer_kinds,omitempty" nullable:"false" doc:"Replaces the allow-list; empty disables remote videos" example:"[\"trailer\"]"`
 }
 
 // LibraryCreateInput is the createLibrary request.
@@ -1047,13 +1050,14 @@ func (reg *Registry) createLibrary(ctx context.Context, in *LibraryCreateInput) 
 		return nil, p
 	}
 	view, err := svc.CreateLibrary(ctx, handlers.LibraryCreateRequest{
-		Paths:                    in.Body.Paths,
-		Type:                     in.Body.Type,
-		Name:                     in.Body.Name,
-		MetadataLanguage:         in.Body.MetadataLanguage,
-		ChapterThumbnailsEnabled: in.Body.ChapterThumbnailsEnabled,
-		IntroDetectionEnabled:    in.Body.IntroDetectionEnabled,
-		TrailerKinds:             in.Body.TrailerKinds,
+		Paths:                      in.Body.Paths,
+		Type:                       in.Body.Type,
+		Name:                       in.Body.Name,
+		MetadataLanguage:           in.Body.MetadataLanguage,
+		ChapterThumbnailsEnabled:   in.Body.ChapterThumbnailsEnabled,
+		IntroDetectionEnabled:      in.Body.IntroDetectionEnabled,
+		PlaceholderEpisodesEnabled: in.Body.PlaceholderEpisodesEnabled,
+		TrailerKinds:               in.Body.TrailerKinds,
 	})
 	if err != nil {
 		return nil, libraryProblem(err)
@@ -1079,15 +1083,16 @@ func (reg *Registry) updateLibrary(ctx context.Context, in *LibraryUpdateInput) 
 		return nil, p
 	}
 	view, err := svc.UpdateLibrary(ctx, id, userID, handlers.LibraryUpdateRequest{
-		Paths:                    in.Body.Paths,
-		Type:                     in.Body.Type,
-		Name:                     in.Body.Name,
-		Enabled:                  in.Body.Enabled,
-		MetadataLanguage:         in.Body.MetadataLanguage,
-		AutoTranslateMetadata:    in.Body.AutoTranslateMetadata,
-		ChapterThumbnailsEnabled: in.Body.ChapterThumbnailsEnabled,
-		IntroDetectionEnabled:    in.Body.IntroDetectionEnabled,
-		TrailerKinds:             in.Body.TrailerKinds,
+		Paths:                      in.Body.Paths,
+		Type:                       in.Body.Type,
+		Name:                       in.Body.Name,
+		Enabled:                    in.Body.Enabled,
+		MetadataLanguage:           in.Body.MetadataLanguage,
+		AutoTranslateMetadata:      in.Body.AutoTranslateMetadata,
+		ChapterThumbnailsEnabled:   in.Body.ChapterThumbnailsEnabled,
+		IntroDetectionEnabled:      in.Body.IntroDetectionEnabled,
+		PlaceholderEpisodesEnabled: in.Body.PlaceholderEpisodesEnabled,
+		TrailerKinds:               in.Body.TrailerKinds,
 	})
 	if err != nil {
 		return nil, libraryProblem(err)
@@ -1485,6 +1490,7 @@ func libraryOf(v handlers.LibraryView) Library {
 		ChapterThumbnailsEnabled:   v.ChapterThumbnailsEnabled,
 		ChapterThumbnailsSupported: v.ChapterThumbnailsSupported,
 		IntroDetectionEnabled:      v.IntroDetectionEnabled,
+		PlaceholderEpisodesEnabled: v.PlaceholderEpisodesEnabled,
 		TrailerKinds:               NonNil(v.TrailerKinds),
 		SortOrder:                  v.SortOrder,
 		PosterURL:                  v.PosterURL,

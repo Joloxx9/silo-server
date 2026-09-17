@@ -12130,12 +12130,7 @@ export interface components {
       web_enabled: boolean;
       /** @enum {string} */
       web_state:
-        | "missing"
-        | "installing"
-        | "removing"
-        | "installed"
-        | "failed"
-        | "update_available";
+        "missing" | "installing" | "removing" | "installed" | "failed" | "update_available";
     };
     AdminJellyfinWebInstallBody: {
       /** @description Official jellyfin-web source; empty uses the stored source URL */
@@ -17887,6 +17882,8 @@ export interface components {
     Episode: {
       /** @description Calendar date, YYYY-MM-DD */
       air_date?: string;
+      /** @enum {string} */
+      availability?: "in_library" | "missing" | "unaired";
       /** @example episode:severance-s01e01 */
       content_id: string;
       /** Format: int64 */
@@ -18772,6 +18769,11 @@ export interface components {
        *     ]
        */
       paths: string[];
+      /**
+       * @description Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired
+       * @example false
+       */
+      placeholder_episodes_enabled: boolean;
       /** @description Presigned poster URL; absent when the library has no poster */
       poster_url?: string;
       /**
@@ -18890,6 +18892,11 @@ export interface components {
        *     ]
        */
       paths: string[];
+      /**
+       * @description Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired
+       * @example false
+       */
+      placeholder_episodes_enabled?: boolean;
       /**
        * @description Remote video kinds to fetch; omitted applies the default (every provider kind), empty disables them
        * @example [
@@ -19170,6 +19177,11 @@ export interface components {
        *     ]
        */
       paths?: string[];
+      /**
+       * @description Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired
+       * @example false
+       */
+      placeholder_episodes_enabled?: boolean;
       /**
        * @description Replaces the allow-list; empty disables remote videos
        * @example [
@@ -22272,8 +22284,7 @@ export interface components {
     };
     ProgressSyncBatchResult: {
       items: (
-        | components["schemas"]["ProgressSyncSuccess"]
-        | components["schemas"]["ProgressSyncFailure"]
+        components["schemas"]["ProgressSyncSuccess"] | components["schemas"]["ProgressSyncFailure"]
       )[];
       summary: components["schemas"]["BulkSummary"];
     };
@@ -22927,6 +22938,8 @@ export interface components {
       season_number: number;
       /** @example Season 1 */
       title: string;
+      /** Format: int64 */
+      total_episode_count?: number;
       user_data?: components["schemas"]["WatchRollup"];
     };
     SeasonCollection: {
@@ -69587,13 +69600,7 @@ export interface operations {
         end: string;
         /** @description Which items to include; absent is all */
         filter?:
-          | "all"
-          | "everything"
-          | "following"
-          | "favorites"
-          | "watchlist"
-          | "popular"
-          | "trending";
+          "all" | "everything" | "following" | "favorites" | "watchlist" | "popular" | "trending";
         /** @description Restrict to one library */
         library_id?: string;
         /** @description First local day of the window, YYYY-MM-DD */

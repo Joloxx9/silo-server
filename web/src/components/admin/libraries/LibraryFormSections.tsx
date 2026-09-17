@@ -418,6 +418,19 @@ export function AdvancedFields({
           />
         </SettingCard>
       )}
+      {form.settingSupport.placeholderEpisodes && (
+        <SettingCard
+          htmlFor="placeholder-episodes-switch"
+          title="Show placeholders for missing/unreleased episodes"
+          description="Makes a season look complete by showing a non-playable placeholder for every episode not yet downloaded or aired, alongside the ones you have."
+        >
+          <Switch
+            id="placeholder-episodes-switch"
+            checked={form.placeholderEpisodesEnabled}
+            onCheckedChange={form.setPlaceholderEpisodesEnabled}
+          />
+        </SettingCard>
+      )}
     </div>
   );
 }

@@ -91,6 +91,7 @@ type ItemsHandler struct {
 	itemRepo                 *catalog.ItemRepository
 	episodeRepo              *catalog.EpisodeRepository
 	seasonRepo               *catalog.SeasonRepository
+	folderRepo               *catalog.FolderRepository
 	ratingsRepo              ratingsRepository
 	catalogResolver          *catalog.CatalogResolver
 	playableTargets          *catalog.PlayableTargetResolver
@@ -157,6 +158,12 @@ func (h *ItemsHandler) SetCompletionObserver(obs watchstate.CompletionObserver) 
 // SetProfileStaler configures an optional staleness trigger for taste profiles.
 func (h *ItemsHandler) SetProfileStaler(ps ProfileStaler) {
 	h.profileStaler = ps
+}
+
+// SetFolderRepository wires the library lookup used to decide whether a
+// series' season/episode views should include placeholder episodes.
+func (h *ItemsHandler) SetFolderRepository(folderRepo *catalog.FolderRepository) {
+	h.folderRepo = folderRepo
 }
 
 // SetProfileRefreshRequester configures an optional background refresh queue for taste profiles.
@@ -371,17 +378,21 @@ type itemFiltersResponse struct {
 
 // seasonResponse is the shape of a season in API responses.
 type seasonResponse struct {
-	ContentID       string                  `json:"content_id"`
-	PlayContentID   string                  `json:"play_content_id,omitempty"`
-	SeasonNumber    int                     `json:"season_number"`
-	IsSpecials      bool                    `json:"is_specials,omitempty"`
-	Title           string                  `json:"title"`
-	Overview        string                  `json:"overview,omitempty"`
-	AirDate         string                  `json:"air_date,omitempty"`
-	EpisodeCount    int                     `json:"episode_count"`
-	PosterURL       string                  `json:"poster_url,omitempty"`
-	PosterThumbhash string                  `json:"poster_thumbhash,omitempty"`
-	UserData        *catalog.SeasonUserData `json:"user_data,omitempty"`
+	ContentID     string `json:"content_id"`
+	PlayContentID string `json:"play_content_id,omitempty"`
+	SeasonNumber  int    `json:"season_number"`
+	IsSpecials    bool   `json:"is_specials,omitempty"`
+	Title         string `json:"title"`
+	Overview      string `json:"overview,omitempty"`
+	AirDate       string `json:"air_date,omitempty"`
+	EpisodeCount  int    `json:"episode_count"`
+	// TotalEpisodeCount is the metadata episode total for the season; set
+	// only when placeholder episodes are enabled for the requesting library,
+	// alongside EpisodeCount (which always means "in library").
+	TotalEpisodeCount *int                    `json:"total_episode_count,omitempty"`
+	PosterURL         string                  `json:"poster_url,omitempty"`
+	PosterThumbhash   string                  `json:"poster_thumbhash,omitempty"`
+	UserData          *catalog.SeasonUserData `json:"user_data,omitempty"`
 }
 
 // seasonsResponse wraps the seasons list for JSON serialization.
@@ -427,6 +438,10 @@ type episodeResponse struct {
 	UserData       *catalog.SeasonUserData `json:"user_data,omitempty"`
 	Files          []episodeFileResponse   `json:"files,omitempty"`
 	OverlaySummary *models.OverlaySummary  `json:"overlay_summary,omitempty"`
+	// Availability is set only when placeholder episodes are enabled for the
+	// requesting library: "in_library", "missing" (aired, no file), or
+	// "unaired". Omitted otherwise, which always means "in_library".
+	Availability string `json:"availability,omitempty"`
 }
 
 type episodeImageFallback struct {
@@ -1146,7 +1161,10 @@ func (h *ItemsHandler) listItemUserStates(ctx context.Context, v ItemViewer, ite
 func episodeResponseShell(ep *models.Episode, fallback episodeImageFallback, size imagesize.Size) (episodeResponse, string) {
 	stillPath := ep.StillPath
 	stillThumbhash := ep.StillThumbhash
-	if strings.TrimSpace(stillPath) == "" && strings.TrimSpace(fallback.Path) != "" {
+	// An unaired placeholder has no still by definition (the episode hasn't
+	// been shot yet) — skip the series-backdrop fallback so the client
+	// renders an empty placeholder rather than a misleadingly full one.
+	if strings.TrimSpace(stillPath) == "" && strings.TrimSpace(fallback.Path) != "" && ep.Availability != "unaired" {
 		stillPath = fallback.Path
 		stillThumbhash = fallback.Thumbhash
 	}
@@ -1161,6 +1179,7 @@ func episodeResponseShell(ep *models.Episode, fallback episodeImageFallback, siz
 		TmdbID:         ep.TmdbID,
 		TvdbID:         ep.TvdbID,
 		StillThumbhash: stillThumbhash,
+		Availability:   ep.Availability,
 	}
 
 	if ep.AirDate != nil {
@@ -1718,33 +1737,52 @@ func (h *ItemsHandler) toSeasonResponseFromEpisodes(
 	episodes []*models.Episode,
 	userData *catalog.SeasonUserData,
 	size imagesize.Size,
+	placeholdersEnabled bool,
 ) seasonResponse {
 	if h.detailSvc != nil {
 		if localized, err := h.detailSvc.LocalizeSeasonModel(ctx, s, v.Access); err == nil && localized != nil {
 			s = localized
 		}
 	}
-	return h.seasonResponseFromEpisodes(ctx, v, s, episodes, userData, size)
+	return h.seasonResponseFromEpisodes(ctx, v, s, episodes, userData, size, placeholdersEnabled)
 }
 
 // seasonResponseFromEpisodes maps a season that has already been localized.
 // List endpoints use this after LocalizeSeasonModels so they do not repeat the
-// localization query for every row.
+// localization query for every row. When placeholdersEnabled is true,
+// episodes is expected to include placeholder rows (each carrying an
+// Availability classification): EpisodeCount then counts only the
+// "in_library" ones and TotalEpisodeCount reports the full metadata count.
 func (h *ItemsHandler) seasonResponseFromEpisodes(
 	ctx context.Context, v ItemViewer,
 	s *models.Season,
 	episodes []*models.Episode,
 	userData *catalog.SeasonUserData,
 	size imagesize.Size,
+	placeholdersEnabled bool,
 ) seasonResponse {
+	episodeCount := len(episodes)
+	var totalEpisodeCount *int
+	if placeholdersEnabled {
+		inLibrary := 0
+		for _, ep := range episodes {
+			if ep != nil && ep.Availability == "in_library" {
+				inLibrary++
+			}
+		}
+		total := len(episodes)
+		episodeCount = inLibrary
+		totalEpisodeCount = &total
+	}
 	resp := seasonResponse{
-		ContentID:       s.ContentID,
-		SeasonNumber:    s.SeasonNumber,
-		IsSpecials:      s.SeasonNumber == 0,
-		Title:           s.Title,
-		Overview:        s.Overview,
-		EpisodeCount:    len(episodes),
-		PosterThumbhash: s.PosterThumbhash,
+		ContentID:         s.ContentID,
+		SeasonNumber:      s.SeasonNumber,
+		IsSpecials:        s.SeasonNumber == 0,
+		Title:             s.Title,
+		Overview:          s.Overview,
+		EpisodeCount:      episodeCount,
+		TotalEpisodeCount: totalEpisodeCount,
+		PosterThumbhash:   s.PosterThumbhash,
 	}
 	if s.AirDate != nil {
 		resp.AirDate = s.AirDate.Format("2006-01-02")
@@ -1926,6 +1964,23 @@ func episodeContentIDs(episodes []*models.Episode) []string {
 		ids = append(ids, ep.ContentID)
 	}
 	return ids
+}
+
+// inLibraryEpisodes drops placeholder rows (Availability "missing"/"unaired")
+// before computing a watch-progress rollup, so a season with unaired or
+// undownloaded episodes doesn't read as partially unwatched, or lose a
+// "completed" state, because of episodes nobody could have watched. Rows
+// with no Availability set (the non-placeholder read path) always pass
+// through unchanged.
+func inLibraryEpisodes(episodes []*models.Episode) []*models.Episode {
+	filtered := make([]*models.Episode, 0, len(episodes))
+	for _, ep := range episodes {
+		if ep == nil || ep.Availability == "missing" || ep.Availability == "unaired" {
+			continue
+		}
+		filtered = append(filtered, ep)
+	}
+	return filtered
 }
 
 func flattenEpisodeGroups(groups map[int][]*models.Episode) []*models.Episode {

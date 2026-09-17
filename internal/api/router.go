@@ -756,6 +756,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 			detailSvc,
 			providerIDRepo,
 		)
+		itemsHandler.SetFolderRepository(folderRepo)
 		if catalogSearchService != nil {
 			itemsHandler.SetCatalogSearchProvider(catalogSearchService.Provider())
 		}

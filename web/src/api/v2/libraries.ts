@@ -44,6 +44,7 @@ export function libraryFromV2(library: LibraryV2): Library {
     chapter_thumbnails_enabled: library.chapter_thumbnails_enabled,
     chapter_thumbnails_supported: library.chapter_thumbnails_supported,
     intro_detection_enabled: library.intro_detection_enabled,
+    placeholder_episodes_enabled: library.placeholder_episodes_enabled,
     trailer_kinds: library.trailer_kinds,
     sort_order: library.sort_order,
     poster_url: library.poster_url,
@@ -71,6 +72,9 @@ export function libraryCreateToV2(body: CreateLibraryRequest): V2Body<"POST /api
     ...(body.intro_detection_enabled === undefined
       ? {}
       : { intro_detection_enabled: body.intro_detection_enabled }),
+    ...(body.placeholder_episodes_enabled === undefined
+      ? {}
+      : { placeholder_episodes_enabled: body.placeholder_episodes_enabled }),
     ...(body.trailer_kinds === undefined ? {} : { trailer_kinds: body.trailer_kinds }),
   };
 }

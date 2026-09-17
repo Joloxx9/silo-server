@@ -442,6 +442,11 @@ type Episode struct {
 	UserData       *WatchRollup        `json:"user_data,omitempty"`
 	Files          []EpisodeFile       `json:"files,omitempty"`
 	OverlaySummary *CatalogItemOverlay `json:"overlay_summary,omitempty"`
+	// Availability is set only when the owning library has placeholder
+	// episodes enabled: "in_library", "missing" (aired, no file in this
+	// library), or "unaired". Omitted otherwise, which always means the
+	// episode is in the library.
+	Availability string `json:"availability,omitempty" enum:"in_library,missing,unaired"`
 }
 
 // EpisodeCollection is the episodes of one season.
@@ -456,17 +461,21 @@ type EpisodeCollectionOutput struct {
 
 // Season is one season row.
 type Season struct {
-	ContentID       string       `json:"content_id" example:"series:severance-S01"`
-	PlayContentID   string       `json:"play_content_id,omitempty" doc:"The episode to play next"`
-	SeasonNumber    int          `json:"season_number"`
-	IsSpecials      bool         `json:"is_specials,omitempty"`
-	Title           string       `json:"title" example:"Season 1"`
-	Overview        string       `json:"overview,omitempty"`
-	AirDate         *string      `json:"air_date,omitempty" doc:"Calendar date, YYYY-MM-DD"`
-	EpisodeCount    int          `json:"episode_count"`
-	PosterURL       string       `json:"poster_url,omitempty" doc:"Presigned, short-lived"`
-	PosterThumbhash string       `json:"poster_thumbhash,omitempty"`
-	UserData        *WatchRollup `json:"user_data,omitempty"`
+	ContentID     string  `json:"content_id" example:"series:severance-S01"`
+	PlayContentID string  `json:"play_content_id,omitempty" doc:"The episode to play next"`
+	SeasonNumber  int     `json:"season_number"`
+	IsSpecials    bool    `json:"is_specials,omitempty"`
+	Title         string  `json:"title" example:"Season 1"`
+	Overview      string  `json:"overview,omitempty"`
+	AirDate       *string `json:"air_date,omitempty" doc:"Calendar date, YYYY-MM-DD"`
+	EpisodeCount  int     `json:"episode_count"`
+	// TotalEpisodeCount is the metadata episode total for the season; set
+	// only when the owning library has placeholder episodes enabled,
+	// alongside EpisodeCount (which always means "in library").
+	TotalEpisodeCount *int         `json:"total_episode_count,omitempty"`
+	PosterURL         string       `json:"poster_url,omitempty" doc:"Presigned, short-lived"`
+	PosterThumbhash   string       `json:"poster_thumbhash,omitempty"`
+	UserData          *WatchRollup `json:"user_data,omitempty"`
 }
 
 // SeasonCollection is the seasons of a series.
@@ -1246,7 +1255,7 @@ func episodesOf(views []handlers.EpisodeView) []Episode {
 	for _, e := range views {
 		ep := Episode{ContentID: e.ContentID, SeasonNumber: e.SeasonNumber, EpisodeNumber: e.EpisodeNumber, Title: e.Title, Overview: e.Overview,
 			AirDate: datePtr(e.AirDate), Runtime: e.Runtime, ImdbID: e.ImdbID, TmdbID: e.TmdbID, TvdbID: e.TvdbID, StillURL: e.StillURL, StillThumbhash: e.StillThumbhash,
-			UserData: watchRollupOf(e.UserData), OverlaySummary: catalogOverlayOf(e.OverlaySummary)}
+			UserData: watchRollupOf(e.UserData), OverlaySummary: catalogOverlayOf(e.OverlaySummary), Availability: e.Availability}
 		for _, f := range e.Files {
 			ep.Files = append(ep.Files, EpisodeFile{FileID: IDFromInt(int64(f.FileID)), Resolution: f.Resolution, CodecVideo: f.CodecVideo, HDR: f.HDR,
 				AudioChannels: f.AudioChannels, Container: f.Container, FileSize: f.FileSize})
@@ -1258,6 +1267,6 @@ func episodesOf(views []handlers.EpisodeView) []Episode {
 
 func seasonOf(s handlers.SeasonView) Season {
 	return Season{ContentID: s.ContentID, PlayContentID: s.PlayContentID, SeasonNumber: s.SeasonNumber, IsSpecials: s.IsSpecials, Title: s.Title,
-		Overview: s.Overview, AirDate: datePtr(s.AirDate), EpisodeCount: s.EpisodeCount, PosterURL: s.PosterURL, PosterThumbhash: s.PosterThumbhash,
-		UserData: watchRollupOf(s.UserData)}
+		Overview: s.Overview, AirDate: datePtr(s.AirDate), EpisodeCount: s.EpisodeCount, TotalEpisodeCount: s.TotalEpisodeCount,
+		PosterURL: s.PosterURL, PosterThumbhash: s.PosterThumbhash, UserData: watchRollupOf(s.UserData)}
 }

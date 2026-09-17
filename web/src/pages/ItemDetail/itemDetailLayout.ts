@@ -80,6 +80,9 @@ export function getSeasonDisplayTitle(season: Season): string {
 }
 
 export function formatSeasonMeta(season: Season): string {
+  if (season.total_episode_count != null) {
+    return `${season.episode_count}/${season.total_episode_count} episodes`;
+  }
   return `${season.episode_count} episodes`;
 }
 

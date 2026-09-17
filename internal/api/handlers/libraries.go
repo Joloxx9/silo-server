@@ -175,12 +175,13 @@ var validMetadataLanguages = map[string]bool{
 
 // createLibraryRequest represents the JSON body for POST /libraries.
 type createLibraryRequest struct {
-	Paths                    []string `json:"paths"`
-	Type                     string   `json:"type"`
-	Name                     string   `json:"name"`
-	MetadataLanguage         string   `json:"metadata_language,omitempty"`
-	ChapterThumbnailsEnabled bool     `json:"chapter_thumbnails_enabled,omitempty"`
-	IntroDetectionEnabled    bool     `json:"intro_detection_enabled,omitempty"`
+	Paths                      []string `json:"paths"`
+	Type                       string   `json:"type"`
+	Name                       string   `json:"name"`
+	MetadataLanguage           string   `json:"metadata_language,omitempty"`
+	ChapterThumbnailsEnabled   bool     `json:"chapter_thumbnails_enabled,omitempty"`
+	IntroDetectionEnabled      bool     `json:"intro_detection_enabled,omitempty"`
+	PlaceholderEpisodesEnabled bool     `json:"placeholder_episodes_enabled,omitempty"`
 	// TrailerKinds is the allow-list of remote video kinds fetched during
 	// metadata refresh; omitted = default (all provider kinds).
 	TrailerKinds []string `json:"trailer_kinds,omitempty"`
@@ -188,14 +189,15 @@ type createLibraryRequest struct {
 
 // updateLibraryRequest represents the JSON body for PUT /libraries/{id}.
 type updateLibraryRequest struct {
-	Paths                    *[]string `json:"paths,omitempty"`
-	Type                     *string   `json:"type,omitempty"`
-	Name                     *string   `json:"name,omitempty"`
-	Enabled                  *bool     `json:"enabled,omitempty"`
-	MetadataLanguage         *string   `json:"metadata_language,omitempty"`
-	AutoTranslateMetadata    *bool     `json:"auto_translate_metadata,omitempty"`
-	ChapterThumbnailsEnabled *bool     `json:"chapter_thumbnails_enabled,omitempty"`
-	IntroDetectionEnabled    *bool     `json:"intro_detection_enabled,omitempty"`
+	Paths                      *[]string `json:"paths,omitempty"`
+	Type                       *string   `json:"type,omitempty"`
+	Name                       *string   `json:"name,omitempty"`
+	Enabled                    *bool     `json:"enabled,omitempty"`
+	MetadataLanguage           *string   `json:"metadata_language,omitempty"`
+	AutoTranslateMetadata      *bool     `json:"auto_translate_metadata,omitempty"`
+	ChapterThumbnailsEnabled   *bool     `json:"chapter_thumbnails_enabled,omitempty"`
+	IntroDetectionEnabled      *bool     `json:"intro_detection_enabled,omitempty"`
+	PlaceholderEpisodesEnabled *bool     `json:"placeholder_episodes_enabled,omitempty"`
 	// TrailerKinds is the allow-list of remote video kinds fetched during
 	// metadata refresh (ExtraKind values); empty array disables remote videos.
 	TrailerKinds *[]string `json:"trailer_kinds,omitempty"`
@@ -241,6 +243,7 @@ type libraryResponse struct {
 	ChapterThumbnailsEnabled   bool       `json:"chapter_thumbnails_enabled"`
 	ChapterThumbnailsSupported bool       `json:"chapter_thumbnails_supported"`
 	IntroDetectionEnabled      bool       `json:"intro_detection_enabled"`
+	PlaceholderEpisodesEnabled bool       `json:"placeholder_episodes_enabled"`
 	TrailerKinds               []string   `json:"trailer_kinds"`
 	SortOrder                  int        `json:"sort_order"`
 	PosterURL                  string     `json:"poster_url,omitempty"`
@@ -381,6 +384,7 @@ func toLibraryResponse(f *models.MediaFolder) libraryResponse {
 		ChapterThumbnailsEnabled:   f.ChapterThumbnailsEnabled,
 		ChapterThumbnailsSupported: false,
 		IntroDetectionEnabled:      f.IntroDetectionEnabled,
+		PlaceholderEpisodesEnabled: f.PlaceholderEpisodesEnabled,
 		TrailerKinds:               trailerKinds,
 		SortOrder:                  f.SortOrder,
 		LastScannedAt:              f.LastScannedAt,

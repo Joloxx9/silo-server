@@ -861,6 +861,9 @@ func (r *EpisodeRepository) ListBySeriesGroupedBySeason(ctx context.Context, ser
 type SeasonSummary struct {
 	SeasonNumber int `json:"season_number"`
 	EpisodeCount int `json:"episode_count"`
+	// TotalEpisodeCount is the metadata episode total for the season,
+	// populated only by ListSeasonsForDisplay; zero otherwise.
+	TotalEpisodeCount int `json:"total_episode_count,omitempty"`
 }
 
 // ListSeasons returns a summary of all seasons for a given series.
@@ -1013,6 +1016,209 @@ func (r *EpisodeRepository) ListBySeasonIDs(ctx context.Context, seasonIDs []str
 		result[episode.SeasonID] = append(result[episode.SeasonID], episode)
 	}
 	return result, nil
+}
+
+// episodeAvailabilityCaseSQL computes a per-row availability classification
+// for the placeholder-episodes display path: "in_library" when the episode
+// has a file in one of the given libraries, "unaired" when it hasn't aired
+// yet, "missing" otherwise (already aired with no file, or no air date at
+// all — treated as already aired, per product decision, since there's
+// nothing more specific to say). argIndex is the positional bind ($N)
+// holding the int[] of owning library (media_folder_id) IDs to scope the
+// library check to.
+func episodeAvailabilityCaseSQL(argIndex int) string {
+	return fmt.Sprintf(`CASE
+		WHEN EXISTS (
+			SELECT 1 FROM episode_libraries el
+			WHERE el.episode_id = episodes.content_id AND el.media_folder_id = ANY($%d::int[])
+		) THEN 'in_library'
+		WHEN episodes.air_date IS NOT NULL AND episodes.air_date > CURRENT_DATE THEN 'unaired'
+		ELSE 'missing'
+	END`, argIndex)
+}
+
+// scanEpisodesWithAvailability is scanEpisodes plus the computed
+// availability column appended by the *ForDisplay queries below.
+func scanEpisodesWithAvailability(rows pgx.Rows) ([]*models.Episode, error) {
+	var episodes []*models.Episode
+	for rows.Next() {
+		var ep models.Episode
+		var seasonID *string
+		var runtime *int
+		var overview *string
+		var imdbID *string
+		var tmdbID *string
+		var tvdbID *string
+		var stillPath *string
+		var stillSourcePath *string
+		var stillThumbhash *string
+		var metadataS3Path *string
+		var metadataEtag *string
+		err := rows.Scan(
+			&ep.ContentID,
+			&ep.SeriesID,
+			&seasonID,
+			&ep.SeasonNumber,
+			&ep.EpisodeNumber,
+			&ep.Title,
+			&ep.DefaultMetadataLanguage,
+			&overview,
+			&ep.AirDate,
+			&runtime,
+			&ep.RatingIMDB,
+			&ep.RatingTMDB,
+			&imdbID,
+			&tmdbID,
+			&tvdbID,
+			&stillPath,
+			&stillSourcePath,
+			&stillThumbhash,
+			&metadataS3Path,
+			&metadataEtag,
+			&ep.MetadataSource,
+			&ep.CreatedAt,
+			&ep.UpdatedAt,
+			&ep.Availability,
+		)
+		if seasonID != nil {
+			ep.SeasonID = *seasonID
+		}
+		if runtime != nil {
+			ep.Runtime = *runtime
+		}
+		if overview != nil {
+			ep.Overview = *overview
+		}
+		if imdbID != nil {
+			ep.ImdbID = *imdbID
+		}
+		if tmdbID != nil {
+			ep.TmdbID = *tmdbID
+		}
+		if tvdbID != nil {
+			ep.TvdbID = *tvdbID
+		}
+		if stillPath != nil {
+			ep.StillPath = *stillPath
+		}
+		if stillSourcePath != nil {
+			ep.StillSourcePath = *stillSourcePath
+		}
+		if stillThumbhash != nil {
+			ep.StillThumbhash = *stillThumbhash
+		}
+		if metadataS3Path != nil {
+			ep.MetadataS3Path = *metadataS3Path
+		}
+		if metadataEtag != nil {
+			ep.MetadataEtag = *metadataEtag
+		}
+		if err != nil {
+			return nil, fmt.Errorf("scanning episode row with availability: %w", err)
+		}
+		episodes = append(episodes, &ep)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating episode rows with availability: %w", err)
+	}
+	return episodes, nil
+}
+
+// ListBySeasonForDisplay is the placeholder-episodes counterpart of
+// ListBySeason: it returns every episode row for the season regardless of
+// library membership, each tagged with an Availability classification,
+// scoped to folderIDs (the series' owning libraries). It exists only for the
+// season/episode display path when a library has placeholder episodes
+// enabled; every other caller keeps using ListBySeason, so their behavior
+// (auto-download eligibility, watch state, jellycompat, etc.) is unaffected.
+func (r *EpisodeRepository) ListBySeasonForDisplay(ctx context.Context, seriesID string, seasonNum int, folderIDs []int) ([]*models.Episode, error) {
+	query := `SELECT ` + episodeColumns + `, ` + episodeAvailabilityCaseSQL(3) + ` AS availability
+		FROM episodes
+		WHERE series_id = $1 AND season_number = $2
+		ORDER BY episode_number ASC`
+
+	rows, err := r.pool.Query(ctx, query, seriesID, seasonNum, folderIDs)
+	if err != nil {
+		return nil, fmt.Errorf("listing episodes by season for display: %w", err)
+	}
+	defer rows.Close()
+
+	return scanEpisodesWithAvailability(rows)
+}
+
+// ListBySeasonIDForDisplay is the placeholder-episodes counterpart of
+// ListBySeasonID; see ListBySeasonForDisplay.
+func (r *EpisodeRepository) ListBySeasonIDForDisplay(ctx context.Context, seasonID string, folderIDs []int) ([]*models.Episode, error) {
+	query := `SELECT ` + episodeColumns + `, ` + episodeAvailabilityCaseSQL(2) + ` AS availability
+		FROM episodes
+		WHERE season_id = $1
+		ORDER BY episode_number ASC`
+
+	rows, err := r.pool.Query(ctx, query, seasonID, folderIDs)
+	if err != nil {
+		return nil, fmt.Errorf("listing episodes by season_id for display: %w", err)
+	}
+	defer rows.Close()
+
+	return scanEpisodesWithAvailability(rows)
+}
+
+// ListBySeriesGroupedBySeasonForDisplay is the placeholder-episodes
+// counterpart of ListBySeriesGroupedBySeason; see ListBySeasonForDisplay.
+func (r *EpisodeRepository) ListBySeriesGroupedBySeasonForDisplay(ctx context.Context, seriesID string, folderIDs []int) (map[int][]*models.Episode, error) {
+	query := `SELECT ` + episodeColumns + `, ` + episodeAvailabilityCaseSQL(2) + ` AS availability
+		FROM episodes
+		WHERE series_id = $1
+		ORDER BY season_number ASC, episode_number ASC`
+
+	rows, err := r.pool.Query(ctx, query, seriesID, folderIDs)
+	if err != nil {
+		return nil, fmt.Errorf("listing episodes grouped by season for display: %w", err)
+	}
+	defer rows.Close()
+
+	episodes, err := scanEpisodesWithAvailability(rows)
+	if err != nil {
+		return nil, err
+	}
+	grouped := make(map[int][]*models.Episode)
+	for _, ep := range episodes {
+		grouped[ep.SeasonNumber] = append(grouped[ep.SeasonNumber], ep)
+	}
+	return grouped, nil
+}
+
+// ListSeasonsForDisplay is the placeholder-episodes counterpart of
+// ListSeasons, used for the synthetic-season fallback path (a series with no
+// dedicated seasons rows). It reports both the in-library episode count and
+// the total metadata episode count per season.
+func (r *EpisodeRepository) ListSeasonsForDisplay(ctx context.Context, seriesID string, folderIDs []int) ([]SeasonSummary, error) {
+	query := `SELECT season_number,
+			COUNT(*) FILTER (WHERE ` + episodeAvailabilityCaseSQL(2) + ` = 'in_library') AS episode_count,
+			COUNT(*) AS total_episode_count
+		FROM episodes
+		WHERE series_id = $1
+		GROUP BY season_number
+		ORDER BY season_number ASC`
+
+	rows, err := r.pool.Query(ctx, query, seriesID, folderIDs)
+	if err != nil {
+		return nil, fmt.Errorf("listing seasons for display: %w", err)
+	}
+	defer rows.Close()
+
+	var seasons []SeasonSummary
+	for rows.Next() {
+		var s SeasonSummary
+		if err := rows.Scan(&s.SeasonNumber, &s.EpisodeCount, &s.TotalEpisodeCount); err != nil {
+			return nil, fmt.Errorf("scanning season summary for display: %w", err)
+		}
+		seasons = append(seasons, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating season rows for display: %w", err)
+	}
+	return seasons, nil
 }
 
 // UpdateMetadata builds a dynamic UPDATE query for the episodes table,

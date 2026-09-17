@@ -144,6 +144,9 @@ export function useLibraryForm({
   const [introDetectionEnabled, setIntroDetectionEnabled] = useState(
     library?.intro_detection_enabled ?? false,
   );
+  const [placeholderEpisodesEnabled, setPlaceholderEpisodesEnabled] = useState(
+    library?.placeholder_episodes_enabled ?? false,
+  );
   const [trailerKinds, setTrailerKinds] = useState<string[]>(
     library?.trailer_kinds ?? [...PROVIDER_TRAILER_KINDS],
   );
@@ -270,6 +273,8 @@ export function useLibraryForm({
       auto_translate_metadata: autoTranslateMetadata,
       chapter_thumbnails_enabled: settingSupport.chapterThumbnails && chapterThumbnailsEnabled,
       intro_detection_enabled: settingSupport.introDetection && introDetectionEnabled,
+      placeholder_episodes_enabled:
+        settingSupport.placeholderEpisodes && placeholderEpisodesEnabled,
       trailer_kinds: settingSupport.trailers ? trailerKinds : [],
     };
 
@@ -335,6 +340,8 @@ export function useLibraryForm({
     setChapterThumbnailsEnabled,
     introDetectionEnabled,
     setIntroDetectionEnabled,
+    placeholderEpisodesEnabled,
+    setPlaceholderEpisodesEnabled,
     trailerKinds,
     toggleTrailerKind,
     contentLevels: contentLevelsForType(type),

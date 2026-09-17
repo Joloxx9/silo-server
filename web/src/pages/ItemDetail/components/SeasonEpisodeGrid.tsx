@@ -11,7 +11,9 @@ import { usePrefetchCatalogItemDetail } from "@/hooks/queries/catalogRead";
 import { useDwellPrefetch } from "@/hooks/useDwellPrefetch";
 import { useGridRowCap } from "@/hooks/useGridRowCap";
 import type { CardQuickActionMode } from "@/lib/cardQuickActions";
+import { formatDate } from "@/lib/datetime";
 import { overlayDataFromEpisodeListItem, type CardOverlayPrefs } from "@/lib/overlays";
+import { cn } from "@/lib/utils";
 import { EpisodeGridSkeleton } from "./SectionSkeletons";
 import type { EpisodeNavigationState } from "../itemDetailLayout";
 
@@ -94,6 +96,96 @@ function SeasonEpisodeCard({
     (episode.user_data?.position_seconds ?? 0) > 0 &&
     (episode.user_data?.duration_seconds ?? 0) > 0;
   const episodeTitle = episode.title || `Episode ${episode.episode_number}`;
+  const isMissing = episode.availability === "missing";
+  const isUnaired = episode.availability === "unaired";
+  const isPlaceholder = isMissing || isUnaired;
+
+  const image = (
+    <div className="media-card-image relative aspect-video">
+      {isUnaired ? (
+        <div className="bg-surface flex h-full w-full items-center justify-center" />
+      ) : episode.still_url ? (
+        <img
+          src={episode.still_url}
+          alt={episodeTitle}
+          decoding="async"
+          className={cn(
+            "h-full w-full object-cover transition-transform duration-300",
+            !isPlaceholder && "group-hover:scale-[1.03]",
+            isMissing && "opacity-50 grayscale",
+          )}
+          loading="lazy"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center">
+          <Play size={32} className="text-muted-foreground/30" />
+        </div>
+      )}
+      {isPlaceholder && (
+        <div className="bg-background/80 text-foreground absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+          {isUnaired && episode.air_date
+            ? `Airs ${formatDate(episode.air_date, "medium")}`
+            : "Not in library"}
+        </div>
+      )}
+      {!isPlaceholder && overlayPrefs && (
+        <CardOverlays
+          data={overlayDataFromEpisodeListItem(episode)}
+          prefs={overlayPrefs}
+          variant="wide"
+        />
+      )}
+      {!isPlaceholder && hasPartialProgress && (
+        <div className="absolute inset-x-2 bottom-1.5 h-[3px] overflow-hidden rounded-full bg-black/40">
+          <div
+            className="progress-fill h-full rounded-full"
+            style={{
+              width: `${Math.max(
+                0,
+                Math.min(
+                  100,
+                  ((episode.user_data?.position_seconds ?? 0) /
+                    (episode.user_data?.duration_seconds ?? 1)) *
+                    100,
+                ),
+              )}%`,
+              background: "var(--primary)",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const info = (
+    <>
+      <div className="text-muted-foreground mt-2 flex items-center gap-2 text-xs">
+        <span>Episode {episode.episode_number}</span>
+        {episode.user_data?.played && <WatchedCheckIndicator className="ml-auto" />}
+      </div>
+      <p className="text-foreground truncate text-sm font-semibold">{episodeTitle}</p>
+      <div className="mt-1.5 space-y-1">
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          {episode.runtime > 0 && <span>{episode.runtime}m</span>}
+          {episode.air_date && !isUnaired && <span>{formatDate(episode.air_date, "medium")}</span>}
+        </div>
+        {episode.overview && (
+          <p className="text-muted-foreground line-clamp-2 text-xs leading-relaxed">
+            {episode.overview}
+          </p>
+        )}
+      </div>
+    </>
+  );
+
+  if (isPlaceholder) {
+    return (
+      <div ref={cardRef} className="media-card cursor-default opacity-90">
+        <div className="relative">{image}</div>
+        <div className="block">{info}</div>
+      </div>
+    );
+  }
 
   return (
     <div ref={cardRef} className="group/card media-card media-card-longpress" {...prefetchHandlers}>
@@ -103,47 +195,7 @@ function SeasonEpisodeCard({
           state={episodeLinkState}
           className="group block"
         >
-          <div className="media-card-image relative aspect-video">
-            {episode.still_url ? (
-              <img
-                src={episode.still_url}
-                alt={episodeTitle}
-                decoding="async"
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                loading="lazy"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <Play size={32} className="text-muted-foreground/30" />
-              </div>
-            )}
-            {overlayPrefs && (
-              <CardOverlays
-                data={overlayDataFromEpisodeListItem(episode)}
-                prefs={overlayPrefs}
-                variant="wide"
-              />
-            )}
-            {hasPartialProgress && (
-              <div className="absolute inset-x-2 bottom-1.5 h-[3px] overflow-hidden rounded-full bg-black/40">
-                <div
-                  className="progress-fill h-full rounded-full"
-                  style={{
-                    width: `${Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        ((episode.user_data?.position_seconds ?? 0) /
-                          (episode.user_data?.duration_seconds ?? 1)) *
-                          100,
-                      ),
-                    )}%`,
-                    background: "var(--primary)",
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          {image}
         </ViewTransitionLink>
         <MediaItemMenu
           contentId={episode.content_id}
@@ -163,30 +215,7 @@ function SeasonEpisodeCard({
         state={episodeLinkState}
         className="block"
       >
-        <div className="text-muted-foreground mt-2 flex items-center gap-2 text-xs">
-          <span>Episode {episode.episode_number}</span>
-          {episode.user_data?.played && <WatchedCheckIndicator className="ml-auto" />}
-        </div>
-        <p className="text-foreground truncate text-sm font-semibold">{episodeTitle}</p>
-        <div className="mt-1.5 space-y-1">
-          <div className="text-muted-foreground flex items-center gap-2 text-xs">
-            {episode.runtime > 0 && <span>{episode.runtime}m</span>}
-            {episode.air_date && (
-              <span>
-                {new Intl.DateTimeFormat(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                }).format(new Date(episode.air_date))}
-              </span>
-            )}
-          </div>
-          {episode.overview && (
-            <p className="text-muted-foreground line-clamp-2 text-xs leading-relaxed">
-              {episode.overview}
-            </p>
-          )}
-        </div>
+        {info}
       </ViewTransitionLink>
     </div>
   );

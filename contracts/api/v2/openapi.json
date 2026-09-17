@@ -22370,6 +22370,14 @@
             "description": "Calendar date, YYYY-MM-DD",
             "type": "string"
           },
+          "availability": {
+            "enum": [
+              "in_library",
+              "missing",
+              "unaired"
+            ],
+            "type": "string"
+          },
           "content_id": {
             "examples": [
               "episode:severance-s01e01"
@@ -24493,6 +24501,13 @@
             },
             "type": "array"
           },
+          "placeholder_episodes_enabled": {
+            "description": "Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
           "poster_url": {
             "description": "Presigned poster URL; absent when the library has no poster",
             "type": "string"
@@ -24554,6 +24569,7 @@
           "chapter_thumbnails_enabled",
           "chapter_thumbnails_supported",
           "intro_detection_enabled",
+          "placeholder_episodes_enabled",
           "trailer_kinds",
           "sort_order"
         ],
@@ -24778,6 +24794,13 @@
             },
             "minItems": 1,
             "type": "array"
+          },
+          "placeholder_episodes_enabled": {
+            "description": "Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "trailer_kinds": {
             "description": "Remote video kinds to fetch; omitted applies the default (every provider kind), empty disables them",
@@ -25448,6 +25471,13 @@
             },
             "minItems": 1,
             "type": "array"
+          },
+          "placeholder_episodes_enabled": {
+            "description": "Show placeholder entries in season/episode views for metadata episodes not yet downloaded or aired",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "trailer_kinds": {
             "description": "Replaces the allow-list; empty disables remote videos",
@@ -34543,6 +34573,10 @@
               "Season 1"
             ],
             "type": "string"
+          },
+          "total_episode_count": {
+            "format": "int64",
+            "type": "integer"
           },
           "user_data": {
             "$ref": "#/components/schemas/WatchRollup"

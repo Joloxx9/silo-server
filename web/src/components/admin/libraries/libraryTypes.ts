@@ -32,5 +32,6 @@ export function librarySettingSupport(type: string) {
     trailers: video,
     chapterThumbnails: video,
     introDetection: kind === "series" || kind === "mixed",
+    placeholderEpisodes: kind === "series" || kind === "mixed",
   };
 }

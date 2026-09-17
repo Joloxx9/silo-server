@@ -17,6 +17,7 @@ function makeSeason(overrides: Partial<Season> = {}): Season {
     overview: overrides.overview ?? "",
     air_date: overrides.air_date ?? null,
     episode_count: overrides.episode_count ?? 10,
+    total_episode_count: overrides.total_episode_count,
     poster_url: overrides.poster_url ?? "",
     poster_thumbhash: overrides.poster_thumbhash ?? "",
     user_data: overrides.user_data,
@@ -297,6 +298,18 @@ describe("formatSeasonMeta", () => {
   it("returns episode count when user data is missing", () => {
     expect(formatSeasonMeta(makeSeason({ episode_count: 8, user_data: undefined }))).toBe(
       "8 episodes",
+    );
+  });
+
+  it("renders in-library/total when placeholder episodes give a total count", () => {
+    expect(formatSeasonMeta(makeSeason({ episode_count: 5, total_episode_count: 7 }))).toBe(
+      "5/7 episodes",
+    );
+  });
+
+  it("renders 0/0 for a season with no metadata episodes yet", () => {
+    expect(formatSeasonMeta(makeSeason({ episode_count: 0, total_episode_count: 0 }))).toBe(
+      "0/0 episodes",
     );
   });
 });
