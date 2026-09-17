@@ -66,6 +66,7 @@ interface ColorSwatch {
 
 export const FONT_COLOR_PALETTE: ColorSwatch[] = [
   { hex: "#ffffff", label: "White" },
+  { hex: "#9ca3af", label: "Gray" },
   { hex: "#facc15", label: "Yellow" },
   { hex: "#22c55e", label: "Green" },
   { hex: "#06b6d4", label: "Cyan" },
