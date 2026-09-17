@@ -555,8 +555,8 @@ func (h *CatalogResourceHandler) seriesSeasons(ctx context.Context, v ItemViewer
 					continue
 				}
 				var userData *catalog.SeasonUserData
-				if hasProgressMap {
-					userData = catalog.EpisodeRollupUserData(rollupEligibleEpisodes(episodes), progressMap)
+				if hasProgressMap && hasRollupEligibleEpisode(episodes) {
+					userData = catalog.EpisodeRollupUserData(episodes, progressMap)
 				}
 				// Construct metadata without resolving each season again.
 				season := *s
@@ -592,7 +592,7 @@ func (h *CatalogResourceHandler) seriesSeasons(ctx context.Context, v ItemViewer
 				EpisodeCount:      s.EpisodeCount,
 				TotalEpisodeCount: &total,
 				Title:             title,
-				UserData:          h.items.getAggregateUserData(ctx, v, rollupEligibleEpisodes(episodes)),
+				UserData:          h.items.getAggregateUserData(ctx, v, episodes),
 			})
 		}
 		h.items.enrichSeasonPlayTargets(ctx, v, id, resp)
@@ -642,14 +642,22 @@ func (h *CatalogResourceHandler) SeriesSeason(ctx context.Context, v ItemViewer,
 			if err != nil {
 				return SeasonView{}, apiError(http.StatusInternalServerError, "internal_error", failed)
 			}
-			if len(episodes) == 0 && !placeholders {
-				episodes, err = h.items.episodeRepo.ListBySeason(ctx, id, season.SeasonNumber)
+			// A season row whose season_id link has drifted (partial
+			// migration/scan race) leaves ListBySeasonID(ForDisplay) with
+			// nothing to find by season_id even though the episodes exist
+			// under series_id+season_number; recover them either way.
+			if len(episodes) == 0 {
+				if placeholders {
+					episodes, err = h.items.episodeRepo.ListBySeasonForDisplay(ctx, id, season.SeasonNumber, folderIDs)
+				} else {
+					episodes, err = h.items.episodeRepo.ListBySeason(ctx, id, season.SeasonNumber)
+				}
 				if err != nil {
 					return SeasonView{}, apiError(http.StatusInternalServerError, "internal_error", failed)
 				}
 			}
 			h.items.maybeRequestStaleSeasonMetadataRefresh(ctx, season.ContentID, episodes)
-			resp := h.items.toSeasonResponseFromEpisodes(ctx, v, id, season, episodes, h.items.getAggregateUserData(ctx, v, rollupEligibleEpisodes(episodes)), v.Access.ImageSize, placeholders)
+			resp := h.items.toSeasonResponseFromEpisodes(ctx, v, id, season, episodes, h.items.getAggregateUserData(ctx, v, episodes), v.Access.ImageSize, placeholders)
 			h.items.resolveSeasonPlayTarget(ctx, v, id, &resp)
 			return resp, nil
 		case !errors.Is(err, catalog.ErrSeasonNotFound):
@@ -693,7 +701,7 @@ func (h *CatalogResourceHandler) SeriesSeason(ctx context.Context, v ItemViewer,
 		Title:             title,
 		EpisodeCount:      episodeCount,
 		TotalEpisodeCount: totalEpisodeCount,
-		UserData:          h.items.getAggregateUserData(ctx, v, rollupEligibleEpisodes(episodes)),
+		UserData:          h.items.getAggregateUserData(ctx, v, episodes),
 	}
 	h.items.resolveSeasonPlayTarget(ctx, v, id, &resp)
 	return resp, nil

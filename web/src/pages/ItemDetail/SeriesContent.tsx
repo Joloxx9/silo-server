@@ -175,7 +175,9 @@ export default function SeriesContent({ item }: { item: ItemDetail & { type: "se
             <div className="mb-5 flex items-center justify-between gap-3">
               <h2 className="text-xl font-semibold tracking-tight">Episodes</h2>
               <span className="text-muted-foreground text-sm">
-                {singleSeason.episode_count} total
+                {singleSeason.total_episode_count != null
+                  ? `${singleSeason.episode_count}/${singleSeason.total_episode_count} total`
+                  : `${singleSeason.episode_count} total`}
               </span>
             </div>
             <SeasonEpisodeGrid

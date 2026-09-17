@@ -1902,7 +1902,7 @@ func applyEffectiveEditionPreference(userData *catalog.SeasonUserData, target **
 }
 
 func (h *ItemsHandler) getAggregateUserData(ctx context.Context, v ItemViewer, episodes []*models.Episode) *catalog.SeasonUserData {
-	if len(episodes) == 0 {
+	if !hasRollupEligibleEpisode(episodes) {
 		return nil
 	}
 
@@ -1916,6 +1916,22 @@ func (h *ItemsHandler) getAggregateUserData(ctx context.Context, v ItemViewer, e
 		return nil
 	}
 	return catalog.EpisodeRollupUserData(episodes, progressMap)
+}
+
+// hasRollupEligibleEpisode reports whether episodes contains at least one
+// row EpisodeRollupUserData would actually count (i.e. not "unaired"). Used
+// to decide whether a season's user_data should be omitted (nil) rather than
+// an all-zero object — otherwise an all-placeholder-unaired or genuinely
+// empty season could get either shape depending on which code path built the
+// response, since EpisodeRollupUserData itself always returns a non-nil
+// struct once called.
+func hasRollupEligibleEpisode(episodes []*models.Episode) bool {
+	for _, ep := range episodes {
+		if ep != nil && ep.Availability != "unaired" {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *ItemsHandler) progressMapForEpisodes(ctx context.Context, v ItemViewer, episodes []*models.Episode) (map[string]userstore.WatchProgress, bool) {
@@ -1964,27 +1980,6 @@ func episodeContentIDs(episodes []*models.Episode) []string {
 		ids = append(ids, ep.ContentID)
 	}
 	return ids
-}
-
-// rollupEligibleEpisodes drops only "unaired" placeholder rows before
-// computing a watch-progress rollup: an episode that hasn't aired yet cannot
-// possibly have been watched, so counting it as unwatched would make an
-// otherwise fully-watched season read as perpetually incomplete. A "missing"
-// episode (aired, no file) is deliberately kept — whether the viewer watched
-// it, e.g. before its file was lost, is exactly what should decide the
-// season's completion state, and its watch state (if any) already lives in
-// progressMap independent of whether the file still exists. Rows with no
-// Availability set (the non-placeholder read path) always pass through
-// unchanged.
-func rollupEligibleEpisodes(episodes []*models.Episode) []*models.Episode {
-	filtered := make([]*models.Episode, 0, len(episodes))
-	for _, ep := range episodes {
-		if ep == nil || ep.Availability == "unaired" {
-			continue
-		}
-		filtered = append(filtered, ep)
-	}
-	return filtered
 }
 
 func flattenEpisodeGroups(groups map[int][]*models.Episode) []*models.Episode {
