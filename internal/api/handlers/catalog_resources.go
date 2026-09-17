@@ -266,14 +266,35 @@ func (h *CatalogResourceHandler) enrichItemDetail(ctx context.Context, v ItemVie
 	switch detail.Type {
 	case "season":
 		if h.items.episodeRepo != nil {
-			episodes, err := h.items.episodeRepo.ListBySeasonID(ctx, detail.ContentID)
+			var episodes []*models.Episode
+			var err error
+			// Unmodified ListBySeasonID only ever sees in-library episodes,
+			// so a season missing an undownloaded (but never-watched)
+			// episode would read as fully watched — the "missing" episode
+			// simply doesn't exist from its point of view. Use the
+			// placeholder-aware read when the library has the feature on,
+			// so the season's watched state (and the "Mark as Watched"
+			// action it drives) agrees with the episode grid on the page.
+			if placeholders, folderIDs := h.resolvePlaceholderEpisodes(ctx, v, detail.SeriesID); placeholders {
+				episodes, err = h.items.episodeRepo.ListBySeasonIDForDisplay(ctx, detail.ContentID, folderIDs)
+			} else {
+				episodes, err = h.items.episodeRepo.ListBySeasonID(ctx, detail.ContentID)
+			}
 			if err == nil {
 				detail.SeasonUserData = h.items.getAggregateUserData(ctx, v, episodes)
 			}
 		}
 	case "series":
 		if h.items.episodeRepo != nil {
-			episodes, err := h.items.episodeRepo.ListBySeries(ctx, detail.ContentID)
+			var episodes []*models.Episode
+			var err error
+			if placeholders, folderIDs := h.resolvePlaceholderEpisodes(ctx, v, detail.ContentID); placeholders {
+				var grouped map[int][]*models.Episode
+				grouped, err = h.items.episodeRepo.ListBySeriesGroupedBySeasonForDisplay(ctx, detail.ContentID, folderIDs)
+				episodes = flattenEpisodeGroups(grouped)
+			} else {
+				episodes, err = h.items.episodeRepo.ListBySeries(ctx, detail.ContentID)
+			}
 			if err == nil {
 				detail.SeasonUserData = h.items.getAggregateUserData(ctx, v, episodes)
 			}
