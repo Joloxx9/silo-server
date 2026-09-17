@@ -53,9 +53,7 @@ export default function SeasonCarousel({ seasons }: SeasonCarouselProps) {
               // an aired-but-missing episode watched before its file was
               // lost. Dividing by episode_count there could exceed 100% or
               // divide by zero for a fully-missing season with watch history.
-              const rollupTotal = userData
-                ? userData.watched_count + userData.unplayed_count
-                : 0;
+              const rollupTotal = userData ? userData.watched_count + userData.unplayed_count : 0;
               const progressPercent =
                 hasProgress && rollupTotal > 0
                   ? Math.round((userData.watched_count / rollupTotal) * 100)

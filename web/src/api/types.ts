@@ -121,7 +121,12 @@ export interface AuthSession {
 }
 
 export type JellyfinCompatWebState =
-  "missing" | "installing" | "removing" | "installed" | "failed" | "update_available";
+  | "missing"
+  | "installing"
+  | "removing"
+  | "installed"
+  | "failed"
+  | "update_available";
 
 export interface JellyfinCompatInstallerPrerequisite {
   name: string;
@@ -2596,7 +2601,12 @@ export interface DiagnosticStatus {
 
 export type DiagnosticReportState = "receiving" | "ready" | "failed";
 export type DiagnosticReportType =
-  "crash" | "anr" | "native_crash" | "hang" | "abnormal_exit" | "manual";
+  | "crash"
+  | "anr"
+  | "native_crash"
+  | "hang"
+  | "abnormal_exit"
+  | "manual";
 export type DiagnosticPlatform = "android" | "android-tv" | "ios" | "tvos";
 
 export interface ClientDiagnosticManifest {
@@ -2901,7 +2911,10 @@ export interface NotificationCapability {
 }
 
 export type NotificationChannelMode =
-  "off" | "per_episode" | "daily_digest" | "per_episode_and_digest";
+  | "off"
+  | "per_episode"
+  | "daily_digest"
+  | "per_episode_and_digest";
 export type NotificationEmailMode = NotificationChannelMode;
 export type NotificationDiscordMode = NotificationChannelMode;
 
@@ -3012,7 +3025,9 @@ export type EventsStreamMessage =
   | EventsErrorMessage;
 
 export type AdminLogStreamMessage =
-  AdminLogSnapshotMessage | AdminLogAppendMessage | AdminLogErrorMessage;
+  | AdminLogSnapshotMessage
+  | AdminLogAppendMessage
+  | AdminLogErrorMessage;
 
 export interface AdminPlaybackHistoryItem {
   session_id: string;

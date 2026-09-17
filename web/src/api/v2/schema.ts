@@ -12130,7 +12130,12 @@ export interface components {
       web_enabled: boolean;
       /** @enum {string} */
       web_state:
-        "missing" | "installing" | "removing" | "installed" | "failed" | "update_available";
+        | "missing"
+        | "installing"
+        | "removing"
+        | "installed"
+        | "failed"
+        | "update_available";
     };
     AdminJellyfinWebInstallBody: {
       /** @description Official jellyfin-web source; empty uses the stored source URL */
@@ -22284,7 +22289,8 @@ export interface components {
     };
     ProgressSyncBatchResult: {
       items: (
-        components["schemas"]["ProgressSyncSuccess"] | components["schemas"]["ProgressSyncFailure"]
+        | components["schemas"]["ProgressSyncSuccess"]
+        | components["schemas"]["ProgressSyncFailure"]
       )[];
       summary: components["schemas"]["BulkSummary"];
     };
@@ -69600,7 +69606,13 @@ export interface operations {
         end: string;
         /** @description Which items to include; absent is all */
         filter?:
-          "all" | "everything" | "following" | "favorites" | "watchlist" | "popular" | "trending";
+          | "all"
+          | "everything"
+          | "following"
+          | "favorites"
+          | "watchlist"
+          | "popular"
+          | "trending";
         /** @description Restrict to one library */
         library_id?: string;
         /** @description First local day of the window, YYYY-MM-DD */
