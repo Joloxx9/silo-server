@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { MediaRequest } from "@/api/types";
-import { canCancelOwnRequest, requestDetailHref, requestDisplayState } from "./mediaRequests";
+import {
+  canCancelOwnRequest,
+  parseRequestMediaType,
+  requestDetailHref,
+  requestDisplayState,
+} from "./mediaRequests";
 
 type CancelFields = Pick<MediaRequest, "status" | "outcome" | "targets">;
 
@@ -46,8 +51,19 @@ describe("requestDisplayState", () => {
 });
 
 describe("requestDetailHref", () => {
-  it("builds the request detail route", () => {
-    expect(requestDetailHref("movie", 603)).toBe("/requests/movie/603");
-    expect(requestDetailHref("series", 1399)).toBe("/requests/series/1399");
+  it("builds the title detail route", () => {
+    expect(requestDetailHref("movie", 603)).toBe("/title/movie/603");
+    expect(requestDetailHref("series", 1399)).toBe("/title/series/1399");
+  });
+});
+
+describe("parseRequestMediaType", () => {
+  it("accepts the two title media types", () => {
+    expect(parseRequestMediaType("movie")).toBe("movie");
+    expect(parseRequestMediaType("series")).toBe("series");
+  });
+
+  it.each([undefined, "", "tv", "Movie", "browse"])("rejects %j", (value) => {
+    expect(parseRequestMediaType(value)).toBeUndefined();
   });
 });

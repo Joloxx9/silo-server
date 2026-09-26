@@ -66,6 +66,7 @@ import {
   formatRequestDate,
   formatRequestOutcome,
   formatRequestStatus,
+  requestDetailHref,
   requestOutcomeBadgeVariant,
   requestStatusBadgeVariant,
   REQUEST_OUTCOMES,
@@ -358,14 +359,16 @@ function RequestQueueRow({
       (request.targets?.length ?? 0) === 0);
   const canRetry = request.outcome === "failed";
   const requesterLabel = requesterUsername ?? `User ${request.requested_by_user_id}`;
-  const requestDetailHref = `/requests/${request.media_type}/${request.tmdb_id}`;
 
   return (
     <TableRow>
       <TableCell>
         <div className="min-w-[220px]">
           <div className="flex flex-wrap items-center gap-2">
-            <Link to={requestDetailHref} className="font-medium hover:underline">
+            <Link
+              to={requestDetailHref(request.media_type, request.tmdb_id)}
+              className="font-medium hover:underline"
+            >
               {request.title}
             </Link>
             <Badge variant="secondary">{formatMediaType(request.media_type)}</Badge>

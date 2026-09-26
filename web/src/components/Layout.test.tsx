@@ -280,6 +280,8 @@ describe("Layout request routes", () => {
     ["/requests/browse/genre/drama", false, false],
     ["/requests/movie/603", false, true],
     ["/requests/series/1399", false, true],
+    ["/title/movie/603", false, true],
+    ["/title/series/1399", false, true],
     ["/collections", true, false],
   ])("renders %s with shell padding %s and a collapsed sidebar %s", (path, padded, collapsed) => {
     setRoute(path, "requests");

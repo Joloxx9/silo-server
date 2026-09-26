@@ -146,8 +146,17 @@ export function canCancelOwnRequest(
   return request.status === "approved" && (request.targets?.length ?? 0) === 0;
 }
 
+/**
+ * The detail page of a TMDB title. It serves titles outside the library; one
+ * the viewer can open in the library redirects to its item page.
+ */
 export function requestDetailHref(mediaType: RequestMediaType, tmdbID: number): string {
-  return `/requests/${mediaType}/${tmdbID}`;
+  return `/title/${mediaType}/${tmdbID}`;
+}
+
+/** The media type a title URL names, or undefined for any other segment. */
+export function parseRequestMediaType(value: string | undefined): RequestMediaType | undefined {
+  return value === "movie" || value === "series" ? value : undefined;
 }
 
 /** Request suggestions the ⌘K dialog lists below the library results. */

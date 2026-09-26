@@ -1,0 +1,174 @@
+import { useState } from "react";
+import {
+  Ban,
+  Bell,
+  BellOff,
+  CircleCheck,
+  Clock,
+  Hourglass,
+  Library,
+  type LucideIcon,
+  Plus,
+  X,
+} from "lucide-react";
+import type { MediaRequest, RequestMediaDetail } from "@/api/types";
+import { CancelRequestDialog } from "@/components/CancelRequestDialog";
+import {
+  useCancelMediaRequest,
+  useCreateMediaRequest,
+  useMyMediaRequests,
+  useToggleRequestFollow,
+} from "@/hooks/queries/useRequests";
+import { useViewTransitionNavigate } from "@/hooks/useViewTransition";
+import {
+  canCancelOwnRequest,
+  formatRequestDisplayState,
+  formatRequestReason,
+  requestDisplayState,
+  requestInputFromMediaResult,
+  type RequestDisplayState,
+} from "@/lib/mediaRequests";
+import ActionBar, {
+  type ActionBarLink,
+  type ActionBarPrimaryAction,
+  type ActionBarSecondaryAction,
+} from "./ActionBar";
+
+const STATE_ICONS: Record<RequestDisplayState, LucideIcon> = {
+  pending: Clock,
+  approved: CircleCheck,
+  processing: Hourglass,
+  available: Library,
+  declined: Ban,
+  cancelled: Ban,
+  failed: Ban,
+};
+
+interface RequestActionBarProps {
+  item: RequestMediaDetail;
+  /**
+   * Opens the library's copy of the title. Set only when the page could not
+   * confirm whether the viewer may open it; a copy they cannot open reads as
+   * a disabled "In the library", with no link.
+   */
+  libraryHref?: string;
+}
+
+/**
+ * The action row for a title outside the library: Request in the Play pill's
+ * place, the request's state once there is one, and cancelling or following
+ * that request. Owns the request mutations so their pending state re-renders
+ * only this row, as MediaUserActionBar does for library items.
+ */
+export default function RequestActionBar({ item, libraryHref }: RequestActionBarProps) {
+  const navigate = useViewTransitionNavigate();
+  const createRequest = useCreateMediaRequest();
+  const cancelRequest = useCancelMediaRequest();
+  const toggleFollow = useToggleRequestFollow();
+  const ownRequest = useOwnCancellableRequest(item);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  const state = requestDisplayState(item.request.status, undefined, item.request.state);
+  const inLibrary =
+    item.availability === "available" || state === "available" || Boolean(item.library_content_id);
+  const following = item.request.following === true;
+  // Someone else's open request: the viewer can ask to hear when it lands
+  // instead of requesting the title again.
+  const canFollow =
+    state !== undefined &&
+    state !== "available" &&
+    item.request.reason === "already_requested" &&
+    !item.request.requested_by_viewer;
+
+  let primaryAction: ActionBarPrimaryAction;
+  if (item.request.requestable) {
+    primaryAction = {
+      label: item.media_type === "series" ? "Request series" : "Request movie",
+      icon: Plus,
+      pending: createRequest.isPending,
+      onClick: () => createRequest.mutate(requestInputFromMediaResult(item)),
+    };
+  } else if (inLibrary) {
+    primaryAction = libraryHref
+      ? { label: "Open in library", icon: Library, onClick: () => navigate(libraryHref) }
+      : { label: "In the library", icon: Library, disabled: true };
+  } else if (state) {
+    primaryAction = {
+      // The viewer's side of a pending request: they asked, nobody has answered.
+      label: state === "pending" ? "Requested" : formatRequestDisplayState(state),
+      icon: STATE_ICONS[state],
+      disabled: true,
+    };
+  } else {
+    primaryAction = { label: formatRequestReason(item.request.reason), icon: Ban, disabled: true };
+  }
+
+  const secondaryActions: ActionBarSecondaryAction[] = [];
+  if (ownRequest) {
+    secondaryActions.push({
+      id: "cancel",
+      label: "Cancel request",
+      icon: X,
+      pending: cancelRequest.isPending,
+      onClick: () => setConfirmCancel(true),
+    });
+  }
+  if (canFollow) {
+    secondaryActions.push({
+      id: "follow",
+      label: following ? "Stop notifying me" : "Notify me when available",
+      icon: following ? BellOff : Bell,
+      pressed: following,
+      pending: toggleFollow.isPending,
+      onClick: () =>
+        toggleFollow.mutate({
+          mediaType: item.media_type,
+          tmdbID: item.tmdb_id,
+          follow: !following,
+        }),
+    });
+  }
+
+  const links: ActionBarLink[] = [];
+  if (item.imdb_id) {
+    links.push({ label: "IMDb", href: `https://www.imdb.com/title/${item.imdb_id}` });
+  }
+  links.push({
+    label: "TMDB",
+    href: `https://www.themoviedb.org/${item.media_type === "series" ? "tv" : "movie"}/${item.tmdb_id}`,
+  });
+
+  return (
+    <>
+      <ActionBar primaryAction={primaryAction} secondaryActions={secondaryActions} links={links} />
+      {ownRequest ? (
+        <CancelRequestDialog
+          title={item.title}
+          open={confirmCancel}
+          onOpenChange={setConfirmCancel}
+          onConfirm={() => cancelRequest.mutate(ownRequest.id)}
+          isPending={cancelRequest.isPending}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The viewer's own request for this title, while they can still cancel it. The
+ * detail payload says a title has a request but not whose it is, so look for
+ * it among the account's own active requests.
+ */
+function useOwnCancellableRequest(item: RequestMediaDetail): MediaRequest | undefined {
+  const mayCancel = item.request.status === "pending" || item.request.status === "approved";
+  const mine = useMyMediaRequests({ outcome: "active" }, { enabled: mayCancel });
+  if (!mayCancel) return undefined;
+  const requestID = item.request.request_id;
+  return mine.data?.find(
+    (request) =>
+      (requestID
+        ? request.id === requestID
+        : request.media_type === item.media_type && request.tmdb_id === item.tmdb_id) &&
+      canCancelOwnRequest(request),
+  );
+}
