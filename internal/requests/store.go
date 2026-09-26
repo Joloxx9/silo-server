@@ -69,6 +69,12 @@ type Store interface {
 	// ForgetTitleFollows removes every follow on a title whose request was
 	// withdrawn.
 	ForgetTitleFollows(ctx context.Context, mediaType MediaType, tmdbID int) error
+	// ListRoutes returns every routing rule, in no particular order;
+	// decideRoutes orders them.
+	ListRoutes(ctx context.Context) ([]Route, error)
+	// SetRoutingFacts stores facts fetched after the request was created (and
+	// the anime flag they imply).
+	SetRoutingFacts(ctx context.Context, id string, facts RoutingFacts) (*Request, error)
 	ListTargets(ctx context.Context, requestID string) ([]Target, error)
 	CreateTarget(ctx context.Context, target Target) (Target, error)
 	DeleteTarget(ctx context.Context, id int64) error

@@ -35496,6 +35496,10 @@
             "minLength": 1,
             "type": "string"
           },
+          "route_name": {
+            "description": "The routing rule that sent this target to its server, as named when it was sent",
+            "type": "string"
+          },
           "status": {
             "examples": [
               "queued"

@@ -977,6 +977,31 @@ func (r *Repository) deleteIntegration(ctx context.Context, tx pgx.Tx, id string
 		return ErrInvalidState
 	}
 
+	// Deleting a server a route sends to would silently reroute its titles.
+	rows, err := tx.Query(ctx, `
+		SELECT name FROM request_routes
+		WHERE hd_integration_id = $1 OR uhd_integration_id = $1
+		ORDER BY media_type, is_fallback, position`, id)
+	if err != nil {
+		return fmt.Errorf("check integration routes: %w", err)
+	}
+	var routes []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		routes = append(routes, name)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(routes) > 0 {
+		return &ValidationError{FormError: "Routing still sends requests to this server (" + strings.Join(routes, ", ") + "); change those routes first."}
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM request_integrations WHERE id = $1`, id); err != nil {
 		return fmt.Errorf("delete request integration: %w", err)
 	}

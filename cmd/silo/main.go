@@ -77,6 +77,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/markers"
 	"github.com/Silo-Server/silo-server/internal/mdblist"
 	"github.com/Silo-Server/silo-server/internal/metadata"
+	"github.com/Silo-Server/silo-server/internal/metadata/tmdb"
 	"github.com/Silo-Server/silo-server/internal/netaccess"
 
 	// Built-in metadata providers self-register into the metadata package's
@@ -2904,9 +2905,11 @@ func main() {
 		if watchProviderService != nil {
 			taskMgr.Register(tasks.NewSyncWatchProvidersTask(watchProviderService))
 		}
+		// The reconcile pass routes requests, which reads TMDB for requests
+		// whose routing facts were never captured.
 		requestReconcileSvc := mediarequests.NewService(
 			mediarequests.NewRepository(deps.DB, deps.SecretCipher),
-			nil,
+			tmdb.NewClient(cfg.TMDBAPIKey, 40),
 			mediarequests.NewCatalogPresence(
 				catalog.NewItemRepository(deps.DB),
 				catalog.NewProviderIDRepository(deps.DB),

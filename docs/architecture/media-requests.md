@@ -29,6 +29,48 @@ anime. IDs rather than names, because names follow the configured TMDB
 language. When TMDB cannot answer, the request is still created from the
 client's copy, and the facts stay uncaptured until routing fetches them.
 
+## Routing
+
+Silo, not the router plugin, decides which server each quality tier of a request
+goes to (`internal/requests/routing.go`). Routes (`request_routes`) belong to a
+media type and hold conditions and a destination per tier: a server plus
+overrides for its plugin config (root folder, quality profile, tags, series type,
+minimum availability, ...). Conditions match on the request's routing facts and
+requester: anime, genre, keyword, original language, origin country, year range,
+network, studio, requesting account. Every set condition must hold, and a list
+matches any of its values.
+
+Each tier is decided on its own: the first enabled route, in position order,
+whose conditions match and that has a destination for the tier wins, and the
+media type's fallback route (no conditions) comes last. A route with no
+destination for a tier lets that tier fall through; `skip_uhd` stops a matching
+title from getting a 4K copy at all, even with `force_dual_quality`. Without
+`force_dual_quality`, a title no route sends to a 4K server gets no 4K copy.
+
+A routed submission calls the plugin once per tier with only the chosen server.
+Its config carries the route's overrides and marks it the tier's default in the
+Sonarr/Radarr plugin's terms, with the plugin's own anime overlay off, so the
+existing plugin follows the route without knowing about routing. Each target
+records the route that sent it. A server a route sends to cannot be deleted
+until the route stops using it, so deleting a server never silently reroutes
+titles. A chosen server that is disabled, not set up (no installation, no key)
+or since switched to the other kind is an admin-fixable problem: when nothing has been
+sent yet, the submission retries with backoff; a later tier that fails that way
+becomes a failed target. Status checks go through the plugin installation that
+owns each target's server, and one plugin failing does not discard the statuses
+another reported. A media type with no routes keeps the plugin's own routing:
+every usable connection is handed over and the plugin picks.
+
+The migration that introduced routes carried the Sonarr/Radarr plugin's routing
+over unchanged: each media type's first usable default and default-4K servers
+(by name) became its fallback route, and a default server's anime settings
+became an Anime route. Once a media type has routes, the connections' own
+default and anime switches no longer decide anything.
+
+A request created before facts were captured, or while TMDB was unreachable, has
+them fetched when it is first routed; if TMDB still cannot answer, the
+submission retries rather than route on missing facts.
+
 ## Transitions are guarded
 
 Every status or outcome write made by an admin, a user, or the reconcile pass

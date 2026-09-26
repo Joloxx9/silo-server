@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -373,6 +375,19 @@ func (s *Service) allowedQualities(ctx context.Context, req Request, settings Se
 type fulfillContext struct {
 	integrations []Integration
 	settings     Settings
+	routes       []Route
+}
+
+// routesFor returns the media type's routing rules; none means the router
+// plugin routes the media type itself.
+func (fc *fulfillContext) routesFor(mediaType MediaType) []Route {
+	var out []Route
+	for _, route := range fc.routes {
+		if route.MediaType == mediaType {
+			out = append(out, route)
+		}
+	}
+	return out
 }
 
 func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error) {
@@ -384,7 +399,11 @@ func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error
 	if err != nil {
 		return nil, err
 	}
-	return &fulfillContext{integrations: integrations, settings: settings}, nil
+	routes, err := s.store.ListRoutes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &fulfillContext{integrations: integrations, settings: settings, routes: routes}, nil
 }
 
 // resolveRouterConnections turns enabled request_router integrations that serve
@@ -1820,6 +1839,9 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 // submitClaimed does the submission work for a request whose claim the caller
 // holds.
 func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, fc *fulfillContext) (*Request, error) {
+	if routes := fc.routesFor(req.MediaType); len(routes) > 0 {
+		return s.submitRouted(ctx, req, actor, fc, routes)
+	}
 	conns, installationID, capabilityID, err := s.resolveRouterConnections(ctx, fc, req.MediaType)
 	if err != nil {
 		return nil, err
@@ -1831,67 +1853,16 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 		// retries with backoff, and goes through once the connection is fixed.
 		return nil, errors.New(unusableRouterMessage(fc, req.MediaType))
 	}
-	existing, err := s.store.ListTargets(ctx, req.ID)
-	if err != nil {
-		return nil, err
-	}
-	healthy := map[Quality]bool{}
-	for _, t := range existing {
-		if t.Status != StatusFailed {
-			healthy[t.Quality] = true
-		}
-	}
 	allowed, resolved := s.allowedQualities(ctx, req, fc.settings)
 	if !fc.settings.ForceDualQuality {
 		allowed = filterUnconfiguredOptionalQualities(allowed, conns)
 	}
-	// A failed target for a quality the request no longer wants (4K turned
-	// off, the requester lost 4K, the 4K server removed) would keep the request
-	// failed forever; converge to the current quality set instead. Only when
-	// that set is certain: an entitlement lookup error or a connection skipped
-	// for a missing key also shrinks it, and a transient error must not
-	// discard the failed target an admin still needs to see.
-	if resolved && !skippedRouterConnection(fc, req.MediaType) {
-		allowedSet := make(map[Quality]bool, len(allowed))
-		for _, q := range allowed {
-			allowedSet[q] = true
-		}
-		for _, t := range existing {
-			if t.Status == StatusFailed && !allowedSet[t.Quality] {
-				if err := s.store.DeleteTarget(ctx, t.ID); err != nil && !errors.Is(err, ErrNotFound) {
-					return nil, err
-				}
-			}
-		}
-	}
-	var want []Quality
-	for _, q := range allowed {
-		if !healthy[q] {
-			want = append(want, q)
-		}
-	}
-	if len(want) == 0 {
-		// Nothing left to send: let the remaining targets decide the status so
-		// the request does not sit in approved.
-		updated, err := s.store.RecomputeStatus(ctx, req.ID, actor)
-		if errors.Is(err, ErrInvalidState) {
-			return s.store.GetRequest(ctx, req.ID)
-		}
-		return updated, err
-	}
-	for _, t := range existing { // drop stale failed targets for the qualities we re-submit
-		if t.Status == StatusFailed {
-			for _, q := range want {
-				if t.Quality == q {
-					if err := s.store.DeleteTarget(ctx, t.ID); err != nil {
-						return nil, err
-					}
-				}
-			}
-		}
+	plan, done, err := s.planSubmission(ctx, req, actor, allowed, resolved && !skippedRouterConnection(fc, req.MediaType))
+	if done != nil || err != nil {
+		return done, err
 	}
 	s.populateRequesterIdentity(ctx, &req)
-	targets, msg, err := s.router.Fulfill(ctx, installationID, capabilityID, req, want, conns)
+	targets, msg, err := s.router.Fulfill(ctx, installationID, capabilityID, req, plan.want, conns)
 	if err != nil {
 		return nil, err
 	}
@@ -1901,13 +1872,182 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 		}
 		return s.markSubmissionFailed(ctx, req.ID, actor, errors.New(msg))
 	}
-	connKind := connectionKindByID(conns)
+	return s.recordTargets(ctx, req, actor, plan, targets, connectionKindByID(conns), nil, nil)
+}
+
+// submitRouted sends each wanted tier to the server the routing rules chose
+// for it, one plugin call per tier with only that server, so the plugin
+// cannot pick another.
+func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, fc *fulfillContext, routes []Route) (*Request, error) {
+	if err := s.ensureRoutingFacts(ctx, &req); err != nil {
+		return nil, err
+	}
+	allowed, resolved := s.allowedQualities(ctx, req, fc.settings)
+	decisions := decideRoutes(routes, req, allowed)
+	allowed = slices.DeleteFunc(allowed, func(q Quality) bool {
+		decision, routed := decisions[q]
+		switch {
+		case routed && decision.Skip:
+			// A matching route skips the tier: no copy, even with force-dual.
+			return true
+		case !routed && q == Quality2160p && !fc.settings.ForceDualQuality:
+			// No route gives this title a 4K destination: it does not get a
+			// 4K copy, the same as when no 4K server is configured.
+			return true
+		}
+		return false
+	})
+	plan, done, err := s.planSubmission(ctx, req, actor, allowed, resolved)
+	if done != nil || err != nil {
+		return done, err
+	}
+	s.populateRequesterIdentity(ctx, &req)
+	var targets []RouterTarget
+	connKind := map[string]string{}
+	failures := map[Quality]string{}
+	for _, q := range plan.want {
+		decision, ok := decisions[q]
+		if !ok {
+			failures[q] = "no routing rule sends " + qualityLabel(q) + " for this title"
+			continue
+		}
+		conn, installationID, capabilityID, err := routedConnection(fc, decision, req.MediaType, q)
+		if err != nil {
+			if len(targets) == 0 {
+				// The chosen server is gone, disabled or not set up: an
+				// admin-fixable problem. Nothing reached a server yet, so the
+				// submission retries with backoff and goes through once the
+				// server or the route is fixed.
+				return nil, err
+			}
+			failures[q] = err.Error()
+			continue
+		}
+		maps.Copy(connKind, connectionKindByID([]ResolvedRouterConnection{conn}))
+		got, msg, err := s.router.Fulfill(ctx, installationID, capabilityID, req, []Quality{q}, []ResolvedRouterConnection{conn})
+		if err != nil {
+			if len(targets) == 0 {
+				// Nothing reached a server yet: retry the whole submission.
+				return nil, err
+			}
+			failures[q] = err.Error()
+			continue
+		}
+		if len(got) == 0 && msg != "" {
+			failures[q] = msg
+		}
+		targets = append(targets, got...)
+	}
+	return s.recordTargets(ctx, req, actor, plan, targets, connKind, decisions, failures)
+}
+
+// qualityLabel names a tier in messages.
+func qualityLabel(q Quality) string {
+	if q == Quality2160p {
+		return "4K"
+	}
+	return "HD"
+}
+
+// ensureRoutingFacts fetches the routing facts of a request created before
+// they were captured, or while TMDB was unreachable, and stores them. Routing
+// without them could send a title to the wrong server, so a TMDB failure is a
+// submission error and the submission retries.
+func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request) error {
+	if req.RoutingFacts.Captured() {
+		return nil
+	}
+	detail := s.requestDetail(ctx, req.MediaType, req.TMDBID)
+	if detail == nil {
+		return errors.New("could not read the title's details from TMDB to route it")
+	}
+	updated, err := s.store.SetRoutingFacts(ctx, req.ID, routingFactsFrom(detail, s.now()))
+	if err != nil {
+		return err
+	}
+	req.RoutingFacts, req.IsAnime = updated.RoutingFacts, updated.IsAnime
+	return nil
+}
+
+// submissionPlan is what a submission still has to send.
+type submissionPlan struct {
+	// healthy holds the qualities that already have a live or finished target.
+	healthy map[Quality]bool
+	// want is the qualities to send now.
+	want []Quality
+}
+
+// planSubmission compares the qualities a request should have with its
+// targets. It drops failed targets for qualities no longer wanted (4K turned
+// off, the requester lost 4K, the 4K destination removed), which would keep the
+// request failed forever, but only when allowed is certain: an entitlement
+// lookup error or a skipped connection also shrinks it, and a transient error
+// must not discard a failure an admin still needs to see. It also drops the
+// failed targets of the qualities it is about to resend. done is set when
+// nothing is left to send.
+func (s *Service) planSubmission(ctx context.Context, req Request, actor Viewer, allowed []Quality, certain bool) (submissionPlan, *Request, error) {
+	existing, err := s.store.ListTargets(ctx, req.ID)
+	if err != nil {
+		return submissionPlan{}, nil, err
+	}
+	plan := submissionPlan{healthy: map[Quality]bool{}}
+	for _, t := range existing {
+		if t.Status != StatusFailed {
+			plan.healthy[t.Quality] = true
+		}
+	}
+	if certain {
+		for _, t := range existing {
+			if t.Status == StatusFailed && !slices.Contains(allowed, t.Quality) {
+				if err := s.store.DeleteTarget(ctx, t.ID); err != nil && !errors.Is(err, ErrNotFound) {
+					return submissionPlan{}, nil, err
+				}
+			}
+		}
+	}
+	for _, q := range allowed {
+		if !plan.healthy[q] {
+			plan.want = append(plan.want, q)
+		}
+	}
+	if len(plan.want) == 0 {
+		// Nothing left to send: let the remaining targets decide the status so
+		// the request does not sit in approved.
+		updated, err := s.store.RecomputeStatus(ctx, req.ID, actor)
+		if errors.Is(err, ErrInvalidState) {
+			updated, err = s.store.GetRequest(ctx, req.ID)
+		}
+		if err != nil {
+			return submissionPlan{}, nil, err
+		}
+		return submissionPlan{}, updated, nil
+	}
+	for _, t := range existing {
+		if t.Status == StatusFailed && slices.Contains(plan.want, t.Quality) {
+			if err := s.store.DeleteTarget(ctx, t.ID); err != nil {
+				return submissionPlan{}, nil, err
+			}
+		}
+	}
+	return plan, nil, nil
+}
+
+// msgNoTargetForQuality is recorded on a wanted quality the plugin returned no
+// target for.
+const msgNoTargetForQuality = "fulfillment backend returned no target for this quality"
+
+// recordTargets stores what the plugin returned for a submission. The plugin
+// is an out-of-process trust boundary: every returned target is validated
+// against the DB CHECK constraints (quality, status), and a quality duplicated
+// in the batch or already holding a healthy target is skipped, so a
+// misbehaving plugin can't violate UNIQUE(request_id, quality) and wedge the
+// request. Any wanted quality left without a target is recorded as a failed
+// target rather than silently dropped, so it stays visible and Retry
+// re-attempts it; failures carries the reason when one is known. decisions,
+// when routing chose the servers, stamps each target with its route.
+func (s *Service) recordTargets(ctx context.Context, req Request, actor Viewer, plan submissionPlan, targets []RouterTarget,
+	connKind map[string]string, decisions map[Quality]RouteDecision, failures map[Quality]string) (*Request, error) {
 	latest := &req
-	// The plugin is an out-of-process trust boundary: validate every returned
-	// target against the DB CHECK constraints (quality, status) and skip any
-	// quality that is duplicated in the batch or already has a healthy target, so
-	// a misbehaving plugin can't violate UNIQUE(request_id, quality) and wedge the
-	// request.
 	validQuality := map[Quality]bool{Quality1080p: true, Quality2160p: true}
 	validStatus := map[Status]bool{StatusQueued: true, StatusDownloading: true, StatusCompleted: true, StatusFailed: true}
 	returned := map[Quality]bool{}
@@ -1916,7 +2056,7 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 			slog.WarnContext(ctx, "requests: plugin returned unknown quality; skipping", "component", "requests", "request_id", req.ID, "quality", string(rt.Quality))
 			continue
 		}
-		if returned[rt.Quality] || healthy[rt.Quality] {
+		if returned[rt.Quality] || plan.healthy[rt.Quality] {
 			continue // dup-in-batch, or a healthy target already exists for this quality
 		}
 		if rt.ConnectionID != "" {
@@ -1926,9 +2066,11 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 			}
 		}
 		returned[rt.Quality] = true
+		decision := decisions[rt.Quality]
 		created, err := s.store.CreateTarget(ctx, Target{
 			RequestID: req.ID, IntegrationID: rt.ConnectionID, IntegrationKind: connKind[rt.ConnectionID],
 			Quality: rt.Quality, IsAnime: req.IsAnime, Status: StatusQueued,
+			RouteID: decision.RouteID, RouteName: decision.RouteName,
 		})
 		if err != nil {
 			return nil, err
@@ -1945,21 +2087,23 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 			latest = updated
 		}
 	}
-	// Any wanted quality the plugin did not fulfill is recorded as a failed target
-	// rather than silently dropped, so it stays visible and Retry re-attempts it
-	// (a failed target is not "healthy").
-	const noTargetMsg = "fulfillment backend returned no target for this quality"
-	for _, q := range want {
+	for _, q := range plan.want {
 		if returned[q] {
 			continue
 		}
+		msg := failures[q]
+		if msg == "" {
+			msg = msgNoTargetForQuality
+		}
+		decision := decisions[q]
 		created, err := s.store.CreateTarget(ctx, Target{
-			RequestID: req.ID, Quality: q, IsAnime: req.IsAnime, Status: StatusFailed, LastError: noTargetMsg,
+			RequestID: req.ID, IntegrationID: decision.IntegrationID, Quality: q, IsAnime: req.IsAnime,
+			Status: StatusFailed, LastError: msg, RouteID: decision.RouteID, RouteName: decision.RouteName,
 		})
 		if err != nil {
 			return nil, err
 		}
-		updated, err := s.store.UpdateTargetStatus(ctx, created.ID, StatusFailed, "", "", noTargetMsg, actor)
+		updated, err := s.store.UpdateTargetStatus(ctx, created.ID, StatusFailed, "", "", msg, actor)
 		if err != nil {
 			return nil, err
 		}
@@ -2180,29 +2324,7 @@ func (s *Service) reconcileRequest(ctx context.Context, req Request, fc *fulfill
 	if s.router == nil {
 		return reconcileUnchanged, nil
 	}
-	conns, installationID, capabilityID, err := s.resolveRouterConnections(ctx, fc, req.MediaType)
-	if err != nil {
-		return reconcileUnchanged, err
-	}
-	if len(conns) == 0 {
-		return reconcileUnchanged, nil
-	}
-
-	var refs []RouterTargetRef
-	for _, t := range targets {
-		if t.Status == StatusCompleted || t.Status == StatusFailed {
-			continue
-		}
-		refs = append(refs, RouterTargetRef{Quality: t.Quality, ConnectionID: t.IntegrationID, ExternalID: t.ExternalID})
-	}
-	if len(refs) == 0 {
-		return reconcileUnchanged, nil
-	}
-
-	statuses, err := s.router.CheckStatus(ctx, installationID, capabilityID, req, refs, conns)
-	if err != nil {
-		return reconcileUnchanged, err
-	}
+	statuses, checkErr := s.checkTargetStatuses(ctx, req, targets, fc)
 
 	change := reconcileUnchanged
 	for _, st := range statuses {
@@ -2237,7 +2359,74 @@ func (s *Service) reconcileRequest(ctx context.Context, req Request, fc *fulfill
 			}
 		}
 	}
-	return change, nil
+	return change, checkErr
+}
+
+// checkTargetStatuses asks each live target's plugin for its status. Targets
+// are grouped by the installation and capability that own their server, so a
+// target sent through one plugin is never checked through another (routing
+// can send a request's tiers through different plugins, and an admin can
+// rebind a server). A target whose server is gone, disabled or unusable is
+// skipped; the library presence check retires it if the media arrives.
+func (s *Service) checkTargetStatuses(ctx context.Context, req Request, targets []Target, fc *fulfillContext) ([]RouterTargetStatus, error) {
+	type owner struct {
+		installationID int
+		capabilityID   string
+	}
+	type group struct {
+		refs  []RouterTargetRef
+		conns []ResolvedRouterConnection
+		seen  map[string]bool
+	}
+	groups := map[owner]*group{}
+	var order []owner
+	for _, t := range targets {
+		if t.Status != StatusQueued && t.Status != StatusDownloading {
+			continue
+		}
+		in := integrationByID(fc, t.IntegrationID)
+		if in == nil || !in.Enabled || in.InstallationID == nil || in.CapabilityID == "" || strings.TrimSpace(in.APIKeyRef) == "" {
+			continue
+		}
+		key := owner{*in.InstallationID, in.CapabilityID}
+		g := groups[key]
+		if g == nil {
+			g = &group{seen: map[string]bool{}}
+			groups[key] = g
+			order = append(order, key)
+		}
+		g.refs = append(g.refs, RouterTargetRef{Quality: t.Quality, ConnectionID: t.IntegrationID, ExternalID: t.ExternalID})
+		if !g.seen[in.ID] {
+			g.seen[in.ID] = true
+			g.conns = append(g.conns, ResolvedRouterConnection{ID: in.ID, BaseURL: in.BaseURL, APIKey: strings.TrimSpace(in.APIKeyRef), Config: in.PluginConfig})
+		}
+	}
+	// One plugin being down must not hide the statuses another reported, so
+	// every group is asked and the errors are returned alongside them.
+	var out []RouterTargetStatus
+	var errs []error
+	for _, key := range order {
+		g := groups[key]
+		statuses, err := s.router.CheckStatus(ctx, key.installationID, key.capabilityID, req, g.refs, g.conns)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		out = append(out, statuses...)
+	}
+	return out, errors.Join(errs...)
+}
+
+func integrationByID(fc *fulfillContext, id string) *Integration {
+	if id == "" {
+		return nil
+	}
+	for i := range fc.integrations {
+		if fc.integrations[i].ID == id {
+			return &fc.integrations[i]
+		}
+	}
+	return nil
 }
 
 // liveTargets returns the request's non-terminal (queued or downloading)

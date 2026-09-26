@@ -23820,6 +23820,8 @@ export interface components {
        * @example 1834729
        */
       request_id: string;
+      /** @description The routing rule that sent this target to its server, as named when it was sent */
+      route_name?: string;
       /** @example queued */
       status: string;
       /**
