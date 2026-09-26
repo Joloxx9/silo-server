@@ -683,6 +683,7 @@ func registerAll(reg *Registry) {
 	registerRequests(reg)
 	registerAdminRequests(reg)
 	registerAdminRequestRoutes(reg)
+	registerAdminRequestQueue(reg)
 	registerRequestLifecycle(reg, reg.deps.RequestLifecycle, reg.deps.WatchProviders)
 	registerHistoryImports(reg)
 	registerAdminHistoryImports(reg)

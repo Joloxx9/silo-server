@@ -1586,6 +1586,9 @@ func testViewer(userID int) Viewer {
 
 type fakeStore struct {
 	mu            sync.Mutex
+	adminFilters  []ListFilter
+	viewCounts    AdminViewCounts
+	events        map[string][]RequestEvent
 	settings      Settings
 	limit         *UserLimit
 	count         int
@@ -1786,8 +1789,21 @@ func (f *fakeStore) ListMine(context.Context, int, ListFilter) ([]*Request, erro
 	return append([]*Request(nil), f.mine...), nil
 }
 
-func (f *fakeStore) ListAdmin(context.Context, ListFilter) ([]*Request, error) {
+func (f *fakeStore) ListAdmin(_ context.Context, filter ListFilter) ([]*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.adminFilters = append(f.adminFilters, filter)
 	return nil, nil
+}
+
+func (f *fakeStore) CountAdminViews(context.Context) (AdminViewCounts, error) {
+	return f.viewCounts, nil
+}
+
+func (f *fakeStore) ListEvents(_ context.Context, requestID string, _ int) ([]RequestEvent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]RequestEvent(nil), f.events[requestID]...), nil
 }
 
 // guardAccepts mirrors the repository's guarded UPDATE. Callers hold f.mu.
@@ -2153,6 +2169,18 @@ func (f *fakeStore) ListTargets(_ context.Context, requestID string) ([]Target, 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]Target(nil), f.targets[requestID]...), nil
+}
+
+func (f *fakeStore) ListTargetsForRequests(_ context.Context, requestIDs []string) (map[string][]Target, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string][]Target{}
+	for _, id := range requestIDs {
+		if targets := f.targets[id]; len(targets) > 0 {
+			out[id] = append([]Target(nil), targets...)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeStore) CreateTarget(_ context.Context, t Target) (Target, error) {

@@ -2005,7 +2005,12 @@ have no request-administration consumers; the bundled web migrates these workflo
 Jellyfin compatibility has no corresponding administration contract.
 
 Moderation uses signed `(created_at, id)` cursors scoped to the administrator,
-profile and filters. Integration lists return bounded ID-ordered pages over the
+profile and filters. The v2 queue adds filters v1 never had: a `view`
+(`needs_approval`, `in_progress`, `failed`, `done`), a title or TMDB ID search
+(`q`), `media_type` and `requested_by_user_id`. Two v2-only reads serve the queue:
+`GET /admin/requests/counts` counts each view, and
+`GET /admin/requests/{id}/events` returns a request's history, newest first and
+bounded to 200 entries. Integration lists return bounded ID-ordered pages over the
 configured integrations. The service currently loads that small configuration set
 before slicing a page; it does not claim database-bounded enumeration.
 

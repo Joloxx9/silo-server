@@ -267,9 +267,11 @@ GET /api/v2/admin/request-users/{user_id}/limit	non-media
 PUT /api/v2/admin/request-users/{user_id}/limit	non-media
 GET /api/v2/admin/requests	non-media
 GET /api/v2/admin/requests/capabilities	non-media
+GET /api/v2/admin/requests/counts	non-media
 POST /api/v2/admin/requests/{id}/approve	non-media
 POST /api/v2/admin/requests/{id}/cancel	non-media
 POST /api/v2/admin/requests/{id}/decline	non-media
+GET /api/v2/admin/requests/{id}/events	non-media
 POST /api/v2/admin/requests/{id}/retry	non-media
 GET /api/v2/admin/sections	non-media
 POST /api/v2/admin/sections	non-media
@@ -1436,9 +1438,11 @@ GET /api/v2/admin/request-users/{user_id}/limit	non-media
 PUT /api/v2/admin/request-users/{user_id}/limit	non-media
 GET /api/v2/admin/requests	non-media
 GET /api/v2/admin/requests/capabilities	non-media
+GET /api/v2/admin/requests/counts	non-media
 POST /api/v2/admin/requests/{id}/approve	non-media
 POST /api/v2/admin/requests/{id}/cancel	non-media
 POST /api/v2/admin/requests/{id}/decline	non-media
+GET /api/v2/admin/requests/{id}/events	non-media
 POST /api/v2/admin/requests/{id}/retry	non-media
 GET /api/v2/admin/sections	non-media
 POST /api/v2/admin/sections	non-media

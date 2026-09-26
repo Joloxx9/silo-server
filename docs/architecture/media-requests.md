@@ -238,3 +238,16 @@ requester's advisory lock. Other accounts' failed requests are left alone: they
 are those users' history and count against their quota. Retrying one of them
 after someone else has requested the title answers `ErrAlreadyRequested`, since
 only one active request per title may exist.
+
+## Admin queue
+
+The admin queue groups requests by what an admin does next, from status and
+outcome alone so the database can filter and count them: needs approval
+(pending), in progress (approved, queued or downloading), failed, and done
+(completed, or closed by a decline or cancellation). An admin can retry a
+failed request or close it, which moves it to done (v2 only; the v1 cancel
+still refuses a failed request). A closed request stays closed: a target that
+reports later updates only itself. A request's
+history is its `media_request_events` rows. Target updates record the
+request's status or outcome only when it changes, so neither a reconcile pass
+nor a second target repeats an entry.

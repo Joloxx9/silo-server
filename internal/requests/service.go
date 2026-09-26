@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Silo-Server/silo-server/internal/access"
 	"github.com/Silo-Server/silo-server/internal/idgen"
@@ -938,6 +939,19 @@ func (s *Service) ListAdmin(ctx context.Context, viewer Viewer, filter ListFilte
 	if !viewer.IsAdmin {
 		return nil, ErrForbidden
 	}
+	if filter.View != "" && !filter.View.Valid() {
+		return nil, fmt.Errorf("%w: unknown view %q", ErrInvalidInput, filter.View)
+	}
+	if filter.MediaType != "" {
+		mediaType, err := normalizeMediaType(filter.MediaType)
+		if err != nil {
+			return nil, err
+		}
+		filter.MediaType = mediaType
+	}
+	if utf8.RuneCountInString(filter.Query) > maxAdminQueryLength {
+		return nil, fmt.Errorf("%w: search is longer than %d characters", ErrInvalidInput, maxAdminQueryLength)
+	}
 	reqs, err := s.store.ListAdmin(ctx, normalizeListFilter(filter))
 	if err != nil {
 		return nil, err
@@ -951,18 +965,53 @@ func (s *Service) ListAdmin(ctx context.Context, viewer Viewer, filter ListFilte
 	return reqs, nil
 }
 
+// maxAdminQueryLength bounds the admin queue's title search.
+const maxAdminQueryLength = 200
+
+// maxRequestEvents bounds a request's history as the admin queue reads it.
+const maxRequestEvents = 200
+
+// CountAdminViews counts the requests in each admin queue view.
+func (s *Service) CountAdminViews(ctx context.Context, viewer Viewer) (AdminViewCounts, error) {
+	if !viewer.IsAdmin {
+		return AdminViewCounts{}, ErrForbidden
+	}
+	return s.store.CountAdminViews(ctx)
+}
+
+// ListRequestEvents returns a request's history, newest first, for admins.
+func (s *Service) ListRequestEvents(ctx context.Context, viewer Viewer, id string) ([]RequestEvent, error) {
+	if !viewer.IsAdmin {
+		return nil, ErrForbidden
+	}
+	id = strings.TrimSpace(id)
+	if _, err := s.store.GetRequest(ctx, id); err != nil {
+		return nil, err
+	}
+	return s.store.ListEvents(ctx, id, maxRequestEvents)
+}
+
 // attachTargets loads and attaches the per-instance fulfillment targets for each
 // request so callers (admin queue, detail view) can surface multi-target status.
+// One query serves the whole page.
 func (s *Service) attachTargets(ctx context.Context, reqs ...*Request) error {
+	ids := make([]string, 0, len(reqs))
 	for _, r := range reqs {
-		if r == nil {
-			continue
+		if r != nil {
+			ids = append(ids, r.ID)
 		}
-		targets, err := s.store.ListTargets(ctx, r.ID)
-		if err != nil {
-			return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	byRequest, err := s.store.ListTargetsForRequests(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for _, r := range reqs {
+		if r != nil {
+			r.Targets = byRequest[r.ID]
 		}
-		r.Targets = targets
 	}
 	return nil
 }
@@ -1084,6 +1133,20 @@ func (s *Service) Decline(ctx context.Context, viewer Viewer, id, reason string)
 // or a target exists, the request stays in the pipeline until it completes or
 // fails.
 func (s *Service) Cancel(ctx context.Context, viewer Viewer, id, reason string) (*Request, error) {
+	return s.cancel(ctx, viewer, id, reason, false)
+}
+
+// AdminCancel is Cancel for the admin queue, which may also close a failed
+// request instead of retrying it. The v1 cancel keeps refusing failed
+// requests.
+func (s *Service) AdminCancel(ctx context.Context, viewer Viewer, id, reason string) (*Request, error) {
+	if !viewer.IsAdmin {
+		return nil, ErrForbidden
+	}
+	return s.cancel(ctx, viewer, id, reason, true)
+}
+
+func (s *Service) cancel(ctx context.Context, viewer Viewer, id, reason string, closeFailed bool) (*Request, error) {
 	if viewer.UserID == 0 {
 		return nil, ErrForbidden
 	}
@@ -1099,7 +1162,13 @@ func (s *Service) Cancel(ctx context.Context, viewer Viewer, id, reason string) 
 	if !viewer.IsAdmin && req.RequestedByUserID != viewer.UserID {
 		return nil, ErrForbidden
 	}
-	withdrawn, err := s.store.SetOutcome(ctx, req.ID, guardWithdrawable, OutcomeCancelled, viewer, reason)
+	guard := guardWithdrawable
+	if closeFailed && req.Outcome == OutcomeFailed {
+		// Closing a failed request moves it out of the admin's failed view;
+		// nothing more is sent for it.
+		guard = guardFailed
+	}
+	withdrawn, err := s.store.SetOutcome(ctx, req.ID, guard, OutcomeCancelled, viewer, reason)
 	if err != nil {
 		return nil, err
 	}

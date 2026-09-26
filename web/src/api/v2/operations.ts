@@ -186,6 +186,8 @@ export const v2Operations = {
   "GET /api/v2/admin/request-users/{user_id}/limit": "getAdminRequestUserLimit",
   "GET /api/v2/admin/requests": "listAdminRequests",
   "GET /api/v2/admin/requests/capabilities": "getAdminRequestCapabilities",
+  "GET /api/v2/admin/requests/counts": "getAdminRequestCounts",
+  "GET /api/v2/admin/requests/{id}/events": "listAdminRequestEvents",
   "GET /api/v2/admin/sections": "listAdminSections",
   "GET /api/v2/admin/sections/capabilities": "getAdminSectionCapabilities",
   "GET /api/v2/admin/sections/order": "getAdminSectionOrder",

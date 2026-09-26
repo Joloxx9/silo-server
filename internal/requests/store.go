@@ -28,6 +28,8 @@ type Store interface {
 	MarkFulfilledNotified(ctx context.Context, id string) error
 	ListMine(ctx context.Context, userID int, filter ListFilter) ([]*Request, error)
 	ListAdmin(ctx context.Context, filter ListFilter) ([]*Request, error)
+	CountAdminViews(ctx context.Context) (AdminViewCounts, error)
+	ListEvents(ctx context.Context, requestID string, limit int) ([]RequestEvent, error)
 	// SetStatus and SetOutcome apply a transition only while the request is in
 	// a state the guard accepts; otherwise they return ErrInvalidState.
 	SetStatus(ctx context.Context, id string, from StateGuard, status Status, actor Viewer) (*Request, error)
@@ -76,6 +78,7 @@ type Store interface {
 	// the anime flag they imply).
 	SetRoutingFacts(ctx context.Context, id string, facts RoutingFacts) (*Request, error)
 	ListTargets(ctx context.Context, requestID string) ([]Target, error)
+	ListTargetsForRequests(ctx context.Context, requestIDs []string) (map[string][]Target, error)
 	CreateTarget(ctx context.Context, target Target) (Target, error)
 	DeleteTarget(ctx context.Context, id int64) error
 	UpdateTargetStatus(ctx context.Context, targetID int64, status Status, externalID, externalStatus, lastErr string, actor Viewer) (*Request, error)

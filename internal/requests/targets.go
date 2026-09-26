@@ -85,6 +85,30 @@ func (r *Repository) ListTargets(ctx context.Context, requestID string) ([]Targe
 	return out, rows.Err()
 }
 
+// ListTargetsForRequests reads the targets of many requests in one query.
+func (r *Repository) ListTargetsForRequests(ctx context.Context, requestIDs []string) (map[string][]Target, error) {
+	out := map[string][]Target{}
+	if len(requestIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx, `SELECT `+targetColumns+`
+		FROM media_request_targets t
+		LEFT JOIN request_integrations ri ON ri.id = t.integration_id
+		WHERE t.request_id = ANY($1) ORDER BY t.request_id, t.quality`, requestIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list targets: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		t, err := scanTarget(rows)
+		if err != nil {
+			return nil, err
+		}
+		out[t.RequestID] = append(out[t.RequestID], t)
+	}
+	return out, rows.Err()
+}
+
 func (r *Repository) CreateTarget(ctx context.Context, t Target) (Target, error) {
 	var integrationID, routeID any
 	if t.IntegrationID != "" {
@@ -154,6 +178,23 @@ func (r *Repository) UpdateTargetStatus(ctx context.Context, targetID int64, sta
 }
 
 func (r *Repository) recomputeAggregate(ctx context.Context, exec requestExecutor, requestID string, actor Viewer) (*Request, error) {
+	// The request's history records what changed, once: a request with two
+	// targets moving to queued is one event, not two.
+	var prevStatus Status
+	var prevOutcome Outcome
+	if err := exec.QueryRow(ctx, `SELECT status, outcome FROM media_requests WHERE id = $1 FOR UPDATE`, requestID).
+		Scan(&prevStatus, &prevOutcome); err != nil {
+		return nil, fmt.Errorf("load request status: %w", err)
+	}
+	if prevOutcome == OutcomeDeclined || prevOutcome == OutcomeCancelled {
+		// A closed request stays closed: a target reporting late (say, after
+		// an admin closed a failed request) updates only itself.
+		req, err := scanRequest(exec.QueryRow(ctx, requestSelectSQL()+` WHERE id = $1`, requestID))
+		if err != nil {
+			return nil, fmt.Errorf("load closed request: %w", err)
+		}
+		return req, nil
+	}
 	rows, err := exec.Query(ctx, `SELECT status FROM media_request_targets WHERE request_id = $1`, requestID)
 	if err != nil {
 		return nil, fmt.Errorf("load target statuses: %w", err)
@@ -190,6 +231,11 @@ func (r *Repository) recomputeAggregate(ctx context.Context, exec requestExecuto
 	if err != nil {
 		return nil, fmt.Errorf("recompute aggregate: %w", err)
 	}
-	_ = r.recordEvent(ctx, exec, requestID, "status_"+string(status), actor, string(req.ExternalStatus))
+	if status != prevStatus {
+		_ = r.recordEvent(ctx, exec, requestID, "status_"+string(status), actor, req.ExternalStatus)
+	}
+	if outcome != prevOutcome {
+		_ = r.recordEvent(ctx, exec, requestID, "outcome_"+string(outcome), actor, lastErr)
+	}
 	return req, nil
 }

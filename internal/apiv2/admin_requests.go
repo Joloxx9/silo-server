@@ -219,7 +219,7 @@ func registerAdminRequests(reg *Registry) {
 		_, out.Body.GuardedConfiguration = reg.deps.AdminRequests.(guardedAdminRequests)
 		return out, nil
 	})
-	Register(reg, op(http.MethodGet, "/admin/requests", opListAdminRequests, false), func(ctx context.Context, in *MediaRequestListInput) (*MediaRequestCollectionOutput, error) {
+	Register(reg, op(http.MethodGet, "/admin/requests", opListAdminRequests, false), func(ctx context.Context, in *AdminMediaRequestListInput) (*MediaRequestCollectionOutput, error) {
 		return reg.listAdminRequests(ctx, cursors, in)
 	})
 	for _, action := range []string{adminActionApprove, adminActionDecline, adminActionCancel, adminActionRetry} {
@@ -237,7 +237,11 @@ func registerAdminRequests(reg *Registry) {
 			case adminActionDecline:
 				r, err = s.Decline(ctx, v, string(in.ID), in.Body.Reason)
 			case adminActionCancel:
-				r, err = s.Cancel(ctx, v, string(in.ID), in.Body.Reason)
+				if closer, ok := s.(adminRequestCloser); ok {
+					r, err = closer.AdminCancel(ctx, v, string(in.ID), in.Body.Reason)
+				} else {
+					r, err = s.Cancel(ctx, v, string(in.ID), in.Body.Reason)
+				}
 			case adminActionRetry:
 				r, err = s.Retry(ctx, v, string(in.ID))
 			}
@@ -263,13 +267,13 @@ func registerAdminRequests(reg *Registry) {
 	Register(reg, op(http.MethodPost, "/admin/request-integrations/{id}/options", opLoadRequestIntegrationOptions, false), reg.loadAdminRequestOptions)
 }
 
-func (reg *Registry) listAdminRequests(ctx context.Context, cursors *Cursors, in *MediaRequestListInput) (*MediaRequestCollectionOutput, error) {
+func (reg *Registry) listAdminRequests(ctx context.Context, cursors *Cursors, in *AdminMediaRequestListInput) (*MediaRequestCollectionOutput, error) {
 	s, p := reg.adminRequestService()
 	if p != nil {
 		return nil, p
 	}
 	v := adminRequestViewer(ctx)
-	scope := CursorScope{OperationID: opListAdminRequests, Security: strconv.Itoa(v.UserID) + "/" + v.ProfileID, Filter: in.Status + "|" + in.Outcome, Sort: adminRequestSort, Tiebreaker: "id"}
+	scope := CursorScope{OperationID: opListAdminRequests, Security: strconv.Itoa(v.UserID) + "/" + v.ProfileID, Filter: in.filterKey(), Sort: adminRequestSort, Tiebreaker: "id"}
 	var before *mediarequests.RequestPageKey
 	if in.Cursor != "" {
 		before = new(mediarequests.RequestPageKey)
@@ -280,7 +284,12 @@ func (reg *Registry) listAdminRequests(ctx context.Context, cursors *Cursors, in
 			return nil, NewProblem(TypeInvalidCursor, "The cursor position is invalid.")
 		}
 	}
-	rows, err := s.ListAdmin(ctx, v, mediarequests.ListFilter{Status: mediarequests.Status(in.Status), Outcome: mediarequests.Outcome(in.Outcome), Limit: in.Limit + 1, Before: before})
+	filter, p := adminListFilter(in)
+	if p != nil {
+		return nil, p
+	}
+	filter.Limit, filter.Before = in.Limit+1, before
+	rows, err := s.ListAdmin(ctx, v, filter)
 	if err != nil {
 		return nil, requestProblem(err)
 	}

@@ -1,4 +1,11 @@
-import { useMutation, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type Query,
+} from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
 import { V2ProblemError } from "@/api/v2/request";
 import {
@@ -9,8 +16,11 @@ import {
   listAdminRequestIntegrationsV2,
   saveAdminRequestIntegrationV2,
   deleteAdminRequestIntegrationV2,
-  listAdminMediaRequestsV2,
+  listAdminRequestQueuePageV2,
+  getAdminRequestCountsV2,
+  listAdminRequestEventsV2,
   approveAdminRequestV2,
+  cancelAdminRequestV2,
   declineAdminRequestV2,
   retryAdminRequestV2,
   loadAdminRequestIntegrationOptionsV2,
@@ -20,6 +30,7 @@ import {
   deleteAdminRequestRouteV2,
   reorderAdminRequestRoutesV2,
   previewAdminRequestRouteV2,
+  type AdminRequestQueueFilter,
   type RequestRoute,
   type RequestRouteBody,
   type RequestRouteMediaType,
@@ -45,6 +56,7 @@ import type {
   CreateMediaRequestInput,
   DiscoverBrowseKind,
   LoadRequestIntegrationOptionsRequest,
+  MediaRequest,
   RequestIntegration,
   RequestDiscoverySection,
   RequestListParams,
@@ -287,8 +299,10 @@ export function useCancelMediaRequest() {
     mutationFn: (id: string) => cancelMediaRequestV2(id),
     onSuccess: () => {
       toast.success("Request cancelled");
-      invalidateRequestSurfaces(queryClient);
     },
+    // A refused action still refreshes the queue: another admin may have
+    // acted first, and the row should show what happened.
+    onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to cancel request");
     },
@@ -308,12 +322,107 @@ export function useMyMediaRequests(
   });
 }
 
-export function useAdminMediaRequests(params: RequestListParams = {}) {
-  const key = listParamsKey(params);
+const ADMIN_QUEUE_STALE_TIME = 10_000;
+/** Rows per queue page; the server answers at most 50. */
+export const ADMIN_QUEUE_PAGE_SIZE = 25;
+/** How often the view counts (and so the admin nav's badge) are read again. */
+export const ADMIN_REQUEST_COUNTS_INTERVAL = 60_000;
+
+function requestQueueKey(filter: AdminRequestQueueFilter) {
+  return adminKeys.requestQueue({
+    view: filter.view,
+    q: filter.q?.trim() ?? "",
+    mediaType: filter.mediaType ?? "all",
+    requestedByUserId: filter.requestedByUserId ?? null,
+  });
+}
+
+/**
+ * One queue view, a page at a time. A new search or type filter keeps the
+ * rows on screen until its first page arrives; a new view does not, since its
+ * rows take different actions.
+ */
+export function useAdminRequestQueue(filter: AdminRequestQueueFilter) {
+  return useInfiniteQuery({
+    queryKey: requestQueueKey(filter),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      listAdminRequestQueuePageV2(filter, {
+        limit: ADMIN_QUEUE_PAGE_SIZE,
+        cursor: pageParam,
+        signal,
+      }),
+    // A cursor the list already visited would loop; stop there.
+    getNextPageParam: (last, _pages, _lastParam, params) =>
+      last.nextCursor && !params.includes(last.nextCursor) ? last.nextCursor : undefined,
+    placeholderData: (previous, previousQuery) =>
+      (previousQuery?.queryKey[3] as { view?: string } | undefined)?.view === filter.view
+        ? previous
+        : undefined,
+    staleTime: ADMIN_QUEUE_STALE_TIME,
+  });
+}
+
+/** How many requests each queue view holds; polled for the admin nav badge. */
+export function useAdminRequestCounts(options: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: adminKeys.requests(key),
-    queryFn: () => listAdminMediaRequestsV2(params),
-    staleTime: 10_000,
+    queryKey: adminKeys.requestCounts(),
+    queryFn: getAdminRequestCountsV2,
+    enabled: options.enabled ?? true,
+    staleTime: ADMIN_QUEUE_STALE_TIME,
+    // A server without request administration, or an admin session that lost
+    // its rights, answers the same every time; any other error (a node
+    // restarting) is worth asking again.
+    refetchInterval: (query) =>
+      query.state.error instanceof V2ProblemError &&
+      ["permission_denied", "dependency_unavailable"].includes(query.state.error.problemType)
+        ? false
+        : ADMIN_REQUEST_COUNTS_INTERVAL,
+    retry: false,
+  });
+}
+
+/** Reads the queue's rows and view counts again. */
+export function useRefreshRequestQueue() {
+  const queryClient = useQueryClient();
+  const [isRefreshing, setRefreshing] = useState(false);
+  return {
+    isRefreshing,
+    refresh: () => {
+      setRefreshing(true);
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: adminKeys.requestQueueRoot() }),
+        queryClient.invalidateQueries({ queryKey: adminKeys.requestCounts() }),
+      ]).finally(() => setRefreshing(false));
+    },
+  };
+}
+
+/** A request's history, newest first. */
+export function useAdminRequestEvents(id: string | undefined) {
+  return useQuery({
+    queryKey: adminKeys.requestEvents(id ?? ""),
+    queryFn: () => listAdminRequestEventsV2(id!),
+    enabled: Boolean(id),
+    staleTime: ADMIN_QUEUE_STALE_TIME,
+  });
+}
+
+/** Where a request's quality tiers would go if it were sent now. */
+export function useAdminRequestRoutePreview(
+  target: { mediaType: RequestRouteMediaType; tmdbId: number; requesterUserId?: number } | null,
+) {
+  return useQuery({
+    queryKey: adminKeys.requestRoutePreview(
+      target?.mediaType ?? "",
+      target?.tmdbId ?? 0,
+      target?.requesterUserId,
+    ),
+    queryFn: () =>
+      previewAdminRequestRouteV2(target!.mediaType, target!.tmdbId, target!.requesterUserId),
+    enabled: target !== null,
+    staleTime: REQUESTS_STALE_TIME,
+    retry: false,
   });
 }
 
@@ -324,8 +433,10 @@ export function useApproveMediaRequest() {
     mutationFn: (id: string) => approveAdminRequestV2(id),
     onSuccess: () => {
       toast.success("Request approved");
-      invalidateRequestSurfaces(queryClient);
     },
+    // A refused action still refreshes the queue: another admin may have
+    // acted first, and the row should show what happened.
+    onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to approve request");
     },
@@ -340,8 +451,10 @@ export function useDeclineMediaRequest() {
       declineAdminRequestV2(id, reason),
     onSuccess: () => {
       toast.success("Request declined");
-      invalidateRequestSurfaces(queryClient);
     },
+    // A refused action still refreshes the queue: another admin may have
+    // acted first, and the row should show what happened.
+    onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to decline request");
     },
@@ -355,12 +468,124 @@ export function useRetryMediaRequest() {
     mutationFn: (id: string) => retryAdminRequestV2(id),
     onSuccess: () => {
       toast.success("Request queued for retry");
-      invalidateRequestSurfaces(queryClient);
     },
+    // A refused action still refreshes the queue: another admin may have
+    // acted first, and the row should show what happened.
+    onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to retry request");
     },
   });
+}
+
+/** An admin withdraws a request nothing has been sent for yet, or closes a failed one. */
+export function useAdminCancelMediaRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      cancelAdminRequestV2(id, reason),
+    onSuccess: () => {
+      toast.success("Request cancelled");
+      invalidateRequestSurfaces(queryClient);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel request");
+    },
+  });
+}
+
+export type BulkRequestAction = "approve" | "decline";
+
+/** Requests a bulk action sends at once; the rest wait for a free slot. */
+export const BULK_REQUEST_CONCURRENCY = 4;
+
+export interface BulkRequestFailure {
+  id: string;
+  title: string;
+  message: string;
+}
+
+export interface BulkRequestProgress {
+  action: BulkRequestAction;
+  total: number;
+  /** Requests answered so far, failed ones included. */
+  done: number;
+  failures: BulkRequestFailure[];
+}
+
+async function forEachWithConcurrency<T>(
+  items: readonly T[],
+  limit: number,
+  run: (item: T) => Promise<void>,
+) {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await run(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+/**
+ * Approves or declines several requests through the per-request endpoints, a
+ * few at a time. One refusal does not stop the rest: `progress` counts every
+ * answer and keeps each failure with its reason. The queue and counts are
+ * read again once, when the last answer is in.
+ */
+export function useBulkRequestAction() {
+  const queryClient = useQueryClient();
+  const [progress, setProgress] = useState<BulkRequestProgress | null>(null);
+  const mutation = useMutation({
+    retry: false,
+    mutationFn: async ({
+      action,
+      requests,
+      reason,
+    }: {
+      action: BulkRequestAction;
+      requests: readonly Pick<MediaRequest, "id" | "title">[];
+      reason?: string;
+    }) => {
+      const failures: BulkRequestFailure[] = [];
+      let done = 0;
+      setProgress({ action, total: requests.length, done, failures: [] });
+      await forEachWithConcurrency(requests, BULK_REQUEST_CONCURRENCY, async (request) => {
+        try {
+          if (action === "approve") await approveAdminRequestV2(request.id);
+          else await declineAdminRequestV2(request.id, reason);
+        } catch (err) {
+          failures.push({
+            id: request.id,
+            title: request.title,
+            message: problemMessage(err, `Failed to ${action} request`),
+          });
+        }
+        done += 1;
+        setProgress({ action, total: requests.length, done, failures: [...failures] });
+      });
+      return { action, total: requests.length, failures };
+    },
+    onSuccess: ({ action, total, failures }) => {
+      const verb = action === "approve" ? "approved" : "declined";
+      const succeeded = total - failures.length;
+      if (failures.length === 0) {
+        toast.success(`${succeeded} ${succeeded === 1 ? "request" : "requests"} ${verb}`);
+      } else {
+        toast.error(`${failures.length} of ${total} requests couldn't be ${verb}`);
+      }
+    },
+    onSettled: () => invalidateRequestSurfaces(queryClient),
+  });
+  return {
+    run: mutation.mutate,
+    isRunning: mutation.isPending,
+    progress,
+    /** Forgets the last run's progress and failures. */
+    reset: () => {
+      mutation.reset();
+      setProgress(null);
+    },
+  };
 }
 
 export function useRequestSettings() {
