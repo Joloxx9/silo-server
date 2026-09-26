@@ -8,12 +8,17 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { buildQueryCatalogHref } from "@/pages/catalogSearchParams";
 import { prefetchCatalog } from "@/pages/catalogRoute";
 import { useSidebarItemNavigation } from "@/components/sidebarItemNavigationContext";
-import { createEmptyQueryDefinition, type BrowseItem } from "@/api/types";
+import { createEmptyQueryDefinition, type BrowseItem, type RequestMediaResult } from "@/api/types";
 import { createCatalogSearchState, fetchCatalogPage } from "@/hooks/queries/catalog";
 import { useSearchMediaScope } from "@/hooks/useSearchMediaScope";
 import { useRequestSearch } from "@/hooks/queries/useRequests";
 import { useCanRequest } from "@/hooks/useCanRequest";
 import { catalogKeys } from "@/hooks/queries/keys";
+import {
+  REQUEST_DIALOG_SUGGESTION_LIMIT,
+  requestDetailHref,
+  requestSuggestions,
+} from "@/lib/mediaRequests";
 import { decodeThumbhash } from "@/lib/thumbhash";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
@@ -24,6 +29,14 @@ const PREVIEW_LIMIT = 8;
 const DEBOUNCE_MS = 200;
 const TMDB_DEBOUNCE_MS = 400;
 const INTERACTIVE_SEARCH_GC_TIME_MS = 30_000;
+const LIBRARY_LISTBOX_ID = "global-search-library-results";
+const REQUEST_LISTBOX_ID = "global-search-request-results";
+
+// Library rows and request suggestions share one option sequence, so the
+// arrow keys walk from the last library row into the suggestions.
+function searchResultOptionId(index: number): string {
+  return `search-result-${index}`;
+}
 
 function typeLabel(type: BrowseItem["type"]): string {
   switch (type) {
@@ -79,7 +92,7 @@ function GlobalSearchResultRow({
   return (
     <div className="group/media hover:bg-muted/80 data-[selected]:bg-accent relative rounded-md transition-colors">
       <div
-        id={`search-result-${index}`}
+        id={searchResultOptionId(index)}
         role="option"
         aria-selected={isSelected}
         aria-label={[item.title, item.year > 0 ? String(item.year) : null, typeLabel(item.type)]
@@ -161,13 +174,14 @@ export function GlobalSearch({
     gcTime: INTERACTIVE_SEARCH_GC_TIME_MS,
     retry: false,
   });
-  const tmdbMissingCount =
-    tmdbQuery.data?.results?.filter((result) => result.availability !== "available").length ?? 0;
-  // Cap at DIALOG_LIMIT (4) — RequestToAddSection slices results to that many rows.
-  const tmdbVisibleCount = Math.min(tmdbMissingCount, 4);
-  const tmdbStillLoading =
-    canRequest.discoveryEnabled && tmdbDebouncedQuery.length > 1 && tmdbQuery.isLoading;
-  const tmdbWillRender = canRequest.discoveryEnabled && tmdbMissingCount > 0;
+  const showRequestSection = canRequest.discoveryEnabled && tmdbDebouncedQuery.length > 1;
+  // The same rows RequestToAddSection renders: it reads this query from the
+  // shared cache and applies the same selection.
+  const requestRows = showRequestSection
+    ? requestSuggestions(tmdbQuery.data?.results, REQUEST_DIALOG_SUGGESTION_LIMIT)
+    : [];
+  const tmdbStillLoading = showRequestSection && tmdbQuery.isLoading;
+  const tmdbWillRender = requestRows.length > 0;
   // Hide empty state while the TMDB debounce trails the library debounce; otherwise
   // the user sees "No matches" flash between t=200ms and t=400ms after typing.
   const tmdbDebounceCatchingUp =
@@ -243,6 +257,15 @@ export function GlobalSearch({
     [beginSidebarItemNavigation, navigate],
   );
 
+  const handlePickRequest = useCallback(
+    (item: RequestMediaResult) => {
+      navigate(requestDetailHref(item.media_type, item.tmdb_id));
+      setOpen(false);
+      setQuery("");
+    },
+    [navigate],
+  );
+
   // Reset selectedIndex when query changes
   useEffect(() => {
     setSelectedIndex(-1);
@@ -252,7 +275,7 @@ export function GlobalSearch({
   // the input; aria-activedescendant carries the selection.
   useEffect(() => {
     if (selectedIndex >= 0) {
-      document.getElementById(`search-result-${selectedIndex}`)?.scrollIntoView?.({
+      document.getElementById(searchResultOptionId(selectedIndex))?.scrollIntoView?.({
         block: "nearest",
       });
     }
@@ -272,17 +295,31 @@ export function GlobalSearch({
     !canRequest.isResolving &&
     !tmdbDebounceCatchingUp;
   const showError = previewQuery.isError;
+  const optionCount = items.length + requestRows.length;
   const moveResultFocus = useCallback(
     (nextIndex: number) => {
-      if (items.length === 0) {
+      if (optionCount === 0) {
         setSelectedIndex(-1);
         searchInputRef.current?.focus();
         return;
       }
-      setSelectedIndex(((nextIndex % items.length) + items.length) % items.length);
+      setSelectedIndex(((nextIndex % optionCount) + optionCount) % optionCount);
     },
-    [items.length],
+    [optionCount],
   );
+  const pickSelectedOption = () => {
+    const item = items[selectedIndex];
+    if (item) {
+      handlePickItem(item.content_id);
+      return true;
+    }
+    const suggestion = requestRows[selectedIndex - items.length];
+    if (suggestion) {
+      handlePickRequest(suggestion);
+      return true;
+    }
+    return false;
+  };
 
   return (
     <Dialog
@@ -306,7 +343,11 @@ export function GlobalSearch({
               ref={searchInputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search library..."
+              placeholder={
+                canRequest.discoveryEnabled
+                  ? "Search library or find titles to request..."
+                  : "Search library..."
+              }
               className="placeholder:text-muted-foreground flex h-12 w-full bg-transparent text-sm outline-none"
               autoFocus
               // Submitting opens the Catalog page, so its chunk starts loading
@@ -316,9 +357,13 @@ export function GlobalSearch({
               role="combobox"
               aria-expanded={showResultsPanel}
               aria-autocomplete="list"
-              aria-controls="global-search-library-results"
+              aria-controls={
+                requestRows.length > 0
+                  ? `${LIBRARY_LISTBOX_ID} ${REQUEST_LISTBOX_ID}`
+                  : LIBRARY_LISTBOX_ID
+              }
               aria-activedescendant={
-                selectedIndex >= 0 ? `search-result-${selectedIndex}` : undefined
+                selectedIndex >= 0 ? searchResultOptionId(selectedIndex) : undefined
               }
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown") {
@@ -326,10 +371,10 @@ export function GlobalSearch({
                   moveResultFocus(selectedIndex + 1);
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault();
-                  moveResultFocus(selectedIndex < 0 ? items.length - 1 : selectedIndex - 1);
-                } else if (e.key === "Enter" && selectedIndex >= 0 && items[selectedIndex]) {
-                  e.preventDefault();
-                  handlePickItem(items[selectedIndex].content_id);
+                  moveResultFocus(selectedIndex < 0 ? optionCount - 1 : selectedIndex - 1);
+                } else if (e.key === "Enter" && selectedIndex >= 0) {
+                  // With nothing highlighted, Enter submits the form instead.
+                  if (pickSelectedOption()) e.preventDefault();
                 } else if (e.key === "Escape") {
                   setOpen(false);
                 }
@@ -343,11 +388,7 @@ export function GlobalSearch({
         {showResultsPanel && (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="max-h-[min(22rem,55vh)] overflow-y-auto overscroll-contain px-2 py-2">
-              <div
-                id="global-search-library-results"
-                role="listbox"
-                aria-label="Library search results"
-              >
+              <div id={LIBRARY_LISTBOX_ID} role="listbox" aria-label="Library search results">
                 {showLoading && (
                   <div className="text-muted-foreground px-3 py-6 text-center text-sm">
                     Searching...
@@ -374,18 +415,25 @@ export function GlobalSearch({
                   />
                 ))}
               </div>
-              {tmdbDebouncedQuery.length > 1 && canRequest.discoveryEnabled && (
+              {showRequestSection && (
                 <RequestToAddSection
                   variant="dialog"
                   query={tmdbDebouncedQuery}
                   libraryHadHits={items.length > 0}
                   libraryResultsKnown={!previewQuery.isFetching && !previewQuery.isError}
+                  combobox={{
+                    listboxId: REQUEST_LISTBOX_ID,
+                    optionId: (index) => searchResultOptionId(items.length + index),
+                    selectedIndex:
+                      selectedIndex >= items.length ? selectedIndex - items.length : -1,
+                    onPick: handlePickRequest,
+                  }}
                 />
               )}
             </div>
             <div role="status" aria-live="polite" className="sr-only">
-              {tmdbVisibleCount > 0
-                ? `${items.length} library results, ${tmdbVisibleCount} request suggestions`
+              {requestRows.length > 0
+                ? `${items.length} library results, ${requestRows.length} request suggestions`
                 : `${items.length} results found`}
             </div>
             <div className="text-muted-foreground border-t px-3 py-2 text-center text-xs">

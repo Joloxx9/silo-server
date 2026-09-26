@@ -1,35 +1,48 @@
 import { useState } from "react";
+import type { MouseEvent } from "react";
 import { Link } from "react-router";
 import { Film, Sparkles, Tv } from "lucide-react";
 import { useCanRequest } from "@/hooks/useCanRequest";
 import { useCreateMediaRequest, useRequestSearch } from "@/hooks/queries/useRequests";
 import type { RequestMediaResult } from "@/api/types";
 import {
+  formatMediaType,
+  formatRequestDisplayState,
   formatRequestReason,
-  formatRequestStatus,
+  REQUEST_DIALOG_SUGGESTION_LIMIT,
+  requestDetailHref,
+  requestDisplayState,
   requestInputFromMediaResult,
+  requestSuggestions,
   tmdbImageURL,
 } from "@/lib/mediaRequests";
 import { cn } from "@/lib/utils";
+import { RequestStatusBadge } from "./RequestStatusBadge";
 import RequestPosterCard from "./RequestPosterCard";
 
 function cardKey(item: Pick<RequestMediaResult, "media_type" | "tmdb_id">): string {
   return `${item.media_type}-${item.tmdb_id}`;
 }
 
-function nonRequestableLabel(item: RequestMediaResult): string {
-  if (item.request.status) {
-    return formatRequestStatus(item.request.status);
-  }
-  if (item.request.reason) {
-    return formatRequestReason(item.request.reason);
-  }
-  return "Blocked";
+function unavailableReasonLabel(item: RequestMediaResult): string {
+  return item.request.reason ? formatRequestReason(item.request.reason) : "Blocked";
 }
 
-const DIALOG_LIMIT = 4;
 const GRID_LIMIT = 20;
 const INTERACTIVE_SEARCH_GC_TIME_MS = 30_000;
+
+/**
+ * Lets a host combobox (the ⌘K dialog) treat the dialog rows as options of its
+ * own: it owns the highlighted row and what picking a row does.
+ */
+export interface RequestSuggestionCombobox {
+  listboxId: string;
+  /** DOM id for the suggestion at this position, unique across the host's options. */
+  optionId: (index: number) => string;
+  /** Position of the highlighted suggestion, or -1 when none is highlighted. */
+  selectedIndex: number;
+  onPick: (item: RequestMediaResult) => void;
+}
 
 export type RequestToAddSectionProps = {
   variant: "dialog" | "grid";
@@ -41,6 +54,8 @@ export type RequestToAddSectionProps = {
    * Loading and failed searches must not be presented as confirmed absences.
    */
   libraryResultsKnown?: boolean;
+  /** Dialog variant only. */
+  combobox?: RequestSuggestionCombobox;
 };
 
 export function RequestToAddSection({
@@ -48,6 +63,7 @@ export function RequestToAddSection({
   query,
   libraryHadHits,
   libraryResultsKnown = true,
+  combobox,
 }: RequestToAddSectionProps) {
   const { discoveryEnabled } = useCanRequest();
   const search = useRequestSearch("all", query, 1, {
@@ -61,11 +77,9 @@ export function RequestToAddSection({
   if (!discoveryEnabled) return null;
   if (search.isError && !search.data) return null;
 
-  const filtered = (search.data?.results ?? []).filter((item) => item.availability !== "available");
-  if (filtered.length === 0) return null;
-
-  const limit = variant === "dialog" ? DIALOG_LIMIT : GRID_LIMIT;
-  const visible = filtered.slice(0, limit);
+  const limit = variant === "dialog" ? REQUEST_DIALOG_SUGGESTION_LIMIT : GRID_LIMIT;
+  const visible = requestSuggestions(search.data?.results, limit);
+  if (visible.length === 0) return null;
 
   if (variant === "dialog") {
     return (
@@ -73,6 +87,7 @@ export function RequestToAddSection({
         items={visible}
         libraryHadHits={libraryHadHits}
         libraryResultsKnown={libraryResultsKnown}
+        combobox={combobox}
       />
     );
   }
@@ -106,13 +121,13 @@ function HeaderCopy({
   }
 
   if (!libraryResultsKnown) {
-    return <div className="px-3 pt-3 pb-1 text-[12px] text-amber-300/85">Discovery matches:</div>;
+    return (
+      <div className="text-muted-foreground px-3 pt-3 pb-1 text-[12px]">Discovery matches:</div>
+    );
   }
 
   return (
-    <div className="px-3 pt-3 pb-1 text-[12px] text-amber-300/85">
-      Not in your library, but you can request:
-    </div>
+    <div className="text-muted-foreground px-3 pt-3 pb-1 text-[12px]">Not in your library</div>
   );
 }
 
@@ -120,39 +135,86 @@ function DialogVariant({
   items,
   libraryHadHits,
   libraryResultsKnown,
+  combobox,
 }: {
   items: RequestMediaResult[];
   libraryHadHits: boolean;
   libraryResultsKnown: boolean;
+  combobox?: RequestSuggestionCombobox;
 }) {
   return (
-    <div className="border-t border-white/5 pt-1">
+    <div className="border-border/60 border-t pt-1">
       <HeaderCopy
         libraryHadHits={libraryHadHits}
         libraryResultsKnown={libraryResultsKnown}
         count={items.length}
       />
-      <ul className="px-1 py-1">
-        {items.map((item) => (
-          <li key={`${item.media_type}-${item.tmdb_id}`}>
-            <DialogRow item={item} />
-          </li>
+      <div
+        id={combobox?.listboxId}
+        role="listbox"
+        aria-label="Request suggestions"
+        className="px-1 py-1"
+      >
+        {items.map((item, index) => (
+          <DialogRow
+            key={cardKey(item)}
+            item={item}
+            optionId={combobox?.optionId(index)}
+            isSelected={combobox?.selectedIndex === index}
+            onPick={combobox?.onPick}
+          />
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
 
-function DialogRow({ item }: { item: RequestMediaResult }) {
+function DialogRow({
+  item,
+  optionId,
+  isSelected,
+  onPick,
+}: {
+  item: RequestMediaResult;
+  optionId?: string;
+  isSelected: boolean;
+  onPick?: (item: RequestMediaResult) => void;
+}) {
   const poster = tmdbImageURL(item.poster_path);
   const Icon = item.media_type === "series" ? Tv : Film;
   const requestable = item.request.requestable;
-  const unavailableLabel = requestable ? null : nonRequestableLabel(item);
+  const state = item.request.status ? requestDisplayState(item.request.status) : undefined;
+  const reasonLabel = !state && !requestable ? unavailableReasonLabel(item) : null;
 
+  // A plain click goes through the host so it can close the dialog; modified
+  // clicks keep the link's own new-tab and new-window behavior.
+  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (!onPick || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onPick(item);
+  }
+
+  // Keyboard focus stays in the host's search input, which points at this row
+  // with aria-activedescendant, so the row is not a tab stop.
   return (
     <Link
-      to={`/requests/${item.media_type}/${item.tmdb_id}`}
-      className="hover:bg-muted/80 flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors"
+      id={optionId}
+      role="option"
+      aria-selected={isSelected}
+      aria-label={[
+        item.title,
+        item.year ? String(item.year) : null,
+        formatMediaType(item.media_type),
+        state ? formatRequestDisplayState(state) : reasonLabel,
+      ]
+        .filter(Boolean)
+        .join(", ")}
+      data-selected={isSelected || undefined}
+      tabIndex={-1}
+      to={requestDetailHref(item.media_type, item.tmdb_id)}
+      onClick={handleClick}
+      className="hover:bg-muted/80 data-[selected]:bg-accent flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors"
     >
       <div
         className={cn(
@@ -175,18 +237,13 @@ function DialogRow({ item }: { item: RequestMediaResult }) {
           {item.media_type === "series" ? "Series" : "Movie"}
         </div>
       </div>
-      {requestable ? (
-        <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2 py-0.5 text-[9px] font-semibold tracking-[0.5px] text-amber-300 uppercase">
-          Request
+      {state ? (
+        <RequestStatusBadge state={state} className="shrink-0" />
+      ) : reasonLabel ? (
+        <span className="text-muted-foreground shrink-0 text-[11px]" title={reasonLabel}>
+          {reasonLabel}
         </span>
-      ) : (
-        <span
-          className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-medium tracking-[0.5px] text-white/60 uppercase"
-          title={unavailableLabel ?? "Blocked"}
-        >
-          {unavailableLabel}
-        </span>
-      )}
+      ) : null}
     </Link>
   );
 }

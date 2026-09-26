@@ -1,8 +1,15 @@
 import { Link } from "react-router";
-import { Check, Film, Library, Loader2, Plus, Tv } from "lucide-react";
+import { Film, Library, Loader2, Plus, Tv } from "lucide-react";
 import type { MediaRequest, RequestMediaResult } from "@/api/types";
 import { cn } from "@/lib/utils";
-import { formatRequestReason, formatRequestStatus, tmdbImageURL } from "@/lib/mediaRequests";
+import {
+  requestDetailHref,
+  requestDisplayState,
+  tmdbImageURL,
+  type RequestDisplayState,
+} from "@/lib/mediaRequests";
+import { RequestReasonBadge, RequestStatusBadge } from "@/components/RequestStatusBadge";
+import { Button } from "@/components/ui/button";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
 
 const POSTER_WIDTH = "w-[148px] sm:w-[164px] lg:w-[184px]";
@@ -22,13 +29,24 @@ type MineProps = {
   variant: "mine";
   request: MediaRequest;
   fluid?: boolean;
+  /** Shows a Cancel request action. Pass it only for the viewer's own cancellable request. */
+  onCancel?: () => void;
+  /** Disables the Cancel request action while a cancellation is in flight. */
+  isCancelling?: boolean;
 };
 
 export type RequestPosterCardProps = DiscoverProps | MineProps;
 
 export default function RequestPosterCard(props: RequestPosterCardProps) {
   if (props.variant === "mine") {
-    return <MineCard request={props.request} fluid={props.fluid} />;
+    return (
+      <MineCard
+        request={props.request}
+        fluid={props.fluid}
+        onCancel={props.onCancel}
+        isCancelling={props.isCancelling}
+      />
+    );
   }
   return (
     <DiscoverCard
@@ -53,18 +71,13 @@ function DiscoverCard({
 }) {
   const poster = tmdbImageURL(item.poster_path);
   const requestable = item.request.requestable;
-  const statusLabel = item.request.status ? formatRequestStatus(item.request.status) : null;
-  const reasonLabel =
-    !requestable && !item.request.status ? formatRequestReason(item.request.reason) : null;
   const availableInLibrary = item.availability === "available" && !item.request.status;
-
-  const ribbon: { kind: RibbonKind; label: string } | null = statusLabel
-    ? { kind: (item.request.status as RibbonKind) ?? "pending", label: statusLabel }
+  const state: RequestDisplayState | undefined = item.request.status
+    ? requestDisplayState(item.request.status)
     : availableInLibrary
-      ? { kind: "completed", label: "In library" }
-      : reasonLabel
-        ? { kind: "blocked", label: reasonLabel }
-        : null;
+      ? "available"
+      : undefined;
+  const badgeClassName = posterBadgeClassName(Boolean(item.library_content_id));
 
   return (
     <div
@@ -74,7 +87,7 @@ function DiscoverCard({
       )}
     >
       <Link
-        to={`/requests/${item.media_type}/${item.tmdb_id}`}
+        to={requestDetailHref(item.media_type, item.tmdb_id)}
         className="block focus:outline-none focus-visible:outline-none"
       >
         <PosterFrame
@@ -83,13 +96,11 @@ function DiscoverCard({
           mediaType={item.media_type}
           dim={!requestable}
         >
-          {ribbon && (
-            <StatusRibbon
-              status={ribbon.kind}
-              label={ribbon.label}
-              reserveLibrarySpace={Boolean(item.library_content_id)}
-            />
-          )}
+          {state ? (
+            <RequestStatusBadge state={state} overlay className={badgeClassName} />
+          ) : !requestable ? (
+            <RequestReasonBadge reason={item.request.reason} overlay className={badgeClassName} />
+          ) : null}
           {requestable && onRequest && (
             <div
               data-testid="request-poster-hover-overlay"
@@ -140,16 +151,23 @@ function DiscoverCard({
   );
 }
 
-function MineCard({ request, fluid }: { request: MediaRequest; fluid?: boolean }) {
+function MineCard({
+  request,
+  fluid,
+  onCancel,
+  isCancelling,
+}: {
+  request: MediaRequest;
+  fluid?: boolean;
+  onCancel?: () => void;
+  isCancelling?: boolean;
+}) {
   const poster = tmdbImageURL(request.poster_path);
-  const isCompleted = request.status === "completed";
-  const isFailed =
+  const state = requestDisplayState(request.status, request.outcome);
+  const isClosed =
     request.outcome === "failed" ||
     request.outcome === "declined" ||
     request.outcome === "cancelled";
-
-  const kind: RibbonKind = isFailed ? "blocked" : (request.status as RibbonKind);
-  const label = isFailed ? formatOutcome(request.outcome) : formatRequestStatus(request.status);
 
   return (
     <div
@@ -159,42 +177,49 @@ function MineCard({ request, fluid }: { request: MediaRequest; fluid?: boolean }
       )}
     >
       <Link
-        to={`/requests/${request.media_type}/${request.tmdb_id}`}
+        to={requestDetailHref(request.media_type, request.tmdb_id)}
         className="block focus:outline-none focus-visible:outline-none"
       >
         <PosterFrame
           poster={poster}
           title={request.title}
           mediaType={request.media_type}
-          dim={isFailed}
+          dim={isClosed}
         >
-          <StatusRibbon
-            status={kind}
-            label={label}
-            reserveLibrarySpace={Boolean(request.library_content_id)}
-          />
-
-          {isCompleted && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-emerald-950/90 via-emerald-900/40 to-transparent p-3">
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-emerald-200 ring-1 ring-emerald-400/30">
-                <Check className="h-3 w-3 stroke-[2.5]" />
-                Ready to watch
-              </span>
-            </div>
-          )}
+          {state ? (
+            <RequestStatusBadge
+              state={state}
+              overlay
+              className={posterBadgeClassName(Boolean(request.library_content_id))}
+            />
+          ) : null}
         </PosterFrame>
 
         <CardMeta title={request.title} year={request.year} mediaType={request.media_type} />
 
         {request.last_error ? (
           <p
-            className="mt-1 line-clamp-2 text-[11px] leading-tight text-red-300/90"
+            className="text-destructive mt-1 line-clamp-2 text-[11px] leading-tight"
             title={request.last_error}
           >
             {request.last_error}
           </p>
         ) : null}
       </Link>
+
+      {onCancel ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={onCancel}
+          disabled={isCancelling}
+          aria-label={`Cancel request for ${request.title}`}
+          className="text-muted-foreground mt-1"
+        >
+          Cancel request
+        </Button>
+      ) : null}
 
       {request.library_content_id ? (
         <LibraryCardLink contentID={request.library_content_id} title={request.title} />
@@ -352,52 +377,10 @@ function CardMeta({
   );
 }
 
-type RibbonKind = "pending" | "approved" | "queued" | "downloading" | "completed" | "blocked";
-
-const RIBBON_STYLES: Record<RibbonKind, string> = {
-  pending:
-    "bg-amber-950/75 text-amber-100 ring-amber-400/30 [&_.dot]:bg-amber-300 [&_.dot]:animate-pulse",
-  approved: "bg-emerald-950/75 text-emerald-100 ring-emerald-400/30 [&_.dot]:bg-emerald-300",
-  queued: "bg-sky-950/75 text-sky-100 ring-sky-400/30 [&_.dot]:bg-sky-300 [&_.dot]:animate-pulse",
-  downloading:
-    "bg-sky-950/80 text-sky-100 ring-sky-400/35 [&_.dot]:bg-sky-300 [&_.dot]:animate-pulse",
-  completed: "bg-emerald-950/80 text-emerald-100 ring-emerald-400/30 [&_.dot]:bg-emerald-300",
-  blocked: "bg-zinc-900/80 text-zinc-200 ring-white/10 [&_.dot]:bg-zinc-400",
-};
-
-function StatusRibbon({
-  status,
-  label,
-  reserveLibrarySpace,
-}: {
-  status: string;
-  label: string;
-  reserveLibrarySpace?: boolean;
-}) {
-  const kind = (RIBBON_STYLES[status as RibbonKind] ? status : "blocked") as RibbonKind;
-  return (
-    <span
-      className={cn(
-        "absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[10px] leading-none font-medium tracking-[0.06em] uppercase shadow-sm ring-1 shadow-black/40 backdrop-blur-md",
-        reserveLibrarySpace ? "max-w-[calc(100%-5.75rem)]" : "max-w-[calc(100%-1rem)]",
-        RIBBON_STYLES[kind],
-      )}
-    >
-      <span className="dot inline-block h-1.5 w-1.5 shrink-0 rounded-full" />
-      <span className="truncate">{label}</span>
-    </span>
+/** Pins the status badge in the top-right corner, clear of the Library chip. */
+function posterBadgeClassName(reserveLibrarySpace: boolean): string {
+  return cn(
+    "absolute top-2 right-2",
+    reserveLibrarySpace ? "max-w-[calc(100%-5.75rem)]" : "max-w-[calc(100%-1rem)]",
   );
-}
-
-function formatOutcome(outcome: MediaRequest["outcome"]): string {
-  switch (outcome) {
-    case "declined":
-      return "Declined";
-    case "cancelled":
-      return "Cancelled";
-    case "failed":
-      return "Failed";
-    default:
-      return "Active";
-  }
 }

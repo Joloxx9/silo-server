@@ -3,8 +3,10 @@ import type { FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { Search, Sparkles, X } from "lucide-react";
 import BrandCarousel from "@/components/BrandCarousel";
+import { CancelRequestDialog } from "@/components/CancelRequestDialog";
 import MediaCarousel from "@/components/MediaCarousel";
 import RequestPosterCard from "@/components/RequestPosterCard";
+import { RequestStatusBadge } from "@/components/RequestStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,12 +21,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   MediaRequest,
   MediaRequestOutcome,
-  MediaRequestStatus,
   RequestDiscoverySection,
   RequestMediaResult,
   RequestSearchMediaType,
 } from "@/api/types";
 import {
+  useCancelMediaRequest,
   useCreateMediaRequest,
   useDiscoverGenres,
   useDiscoverNetworks,
@@ -34,91 +36,77 @@ import {
   useRequestSearch,
 } from "@/hooks/queries/useRequests";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { cn } from "@/lib/utils";
-import { formatRequestStatus, requestInputFromMediaResult } from "@/lib/mediaRequests";
+import {
+  canCancelOwnRequest,
+  requestDisplayState,
+  requestInputFromMediaResult,
+  type RequestDisplayState,
+} from "@/lib/mediaRequests";
 
 type MineBucketKey = "motion" | "completed" | "issues";
 type RequestTab = "discover" | "yours";
 type StatusGuideItem = {
+  state: RequestDisplayState;
   description: string;
-  tone: string;
 };
 
 const REQUEST_TABS = ["discover", "yours"] as const;
 
-const MINE_BUCKET_META: Record<MineBucketKey, { title: string; eyebrow: string; accent: string }> =
-  {
-    motion: {
-      title: "In motion",
-      eyebrow: "On their way",
-      accent: "text-amber-200/90",
-    },
-    completed: {
-      title: "Landed in your library",
-      eyebrow: "Ready to watch",
-      accent: "text-emerald-200/90",
-    },
-    issues: {
-      title: "Needs attention",
-      eyebrow: "Hit a snag",
-      accent: "text-red-200/90",
-    },
-  };
+const MINE_BUCKET_META: Record<MineBucketKey, { title: string; eyebrow: string }> = {
+  motion: {
+    title: "In motion",
+    eyebrow: "On their way",
+  },
+  completed: {
+    title: "Landed in your library",
+    eyebrow: "Ready to watch",
+  },
+  issues: {
+    title: "Needs attention",
+    eyebrow: "Hit a snag",
+  },
+};
 
-const REQUEST_PROGRESS_GUIDE: Array<StatusGuideItem & { status: MediaRequestStatus }> = [
+const REQUEST_PROGRESS_GUIDE: StatusGuideItem[] = [
   {
-    status: "pending",
-    description: "Waiting for an admin to approve the request.",
-    tone: "bg-amber-500/15 text-amber-100 ring-amber-400/40",
+    state: "pending",
+    description: "Waiting for an admin to review the request. You can cancel it until then.",
   },
   {
-    status: "approved",
+    state: "approved",
     description: "Approved, but not yet sent to the download automation.",
-    tone: "bg-emerald-500/15 text-emerald-100 ring-emerald-400/40",
   },
   {
-    status: "queued",
-    description: "Sent to the request automation and waiting for download/import activity.",
-    tone: "bg-sky-500/15 text-sky-100 ring-sky-400/40",
+    state: "processing",
+    description: "Sent to the download automation: queued, downloading, or importing.",
   },
   {
-    status: "downloading",
-    description: "Downloading or importing now.",
-    tone: "bg-sky-500/20 text-sky-100 ring-sky-400/50",
-  },
-  {
-    status: "completed",
+    state: "available",
     description: "In your Silo library and ready to watch.",
-    tone: "bg-emerald-500/20 text-emerald-100 ring-emerald-400/40",
   },
 ];
 
-const REQUEST_ISSUE_GUIDE: Array<
-  StatusGuideItem & {
-    outcome: Extract<MediaRequestOutcome, "declined" | "cancelled" | "failed">;
-    label: string;
-  }
-> = [
+const REQUEST_ISSUE_GUIDE: StatusGuideItem[] = [
   {
-    outcome: "declined",
-    label: "Declined",
+    state: "declined",
     description: "An admin declined the request.",
-    tone: "bg-zinc-700/60 text-zinc-200 ring-zinc-500/40",
   },
   {
-    outcome: "cancelled",
-    label: "Cancelled",
-    description: "The request was cancelled before completion.",
-    tone: "bg-zinc-700/60 text-zinc-200 ring-zinc-500/40",
+    state: "cancelled",
+    description: "The request was withdrawn before it was approved.",
   },
   {
-    outcome: "failed",
-    label: "Failed",
+    state: "failed",
     description:
       "Silo or the external request automation hit an error. If details are available, they appear on the request card.",
-    tone: "bg-red-500/15 text-red-100 ring-red-400/40",
   },
 ];
+
+// The summary chips follow the status guide's order.
+const REQUEST_STATE_ORDER: RequestDisplayState[] = [
+  ...REQUEST_PROGRESS_GUIDE,
+  ...REQUEST_ISSUE_GUIDE,
+].map((item) => item.state);
 
 export default function Requests() {
   useDocumentTitle("Requests");
@@ -140,6 +128,9 @@ export default function Requests() {
   const search = useRequestSearch(mediaType, searchQuery, searchPage);
   const mine = useMyMediaRequests({ limit: 100 });
   const createRequest = useCreateMediaRequest();
+  const cancelRequest = useCancelMediaRequest();
+  const [cancelTarget, setCancelTarget] = useState<MediaRequest | null>(null);
+  const cancellingRequestID = cancelRequest.isPending ? cancelRequest.variables : undefined;
   const pendingRequestKey = createRequest.variables
     ? mediaRequestKey(createRequest.variables.media_type, createRequest.variables.tmdb_id)
     : undefined;
@@ -236,7 +227,7 @@ export default function Requests() {
   }
 
   const buckets = useMemo(() => groupMineRequests(mine.data ?? []), [mine.data]);
-  const mineCounts = useMemo(() => countMineStatuses(mine.data ?? []), [mine.data]);
+  const mineCounts = useMemo(() => countMineStates(mine.data ?? []), [mine.data]);
   const totalMine = (mine.data ?? []).length;
 
   return (
@@ -352,13 +343,33 @@ export default function Requests() {
                 {(Object.keys(MINE_BUCKET_META) as MineBucketKey[]).map((key) => {
                   const items = buckets[key];
                   if (items.length === 0) return null;
-                  return <MineBucketRow key={key} bucket={key} requests={items} />;
+                  return (
+                    <MineBucketRow
+                      key={key}
+                      bucket={key}
+                      requests={items}
+                      onCancel={setCancelTarget}
+                      cancellingRequestID={cancellingRequestID}
+                    />
+                  );
                 })}
               </div>
             </>
           )}
         </TabsContent>
       </Tabs>
+
+      <CancelRequestDialog
+        title={cancelTarget?.title ?? ""}
+        open={cancelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setCancelTarget(null);
+        }}
+        onConfirm={() => {
+          if (cancelTarget) cancelRequest.mutate(cancelTarget.id);
+        }}
+        isPending={cancelRequest.isPending}
+      />
     </div>
   );
 }
@@ -373,29 +384,18 @@ function RequestStatusGuide() {
               Status guide
             </h2>
             <p className="text-muted-foreground text-[13px] leading-5">
-              Statuses update automatically as Silo checks the library and connected request
-              integrations.
+              What each status on your requests means.
             </p>
           </div>
           <div className="grid min-w-0 flex-1 gap-5 md:grid-cols-2">
             <StatusGuideGroup title="Request progress">
               {REQUEST_PROGRESS_GUIDE.map((item) => (
-                <StatusGuideRow
-                  key={item.status}
-                  label={formatRequestStatus(item.status)}
-                  description={item.description}
-                  tone={item.tone}
-                />
+                <StatusGuideRow key={item.state} {...item} />
               ))}
             </StatusGuideGroup>
             <StatusGuideGroup title="Needs attention">
               {REQUEST_ISSUE_GUIDE.map((item) => (
-                <StatusGuideRow
-                  key={item.outcome}
-                  label={item.label}
-                  description={item.description}
-                  tone={item.tone}
-                />
+                <StatusGuideRow key={item.state} {...item} />
               ))}
             </StatusGuideGroup>
           </div>
@@ -414,26 +414,11 @@ function StatusGuideGroup({ title, children }: { title: string; children: React.
   );
 }
 
-function StatusGuideRow({
-  label,
-  description,
-  tone,
-}: {
-  label: string;
-  description: string;
-  tone: string;
-}) {
+function StatusGuideRow({ state, description }: StatusGuideItem) {
   return (
     <div className="grid gap-1 sm:grid-cols-[118px_minmax(0,1fr)] sm:items-start sm:gap-3">
       <dt>
-        <span
-          className={cn(
-            "inline-flex max-w-full items-center rounded-full px-2 py-0.5 text-[11px] leading-5 font-semibold ring-1",
-            tone,
-          )}
-        >
-          {label}
-        </span>
+        <RequestStatusBadge state={state} className="max-w-full" />
       </dt>
       <dd className="text-muted-foreground text-[13px] leading-5">{description}</dd>
     </div>
@@ -453,9 +438,9 @@ function PageHeader() {
         Find something worth waiting for.
       </h1>
       <p className="text-muted-foreground max-w-xl text-sm leading-6">
-        Browse what's trending, search the full TMDB catalog, and watch your requests move from{" "}
+        Browse what's trending, search the full TMDB catalog, and follow your requests from{" "}
         <span className="text-foreground">pending</span> to{" "}
-        <span className="text-foreground">ready</span>.
+        <span className="text-foreground">available</span>.
       </p>
     </header>
   );
@@ -562,18 +547,35 @@ function DiscoverySectionRow({
   );
 }
 
-function MineBucketRow({ bucket, requests }: { bucket: MineBucketKey; requests: MediaRequest[] }) {
+function MineBucketRow({
+  bucket,
+  requests,
+  onCancel,
+  cancellingRequestID,
+}: {
+  bucket: MineBucketKey;
+  requests: MediaRequest[];
+  onCancel: (request: MediaRequest) => void;
+  cancellingRequestID?: string;
+}) {
   const meta = MINE_BUCKET_META[bucket];
   return (
     <section className="space-y-1">
       <div className="px-4 sm:px-6 lg:px-10 xl:px-12">
-        <span className={cn("text-[10px] font-semibold tracking-[0.22em] uppercase", meta.accent)}>
+        <span className="text-muted-foreground text-[10px] font-semibold tracking-[0.22em] uppercase">
           {meta.eyebrow}
         </span>
       </div>
       <MediaCarousel title={meta.title}>
         {requests.map((request) => (
-          <RequestPosterCard key={request.id} variant="mine" request={request} />
+          <RequestPosterCard
+            key={request.id}
+            variant="mine"
+            request={request}
+            // Every request on this tab is the viewer's own.
+            onCancel={canCancelOwnRequest(request) ? () => onCancel(request) : undefined}
+            isCancelling={cancellingRequestID === request.id}
+          />
         ))}
       </MediaCarousel>
     </section>
@@ -719,52 +721,13 @@ function SearchResultsView({
   );
 }
 
-function MineSummary({
-  counts,
-}: {
-  counts: { pending: number; inFlight: number; completed: number; issues: number };
-}) {
-  const chips: Array<{ label: string; value: number; tone: string }> = [];
-  if (counts.pending > 0)
-    chips.push({
-      label: "Pending review",
-      value: counts.pending,
-      tone: "bg-amber-500/15 text-amber-100 ring-amber-400/40",
-    });
-  if (counts.inFlight > 0)
-    chips.push({
-      label: "In motion",
-      value: counts.inFlight,
-      tone: "bg-sky-500/15 text-sky-100 ring-sky-400/40",
-    });
-  if (counts.completed > 0)
-    chips.push({
-      label: "Ready to watch",
-      value: counts.completed,
-      tone: "bg-emerald-500/15 text-emerald-100 ring-emerald-400/40",
-    });
-  if (counts.issues > 0)
-    chips.push({
-      label: "Need attention",
-      value: counts.issues,
-      tone: "bg-red-500/15 text-red-100 ring-red-400/40",
-    });
-
-  if (chips.length === 0) return null;
+function MineSummary({ counts }: { counts: Array<{ state: RequestDisplayState; count: number }> }) {
+  if (counts.length === 0) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 lg:px-10 xl:px-12">
-      {chips.map((chip) => (
-        <span
-          key={chip.label}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-medium ring-1",
-            chip.tone,
-          )}
-        >
-          <span className="text-foreground/95 tabular-nums">{chip.value}</span>
-          <span className="opacity-80">{chip.label}</span>
-        </span>
+      {counts.map(({ state, count }) => (
+        <RequestStatusBadge key={state} state={state} count={count} className="gap-1.5" />
       ))}
     </div>
   );
@@ -776,8 +739,7 @@ function EmptyMineState() {
       <Sparkles className="h-6 w-6 text-amber-300/70" />
       <p className="text-foreground text-base font-semibold">Your wishlist is empty.</p>
       <p className="text-muted-foreground max-w-sm text-sm">
-        Browse the Discover tab or search above. The moment you request something, it'll show up
-        here with live status.
+        Browse the Discover tab or search above. Anything you request shows up here with its status.
       </p>
     </div>
   );
@@ -878,21 +840,14 @@ function groupMineRequests(requests: MediaRequest[]) {
   return buckets;
 }
 
-function countMineStatuses(requests: MediaRequest[]) {
-  let pending = 0;
-  let inFlight = 0;
-  let completed = 0;
-  let issues = 0;
+function countMineStates(requests: MediaRequest[]) {
+  const counts = new Map<RequestDisplayState, number>();
   for (const request of requests) {
-    if (isIssueOutcome(request.outcome)) {
-      issues += 1;
-    } else if (request.status === "completed") {
-      completed += 1;
-    } else if (request.status === "pending") {
-      pending += 1;
-    } else {
-      inFlight += 1;
-    }
+    const state = requestDisplayState(request.status, request.outcome);
+    if (state) counts.set(state, (counts.get(state) ?? 0) + 1);
   }
-  return { pending, inFlight, completed, issues };
+  return REQUEST_STATE_ORDER.flatMap((state) => {
+    const count = counts.get(state) ?? 0;
+    return count > 0 ? [{ state, count }] : [];
+  });
 }

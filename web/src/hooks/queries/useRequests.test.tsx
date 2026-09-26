@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
+import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { requestKeys } from "./keys";
+import { adminKeys, requestKeys } from "./keys";
 
 const mocks = vi.hoisted(() => ({
   useQuery: vi.fn(),
@@ -27,7 +28,12 @@ vi.mock("@/api/v2/request", () => ({
   v2: (...args: unknown[]) => mocks.api(...args),
 }));
 
-import { useRequestFeatureStatus, useRequestSearch } from "./useRequests";
+import {
+  useCancelMediaRequest,
+  useCreateMediaRequest,
+  useRequestFeatureStatus,
+  useRequestSearch,
+} from "./useRequests";
 
 function render(node: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -191,6 +197,65 @@ describe("viewer-scoped cache isolation", () => {
     });
 
     expect(client.getQueryData(requestKeys.search("all", "dune", 1, "profile-2"))).toBeUndefined();
+  });
+});
+
+describe("useCancelMediaRequest", () => {
+  const wireRequest = {
+    id: "req-1",
+    provider: "silo",
+    media_type: "movie",
+    tmdb_id: 603,
+    title: "The Matrix",
+    status: "pending",
+    outcome: "cancelled",
+    targets: [],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+
+  function wrapperFor(client: QueryClient) {
+    return function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    };
+  }
+
+  beforeEach(() => {
+    mocks.api.mockReset();
+    mocks.api.mockResolvedValue(wireRequest);
+  });
+
+  it("posts to the viewer's cancel operation", async () => {
+    const client = new QueryClient();
+    const { result } = renderHook(() => useCancelMediaRequest(), { wrapper: wrapperFor(client) });
+
+    const cancelled = await result.current.mutateAsync("req-1");
+
+    expect(mocks.api).toHaveBeenCalledExactlyOnceWith("POST /api/v2/requests/{id}/cancel", {
+      path: { id: "req-1" },
+      body: {},
+    });
+    expect(cancelled).toMatchObject({ id: "req-1", outcome: "cancelled" });
+  });
+
+  it("refreshes the same request surfaces a new request does", async () => {
+    const createClient = new QueryClient();
+    const createInvalidations = vi.spyOn(createClient, "invalidateQueries");
+    const create = renderHook(() => useCreateMediaRequest(), {
+      wrapper: wrapperFor(createClient),
+    });
+    await create.result.current.mutateAsync({ media_type: "movie", tmdb_id: 603, title: "X" });
+
+    const cancelClient = new QueryClient();
+    const cancelInvalidations = vi.spyOn(cancelClient, "invalidateQueries");
+    const cancel = renderHook(() => useCancelMediaRequest(), {
+      wrapper: wrapperFor(cancelClient),
+    });
+    await cancel.result.current.mutateAsync("req-1");
+
+    expect(cancelInvalidations.mock.calls).toEqual(createInvalidations.mock.calls);
+    expect(cancelInvalidations).toHaveBeenCalledWith({ queryKey: requestKeys.all });
+    expect(cancelInvalidations).toHaveBeenCalledWith({ queryKey: adminKeys.requestsRoot() });
   });
 });
 

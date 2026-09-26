@@ -51,6 +51,13 @@ export function createMediaRequestV2(body: V2Body<"POST /api/v2/requests">): Pro
   return v2("POST /api/v2/requests", { body }).then(mediaRequestFromV2);
 }
 
+// The server lets an owner cancel only while the request is still pending.
+export function cancelMediaRequestV2(id: string, reason?: string): Promise<MediaRequest> {
+  return v2("POST /api/v2/requests/{id}/cancel", { path: { id }, body: { reason } }).then(
+    mediaRequestFromV2,
+  );
+}
+
 // v2 pages by cursor with a page size of at most 50; callers that asked for a
 // larger window (the Requests page shows up to 100) walk the pages.
 export async function listMyMediaRequestsV2(

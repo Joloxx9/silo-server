@@ -18,6 +18,7 @@ import {
 import { v2 } from "@/api/v2/request";
 import {
   browseDiscoverV2,
+  cancelMediaRequestV2,
   createMediaRequestV2,
   getDiscoverSectionV2,
   getRequestMediaDetailV2,
@@ -196,11 +197,30 @@ export function useCreateMediaRequest() {
   });
 }
 
-export function useMyMediaRequests(params: RequestListParams = {}) {
+export function useCancelMediaRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (id: string) => cancelMediaRequestV2(id),
+    onSuccess: () => {
+      toast.success("Request cancelled");
+      invalidateRequestSurfaces(queryClient);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel request");
+    },
+  });
+}
+
+export function useMyMediaRequests(
+  params: RequestListParams = {},
+  options: { enabled?: boolean } = {},
+) {
   const key = listParamsKey(params);
   return useQuery({
     queryKey: requestKeys.mine(key),
     queryFn: () => listMyMediaRequestsV2(params),
+    enabled: options.enabled ?? true,
     staleTime: REQUESTS_STALE_TIME,
   });
 }

@@ -20,6 +20,7 @@ import {
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { decodeThumbhash } from "@/lib/thumbhash";
 import { preferredDateLocale } from "@/lib/datetime";
+import { requestDetailHref } from "@/lib/mediaRequests";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
 
 function formatNotificationTime(value: string): string {
@@ -86,6 +87,23 @@ function notificationDescription(notification: AppNotification): string {
   return notification.type;
 }
 
+/**
+ * Where a row leads. Episode and fulfilled-request rows open the catalog item;
+ * approved and declined requests have no catalog item yet, so they open the
+ * request's detail page from the TMDB id their payload carries.
+ */
+function notificationHref(notification: AppNotification): string | null {
+  if (notification.episode_id) return `/item/${notification.episode_id}`;
+  if (notification.series_id) return `/item/${notification.series_id}`;
+  if (notification.type === "request.approved" || notification.type === "request.declined") {
+    const { media_type: mediaType, tmdb_id: tmdbID } = notification.reason_flags ?? {};
+    if ((mediaType === "movie" || mediaType === "series") && tmdbID && tmdbID > 0) {
+      return requestDetailHref(mediaType, tmdbID);
+    }
+  }
+  return null;
+}
+
 function reasonLabels(notification: AppNotification): string[] {
   const flags = notification.reason_flags ?? {};
   const labels: string[] = [];
@@ -115,11 +133,7 @@ function NotificationRow({
   const thumbhashUrl = notification.poster_thumbhash
     ? decodeThumbhash(notification.poster_thumbhash)
     : "";
-  const detailHref = notification.episode_id
-    ? `/item/${notification.episode_id}`
-    : notification.series_id
-      ? `/item/${notification.series_id}`
-      : null;
+  const detailHref = notificationHref(notification);
 
   const body = (
     <>
