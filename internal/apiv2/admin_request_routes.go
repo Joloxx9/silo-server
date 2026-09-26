@@ -23,10 +23,13 @@ const (
 	opReorderRequestRoutes     = "reorderRequestRoutes"
 	opPreviewRequestRoute      = "previewRequestRoute"
 	opSearchRequestRouteTitles = "searchRequestRouteTitles"
+	opGetRequestRouting        = "getRequestRouting"
+	opUpdateRequestRouting     = "updateRequestRouting"
 )
 
 var adminRequestRouteOperationIDs = []string{opListRequestRoutes, opGetRequestRoute, opCreateRequestRoute,
-	opUpdateRequestRoute, opDeleteRequestRoute, opReorderRequestRoutes, opPreviewRequestRoute, opSearchRequestRouteTitles}
+	opUpdateRequestRoute, opDeleteRequestRoute, opReorderRequestRoutes, opPreviewRequestRoute, opSearchRequestRouteTitles,
+	opGetRequestRouting, opUpdateRequestRouting}
 
 // adminRequestRoutes is the route administration slice of the request
 // service.
@@ -39,6 +42,36 @@ type adminRequestRoutes interface {
 	ReorderRoutes(context.Context, mediarequests.Viewer, mediarequests.MediaType, []string) ([]mediarequests.Route, error)
 	PreviewRoute(context.Context, mediarequests.Viewer, mediarequests.MediaType, int, int) (*mediarequests.RoutePreview, error)
 	SearchRouteTitles(context.Context, mediarequests.Viewer, mediarequests.MediaType, string) ([]tmdb.MediaResult, error)
+	GetRoutingOverview(context.Context, mediarequests.Viewer) (*mediarequests.RoutingOverview, error)
+	UpdateRoutingModeConditional(context.Context, mediarequests.Viewer, mediarequests.RoutingMode, int64) (*mediarequests.RoutingOverview, error)
+}
+
+// AdminRequestRouting is how requests find their server.
+type AdminRequestRouting struct {
+	Mode string `json:"mode" enum:"standard,advanced" doc:"standard sends each media type to its one server, and 4K copies to its one server marked 4K, with each server's own settings; the routing rules are kept but paused. advanced routes with the rules."`
+	// Standard and StandardUnavailableReason describe Standard whichever
+	// mode is on, so a client can show what switching would do.
+	Standard                  []AdminRequestStandardDestination `json:"standard" doc:"Where Standard sends each media type that has a server; empty when Standard cannot be used"`
+	StandardUnavailableReason string                            `json:"standard_unavailable_reason,omitempty" doc:"Why Standard cannot be used (a media type has more than one server of a kind); absent when it can. Adding or enabling such a server turns Advanced on."`
+}
+
+// AdminRequestStandardDestination is where Standard sends one media type.
+type AdminRequestStandardDestination struct {
+	MediaType        string `json:"media_type" enum:"movie,series"`
+	HDIntegrationID  string `json:"hd_integration_id,omitempty" doc:"The media type's one server that is not marked 4K; absent when it has none"`
+	UHDIntegrationID string `json:"uhd_integration_id,omitempty" doc:"The media type's one server marked 4K; absent when it has none, and then there is no 4K copy"`
+}
+
+type AdminRequestRoutingOutput struct {
+	ETag string `header:"ETag"`
+	Body AdminRequestRouting
+}
+type AdminRequestRoutingUpdateInput struct {
+	IfMatch     string `header:"If-Match"`
+	IfNoneMatch string `header:"If-None-Match"`
+	Body        struct {
+		Mode string `json:"mode" enum:"standard,advanced"`
+	}
 }
 
 // AdminRequestRouteConditions narrow a route. Every set field must match; a
@@ -231,6 +264,60 @@ func registerAdminRequestRoutes(reg *Registry) {
 	preview.DemoRestricted = false
 	Register(reg, preview, reg.previewAdminRequestRoute)
 	Register(reg, op(http.MethodGet, "/admin/request-routes/titles", opSearchRequestRouteTitles, "Search TMDB for titles to try the routing rules on; works while requests are turned off.", false), reg.searchAdminRequestRouteTitles)
+	Register(reg, op(http.MethodGet, "/admin/request-routing", opGetRequestRouting, "Get the request routing mode and where Standard routing would send each media type.", false), reg.getAdminRequestRouting)
+	Register(reg, op(http.MethodPut, "/admin/request-routing", opUpdateRequestRouting, "Switch request routing between Standard and Advanced; Standard is refused while a media type has more than one server of a kind.", true), reg.updateAdminRequestRouting)
+}
+
+func adminRequestRoutingOf(o mediarequests.RoutingOverview) AdminRequestRouting {
+	out := AdminRequestRouting{Mode: string(o.Mode), Standard: []AdminRequestStandardDestination{}, StandardUnavailableReason: o.StandardBlocker}
+	for _, d := range o.Standard {
+		out.Standard = append(out.Standard, AdminRequestStandardDestination{MediaType: string(d.MediaType), HDIntegrationID: d.HDIntegrationID, UHDIntegrationID: d.UHDIntegrationID})
+	}
+	return out
+}
+
+func routingTag(ctx context.Context, o mediarequests.RoutingOverview) EntityTag {
+	return adminRequestTag(ctx, "routing", "global", o.Revision)
+}
+
+func (reg *Registry) getAdminRequestRouting(ctx context.Context, _ *struct{}) (*AdminRequestRoutingOutput, error) {
+	s, p := reg.adminRequestRouteService()
+	if p != nil {
+		return nil, p
+	}
+	o, err := s.GetRoutingOverview(ctx, adminRequestViewer(ctx))
+	if err != nil {
+		return nil, requestProblem(err)
+	}
+	return &AdminRequestRoutingOutput{ETag: routingTag(ctx, *o).String(), Body: adminRequestRoutingOf(*o)}, nil
+}
+
+func (reg *Registry) updateAdminRequestRouting(ctx context.Context, in *AdminRequestRoutingUpdateInput) (*AdminRequestRoutingOutput, error) {
+	s, p := reg.adminRequestRouteService()
+	if p != nil {
+		return nil, p
+	}
+	v := adminRequestViewer(ctx)
+	current, err := s.GetRoutingOverview(ctx, v)
+	if err != nil {
+		return nil, requestProblem(err)
+	}
+	rev, p := adminRequestGuard(AdminRequestPreconditions{in.IfMatch, in.IfNoneMatch}, routingTag(ctx, *current), current.Revision)
+	if p != nil {
+		return nil, p
+	}
+	o, err := s.UpdateRoutingModeConditional(ctx, v, mediarequests.RoutingMode(in.Body.Mode), rev)
+	if errors.Is(err, mediarequests.ErrStaleRevision) {
+		latest, e := s.GetRoutingOverview(ctx, v)
+		if e != nil {
+			return nil, requestProblem(e)
+		}
+		return nil, NewProblem(TypePreconditionFailed, "Request routing changed; reload before saving.").WithHeader("ETag", routingTag(ctx, *latest).String())
+	}
+	if err != nil {
+		return nil, requestProblem(err)
+	}
+	return &AdminRequestRoutingOutput{ETag: routingTag(ctx, *o).String(), Body: adminRequestRoutingOf(*o)}, nil
 }
 
 func (reg *Registry) adminRequestRouteService() (adminRequestRoutes, *Problem) {

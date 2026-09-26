@@ -159,6 +159,17 @@ func routesCheckRating(routes []Route, mediaType MediaType) bool {
 	return false
 }
 
+// routesUseConditions reports whether an enabled route of the media type has
+// conditions, so a request's routing facts matter.
+func routesUseConditions(routes []Route, mediaType MediaType) bool {
+	for _, route := range routes {
+		if route.Enabled && route.MediaType == mediaType && !conditionsEmpty(route.Conditions) {
+			return true
+		}
+	}
+	return false
+}
+
 // ratingWithin reports whether a title's US rating is at most max, by each
 // rating's own minimum age (not the parental-control tiers, which would let
 // "TV-Y7 or lower" take TV-PG). An unknown or unrated title is not.

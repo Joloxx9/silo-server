@@ -44,7 +44,7 @@ func lifecycleTestRepository(t *testing.T) (*Repository, *pgxpool.Pool) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	for _, table := range []string{"media_requests", "media_request_events", "media_request_targets", "request_integrations"} {
+	for _, table := range []string{"media_requests", "media_request_events", "media_request_targets", "request_integrations", "request_routing"} {
 		if _, err = pool.Exec(t.Context(), `CREATE TABLE `+table+` (LIKE public.`+table+` INCLUDING ALL)`); err != nil {
 			t.Fatalf("copy %s: %v", table, err)
 		}

@@ -378,11 +378,20 @@ type fulfillContext struct {
 	integrations []Integration
 	settings     Settings
 	routes       []Route
+	// standard holds where Standard routing sends each media type, when
+	// Standard is on and the servers allow it.
+	standard []StandardDestination
+	// standardOn is set when Standard routing is in effect.
+	standardOn bool
 }
 
 // routesFor returns the media type's routing rules; none means the router
-// plugin routes the media type itself.
+// plugin routes the media type itself. Under Standard the rules are paused
+// and the media type's one server decides.
 func (fc *fulfillContext) routesFor(mediaType MediaType) []Route {
+	if fc.standardOn {
+		return standardRoutes(fc.integrations, fc.standard, mediaType)
+	}
 	var out []Route
 	for _, route := range fc.routes {
 		if route.MediaType == mediaType {
@@ -405,7 +414,20 @@ func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error
 	if err != nil {
 		return nil, err
 	}
-	return &fulfillContext{integrations: integrations, settings: settings, routes: routes}, nil
+	fc := &fulfillContext{integrations: integrations, settings: settings, routes: routes}
+	if store, ok := s.store.(RoutingModeStore); ok {
+		routing, err := store.GetRoutingSettings(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if routing.Mode == RoutingStandard {
+			// Standard with two servers of a kind (saved around a server
+			// change) routes with the rules until an admin sorts it out.
+			layout, blocker := standardLayout(integrations)
+			fc.standard, fc.standardOn = layout, blocker == ""
+		}
+	}
+	return fc, nil
 }
 
 // resolveRouterConnections turns enabled request_router integrations that serve
@@ -2121,7 +2143,7 @@ func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, f
 	for _, q := range plan.want {
 		decision, ok := decisions[q]
 		if !ok {
-			failures[q] = "no routing rule sends " + qualityLabel(q) + " for this title"
+			failures[q] = unroutedMessage(routes, req.MediaType, q)
 			continue
 		}
 		conn, installationID, capabilityID, err := routedConnection(fc, decision, req.MediaType, q)
@@ -2152,6 +2174,15 @@ func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, f
 		targets = append(targets, got...)
 	}
 	return s.recordTargets(ctx, req, actor, plan, targets, connKind, decisions, failures)
+}
+
+// unroutedMessage says why a tier went nowhere. Under Standard it can only be
+// HD, when the media type's one server is marked 4K.
+func unroutedMessage(routes []Route, mediaType MediaType, q Quality) string {
+	if len(routes) == 1 && routes[0].ID == standardRouteID(mediaType) {
+		return fmt.Sprintf("no server takes %s %s: the only one is marked 4K", qualityLabel(q), mediaTypePlural(mediaType))
+	}
+	return "no routing rule sends " + qualityLabel(q) + " for this title"
 }
 
 // qualityLabel names a tier in messages.
@@ -2200,6 +2231,11 @@ func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request, routes [
 	}
 	detail := s.requestDetail(ctx, req.MediaType, req.TMDBID)
 	if detail == nil {
+		if !routesUseConditions(routes, req.MediaType) {
+			// Only Everything else (or Standard) decides: the facts would
+			// not change where the request goes, so it is sent without them.
+			return nil
+		}
 		return errors.New("could not read the title's details from TMDB to route it")
 	}
 	updated, err := s.store.SetRoutingFacts(ctx, req.ID, routingFactsFrom(detail, s.now()))

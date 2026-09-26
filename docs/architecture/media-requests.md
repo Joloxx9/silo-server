@@ -98,7 +98,39 @@ default and anime switches no longer decide anything.
 
 A request created before facts were captured, or while TMDB was unreachable, has
 them fetched when it is first routed; if TMDB still cannot answer, the
-submission retries rather than route on missing facts.
+submission retries rather than route on missing facts, unless no enabled route
+of its media type has a condition (Everything else or Standard alone decides),
+when it goes without them.
+
+### Standard and Advanced
+
+`request_routing` holds the routing mode (`internal/requests/routing_mode.go`).
+Advanced routes with the rules above. Standard pauses the rules (they stay
+stored and apply again under Advanced) and sends each media type to its one
+enabled server that is not marked 4K, and its 4K copies to its one enabled
+server marked 4K (the Sonarr/Radarr plugin's `is_4k` switch), with each
+server's own settings: Everything else's overrides do not apply. With no server
+marked 4K there is no 4K copy, even with `force_dual_quality`. A media type
+whose server is another plugin (Seerr) keeps that plugin's own routing. Targets
+record the route as "Standard".
+
+Standard needs at most one normal and one 4K enabled server per media type,
+counting other plugins that take it. Switching to Standard is refused
+otherwise, and adding or enabling a server that breaks the rule turns Advanced
+on in the same transaction, with Everything else given the servers Standard was
+using where it has none, so requests keep going where they went. Only Radarr
+and Sonarr servers that still take the media type after the save are carried
+over; a media type another plugin routed stays with it. Switching to Advanced
+by hand does the same. Nothing switches back to Standard on its own. Every
+server write and mode switch takes one advisory lock first, so a server added
+while Standard is being turned on cannot leave Standard on with two servers of
+a kind; Standard read with two servers anyway routes with the rules. Under
+Standard, Everything else does not keep a server from being deleted (the
+reference is cleared); a paused rule still does. The migration put installs on
+Advanced when Standard would send a request elsewhere (an enabled rule, two
+servers of a kind, or an Everything else with overrides, a 4K server, an HD
+server other than the media type's one Radarr or Sonarr, or no 4K server while
+one marked 4K exists) and everyone else on Standard.
 
 ## Transitions are guarded
 

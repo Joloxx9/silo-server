@@ -39,9 +39,18 @@ import type { RequestRouterInstallation } from "./requestServerModel";
 const MAX_RESULTS = 6;
 const ANYONE = "__anyone__";
 
-/** Which rule decided a tier, as "rule 1, Anime" or "Everything else". */
+/**
+ * Standard routing's route: the server makes one per media type for the
+ * preview, not stored and not in the list.
+ */
+function isStandardRoute(routeId: string | undefined): boolean {
+  return Boolean(routeId?.startsWith("standard-"));
+}
+
+/** Which rule decided a tier, as "rule 1, Anime", "Everything else" or "Standard". */
 function deciderLabel(preview: RoutePreview, routeId: string | undefined): string | undefined {
   if (!routeId) return undefined;
+  if (isStandardRoute(routeId)) return "Standard";
   const rules = preview.rules.filter((rule) => !rule.is_fallback);
   const index = rules.findIndex((rule) => rule.route_id === routeId);
   if (index !== -1) return `rule ${index + 1}, ${rules[index]!.route_name}`;
@@ -77,6 +86,8 @@ function TierLine({
       { options: options.data, fields },
     );
     outcome = decider ? `${where} (${decider})` : where;
+  } else if (isStandardRoute(tier.route_id)) {
+    outcome = "no copy (no server is marked 4K)";
   } else if (tier.route_id) {
     outcome =
       decider === "Everything else"
@@ -155,7 +166,8 @@ export function RoutePreviewResult({
           />
         ))}
       </ul>
-      {preview.rules.length > 0 ? (
+      {/* Under Standard one route decides everything; there is nothing to explain. */}
+      {preview.rules.some((rule) => !isStandardRoute(rule.route_id)) ? (
         <div>
           <button
             type="button"

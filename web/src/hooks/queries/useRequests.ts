@@ -33,12 +33,16 @@ import {
   reorderAdminRequestRoutesV2,
   previewAdminRequestRouteV2,
   searchAdminRequestRouteTitlesV2,
+  getAdminRequestRoutingV2,
+  putAdminRequestRoutingV2,
   type AdminRequestQueueFilter,
   type RequestGroupLimit,
   type RequestGroupLimitBody,
   type RequestRoute,
   type RequestRouteBody,
   type RequestRouteMediaType,
+  type RequestRouting,
+  type RequestRoutingMode,
 } from "@/api/v2/adminRequests";
 import { v2 } from "@/api/v2/request";
 import {
@@ -640,19 +644,51 @@ function invalidateRequestServers(queryClient: ReturnType<typeof useQueryClient>
   queryClient.invalidateQueries({ queryKey: adminKeys.requestIntegrationOptionsRoot() });
   invalidateRequestSurfaces(queryClient);
   void invalidateRequestRoutes(queryClient);
+  // A server can turn Advanced on, and changes where Standard sends requests.
+  void queryClient.invalidateQueries({ queryKey: adminKeys.requestRouting() });
+}
+
+/** "movies" for a Radarr, "series" for a Sonarr, "requests" for anything else. */
+function serverRequestNoun(saved: RequestIntegration): string {
+  const kind = saved.plugin_config?.service_kind;
+  return kind === "radarr" ? "movies" : kind === "sonarr" ? "series" : "requests";
 }
 
 /**
- * The toast for an added server. The server may make it Everything else for
- * movies or series (the first usable Radarr or Sonarr server); rather than
- * guess its rules, the routes are read again and the toast says so only
- * when Everything else now sends there.
+ * The toast for a saved server. Saving one can turn Advanced routing on (a
+ * second server of a kind), and the first server of a kind starts taking its
+ * media type's requests. Rather than guess the server's rules, the routing is
+ * read again and the toast says what changed.
  */
-async function addedServerMessage(
+async function savedServerMessage(
   queryClient: ReturnType<typeof useQueryClient>,
   saved: RequestIntegration,
+  before: RequestRouting | undefined,
+  added: boolean,
 ): Promise<string> {
+  const plain = added ? "Server added" : "Server saved";
   try {
+    const routing = await queryClient.fetchQuery({
+      queryKey: adminKeys.requestRouting(),
+      queryFn: getAdminRequestRoutingV2,
+      staleTime: 0,
+    });
+    if (before?.mode === "standard" && routing.mode === "advanced") {
+      return `${saved.name} ${added ? "added" : "saved"}. Routing is now Advanced, so you can choose which ${serverRequestNoun(saved)} go to each server.`;
+    }
+    if (!added) return plain;
+    if (routing.mode === "standard") {
+      const destination = routing.standard.find(
+        (d) => d.hd_integration_id === saved.id || d.uhd_integration_id === saved.id,
+      );
+      if (destination?.uhd_integration_id === saved.id) {
+        return `${saved.name} added. 4K copies of ${destination.media_type === "series" ? "series" : "movies"} now go to it.`;
+      }
+      if (destination) {
+        return `${saved.name} added. Every ${destination.media_type} request now goes to it.`;
+      }
+      return plain;
+    }
     const routes = await queryClient.fetchQuery({
       queryKey: adminKeys.requestRoutes(),
       queryFn: listAdminRequestRoutesV2,
@@ -665,42 +701,44 @@ async function addedServerMessage(
       return `${saved.name} added. Every ${fallback.media_type} request now goes to it.`;
     }
   } catch {
-    // The routes could not be read; the plain toast is still true.
+    // The routing could not be read; the plain toast is still true.
   }
-  return "Server added";
+  return plain;
 }
 
-export function useCreateRequestIntegration() {
+function useSaveRequestIntegration(added: boolean) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
     mutationFn: (integration: RequestIntegration) =>
-      saveAdminRequestIntegrationV2(integration, true),
-    onSuccess: (saved) => {
+      saveAdminRequestIntegrationV2(integration, added),
+    // The routing before the save, to tell whether the save turned Advanced on.
+    onMutate: () => queryClient.getQueryData<RequestRouting>(adminKeys.requestRouting()),
+    onSuccess: (saved, _integration, before) => {
       invalidateRequestServers(queryClient);
-      void addedServerMessage(queryClient, saved).then((message) => toast.success(message));
+      void savedServerMessage(queryClient, saved, before, added).then((message) =>
+        toast.success(message),
+      );
     },
     onError: (err) => {
       if (isValidationFailure(err)) return;
-      toast.error(err instanceof Error ? err.message : "Failed to add server");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : added
+            ? "Failed to add server"
+            : "Failed to save server",
+      );
     },
   });
 }
 
+export function useCreateRequestIntegration() {
+  return useSaveRequestIntegration(true);
+}
+
 export function useUpdateRequestIntegration() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    retry: false,
-    mutationFn: (integration: RequestIntegration) => saveAdminRequestIntegrationV2(integration),
-    onSuccess: () => {
-      toast.success("Server saved");
-      invalidateRequestServers(queryClient);
-    },
-    onError: (err) => {
-      if (isValidationFailure(err)) return;
-      toast.error(err instanceof Error ? err.message : "Failed to save server");
-    },
-  });
+  return useSaveRequestIntegration(false);
 }
 
 export function useDeleteRequestIntegration() {
@@ -730,6 +768,36 @@ export function useRequestIntegrationOptions(integrationId: string | undefined) 
     enabled: Boolean(integrationId),
     staleTime: 5 * 60 * 1000,
     retry: false,
+  });
+}
+
+export function useRequestRouting() {
+  return useQuery({
+    queryKey: adminKeys.requestRouting(),
+    queryFn: getAdminRequestRoutingV2,
+    staleTime: REQUESTS_STALE_TIME,
+  });
+}
+
+/** Switches between Standard and Advanced routing; it saves right away. */
+export function useUpdateRequestRouting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: ({ mode, current }: { mode: RequestRoutingMode; current: RequestRouting }) =>
+      putAdminRequestRoutingV2(mode, current),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(adminKeys.requestRouting(), saved);
+      toast.success(
+        saved.mode === "standard" ? "Standard routing is on" : "Advanced routing is on",
+      );
+      // Advanced can fill in Everything else; a preview answers differently.
+      void invalidateRequestRoutes(queryClient);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to change routing");
+      void queryClient.invalidateQueries({ queryKey: adminKeys.requestRouting() });
+    },
   });
 }
 

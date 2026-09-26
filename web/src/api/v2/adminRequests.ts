@@ -85,6 +85,32 @@ export async function putAdminRequestSettingsV2(
   });
   return { ...body, updated_at: "", etag: requireETag(etag) };
 }
+/** How requests find their server: Standard, or Advanced with the rules. */
+export type RequestRouting = Schemas["AdminRequestRouting"] & { etag: string };
+export type RequestRoutingMode = RequestRouting["mode"];
+export async function getAdminRequestRoutingV2(): Promise<RequestRouting> {
+  let etag = "";
+  const body = await v2("GET /api/v2/admin/request-routing", {
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...body, etag: requireETag(etag) };
+}
+export async function putAdminRequestRoutingV2(
+  mode: RequestRoutingMode,
+  current: Pick<RequestRouting, "etag">,
+): Promise<RequestRouting> {
+  let etag = "";
+  const body = await v2("PUT /api/v2/admin/request-routing", {
+    headers: { "If-Match": requireETag(current.etag) },
+    body: { mode },
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...body, etag: requireETag(etag) };
+}
 export async function getAdminRequestUserLimitV2(userId: number): Promise<RequestUserLimit> {
   let etag = "";
   const body = await v2("GET /api/v2/admin/request-users/{user_id}/limit", {

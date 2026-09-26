@@ -12,6 +12,7 @@ import {
   isRequestEditorConflict,
   requestValidationErrors,
   type RequestRoute,
+  type RequestRouting,
 } from "@/api/v2/adminRequests";
 import { EditorConflict } from "@/components/admin/EditorConflict";
 import { SchemaForm } from "@/components/admin/plugins/SchemaForm";
@@ -53,6 +54,7 @@ import {
   useCreateRequestIntegration,
   useDeleteRequestIntegration,
   useLoadRequestIntegrationOptions,
+  useRequestRouting,
   useUpdateRequestIntegration,
 } from "@/hooks/queries/useRequests";
 import { cn } from "@/lib/utils";
@@ -72,6 +74,7 @@ import {
   serverReady,
   serverRouteUsage,
   serverTypeLabel,
+  standardServerUsage,
   SERVICE_KIND_KEY,
   type RequestRouterInstallation,
 } from "./requestServerModel";
@@ -81,6 +84,9 @@ const KIND_TILE_CLASSES: Record<string, string> = {
   radarr: "bg-amber-500/20 text-amber-700 dark:text-amber-300",
   sonarr: "bg-sky-500/20 text-sky-700 dark:text-sky-300",
 };
+
+/** The plugin config key that marks a server as the 4K one. */
+const FOUR_K_KEY = "is_4k";
 
 /** The plugin's per-kind default switches, which routing replaced. */
 const RETIRED_DEFAULT_KEYS = ["is_default", "is_default_4k"] as const;
@@ -107,16 +113,21 @@ function ServerTile({
   server,
   installations,
   routes,
+  routing,
   onEdit,
 }: {
   server: RequestIntegration;
   installations: RequestRouterInstallation[];
   routes: RequestRoute[];
+  routing: RequestRouting | undefined;
   onEdit: () => void;
 }) {
   const type = serverTypeLabel(server, installations);
   const ready = serverReady(server);
-  const usage = serverRouteUsage(server.id, routes);
+  const usage =
+    routing?.mode === "standard"
+      ? standardServerUsage(server.id, routing)
+      : serverRouteUsage(server.id, routes);
   const failing = ready && Boolean(server.last_check_error);
   return (
     <ProviderTile
@@ -159,6 +170,7 @@ export function RequestServersGroup({
   // null: closed; "new": adding; otherwise the id of the server being edited.
   const [editing, setEditing] = useState<string | null>(null);
   const [newKey, setNewKey] = useState(0);
+  const routing = useRequestRouting();
   const noRouterPlugin = !installationsLoading && installations.length === 0;
   const editingServer =
     editing && editing !== "new" ? servers.find((server) => server.id === editing) : undefined;
@@ -213,6 +225,7 @@ export function RequestServersGroup({
                 server={server}
                 installations={installations}
                 routes={routes}
+                routing={routing.data}
                 onEdit={() => setEditing(server.id)}
               />
             ))}
@@ -449,6 +462,12 @@ export function RequestServerEditor({
   );
   const { descriptor, jsonSchema } = serverConfigSchema(selected);
   const fieldTypes = useMemo(() => parseFieldTypes(jsonSchema), [jsonSchema]);
+  // The Sonarr/Radarr plugin's "4K instance" switch. Routing owns the
+  // plugin's other default switches, so the editor shows this one itself.
+  const offers4K = Boolean(descriptor?.fields?.some((field) => field.key === FOUR_K_KEY));
+  const is4K = [FOUR_K_KEY, "is_default_4k"].some(
+    (key) => pluginConfig[key] === true || pluginConfig[key] === "true",
+  );
 
   const {
     options,
@@ -601,7 +620,7 @@ export function RequestServerEditor({
     ...(installations.length > 1 ? ["installation_id", "capability_id"] : []),
     ...(descriptor?.fields ?? [])
       .map((field) => field.key)
-      .filter((key) => !ROUTING_OWNED_CONFIG_KEYS.includes(key)),
+      .filter((key) => !ROUTING_OWNED_CONFIG_KEYS.includes(key) || key === FOUR_K_KEY),
   ]);
   const unshownErrors = Object.entries(fieldErrors).filter(([key]) => !shownKeys.has(key));
 
@@ -706,6 +725,28 @@ export function RequestServerEditor({
             onCheckedChange={(enabled) => patch({ enabled })}
           />
         </SettingFieldRow>
+        {offers4K ? (
+          <SettingFieldRow
+            label="4K server"
+            htmlFor={`${nameId}-4k`}
+            description="With Standard routing, 4K copies go here and everything else goes to the other server of this type."
+            status={<FieldError>{fieldErrors[FOUR_K_KEY]}</FieldError>}
+          >
+            <Switch
+              id={`${nameId}-4k`}
+              checked={is4K}
+              onCheckedChange={(on) =>
+                // The plugin's older "4K default" switch meant the same; it
+                // goes off with this one.
+                patchConfig({
+                  ...pluginConfig,
+                  [FOUR_K_KEY]: on,
+                  ...(on ? {} : { is_default_4k: false }),
+                })
+              }
+            />
+          </SettingFieldRow>
+        ) : null}
       </div>
 
       {descriptor ? (

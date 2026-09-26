@@ -2025,6 +2025,10 @@ go to and, rule by rule, why, plus an admin title search
 fallback that was never saved reads as revision zero and its first replacement
 creates it. The fallback cannot be deleted, and a rule cannot be created until
 its media type's fallback has an HD server.
+`GET`/`PUT /admin/request-routing` reads and switches the routing mode
+(`standard` or `advanced`) with `If-Match` on its revision; the read also says
+where Standard sends each media type, or why it cannot be used, and switching
+to Standard is refused with a validation problem while it cannot.
 
 Settings, account limits and integrations require `If-Match` for replacement and
 integration deletion. A shared PostgreSQL sequence assigns a new revision on every

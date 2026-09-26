@@ -4,7 +4,7 @@ import type {
   PluginInstallation,
   RequestIntegration,
 } from "@/api/types";
-import type { RequestRoute, RequestRouteMediaType } from "@/api/v2/adminRequests";
+import type { RequestRoute, RequestRouteMediaType, RequestRouting } from "@/api/v2/adminRequests";
 
 /** Every request server is fulfilled by a plugin exposing this capability. */
 export const REQUEST_ROUTER_CAPABILITY = "request_router.v1";
@@ -158,6 +158,24 @@ function routeUsage(route: RequestRoute, serverId: string): string | null {
 export function serverRouteUsage(serverId: string, routes: RequestRoute[]): string {
   return routes
     .map((route) => routeUsage(route, serverId))
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * Where Standard routing uses a server, for its tile: "Movies", "4K series".
+ * Empty when Standard does not send there.
+ */
+export function standardServerUsage(serverId: string, routing: RequestRouting): string {
+  return routing.standard
+    .flatMap((destination) => {
+      const plural = mediaTypePlural(destination.media_type);
+      const label = plural.charAt(0).toUpperCase() + plural.slice(1);
+      return [
+        destination.hd_integration_id === serverId ? label : null,
+        destination.uhd_integration_id === serverId ? `4K ${plural}` : null,
+      ];
+    })
     .filter(Boolean)
     .join(" · ");
 }

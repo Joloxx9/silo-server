@@ -470,6 +470,58 @@ describe("request administration", () => {
     expect(within(dialog).getByRole("button", { name: "Approve: Waiting Title" })).toBeEnabled();
   });
 
+  it("says Standard decided, with no rule-by-rule explanation", async () => {
+    serve({
+      ...queue({ needs_approval: [request("r1", "Waiting Title")] }),
+      "GET /api/v2/admin/requests/{id}/events": () => ({ items: [] }),
+      "POST /api/v2/admin/request-routes/preview": () => ({
+        facts: {
+          anime: false,
+          company_ids: [],
+          genre_ids: [],
+          keyword_ids: [],
+          network_ids: [],
+          origin_countries: [],
+          year: 2019,
+        },
+        rules: [
+          {
+            route_id: "standard-movie",
+            route_name: "Standard",
+            is_fallback: true,
+            enabled: true,
+            unmet_conditions: [],
+            hd: "sends",
+            uhd: "skips",
+          },
+        ],
+        tiers: [
+          {
+            quality: "1080p",
+            route_id: "standard-movie",
+            integration_id: "s1",
+            integration_name: "Radarr",
+            route_name: "Standard",
+          },
+          {
+            quality: "2160p",
+            route_id: "standard-movie",
+            route_name: "Standard",
+            note: "No server is marked 4K, so there is no 4K copy.",
+          },
+        ],
+      }),
+    });
+    mount("/admin/requests?view=needs_approval");
+    fireEvent.click(
+      within(await rowOf("Waiting Title")).getByRole("button", { name: "Details: Waiting Title" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Radarr (Standard)")).toBeInTheDocument();
+    expect(within(dialog).getByText("no copy (no server is marked 4K)")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "How it was decided" })).toBeNull();
+  });
+
   it("loads the next page from the cursor the last one returned", async () => {
     serve({
       ...queue({}),

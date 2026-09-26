@@ -5,12 +5,18 @@ import type { RequestRoute, RequestRouteMediaType } from "@/api/v2/adminRequests
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdminUsers } from "@/hooks/queries/admin/users";
-import { useDiscoverNetworks, useDiscoverStudios } from "@/hooks/queries/useRequests";
+import {
+  useDiscoverNetworks,
+  useDiscoverStudios,
+  useRequestRouting,
+  useUpdateRequestRouting,
+} from "@/hooks/queries/useRequests";
 
 import { FieldGroup } from "./FieldGroup";
 import { RequestRoutePreview } from "./RequestRoutePreview";
 import type { RoutingScope } from "./RequestRuleEditor";
 import { RequestRoutingList } from "./RequestRoutingList";
+import { RoutingModeChoice, StandardRoutingSummary } from "./RequestRoutingMode";
 import { adminLanguage } from "./requestRoutingPresets";
 import { serverServesMediaType, type RequestRouterInstallation } from "./requestServerModel";
 
@@ -29,7 +35,8 @@ const MEDIA_TYPES: readonly { value: RequestRouteMediaType; label: string }[] = 
 ];
 
 /**
- * "Where requests go": for movies and for series, the rules Silo checks from
+ * "Where requests go": Standard, which sends each request to the server for
+ * its type, or Advanced: for movies and for series, the rules Silo checks from
  * the top, Everything else for what no rule takes, and a way to try a title.
  * Every change saves right away.
  */
@@ -59,6 +66,8 @@ export function RequestRoutingGroup({
   forceDual: boolean;
 }) {
   const [tab, setTab] = useState<RequestRouteMediaType>("movie");
+  const routing = useRequestRouting();
+  const switchRouting = useUpdateRequestRouting();
   const users = useAdminUsers();
   // The curated networks and studios come from the requesters' discover API,
   // which answers only while requests are on (and refuses with a 409 when
@@ -103,41 +112,53 @@ export function RequestRoutingGroup({
     };
   }
 
+  const advanced = routing.data?.mode === "advanced";
   return (
     <FieldGroup
       label="Where requests go"
-      description="Silo checks the rules from the top. The first rule that matches a request decides where it goes; anything no rule matches goes to Everything else. Changes save right away."
+      description={
+        advanced
+          ? "Silo checks the rules from the top. The first rule that matches a request decides where it goes; anything no rule matches goes to Everything else. Changes save right away."
+          : "Choose how Silo picks the server for each request. Changes save right away."
+      }
     >
-      {routesLoading || serversLoading ? (
+      {routesLoading || serversLoading || routing.isPending ? (
         <div className="space-y-2 py-3.5">
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-full" />
         </div>
-      ) : routesError ? (
+      ) : routesError || routing.isError ? (
         <p className="text-destructive py-3.5 text-sm">Routing could not be loaded.</p>
       ) : (
-        <Tabs
-          value={tab}
-          onValueChange={(value) => setTab(value as RequestRouteMediaType)}
-          className="pt-3"
-        >
-          <TabsList aria-label="Media type">
-            {MEDIA_TYPES.map((type) => (
-              <TabsTrigger key={type.value} value={type.value} className="px-4">
-                {type.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {MEDIA_TYPES.map((type) => {
-            const scope = scopeFor(type.value);
-            return (
-              <TabsContent key={type.value} value={type.value}>
-                <RequestRoutingList scope={scope} routesFetching={routesFetching} />
-                <RequestRoutePreview scope={scope} />
-              </TabsContent>
-            );
-          })}
-        </Tabs>
+        <div className="space-y-3 pt-3">
+          <RoutingModeChoice
+            routing={routing.data}
+            pending={switchRouting.isPending}
+            onChange={(mode) => switchRouting.mutate({ mode, current: routing.data })}
+          />
+          {advanced ? (
+            <Tabs value={tab} onValueChange={(value) => setTab(value as RequestRouteMediaType)}>
+              <TabsList aria-label="Media type">
+                {MEDIA_TYPES.map((type) => (
+                  <TabsTrigger key={type.value} value={type.value} className="px-4">
+                    {type.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {MEDIA_TYPES.map((type) => {
+                const scope = scopeFor(type.value);
+                return (
+                  <TabsContent key={type.value} value={type.value}>
+                    <RequestRoutingList scope={scope} routesFetching={routesFetching} />
+                    <RequestRoutePreview scope={scope} />
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
+          ) : (
+            <StandardRoutingSummary routing={routing.data} servers={allServers} routes={routes} />
+          )}
+        </div>
       )}
     </FieldGroup>
   );

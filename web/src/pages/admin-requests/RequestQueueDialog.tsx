@@ -333,7 +333,7 @@ function RoutePreviewSection({ request }: { request: MediaRequest }) {
         />
       )}
       <p className="text-muted-foreground text-xs">
-        With the rules as saved now.{" "}
+        With routing as saved now.{" "}
         <Link to="/admin/settings/requests" className="hover:text-foreground underline">
           Routing settings
         </Link>

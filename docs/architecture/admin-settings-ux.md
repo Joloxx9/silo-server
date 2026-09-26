@@ -61,10 +61,12 @@ installed plugin whose API key was never entered reads "Needs setup". Request
 servers (Sonarr, Radarr) are the exception to the provider-page rule: they are
 destinations that request routing chooses between, not interchangeable
 providers, so the Requests page holds the servers, the routing rules that pick
-one, and the request limits together. Routing rules are ordered records with
-their own validator, so each one, and each media type's Everything else, saves
-from its own editor as the admin goes; the save pill covers only the general
-request settings. Staged edits raise
+one, and the request limits together. Routing starts on Standard, which needs
+no setup (each request goes to the server for its type) and shows only a line
+per media type; the rules appear under Advanced, which a second server of a
+kind turns on. The Standard/Advanced switch, each routing rule and each media
+type's Everything else carry their own validators and save as the admin goes;
+the save pill covers only the general request settings. Staged edits raise
 one floating save pill (`SaveBar`) and arm the shell's unsaved-changes prompt;
 the restart prompt is a single `RestartBanner` (`web/src/components/admin/`)
 rendered by the admin shell (`AdminLayout`), never per page. A restart is owed

@@ -418,6 +418,9 @@ export const adminKeys = {
   // refresh the routes themselves; reading the routes is one GET per route; the
   // options each call out to the server's Sonarr or Radarr.
   requestRoutes: () => ["admin", "requestRoutes"] as const,
+  // Under requestRoutes: switching it changes the routes (Everything else can
+  // be filled in) and what a preview answers.
+  requestRouting: () => ["admin", "requestRoutes", "mode"] as const,
   // Under requestRoutes, so saving a rule refreshes an open preview.
   requestRoutePreviewRoot: () => ["admin", "requestRoutes", "preview"] as const,
   requestRoutePreview: (mediaType: string, tmdbId: number, requesterUserId?: number) =>

@@ -17,6 +17,7 @@ type fakeRouteAdmin struct {
 	preview  mediarequests.RoutePreview
 	lastSave mediarequests.Route
 	searched string
+	routing  mediarequests.RoutingOverview
 }
 
 func fixtureRouteAdmin() *fakeRouteAdmin {
@@ -93,6 +94,24 @@ func (f *fakeRouteAdmin) PreviewRoute(context.Context, mediarequests.Viewer, med
 func (f *fakeRouteAdmin) SearchRouteTitles(_ context.Context, _ mediarequests.Viewer, mediaType mediarequests.MediaType, q string) ([]tmdb.MediaResult, error) {
 	f.searched = q
 	return []tmdb.MediaResult{{ID: 129, MediaType: string(mediaType), Title: "Spirited Away", Year: 2001}}, nil
+}
+
+func (f *fakeRouteAdmin) GetRoutingOverview(context.Context, mediarequests.Viewer) (*mediarequests.RoutingOverview, error) {
+	o := f.routing
+	return &o, nil
+}
+
+func (f *fakeRouteAdmin) UpdateRoutingModeConditional(_ context.Context, _ mediarequests.Viewer, mode mediarequests.RoutingMode, expected int64) (*mediarequests.RoutingOverview, error) {
+	if expected != -1 && expected != f.routing.Revision {
+		return nil, mediarequests.ErrStaleRevision
+	}
+	if mode == mediarequests.RoutingStandard && f.routing.StandardBlocker != "" {
+		return nil, &mediarequests.ValidationError{FieldErrors: map[string]string{"mode": f.routing.StandardBlocker}}
+	}
+	f.writes++
+	f.routing.Mode, f.routing.Revision = mode, f.routing.Revision+1
+	o := f.routing
+	return &o, nil
 }
 
 func routeAdminHandler(f *fakeRouteAdmin) http.Handler {
@@ -203,4 +222,44 @@ func TestAdminRequestRoutesCreateReorderPreview(t *testing.T) {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 	requireProblem(t, do(t, h, http.MethodPost, base+"/preview", `{"media_type":"movie","tmdb_id":129,"requester_user_id":"x"}`, actingRequestAdmin), TypeValidationFailed)
+}
+
+func TestAdminRequestRoutingMode(t *testing.T) {
+	f := fixtureRouteAdmin()
+	f.routing = mediarequests.RoutingOverview{
+		RoutingSettings: mediarequests.RoutingSettings{Mode: mediarequests.RoutingStandard, Revision: 3},
+		Standard:        []mediarequests.StandardDestination{{MediaType: mediarequests.MediaTypeMovie, HDIntegrationID: "radarr", UHDIntegrationID: "radarr-4k"}},
+	}
+	h := routeAdminHandler(f)
+	path := Prefix + "/admin/request-routing"
+
+	requireProblem(t, do(t, h, http.MethodGet, path, "", requestOwner), TypePermissionDenied)
+	var got AdminRequestRouting
+	read := do(t, h, http.MethodGet, path, "", actingRequestAdmin)
+	decodeBody(t, read.Body, &got)
+	tag := read.Header().Get("ETag")
+	if read.Code != 200 || tag == "" || got.Mode != "standard" || len(got.Standard) != 1 ||
+		got.Standard[0].UHDIntegrationID != "radarr-4k" || got.StandardUnavailableReason != "" {
+		t.Fatalf("%d %s", read.Code, read.Body.String())
+	}
+
+	requireProblem(t, do(t, h, http.MethodPut, path, `{"mode":"advanced"}`, actingRequestAdmin), TypePreconditionRequired)
+	requireProblem(t, do(t, h, http.MethodPut, path, `{"mode":"advanced"}`, with(actingRequestAdmin, "If-Match", `"stale"`)), TypePreconditionFailed)
+	requireProblem(t, do(t, h, http.MethodPut, path, `{"mode":"sideways"}`, with(actingRequestAdmin, "If-Match", tag)), TypeValidationFailed)
+	if f.writes != 0 {
+		t.Fatal("a refused switch took effect")
+	}
+	saved := do(t, h, http.MethodPut, path, `{"mode":"advanced"}`, with(actingRequestAdmin, "If-Match", tag))
+	decodeBody(t, saved.Body, &got)
+	if saved.Code != 200 || got.Mode != "advanced" || saved.Header().Get("ETag") == tag {
+		t.Fatalf("%d %s", saved.Code, saved.Body.String())
+	}
+
+	f.routing.Standard, f.routing.StandardBlocker = nil, "Movies can go to more than one server (A, B)."
+	current := do(t, h, http.MethodGet, path, "", actingRequestAdmin)
+	decodeBody(t, current.Body, &got)
+	if got.Standard == nil || len(got.Standard) != 0 || got.StandardUnavailableReason == "" {
+		t.Fatalf("blocked overview = %s", current.Body.String())
+	}
+	requireProblem(t, do(t, h, http.MethodPut, path, `{"mode":"standard"}`, with(actingRequestAdmin, "If-Match", current.Header().Get("ETag"))), TypeValidationFailed)
 }

@@ -138,6 +138,22 @@ export const invalid = (errors: { location: string; detail: string }[]) =>
     errors.map((error) => ({ ...error, code: "invalid" })),
   );
 
+export type Routing = {
+  mode: "standard" | "advanced";
+  standard: {
+    media_type: "movie" | "series";
+    hd_integration_id?: string;
+    uhd_integration_id?: string;
+  }[];
+  standard_unavailable_reason?: string;
+};
+/** Advanced routing, with Standard unavailable: the routing tests' default. */
+export const advancedRouting: Routing = {
+  mode: "advanced",
+  standard: [],
+  standard_unavailable_reason: "Movies can go to more than one server (Radarr, Radarr Anime).",
+};
+
 export type Options = {
   path?: { id?: string };
   query?: Record<string, unknown>;
@@ -155,11 +171,13 @@ export function serve({
   servers = [radarr, radarrAnime, sonarr],
   routes = [fallback("movie"), fallback("series", "sonarr-1")],
   requestSettings = settings,
+  routing = advancedRouting,
   handlers = {},
 }: {
   servers?: ReturnType<typeof server>[];
   routes?: Route[];
   requestSettings?: typeof settings;
+  routing?: Routing;
   handlers?: Record<string, Handler>;
 } = {}) {
   vi.mocked(v2).mockImplementation(((operation: string, options: Options) => {
@@ -179,6 +197,8 @@ export function serve({
         );
       case "POST /api/v2/admin/request-integrations/{id}/options":
         return reply(options, { options: serverOptions });
+      case "GET /api/v2/admin/request-routing":
+        return reply(options, routing, '"routing-v1"');
       case "GET /api/v2/admin/request-routes":
         return reply(options, { items: routes });
       case "GET /api/v2/admin/request-routes/{id}": {
