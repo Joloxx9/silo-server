@@ -36,12 +36,14 @@ import {
   useRequestSearch,
 } from "@/hooks/queries/useRequests";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useUICustomization } from "@/hooks/useUICustomization";
 import {
   canCancelOwnRequest,
   requestDisplayState,
   requestInputFromMediaResult,
   type RequestDisplayState,
 } from "@/lib/mediaRequests";
+import { cardGridClasses } from "@/lib/uiCustomization";
 
 type MineBucketKey = "motion" | "completed" | "issues";
 type RequestTab = "discover" | "yours";
@@ -614,6 +616,7 @@ function SearchResultsView({
   isSubmitting: boolean;
   onRequest: (item: RequestMediaResult) => void;
 }) {
+  const { cardPresentation } = useUICustomization();
   const typeLabel =
     mediaType === "series" ? "series" : mediaType === "movie" ? "movies" : "movies and series";
   const filterLabel = mediaType === "series" ? "Series" : mediaType === "movie" ? "Movies" : "All";
@@ -681,7 +684,7 @@ function SearchResultsView({
         />
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8">
+          <div className={cardGridClasses(cardPresentation.poster_size)}>
             {results.map((item) => (
               <RequestPosterCard
                 key={`${item.media_type}-${item.tmdb_id}`}

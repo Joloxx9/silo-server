@@ -12,8 +12,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useUICustomization } from "@/hooks/useUICustomization";
 import { useCreateMediaRequest, useRequestBrowse } from "@/hooks/queries/useRequests";
 import { requestInputFromMediaResult } from "@/lib/mediaRequests";
+import { cardGridClasses } from "@/lib/uiCustomization";
 import type {
   DiscoverBrowseKind,
   DiscoverBrowseResponse,
@@ -46,6 +48,7 @@ export default function RequestBrowse({ kind }: RequestBrowseProps) {
 
   const browse = useRequestBrowse({ kind, slug, mediaType, sort, page });
   const createRequest = useCreateMediaRequest();
+  const { cardPresentation } = useUICustomization();
   const pendingRequestKey = createRequest.variables
     ? mediaRequestKey(createRequest.variables.media_type, createRequest.variables.tmdb_id)
     : undefined;
@@ -147,7 +150,7 @@ export default function RequestBrowse({ kind }: RequestBrowseProps) {
         ) : results.length === 0 ? (
           <p className="text-muted-foreground text-sm">Nothing matched. Try a different sort.</p>
         ) : (
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8">
+          <div className={cardGridClasses(cardPresentation.poster_size)}>
             {results.map((item) => (
               <RequestPosterCard
                 key={`${item.media_type}-${item.tmdb_id}`}

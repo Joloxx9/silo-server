@@ -3,6 +3,7 @@ import type { MouseEvent } from "react";
 import { Link } from "react-router";
 import { Film, Sparkles, Tv } from "lucide-react";
 import { useCanRequest } from "@/hooks/useCanRequest";
+import { useUICustomization } from "@/hooks/useUICustomization";
 import { useCreateMediaRequest, useRequestSearch } from "@/hooks/queries/useRequests";
 import type { RequestMediaResult } from "@/api/types";
 import {
@@ -16,6 +17,7 @@ import {
   requestSuggestions,
   tmdbImageURL,
 } from "@/lib/mediaRequests";
+import { cardGridClasses } from "@/lib/uiCustomization";
 import { cn } from "@/lib/utils";
 import { RequestStatusBadge } from "./RequestStatusBadge";
 import RequestPosterCard from "./RequestPosterCard";
@@ -261,6 +263,7 @@ function GridVariant({
 }) {
   const count = items.length;
   const createRequest = useCreateMediaRequest();
+  const { cardPresentation } = useUICustomization();
   // Track each in-flight card key independently; the shared `useMutation`
   // observer overwrites its `variables` on every `mutate` call, so rapid
   // clicks on different cards would otherwise trample each other's spinner.
@@ -323,7 +326,7 @@ function GridVariant({
         </span>
       </header>
 
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8">
+      <div className={cardGridClasses(cardPresentation.poster_size)}>
         {items.map((item) => {
           const key = cardKey(item);
           return (

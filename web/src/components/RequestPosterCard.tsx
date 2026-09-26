@@ -1,8 +1,9 @@
-import { Link } from "react-router";
-import { Film, Library, Loader2, Plus, Tv } from "lucide-react";
-import type { MediaRequest, RequestMediaResult } from "@/api/types";
+import type { ReactNode } from "react";
+import { Library, Loader2, Plus } from "lucide-react";
+import type { MediaRequest, RequestMediaResult, RequestMediaType } from "@/api/types";
 import { cn } from "@/lib/utils";
 import {
+  formatMediaType,
   formatSeasonList,
   formatSeasonProgress,
   requestDetailHref,
@@ -10,20 +11,31 @@ import {
   tmdbImageURL,
   type RequestDisplayState,
 } from "@/lib/mediaRequests";
+import { carouselCardWidthClasses } from "@/lib/uiCustomization";
+import { useUICustomization } from "@/hooks/useUICustomization";
+import MediaCardArtwork, {
+  MEDIA_CARD_CAPTION_CLASS,
+  MEDIA_CARD_CENTER_ACTION_CLASS,
+  MEDIA_CARD_META_CLASS,
+  MEDIA_CARD_TITLE_CLASS,
+} from "@/components/MediaCardArtwork";
 import { RequestReasonBadge, RequestStatusBadge } from "@/components/RequestStatusBadge";
 import { Button } from "@/components/ui/button";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
 
-const POSTER_WIDTH = "w-[148px] sm:w-[164px] lg:w-[184px]";
+// The badge takes the top-right corner and truncates before it reaches the
+// Library chip on the left.
+const BADGE_CLASS = "ml-auto max-w-full shrink-0";
+const DETAIL_CLASS = "text-muted-foreground mt-1 truncate text-[12px] font-medium";
 
 type DiscoverProps = {
   variant: "discover";
   item: RequestMediaResult;
-  /** Called when the inline hover Request button is clicked. Omit to suppress the button. */
+  /** Called when the hover Request action is clicked. Omit to suppress the action. */
   onRequest?: () => void;
-  /** Displays the spinner state on the hover Request button. Ignored when onRequest is omitted. */
+  /** Shows the pending state on the hover Request action. Ignored when onRequest is omitted. */
   isSubmitting?: boolean;
-  /** When true, fills the parent (use inside grids). Default: fixed carousel width. */
+  /** When true, fills the parent (use inside grids). Default: the viewer's carousel card width. */
   fluid?: boolean;
 };
 
@@ -39,6 +51,11 @@ type MineProps = {
 
 export type RequestPosterCardProps = DiscoverProps | MineProps;
 
+/**
+ * A title known from TMDB, drawn on the same poster card as library titles:
+ * a TMDB search or discovery result ("discover"), or one of the viewer's
+ * requests ("mine").
+ */
 export default function RequestPosterCard(props: RequestPosterCardProps) {
   if (props.variant === "mine") {
     return (
@@ -60,18 +77,7 @@ export default function RequestPosterCard(props: RequestPosterCardProps) {
   );
 }
 
-function DiscoverCard({
-  item,
-  isSubmitting,
-  onRequest,
-  fluid,
-}: {
-  item: RequestMediaResult;
-  isSubmitting?: boolean;
-  onRequest?: () => void;
-  fluid?: boolean;
-}) {
-  const poster = tmdbImageURL(item.poster_path);
+function DiscoverCard({ item, isSubmitting, onRequest, fluid }: Omit<DiscoverProps, "variant">) {
   const requestable = item.request.requestable;
   const availableInLibrary = item.availability === "available" && !item.request.status;
   const state: RequestDisplayState | undefined = item.request.status
@@ -79,330 +85,243 @@ function DiscoverCard({
     : availableInLibrary
       ? "available"
       : undefined;
-  const badgeClassName = posterBadgeClassName(Boolean(item.library_content_id));
 
   return (
-    <div
-      className={cn(
-        "group/req-card relative block focus-within:outline-none",
-        fluid ? "w-full" : POSTER_WIDTH,
-      )}
-    >
-      <Link
-        to={requestDetailHref(item.media_type, item.tmdb_id)}
-        className="block focus:outline-none focus-visible:outline-none"
-      >
-        <PosterFrame
-          poster={poster}
-          title={item.title}
-          mediaType={item.media_type}
-          dim={!requestable}
-        >
-          {state ? (
-            <RequestStatusBadge state={state} overlay className={badgeClassName} />
-          ) : !requestable ? (
-            <RequestReasonBadge reason={item.request.reason} overlay className={badgeClassName} />
-          ) : null}
-          {requestable && onRequest && (
-            <div
-              data-testid="request-poster-hover-overlay"
-              className="pointer-events-none absolute inset-0 translate-y-2 bg-gradient-to-t from-black/85 via-black/45 to-transparent opacity-0 transition-all duration-200 ease-out group-focus-within/req-card:translate-y-0 group-focus-within/req-card:opacity-100 group-hover/req-card:translate-y-0 group-hover/req-card:opacity-100"
-            />
-          )}
-        </PosterFrame>
-
-        <CardMeta
-          title={item.title}
-          year={item.year}
-          rating={item.vote_average}
-          mediaType={item.media_type}
-        />
-      </Link>
-
-      {requestable && onRequest && (
-        <div className="pointer-events-none absolute top-0 left-0 flex aspect-[2/3] w-full translate-y-2 items-end justify-center pb-3 opacity-0 transition-all duration-200 ease-out group-focus-within/req-card:translate-y-0 group-focus-within/req-card:opacity-100 group-hover/req-card:translate-y-0 group-hover/req-card:opacity-100">
-          <button
-            type="button"
-            disabled={Boolean(isSubmitting)}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onRequest();
-            }}
-            className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-semibold tracking-wide text-black shadow-lg shadow-black/40 transition-all hover:scale-[1.03] active:scale-[0.97] disabled:opacity-70"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Sending
-              </>
-            ) : (
-              <>
-                <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
-                Request
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
-      {item.library_content_id ? (
-        <LibraryCardLink contentID={item.library_content_id} title={item.title} />
-      ) : null}
-    </div>
+    <ExternalTitleCard
+      title={item.title}
+      mediaType={item.media_type}
+      year={item.year}
+      posterPath={item.poster_path}
+      href={requestDetailHref(item.media_type, item.tmdb_id)}
+      libraryContentId={item.library_content_id}
+      fluid={fluid}
+      dim={!requestable}
+      badge={
+        state ? (
+          <RequestStatusBadge state={state} overlay className={BADGE_CLASS} />
+        ) : !requestable ? (
+          <RequestReasonBadge reason={item.request.reason} overlay className={BADGE_CLASS} />
+        ) : null
+      }
+      action={
+        requestable && onRequest ? (
+          <RequestAction
+            title={`${item.title} (${[formatMediaType(item.media_type), item.year].filter(Boolean).join(" · ")})`}
+            pending={Boolean(isSubmitting)}
+            onRequest={onRequest}
+          />
+        ) : null
+      }
+    />
   );
 }
 
-function MineCard({
-  request,
-  fluid,
-  onCancel,
-  isCancelling,
-}: {
-  request: MediaRequest;
-  fluid?: boolean;
-  onCancel?: () => void;
-  isCancelling?: boolean;
-}) {
-  const poster = tmdbImageURL(request.poster_path);
+function MineCard({ request, fluid, onCancel, isCancelling }: Omit<MineProps, "variant">) {
   const state = requestDisplayState(request.status, request.outcome, request.state);
-  const progress =
-    state === "partially_available" ? formatSeasonProgress(request.season_progress ?? []) : "";
   const isClosed =
     request.outcome === "failed" ||
     request.outcome === "declined" ||
     request.outcome === "cancelled";
+  const seasons = request.seasons?.length ? formatSeasonList(request.seasons) : "";
+  const progress =
+    state === "partially_available" && request.season_progress?.length
+      ? formatSeasonProgress(request.season_progress)
+      : "";
+  const hasDetails = Boolean(
+    seasons || progress || request.last_error || request.outcome_reason || onCancel,
+  );
+
+  return (
+    <ExternalTitleCard
+      title={request.title}
+      mediaType={request.media_type}
+      year={request.year}
+      posterPath={request.poster_path}
+      href={requestDetailHref(request.media_type, request.tmdb_id)}
+      libraryContentId={request.library_content_id}
+      fluid={fluid}
+      dim={isClosed}
+      badge={state ? <RequestStatusBadge state={state} overlay className={BADGE_CLASS} /> : null}
+    >
+      {hasDetails ? (
+        <>
+          {seasons ? <p className={DETAIL_CLASS}>{seasons}</p> : null}
+          {progress ? <p className={DETAIL_CLASS}>{progress}</p> : null}
+          {request.last_error ? (
+            <p
+              className="text-destructive mt-1 line-clamp-2 text-[12px] leading-snug font-medium"
+              title={request.last_error}
+            >
+              {request.last_error}
+            </p>
+          ) : request.outcome_reason ? (
+            <p
+              className="text-muted-foreground mt-1 line-clamp-2 text-[12px] leading-snug"
+              title={request.outcome_reason}
+            >
+              {request.outcome_reason}
+            </p>
+          ) : null}
+          {onCancel ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={onCancel}
+              disabled={isCancelling}
+              aria-label={`Cancel request for ${request.title}`}
+              className="text-muted-foreground mt-1.5 -ml-2"
+            >
+              Cancel request
+            </Button>
+          ) : null}
+        </>
+      ) : null}
+    </ExternalTitleCard>
+  );
+}
+
+/**
+ * The library poster card for a title outside the library: the same artwork
+ * frame, hover reveal, and caption, with a request badge where library cards
+ * carry their overlay badges and a Request action where they carry Play.
+ */
+function ExternalTitleCard({
+  title,
+  mediaType,
+  year,
+  posterPath,
+  href,
+  libraryContentId,
+  fluid,
+  dim,
+  badge,
+  action,
+  children,
+}: {
+  title: string;
+  mediaType: RequestMediaType;
+  year?: number;
+  posterPath?: string;
+  href: string;
+  /** Adds a Library chip linking to the title's library item. */
+  libraryContentId?: string;
+  fluid?: boolean;
+  dim?: boolean;
+  badge?: ReactNode;
+  /** The hover action in the card's centre slot. */
+  action?: ReactNode;
+  /** Request details below the caption. Shown whatever the caption setting; pass null for none. */
+  children?: ReactNode;
+}) {
+  const { cardPresentation } = useUICustomization();
+  const showCaption = cardPresentation.caption !== "artwork";
+  // Unlike a library card, a TMDB title always names its type and year under
+  // a caption: a movie and a series can share a title, and the viewer is
+  // choosing which one to request.
+  const showMetadata = showCaption;
+  const meta = [formatMediaType(mediaType), year].filter(Boolean).join(" · ");
+  const label = `${title} (${meta})`;
 
   return (
     <div
       className={cn(
-        "group/req-card relative block focus:outline-none focus-visible:outline-none",
-        fluid ? "w-full" : POSTER_WIDTH,
+        "media-card group/card",
+        fluid ? "w-full" : carouselCardWidthClasses(cardPresentation.poster_size),
       )}
     >
-      <Link
-        to={requestDetailHref(request.media_type, request.tmdb_id)}
-        className="block focus:outline-none focus-visible:outline-none"
-      >
-        <PosterFrame
-          poster={poster}
-          title={request.title}
-          mediaType={request.media_type}
-          dim={isClosed}
+      <div className="group/media relative">
+        <ViewTransitionLink
+          to={href}
+          aria-label={label}
+          className="block overflow-hidden rounded-xl"
         >
-          {state ? (
-            <RequestStatusBadge
-              state={state}
-              overlay
-              className={posterBadgeClassName(Boolean(request.library_content_id))}
-            />
+          <MediaCardArtwork
+            src={tmdbImageURL(posterPath)}
+            alt={title}
+            fallbackLabel={title}
+            lazy
+            dim={dim}
+            fallbackOnError
+          />
+        </ViewTransitionLink>
+        {libraryContentId || badge ? (
+          <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-wrap items-center gap-1.5">
+            {libraryContentId ? <LibraryChip contentID={libraryContentId} title={title} /> : null}
+            {badge}
+          </div>
+        ) : null}
+        {action}
+      </div>
+      {showCaption || children ? (
+        <div className={MEDIA_CARD_CAPTION_CLASS}>
+          {showCaption ? (
+            <ViewTransitionLink to={href} className={MEDIA_CARD_TITLE_CLASS}>
+              {title}
+            </ViewTransitionLink>
           ) : null}
-        </PosterFrame>
-
-        <CardMeta title={request.title} year={request.year} mediaType={request.media_type} />
-
-        {request.seasons?.length ? (
-          <p className="text-muted-foreground mt-0.5 truncate text-[11px] leading-tight">
-            {formatSeasonList(request.seasons)}
-          </p>
-        ) : null}
-        {progress ? (
-          <p className="text-muted-foreground mt-0.5 truncate text-[11px] leading-tight">
-            {progress}
-          </p>
-        ) : null}
-
-        {request.last_error ? (
-          <p
-            className="text-destructive mt-1 line-clamp-2 text-[11px] leading-tight"
-            title={request.last_error}
-          >
-            {request.last_error}
-          </p>
-        ) : request.outcome_reason ? (
-          <p
-            className="text-muted-foreground mt-1 line-clamp-2 text-[11px] leading-tight"
-            title={request.outcome_reason}
-          >
-            {request.outcome_reason}
-          </p>
-        ) : null}
-      </Link>
-
-      {onCancel ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={onCancel}
-          disabled={isCancelling}
-          aria-label={`Cancel request for ${request.title}`}
-          className="text-muted-foreground mt-1"
-        >
-          Cancel request
-        </Button>
-      ) : null}
-
-      {request.library_content_id ? (
-        <LibraryCardLink contentID={request.library_content_id} title={request.title} />
+          {showMetadata ? (
+            <ViewTransitionLink to={href} className={MEDIA_CARD_META_CLASS}>
+              {meta}
+            </ViewTransitionLink>
+          ) : null}
+          {children}
+        </div>
       ) : null}
     </div>
   );
 }
 
-function LibraryCardLink({ contentID, title }: { contentID: string; title: string }) {
+function RequestAction({
+  title,
+  pending,
+  onRequest,
+}: {
+  title: string;
+  pending: boolean;
+  onRequest: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      aria-label={pending ? `Sending request for ${title}` : `Request ${title}`}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onRequest();
+      }}
+      className={cn(
+        MEDIA_CARD_CENTER_ACTION_CLASS,
+        "h-9 gap-1.5 px-3.5 text-[12px] font-semibold whitespace-nowrap hover:scale-105",
+        // Keep the pending state in view after the pointer leaves the card.
+        pending && "pointer-events-auto opacity-100",
+      )}
+    >
+      {pending ? (
+        <>
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          Sending
+        </>
+      ) : (
+        <>
+          <Plus className="size-3.5 stroke-[2.5]" aria-hidden />
+          Request
+        </>
+      )}
+    </button>
+  );
+}
+
+function LibraryChip({ contentID, title }: { contentID: string; title: string }) {
   return (
     <ViewTransitionLink
       to={`/item/${encodeURIComponent(contentID)}`}
       aria-label={`Open ${title} in library`}
-      className="absolute top-2 left-2 inline-flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-full bg-black/70 px-2 py-[3px] text-[10px] leading-none font-semibold tracking-[0.06em] text-white uppercase shadow-sm ring-1 shadow-white/15 backdrop-blur-md transition-colors hover:bg-black/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      className="glass-chip text-foreground focus-visible:ring-ring pointer-events-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-white/15 px-2.5 py-1 text-[10px] leading-none font-semibold tracking-[0.14em] uppercase transition-colors hover:border-white/40 focus-visible:ring-2 focus-visible:outline-none"
     >
-      <Library className="h-3 w-3 shrink-0" strokeWidth={2.4} aria-hidden />
-      <span className="truncate">Library</span>
+      <Library className="size-3 shrink-0" strokeWidth={2.4} aria-hidden />
+      Library
     </ViewTransitionLink>
-  );
-}
-
-function PosterFrame({
-  poster,
-  title,
-  mediaType,
-  dim,
-  children,
-}: {
-  poster: string | null;
-  title: string;
-  mediaType: "movie" | "series";
-  dim?: boolean;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="media-card-image relative aspect-[2/3]">
-      {poster ? (
-        <img
-          src={poster}
-          alt={title ? `${title} poster` : "Poster"}
-          loading="lazy"
-          className={cn(
-            "h-full w-full object-cover transition-[transform,filter] duration-300 group-hover/req-card:scale-[1.04]",
-            dim && "brightness-[0.85] saturate-[0.8]",
-          )}
-        />
-      ) : (
-        <PosterFallback title={title} mediaType={mediaType} dim={dim} />
-      )}
-      {/* subtle bottom vignette for legibility behind ribbons / hover overlays */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/55 to-transparent opacity-90" />
-      {children}
-    </div>
-  );
-}
-
-function PosterFallback({
-  title,
-  mediaType,
-  dim,
-}: {
-  title: string;
-  mediaType: "movie" | "series";
-  dim?: boolean;
-}) {
-  const hue = stringHue(title);
-  const Icon = mediaType === "series" ? Tv : Film;
-  return (
-    <div
-      className={cn(
-        "relative flex h-full w-full flex-col justify-end overflow-hidden p-3.5",
-        dim && "opacity-90",
-      )}
-      style={{
-        background: `linear-gradient(160deg, hsl(${hue} 30% 22%) 0%, hsl(${hue} 22% 11%) 60%, hsl(${(hue + 28) % 360} 18% 7%) 100%)`,
-      }}
-    >
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <Icon className="h-28 w-28 text-white/[0.05]" strokeWidth={1.25} />
-      </div>
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: "radial-gradient(rgba(255,255,255,0.55) 1px, transparent 1px)",
-          backgroundSize: "9px 9px",
-          opacity: 0.05,
-        }}
-      />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-      <div className="relative space-y-1.5">
-        <span className="text-[9px] font-semibold tracking-[0.22em] text-white/45 uppercase">
-          {mediaType === "series" ? "Series" : "Motion picture"}
-        </span>
-        <h4 className="font-display line-clamp-4 text-[15px] leading-tight font-bold tracking-tight text-balance text-white/90">
-          {title}
-        </h4>
-      </div>
-    </div>
-  );
-}
-
-function stringHue(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    hash = (Math.imul(hash, 31) + input.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash) % 360;
-}
-
-function CardMeta({
-  title,
-  year,
-  rating,
-  mediaType,
-}: {
-  title: string;
-  year?: number;
-  rating?: number;
-  mediaType?: "movie" | "series";
-}) {
-  const Icon = mediaType === "series" ? Tv : Film;
-  const hasMeta = mediaType || year !== undefined || rating !== undefined;
-  return (
-    <div className="mt-2.5 min-w-0 px-0.5">
-      <h3 className="text-foreground line-clamp-1 text-[13px] leading-tight font-semibold tracking-tight">
-        {title}
-      </h3>
-      {hasMeta && (
-        <div className="text-muted-foreground mt-1 flex items-center gap-1.5 text-[11px]">
-          {mediaType && (
-            <>
-              <Icon className="h-3 w-3 shrink-0 opacity-60" strokeWidth={2} aria-hidden />
-              <span>{mediaType === "series" ? "Series" : "Movie"}</span>
-            </>
-          )}
-          {mediaType && year ? (
-            <span aria-hidden className="text-muted-foreground/40">
-              ·
-            </span>
-          ) : null}
-          {year ? <span className="tabular-nums">{year}</span> : null}
-          {(year || mediaType) && rating ? (
-            <span aria-hidden className="text-muted-foreground/40">
-              ·
-            </span>
-          ) : null}
-          {rating ? (
-            <span className="tabular-nums">
-              <span className="text-amber-300/90">★</span> {rating.toFixed(1)}
-            </span>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Pins the status badge in the top-right corner, clear of the Library chip. */
-function posterBadgeClassName(reserveLibrarySpace: boolean): string {
-  return cn(
-    "absolute top-2 right-2",
-    reserveLibrarySpace ? "max-w-[calc(100%-5.75rem)]" : "max-w-[calc(100%-1rem)]",
   );
 }
