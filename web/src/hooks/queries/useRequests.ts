@@ -32,6 +32,7 @@ import {
   deleteAdminRequestRouteV2,
   reorderAdminRequestRoutesV2,
   previewAdminRequestRouteV2,
+  searchAdminRequestRouteTitlesV2,
   type AdminRequestQueueFilter,
   type RequestGroupLimit,
   type RequestGroupLimitBody,
@@ -631,11 +632,42 @@ export function useRequestIntegrations() {
 }
 
 // A saved server's connection may have changed, so the root folders, quality
-// profiles, and tags read from it are stale too.
+// profiles, and tags read from it are stale too. Adding or deleting a server
+// can also set or clear a media type's Everything else, so the routes are read
+// again as well.
 function invalidateRequestServers(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: adminKeys.requestIntegrations() });
   queryClient.invalidateQueries({ queryKey: adminKeys.requestIntegrationOptionsRoot() });
   invalidateRequestSurfaces(queryClient);
+  void invalidateRequestRoutes(queryClient);
+}
+
+/**
+ * The toast for an added server. The server may make it Everything else for
+ * movies or series (the first usable Radarr or Sonarr server); rather than
+ * guess its rules, the routes are read again and the toast says so only
+ * when Everything else now sends there.
+ */
+async function addedServerMessage(
+  queryClient: ReturnType<typeof useQueryClient>,
+  saved: RequestIntegration,
+): Promise<string> {
+  try {
+    const routes = await queryClient.fetchQuery({
+      queryKey: adminKeys.requestRoutes(),
+      queryFn: listAdminRequestRoutesV2,
+      staleTime: 0,
+    });
+    const fallback = routes.find(
+      (route) => route.is_fallback && route.hd.integration_id === saved.id,
+    );
+    if (fallback) {
+      return `${saved.name} added. Every ${fallback.media_type} request now goes to it.`;
+    }
+  } catch {
+    // The routes could not be read; the plain toast is still true.
+  }
+  return "Server added";
 }
 
 export function useCreateRequestIntegration() {
@@ -644,9 +676,9 @@ export function useCreateRequestIntegration() {
     retry: false,
     mutationFn: (integration: RequestIntegration) =>
       saveAdminRequestIntegrationV2(integration, true),
-    onSuccess: () => {
-      toast.success("Server added");
+    onSuccess: (saved) => {
       invalidateRequestServers(queryClient);
+      void addedServerMessage(queryClient, saved).then((message) => toast.success(message));
     },
     onError: (err) => {
       if (isValidationFailure(err)) return;
@@ -715,7 +747,9 @@ export function useRequestRoutes() {
 // reorder or toggle computed from the old list would undo the first or carry
 // a replaced validator.
 function invalidateRequestRoutes(queryClient: ReturnType<typeof useQueryClient>) {
-  return queryClient.invalidateQueries({ queryKey: adminKeys.requestRoutes() });
+  // An open preview asks TMDB again, so it refreshes without holding the list up.
+  void queryClient.invalidateQueries({ queryKey: adminKeys.requestRoutePreviewRoot() });
+  return queryClient.invalidateQueries({ queryKey: adminKeys.requestRoutes(), exact: true });
 }
 
 /** Writes a saved route into the list, so an editor adopting it is not pulled back. */
@@ -770,7 +804,7 @@ export function useUpdateRequestRoute({ inlineErrors = false }: { inlineErrors?:
       body: RequestRouteBody;
     }) => updateAdminRequestRouteV2(route, body),
     onSuccess: (saved) => {
-      toast.success(saved.is_fallback ? "Default destination saved" : "Rule saved");
+      toast.success(saved.is_fallback ? "Everything else saved" : "Rule saved");
       storeRequestRoute(queryClient, saved);
     },
     onError: (err) => routeMutationError(err, "Failed to save routing", inlineErrors),
@@ -798,17 +832,48 @@ export function useReorderRequestRoutes() {
     retry: false,
     mutationFn: ({ mediaType, ids }: { mediaType: RequestRouteMediaType; ids: string[] }) =>
       reorderAdminRequestRoutesV2(mediaType, ids),
-    onError: (err) => routeMutationError(err, "Failed to reorder rules"),
+    // The new order shows at once, so a dragged row stays where it was
+    // dropped. The list stays locked until the reorder is read back (the
+    // mutation is pending until then), and a refused reorder puts it back.
+    onMutate: async ({ mediaType, ids }) => {
+      const key = adminKeys.requestRoutes();
+      await queryClient.cancelQueries({ queryKey: key, exact: true });
+      const previous = queryClient.getQueryData<RequestRoute[]>(key);
+      queryClient.setQueryData<RequestRoute[]>(key, (routes) =>
+        routes?.map((route) =>
+          route.media_type === mediaType && !route.is_fallback && ids.includes(route.id)
+            ? { ...route, position: ids.indexOf(route.id) }
+            : route,
+        ),
+      );
+      return { previous };
+    },
+    onError: (err, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(adminKeys.requestRoutes(), context.previous);
+      }
+      routeMutationError(err, "Failed to reorder rules");
+    },
     onSettled: () => invalidateRequestRoutes(queryClient),
   });
 }
 
-/** Asks where each quality tier of a title would go; failures are shown inline. */
-export function usePreviewRequestRoute() {
-  return useMutation({
+/**
+ * Titles to try the routing rules on. Admin-only, and it answers while
+ * requests are turned off, unlike the requesters' search.
+ */
+export function useRequestRouteTitles(
+  mediaType: RequestRouteMediaType,
+  query: string,
+  options: { enabled?: boolean } = {},
+) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: adminKeys.requestRouteTitles(mediaType, q),
+    queryFn: ({ signal }) => searchAdminRequestRouteTitlesV2(mediaType, q, signal),
+    enabled: (options.enabled ?? true) && q.length > 1,
+    staleTime: 5 * 60 * 1000,
     retry: false,
-    mutationFn: ({ mediaType, tmdbId }: { mediaType: RequestRouteMediaType; tmdbId: number }) =>
-      previewAdminRequestRouteV2(mediaType, tmdbId),
   });
 }
 

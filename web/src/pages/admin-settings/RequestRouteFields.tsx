@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 import type { PluginAdminFormField, RequestIntegration } from "@/api/types";
@@ -15,7 +15,13 @@ import {
 import { useRequestIntegrationOptions } from "@/hooks/queries/useRequests";
 import { cn } from "@/lib/utils";
 
-import { overrideFields, type RouteDestinationDraft } from "./requestRoutingModel";
+import {
+  overrideLabel,
+  serverOverrideFields,
+  splitOverrideFields,
+  type DestinationChoice,
+  type Tier,
+} from "./requestRoutingModel";
 import {
   serverConfigSchema,
   serverInstallation,
@@ -24,9 +30,8 @@ import {
 import { SETTINGS_CONTROL_WIDTH, SettingFieldRow } from "./SettingField";
 
 /** Select values for the choices that are not a server. */
-export const DEST_NONE = "__none__";
-export const DEST_NEXT = "__next__";
-export const DEST_SKIP = "__skip__";
+const DEST_PASS = "__pass__";
+const DEST_SKIP = "__skip__";
 const SERVER_SETTING = "__server__";
 
 export interface Choice {
@@ -45,10 +50,10 @@ export function FieldError({ children }: { children?: string }) {
 }
 
 /**
- * A row of toggle chips for a short, fixed list (genres, a server's tags):
- * every choice visible, each one a pressed or unpressed button.
+ * A row of toggle chips for a short, fixed list (a server's tags): every
+ * choice visible, each one a pressed or unpressed button.
  */
-export function ChipToggleList({
+function ChipToggleList({
   label,
   options,
   selected,
@@ -89,8 +94,8 @@ export function ChipToggleList({
 }
 
 /**
- * The chosen values of a long list (languages, countries, accounts) as
- * removable chips, and one select to add another.
+ * The chosen values of a list (genres, languages, accounts) as removable
+ * chips, and one select to add another.
  */
 export function ValuePicker({
   addLabel,
@@ -100,6 +105,7 @@ export function ValuePicker({
   labelOf,
   disabled,
   unavailableHint,
+  hideAdd = false,
 }: {
   addLabel: string;
   options: readonly Choice[];
@@ -109,14 +115,16 @@ export function ValuePicker({
   disabled?: boolean;
   /** Why there is nothing to pick from; shown in place of the select. Chosen values stay. */
   unavailableHint?: string;
+  /** Shows only the chips; the caller offers its own way to add. */
+  hideAdd?: boolean;
 }) {
   const nameOf = (value: string) =>
     labelOf?.(value) ?? options.find((option) => option.value === value)?.label ?? value;
   const available = options.filter((option) => !selected.includes(option.value));
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       {selected.length > 0 ? (
-        <ul className="flex list-none flex-wrap gap-1.5">
+        <ul className="contents list-none">
           {selected.map((value) => (
             <li
               key={value}
@@ -136,7 +144,7 @@ export function ValuePicker({
           ))}
         </ul>
       ) : null}
-      {unavailableHint ? (
+      {hideAdd ? null : unavailableHint ? (
         <p className="text-muted-foreground text-xs">{unavailableHint}</p>
       ) : (
         <Select
@@ -146,7 +154,7 @@ export function ValuePicker({
           }}
           disabled={disabled || available.length === 0}
         >
-          <SelectTrigger aria-label={addLabel} className="w-full sm:w-64">
+          <SelectTrigger aria-label={addLabel} size="sm" className="w-auto min-w-32 text-xs">
             <SelectValue placeholder={addLabel} />
           </SelectTrigger>
           <SelectContent>
@@ -172,6 +180,7 @@ function overrideValue(value: unknown): string {
  */
 function OverrideFieldRow({
   field,
+  label,
   server,
   options,
   optionsLoading,
@@ -180,6 +189,7 @@ function OverrideFieldRow({
   error,
 }: {
   field: PluginAdminFormField;
+  label: string;
   server: RequestIntegration;
   options: readonly Choice[];
   optionsLoading: boolean;
@@ -194,9 +204,11 @@ function OverrideFieldRow({
     const selected = Array.isArray(value) ? value.map((entry) => String(entry)) : [];
     return (
       <SettingFieldRow
-        label={field.label || field.key}
+        label={label}
         description={
-          selected.length === 0 ? "None chosen, so the server's own setting applies." : undefined
+          selected.length === 0
+            ? `None chosen — the server's ${label.toLowerCase()} apply.`
+            : undefined
         }
         status={<FieldError>{error}</FieldError>}
       >
@@ -206,11 +218,11 @@ function OverrideFieldRow({
           <span className="text-muted-foreground text-xs">Nothing to choose on this server.</span>
         ) : (
           <ChipToggleList
-            label={field.label || field.key}
+            label={label}
             options={options}
             selected={selected}
             onChange={onChange}
-            className="justify-end sm:max-w-[var(--settings-control-w)]"
+            className="sm:max-w-[var(--settings-control-w)] sm:justify-end"
           />
         )}
       </SettingFieldRow>
@@ -237,16 +249,16 @@ function OverrideFieldRow({
         overrideValue(serverValue));
 
   return (
-    <SettingFieldRow
-      label={field.label || field.key}
-      htmlFor={controlId}
-      status={<FieldError>{error}</FieldError>}
-    >
+    <SettingFieldRow label={label} htmlFor={controlId} status={<FieldError>{error}</FieldError>}>
       <Select
         value={current || SERVER_SETTING}
         onValueChange={(next) => onChange(next === SERVER_SETTING ? undefined : next)}
       >
-        <SelectTrigger id={controlId} className={SETTINGS_CONTROL_WIDTH}>
+        <SelectTrigger
+          id={controlId}
+          className={cn(SETTINGS_CONTROL_WIDTH, "min-w-0")}
+          aria-invalid={Boolean(error)}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -265,15 +277,14 @@ function OverrideFieldRow({
 }
 
 /**
- * The server settings a route can replace for one tier (root folder, quality
- * profile, tags, ...), offered from the server's own form and filled from the
- * server's options. Collapsed until the route overrides something.
+ * The settings a destination replaces on its server: Folder, Quality and
+ * Tags on their own rows, and every other field the plugin offers under
+ * More settings, which opens when one of them is set.
  */
-function RouteOverrideFields({
+function DestinationOverrides({
   sectionId,
   server,
   installations,
-  tierLabel,
   overrides,
   onChange,
   errors,
@@ -282,25 +293,19 @@ function RouteOverrideFields({
   sectionId: string;
   server: RequestIntegration;
   installations: RequestRouterInstallation[];
-  tierLabel: string;
   overrides: Record<string, unknown>;
   onChange: (overrides: Record<string, unknown>) => void;
   errors: Record<string, string>;
   errorPrefix: string;
 }) {
   const entry = serverInstallation(installations, server.installation_id, server.capability_id);
-  const { descriptor, jsonSchema } = serverConfigSchema(entry);
-  const fields = overrideFields(descriptor, server.plugin_config ?? {});
-  const fieldTypes = parseFieldTypes(jsonSchema);
+  const fieldTypes = parseFieldTypes(serverConfigSchema(entry).jsonSchema);
+  const fields = serverOverrideFields(server, installations);
+  const { inline, more } = splitOverrideFields(fields);
   const needsOptions = fields.some((field) => field.dynamic_options);
   const options = useRequestIntegrationOptions(needsOptions ? server.id : undefined);
 
   if (fields.length === 0) return null;
-
-  const overrideErrors = Object.keys(errors).some((key) =>
-    key.startsWith(`${errorPrefix}.overrides.`),
-  );
-  const overridden = Object.values(overrides).some((value) => value !== undefined);
 
   function set(field: PluginAdminFormField, raw: unknown) {
     const next = { ...overrides };
@@ -312,138 +317,164 @@ function RouteOverrideFields({
     onChange(next);
   }
 
+  const row = (field: PluginAdminFormField, label: string) => (
+    <OverrideFieldRow
+      key={field.key}
+      field={field}
+      label={label}
+      server={server}
+      options={field.dynamic_options ? (options.data?.[field.key] ?? []) : (field.options ?? [])}
+      optionsLoading={Boolean(field.dynamic_options) && options.isLoading}
+      value={overrides[field.key]}
+      onChange={(raw) => set(field, raw)}
+      error={errors[`${errorPrefix}.overrides.${field.key}`]}
+    />
+  );
+  const moreSet = more.some((field) => overrides[field.key] !== undefined);
+  const moreErrors = more.some((field) => errors[`${errorPrefix}.overrides.${field.key}`]);
+
   return (
-    <AdvancedSection
-      id={`requests.route-overrides.${sectionId}`}
-      title={`Override ${tierLabel} server settings`}
-      count={fields.length}
-      forceOpen={overridden || overrideErrors}
-    >
+    <div className="border-border/60 ml-1 border-l pl-4">
       {options.isError ? (
         <p className="settings-field-note py-3 text-xs text-amber-600 dark:text-amber-400">
-          Couldn&apos;t read root folders and profiles from {server.name}:{" "}
+          Couldn&apos;t read folders and profiles from {server.name}:{" "}
           {options.error instanceof Error ? options.error.message : "unknown error"}
         </p>
       ) : null}
-      {fields.map((field) => (
-        <OverrideFieldRow
-          key={field.key}
-          field={field}
-          server={server}
-          options={
-            field.dynamic_options ? (options.data?.[field.key] ?? []) : (field.options ?? [])
-          }
-          optionsLoading={Boolean(field.dynamic_options) && options.isLoading}
-          value={overrides[field.key]}
-          onChange={(raw) => set(field, raw)}
-          error={errors[`${errorPrefix}.overrides.${field.key}`]}
-        />
-      ))}
-    </AdvancedSection>
+      {inline.map((field) => row(field, overrideLabel(field.key)))}
+      {more.length > 0 ? (
+        <AdvancedSection
+          id={`requests.route-more.${sectionId}`}
+          title="More settings"
+          count={more.length}
+          forceOpen={moreSet || moreErrors}
+        >
+          {more.map((field) => row(field, field.label || overrideLabel(field.key)))}
+        </AdvancedSection>
+      ) : null}
+    </div>
   );
 }
 
 /**
- * Where a route sends one quality tier: a server select, with the choices
- * that are not a server first, and the overrides for the chosen server.
- * `errors` holds the route editor's field errors keyed like the API's
- * (`hd.integration_id`, `uhd.overrides.root_folder`, ...).
+ * Where one copy (HD or 4K) goes: a server, "Don't make a 4K copy", or the
+ * pass-through choice, and under a chosen server the settings the route
+ * replaces on it. `errors` holds the editor's field errors keyed like the
+ * API's (`hd.integration_id`, `uhd.overrides.root_folder`, ...).
  */
-export function RouteDestinationFields({
+export function RouteDestinationEditor({
+  tier,
   sectionId,
-  label,
-  tierLabel,
   servers,
   allServers,
   installations,
   value,
-  choices,
-  selected,
-  onSelect,
-  onOverridesChange,
+  onChange,
+  passLabel,
+  allowSkip = false,
+  caption,
+  note,
   errors,
-  errorPrefix,
-  dirty,
 }: {
-  label: string;
-  tierLabel: string;
-  /** The servers this tier may go to (the media type's kind). */
+  tier: Tier;
+  /**
+   * Names this destination's More settings, e.g. `fallback-movie.hd`, so each
+   * keeps its own open state.
+   */
+  sectionId: string;
+  /** The servers this copy may go to (the media type's kind). */
   servers: readonly RequestIntegration[];
   /** Every server, to name one that no longer fits the media type. */
   allServers: readonly RequestIntegration[];
   installations: RequestRouterInstallation[];
-  value: RouteDestinationDraft;
-  choices: readonly Choice[];
-  selected: string;
-  onSelect: (value: string) => void;
-  onOverridesChange: (overrides: Record<string, unknown>) => void;
+  value: DestinationChoice;
+  onChange: (next: DestinationChoice) => void;
+  /** Offers passing the copy on, labelled so; without it a server is required. */
+  passLabel?: string;
+  /** Offers "Don't make a 4K copy". */
+  allowSkip?: boolean;
+  caption?: ReactNode;
+  /** A line under the chosen server, e.g. what a preset set. */
+  note?: ReactNode;
   errors: Record<string, string>;
-  errorPrefix: string;
-  dirty?: boolean;
-  /**
-   * Names this tier's override section, e.g. `fallback-movie.hd`, so each
-   * section keeps its own open state instead of opening every other one.
-   */
-  sectionId: string;
 }) {
   const controlId = useId();
-  const server = value.integration_id
-    ? allServers.find((candidate) => candidate.id === value.integration_id)
+  const { dest, skip } = value;
+  const server = dest.integration_id
+    ? allServers.find((candidate) => candidate.id === dest.integration_id)
     : undefined;
   const serverChoices: Choice[] = servers.map((candidate) => ({
     value: candidate.id,
-    label: candidate.enabled ? candidate.name : `${candidate.name} (disabled)`,
+    label: candidate.enabled ? candidate.name : `${candidate.name} (turned off)`,
   }));
   if (
-    value.integration_id &&
-    !serverChoices.some((choice) => choice.value === value.integration_id)
+    dest.integration_id &&
+    !serverChoices.some((choice) => choice.value === dest.integration_id)
   ) {
-    serverChoices.push({ value: value.integration_id, label: server?.name ?? "Missing server" });
+    serverChoices.push({ value: dest.integration_id, label: server?.name ?? "Missing server" });
   }
-  const error = errors[errorPrefix] ?? errors[`${errorPrefix}.integration_id`];
+  const selected = skip ? DEST_SKIP : dest.integration_id || (passLabel ? DEST_PASS : "");
+  const error = errors[tier] ?? errors[`${tier}.integration_id`];
+  const label = tier === "hd" ? "HD copies" : "4K copies";
+
+  function select(next: string) {
+    if (next === DEST_SKIP) onChange({ dest: { integration_id: "", overrides: {} }, skip: true });
+    else if (next === DEST_PASS)
+      onChange({ dest: { integration_id: "", overrides: {} }, skip: false });
+    else if (next === dest.integration_id) onChange({ dest, skip: false });
+    else onChange({ dest: { integration_id: next, overrides: {} }, skip: false });
+  }
 
   return (
     <>
       <SettingFieldRow
         label={label}
         htmlFor={controlId}
-        dirty={dirty}
+        description={caption}
         status={<FieldError>{error}</FieldError>}
       >
-        <Select value={selected} onValueChange={onSelect}>
+        {server ? (
+          <span className="text-muted-foreground shrink-0 text-xs" aria-hidden="true">
+            Send to
+          </span>
+        ) : null}
+        <Select value={selected} onValueChange={select}>
           <SelectTrigger
             id={controlId}
-            className={SETTINGS_CONTROL_WIDTH}
+            className={cn(SETTINGS_CONTROL_WIDTH, "min-w-0")}
             aria-invalid={Boolean(error)}
           >
             <SelectValue placeholder="Choose a server" />
           </SelectTrigger>
           <SelectContent>
-            {choices.map((choice) => (
-              <SelectItem key={choice.value} value={choice.value}>
-                {choice.label}
-              </SelectItem>
-            ))}
             {serverChoices.map((choice) => (
               <SelectItem key={choice.value} value={choice.value}>
                 {choice.label}
               </SelectItem>
             ))}
+            {allowSkip ? (
+              <SelectItem value={DEST_SKIP}>Don&apos;t make a 4K copy</SelectItem>
+            ) : null}
+            {passLabel ? <SelectItem value={DEST_PASS}>{passLabel}</SelectItem> : null}
           </SelectContent>
         </Select>
       </SettingFieldRow>
       {server ? (
-        <RouteOverrideFields
+        <DestinationOverrides
           key={server.id}
           sectionId={sectionId}
           server={server}
           installations={installations}
-          tierLabel={tierLabel}
-          overrides={value.overrides}
-          onChange={onOverridesChange}
+          overrides={dest.overrides}
+          onChange={(overrides) => onChange({ dest: { ...dest, overrides }, skip: false })}
           errors={errors}
-          errorPrefix={errorPrefix}
+          errorPrefix={tier}
         />
+      ) : null}
+      {server && note ? (
+        <p className="text-muted-foreground border-border/60 ml-1 border-l py-2 pl-4 text-xs">
+          {note}
+        </p>
       ) : null}
     </>
   );

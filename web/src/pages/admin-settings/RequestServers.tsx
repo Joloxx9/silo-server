@@ -63,10 +63,12 @@ import { supportedMediaTypesForConfig } from "./requestIntegrationMediaTypes";
 import {
   installationOptionLabel,
   installationOptionValue,
+  mediaTypePlural,
   ROUTING_OWNED_CONFIG_KEYS,
   serverConfigSchema,
   serverInstallation,
   serverKind,
+  serverDeleteBlockers,
   serverReady,
   serverRouteUsage,
   serverTypeLabel,
@@ -231,6 +233,7 @@ export function RequestServersGroup({
               source={null}
               installations={installations}
               routes={routes}
+              servers={servers}
               onDone={() => setEditing(null)}
             />
           ) : editingServer ? (
@@ -241,6 +244,7 @@ export function RequestServersGroup({
               source={editingServer}
               installations={installations}
               routes={routes}
+              servers={servers}
               onDone={() => setEditing(null)}
             />
           ) : null}
@@ -386,11 +390,14 @@ export function RequestServerEditor({
   source,
   installations,
   routes,
+  servers,
   onDone,
 }: {
   source: RequestIntegration | null;
   installations: RequestRouterInstallation[];
   routes: RequestRoute[];
+  /** Every server, to tell whether this is the last of its kind. */
+  servers: readonly RequestIntegration[];
   onDone: () => void;
 }) {
   const sole = installations.length === 1 ? installations[0] : undefined;
@@ -407,8 +414,18 @@ export function RequestServerEditor({
   const [testing, setTesting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  // The server refuses to delete a server routing still sends to.
   const routedBy = source ? serverRouteUsage(source.id, routes) : "";
+  // The server refuses to delete a server routing still sends to, except the
+  // last of its kind when only Everything else uses it; that goes with it.
+  const deleteBlockedBy = source ? serverDeleteBlockers(source.id, routes, servers) : "";
+  const clearsFallback =
+    source && routedBy && !deleteBlockedBy
+      ? routes.find(
+          (route) =>
+            route.is_fallback &&
+            (route.hd.integration_id === source.id || route.uhd.integration_id === source.id),
+        )?.media_type
+      : undefined;
   // Nor does it let a routed server change type (Sonarr ↔ Radarr): the routes
   // pointing at it are for one media type.
   const typeLock = routedBy
@@ -732,16 +749,16 @@ export function RequestServerEditor({
                 setDeleteError(null);
                 setConfirmDelete(true);
               }}
-              disabled={deleteServer.isPending || conflict || !etag || routedBy !== ""}
-              aria-describedby={routedBy ? deleteBlockedId : undefined}
+              disabled={deleteServer.isPending || conflict || !etag || deleteBlockedBy !== ""}
+              aria-describedby={deleteBlockedBy ? deleteBlockedId : undefined}
             >
               <Trash2 aria-hidden="true" />
               Delete
             </Button>
           ) : null}
-          {routedBy ? (
+          {deleteBlockedBy ? (
             <span id={deleteBlockedId} className="text-muted-foreground min-w-0 text-xs">
-              Routing sends requests here ({routedBy}). Change that first to delete it.
+              Routing still sends requests here ({deleteBlockedBy}); send them elsewhere first.
             </span>
           ) : null}
           {test ? (
@@ -781,6 +798,9 @@ export function RequestServerEditor({
             <AlertDialogDescription>
               Silo stops sending requests to it, and Autoscan connections that reuse it lose their
               connection details.
+              {clearsFallback
+                ? ` Everything else for ${mediaTypePlural(clearsFallback)} goes with it, so those requests have nowhere to go until you add another server.`
+                : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteError ? (

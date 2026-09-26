@@ -413,13 +413,18 @@ export const adminKeys = {
   requestSettings: () => ["admin", "requests", "settings"] as const,
   requestIntegrations: () => ["admin", "requests", "integrations"] as const,
   // The route and option keys sit outside requestsRoot on purpose: every request, server,
-  // and settings write invalidates that root. Nothing those writes change shows
-  // up in a route, and reading the routes is one GET per route; the options
-  // each call out to the server's Sonarr or Radarr.
+  // and settings write invalidates that root. Only adding or deleting a server
+  // changes a route (it can set or clear Everything else), and those writes
+  // refresh the routes themselves; reading the routes is one GET per route; the
+  // options each call out to the server's Sonarr or Radarr.
   requestRoutes: () => ["admin", "requestRoutes"] as const,
   // Under requestRoutes, so saving a rule refreshes an open preview.
+  requestRoutePreviewRoot: () => ["admin", "requestRoutes", "preview"] as const,
   requestRoutePreview: (mediaType: string, tmdbId: number, requesterUserId?: number) =>
     ["admin", "requestRoutes", "preview", mediaType, tmdbId, requesterUserId ?? null] as const,
+  // Outside requestRoutes: a rule save changes nothing TMDB answers.
+  requestRouteTitles: (mediaType: string, q: string) =>
+    ["admin", "requestRouteTitles", mediaType, q] as const,
   requestIntegrationOptionsRoot: () => ["admin", "requestIntegrationOptions"] as const,
   requestIntegrationOptions: (integrationId: string) =>
     ["admin", "requestIntegrationOptions", integrationId] as const,

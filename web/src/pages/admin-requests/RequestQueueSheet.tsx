@@ -22,10 +22,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAdminPluginInstallations } from "@/hooks/queries/admin/plugins";
+import { useAdminUsers } from "@/hooks/queries/admin/users";
 import {
   useAdminRequestEvents,
   useAdminRequestRoutePreview,
   useRequestIntegrations,
+  useRequestRoutes,
 } from "@/hooks/queries/useRequests";
 import { formatRelativeTime } from "@/lib/date";
 import { formatDateTime } from "@/lib/datetime";
@@ -284,6 +286,13 @@ function RoutePreviewSection({ request }: { request: MediaRequest }) {
   });
   // Server and plugin names turn override IDs into the names the settings use.
   const servers = useRequestIntegrations();
+  // The routes and accounts turn the explanation's rule and account IDs into names.
+  const routes = useRequestRoutes();
+  const users = useAdminUsers();
+  const names = useMemo(
+    () => ({ users: new Map((users.data ?? []).map((user) => [user.id, user.username])) }),
+    [users.data],
+  );
   const installationsQuery = useAdminPluginInstallations();
   const installations = useMemo(
     () => requestRouterInstallations(installationsQuery.data ?? []),
@@ -306,6 +315,10 @@ function RoutePreviewSection({ request }: { request: MediaRequest }) {
           mediaType={request.media_type}
           servers={servers.data ?? []}
           installations={installations}
+          routes={routes.data ?? []}
+          names={names}
+          requesterUserId={request.requested_by_user_id}
+          traceOpen={false}
         />
       )}
       <p className="text-muted-foreground text-xs">

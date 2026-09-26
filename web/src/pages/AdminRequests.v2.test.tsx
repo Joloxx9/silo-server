@@ -395,15 +395,37 @@ describe("request administration", () => {
           network_ids: [],
           origin_countries: [],
           year: 2019,
+          content_rating: "PG-13",
         },
+        rules: [
+          {
+            route_id: "kids",
+            route_name: "Kids",
+            is_fallback: false,
+            enabled: true,
+            unmet_conditions: ["max_content_rating"],
+            hd: "no_match",
+            uhd: "no_match",
+          },
+          {
+            route_id: "fallback-movie",
+            route_name: "Everything else",
+            is_fallback: true,
+            enabled: true,
+            unmet_conditions: [],
+            hd: "sends",
+            uhd: "skips",
+          },
+        ],
         tiers: [
           {
             quality: "1080p",
+            route_id: "fallback-movie",
             integration_id: "s1",
             integration_name: "Radarr",
             route_name: "Everything else",
           },
-          { quality: "2160p", note: "No rule sends 4K for this title." },
+          { quality: "2160p", route_id: "fallback-movie", route_name: "Everything else" },
         ],
       }),
     });
@@ -429,8 +451,17 @@ describe("request administration", () => {
     expect(servers).toHaveTextContent("rejected");
     expect(servers).toHaveTextContent("quality profile missing");
 
-    expect(await within(sheet).findByText("Radarr")).toBeInTheDocument();
-    expect(within(sheet).getByText("No rule sends 4K for this title.")).toBeInTheDocument();
+    expect(await within(sheet).findByText("Radarr (Everything else)")).toBeInTheDocument();
+    expect(
+      within(sheet).getByText("no copy (Everything else doesn't make 4K copies)"),
+    ).toBeInTheDocument();
+    // How it was decided starts collapsed in the sheet.
+    const how = within(sheet).getByRole("button", { name: "How it was decided" });
+    expect(how).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(how);
+    expect(
+      within(sheet).getByText("Everything else — decides HD · decides 4K: no copy"),
+    ).toBeTruthy();
     expect(calls("POST /api/v2/admin/request-routes/preview")[0]?.body).toEqual({
       media_type: "movie",
       tmdb_id: 1,
