@@ -392,8 +392,8 @@ func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error
 // plaintext, plugin_config attached), and returns the installation+capability to
 // dispatch to.
 //
-// It filters by media type to match the integrationConfigured auto-approve gate
-// (so a series-only connection is never used for a movie request). Multi-
+// It filters by media type (so a series-only connection is never used for a
+// movie request). Multi-
 // installation routing isn't supported yet: it picks the first eligible
 // connection's installation and includes ONLY connections belonging to it, so a
 // second installation's resolved plaintext credentials are never handed to the
@@ -430,6 +430,45 @@ func (s *Service) resolveRouterConnections(ctx context.Context, fc *fulfillConte
 	return conns, installationID, capabilityID, nil
 }
 
+// Reasons a configured router connection cannot take a submission, recorded in
+// the request's last_error.
+const (
+	msgRouterUnbound = "request backend connection is not bound to a plugin installation; re-save it in admin"
+	msgRouterNoKey   = "request backend connection has no API key; add it in admin"
+)
+
+// unusableRouterMessage explains why no configured connection could take a
+// submission, for the request's last_error.
+func unusableRouterMessage(fc *fulfillContext, mediaType MediaType) string {
+	for _, in := range fc.integrations {
+		if !in.Enabled || in.CapabilityID == "" || !integrationSupportsMediaType(in, mediaType) {
+			continue
+		}
+		if in.InstallationID == nil {
+			// The migration left installation_id NULL on rows that predate the
+			// plugin install and were never re-bound.
+			return msgRouterUnbound
+		}
+		if strings.TrimSpace(in.APIKeyRef) == "" {
+			return msgRouterNoKey
+		}
+	}
+	return "no usable request backend connection"
+}
+
+// routerConfiguredFor reports whether any enabled router connection is meant to
+// serve the media type, including a misconfigured one (no installation bound,
+// no key). Only when none is does a request fall back to waiting for the
+// library; a misconfigured connection surfaces as a submission failure instead.
+func routerConfiguredFor(fc *fulfillContext, mediaType MediaType) bool {
+	for _, in := range fc.integrations {
+		if in.Enabled && in.CapabilityID != "" && integrationSupportsMediaType(in, mediaType) {
+			return true
+		}
+	}
+	return false
+}
+
 // skippedRouterConnection reports whether resolveRouterConnections leaves out
 // a connection that would otherwise serve the media type, because its API key
 // is missing.
@@ -444,9 +483,8 @@ func skippedRouterConnection(fc *fulfillContext, mediaType MediaType) bool {
 
 // eligibleRouterConnection reports whether a connection is a candidate fulfillment
 // backend for the media type: enabled, bound to an installation, and naming a
-// capability sub-id that serves the media type. resolveRouterConnections (which
-// then resolves credentials) and integrationConfigured (the auto-approval gate)
-// share this predicate so the two cannot drift.
+// capability sub-id that serves the media type. resolveRouterConnections then
+// resolves credentials for the ones it uses.
 func eligibleRouterConnection(in Integration, mediaType MediaType) bool {
 	return in.Enabled && in.CapabilityID != "" && in.InstallationID != nil &&
 		integrationSupportsMediaType(in, mediaType)
@@ -731,12 +769,11 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 	if err != nil {
 		return nil, err
 	}
+	// Auto-approval does not depend on a router: without one, an approved
+	// request waits for the title to appear in the library.
 	status := StatusPending
 	if policy.AutoApprove {
-		configured, err := s.integrationConfigured(ctx, normalized.MediaType)
-		if err == nil && configured {
-			status = StatusApproved
-		}
+		status = StatusApproved
 	}
 	record := CreateRequestRecord{
 		ID:        id,
@@ -909,14 +946,15 @@ func (s *Service) Approve(ctx context.Context, viewer Viewer, id string) (*Reque
 	return s.submitAfterCommit(ctx, *approved, viewer), nil
 }
 
-// Decline rejects a request that is still pending. Approved requests may
-// already be on their way to a downstream service, so declining one could leave
-// the external state diverged from Silo's; the guard refuses it.
+// Decline rejects a request nothing has been sent for: a pending one, or an
+// approved one still waiting for the library or backing off. Once a submission
+// is in flight or a target exists, declining could leave the downstream
+// service's state diverged from Silo's, so the guard refuses it.
 func (s *Service) Decline(ctx context.Context, viewer Viewer, id, reason string) (*Request, error) {
 	if !viewer.IsAdmin {
 		return nil, ErrForbidden
 	}
-	declined, err := s.store.SetOutcome(ctx, strings.TrimSpace(id), guardPending, OutcomeDeclined, viewer, reason)
+	declined, err := s.store.SetOutcome(ctx, strings.TrimSpace(id), guardWithdrawable, OutcomeDeclined, viewer, reason)
 	if err != nil {
 		return nil, err
 	}
@@ -925,10 +963,11 @@ func (s *Service) Decline(ctx context.Context, viewer Viewer, id, reason string)
 	return declined, nil
 }
 
-// Cancel withdraws a request that has not yet been submitted to a downstream
-// integration. Owners can withdraw their own pending requests; admins can
-// withdraw any pending request. Once a request is approved it stays in the
-// fulfillment pipeline until it completes or fails.
+// Cancel withdraws a request that has not been sent to a downstream service:
+// pending, or approved but not yet sent (see guardWithdrawable). Owners can
+// withdraw their own; admins can withdraw any. Once a submission is in flight
+// or a target exists, the request stays in the pipeline until it completes or
+// fails.
 func (s *Service) Cancel(ctx context.Context, viewer Viewer, id, reason string) (*Request, error) {
 	if viewer.UserID == 0 {
 		return nil, ErrForbidden
@@ -945,7 +984,7 @@ func (s *Service) Cancel(ctx context.Context, viewer Viewer, id, reason string) 
 	if !viewer.IsAdmin && req.RequestedByUserID != viewer.UserID {
 		return nil, ErrForbidden
 	}
-	return s.store.SetOutcome(ctx, req.ID, guardPending, OutcomeCancelled, viewer, reason)
+	return s.store.SetOutcome(ctx, req.ID, guardWithdrawable, OutcomeCancelled, viewer, reason)
 }
 
 func (s *Service) Retry(ctx context.Context, viewer Viewer, id string) (*Request, error) {
@@ -974,12 +1013,16 @@ func (s *Service) ReconcileRequests(ctx context.Context, limit int) (ReconcileRe
 	if err != nil {
 		return ReconcileResult{}, err
 	}
+	present, err := s.presentRequests(ctx, candidates)
+	if err != nil {
+		return ReconcileResult{}, err
+	}
 	result := ReconcileResult{Checked: len(candidates)}
 	for _, req := range candidates {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		change, err := s.reconcileRequest(ctx, *req, fc)
+		change, err := s.reconcileRequest(ctx, *req, fc, present[req.ID])
 		// Stamp every candidate, including ones that errored, so the next pass
 		// starts with the requests this one did not reach.
 		if markErr := s.store.MarkReconciled(ctx, req.ID); markErr != nil {
@@ -1011,6 +1054,9 @@ func (s *Service) ReconcileRequests(ctx context.Context, limit int) (ReconcileRe
 		case reconcileSkipped:
 			result.Skipped++
 		}
+	}
+	if err := s.completeWaitingFromLibrary(ctx, 2*limit, &result); err != nil {
+		return result, err
 	}
 	// Presence-gated fulfillment notifications: completion above (and via the
 	// per-target aggregate path) only marks status; the notification fires
@@ -1643,26 +1689,6 @@ func (s *Service) detectRequestAnime(ctx context.Context, mediaType MediaType, t
 	return detectAnime(detail.KeywordIDs)
 }
 
-// integrationConfigured reports whether a fulfillment backend exists for the
-// media type, gating auto-approval (pending vs approved). It uses the same
-// router-connection selection as resolveRouterConnections — an enabled
-// request_router.v1 connection with an installation — and additionally honors a
-// connection's declared media-type support so a movie request only auto-approves
-// when a router connection supporting "movie" exists.
-func (s *Service) integrationConfigured(ctx context.Context, mediaType MediaType) (bool, error) {
-	instances, err := s.store.ListIntegrations(ctx)
-	if err != nil {
-		return false, err
-	}
-	for _, in := range instances {
-		if eligibleRouterConnection(in, mediaType) &&
-			strings.TrimSpace(in.BaseURL) != "" && strings.TrimSpace(in.APIKeyRef) != "" {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // integrationSupportsMediaType reports whether a router connection serves the
 // given media type. An empty SupportedMediaTypes is treated as "supports all".
 func integrationSupportsMediaType(in Integration, mediaType MediaType) bool {
@@ -1721,6 +1747,18 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 	if req.Outcome != OutcomeActive || req.Status != StatusApproved {
 		return &req, nil
 	}
+	if fc == nil {
+		built, err := s.newFulfillContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+		fc = built
+	}
+	if s.router == nil || !routerConfiguredFor(fc, req.MediaType) {
+		// No router serves this media type: the request stays approved and
+		// the reconcile pass completes it when the title reaches the library.
+		return &req, nil
+	}
 	claimed, ok, err := s.store.ClaimSubmission(ctx, req.ID, submitLease)
 	if err != nil {
 		return nil, err
@@ -1758,32 +1796,16 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 // submitClaimed does the submission work for a request whose claim the caller
 // holds.
 func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, fc *fulfillContext) (*Request, error) {
-	if s.router == nil {
-		return s.markSubmissionFailed(ctx, req.ID, actor, fmt.Errorf("no fulfillment backend configured"))
-	}
-	if fc == nil {
-		built, err := s.newFulfillContext(ctx)
-		if err != nil {
-			return nil, err
-		}
-		fc = built
-	}
 	conns, installationID, capabilityID, err := s.resolveRouterConnections(ctx, fc, req.MediaType)
 	if err != nil {
 		return nil, err
 	}
 	if len(conns) == 0 {
-		// Distinguish "no backend at all" from the migration breakage where an
-		// existing connection row exists but its installation_id is NULL (the row
-		// predates the plugin install and was never re-bound).
-		msg := "no fulfillment backend configured"
-		for _, in := range fc.integrations {
-			if in.Enabled && in.CapabilityID != "" && in.InstallationID == nil {
-				msg = "request backend connection is not bound to a plugin installation; re-save it in admin"
-				break
-			}
-		}
-		return s.markSubmissionFailed(ctx, req.ID, actor, errors.New(msg))
+		// A connection is configured for the media type (routerConfiguredFor)
+		// but none is usable. That is an admin-fixable setup problem, so it is
+		// returned as a submission error: the request keeps its approval and
+		// retries with backoff, and goes through once the connection is fixed.
+		return nil, errors.New(unusableRouterMessage(fc, req.MediaType))
 	}
 	existing, err := s.store.ListTargets(ctx, req.ID)
 	if err != nil {
@@ -2012,16 +2034,74 @@ const (
 	reconcileDeferred    reconcileChange = "deferred"
 )
 
-func (s *Service) reconcileRequest(ctx context.Context, req Request, fc *fulfillContext) (reconcileChange, error) {
-	completed, err := s.requestAvailable(ctx, req)
+// completeWaitingFromLibrary completes pending and recently failed requests
+// whose title has reached the library. Nothing is in flight for them, so they
+// run in their own rotation, apart from the requests that need router calls,
+// and one batched presence lookup per media type covers the whole batch.
+func (s *Service) completeWaitingFromLibrary(ctx context.Context, limit int, result *ReconcileResult) error {
+	waiting, err := s.store.ListLibraryWaitCandidates(ctx, limit)
 	if err != nil {
-		return reconcileUnchanged, err
+		return err
 	}
-	if completed {
+	present, err := s.presentRequests(ctx, waiting)
+	if err != nil {
+		return err
+	}
+	result.Checked += len(waiting)
+	for _, req := range waiting {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if present[req.ID] {
+			if _, err := s.store.MarkAvailable(ctx, req.ID, Viewer{}); err == nil {
+				result.Completed++
+			} else if !errors.Is(err, ErrInvalidState) {
+				slog.WarnContext(ctx, "request library completion failed", "component", "requests", "request_id", req.ID, "err", err)
+				result.Errors++
+			}
+		}
+		if err := s.store.MarkReconciled(ctx, req.ID); err != nil {
+			slog.WarnContext(ctx, "request reconcile stamp failed", "component", "requests", "request_id", req.ID, "err", err)
+		}
+	}
+	return nil
+}
+
+// presentRequests reports which requests' titles are in the library, with one
+// presence lookup per media type.
+func (s *Service) presentRequests(ctx context.Context, reqs []*Request) (map[string]bool, error) {
+	byType := map[MediaType][]*Request{}
+	for _, req := range reqs {
+		if req != nil && req.TMDBID > 0 {
+			byType[req.MediaType] = append(byType[req.MediaType], req)
+		}
+	}
+	out := make(map[string]bool, len(reqs))
+	for mediaType, group := range byType {
+		candidates := make([]PresenceCandidate, 0, len(group))
+		for _, req := range group {
+			candidates = append(candidates, requestPresenceCandidate(*req))
+		}
+		matches, err := s.lookupPresence(ctx, mediaType, candidates)
+		if err != nil {
+			return nil, err
+		}
+		for _, req := range group {
+			out[req.ID] = matches[req.TMDBID].Available
+		}
+	}
+	return out, nil
+}
+
+// reconcileRequest moves one in-flight request forward. present reports
+// whether its title is already in the library.
+func (s *Service) reconcileRequest(ctx context.Context, req Request, fc *fulfillContext, present bool) (reconcileChange, error) {
+	if present {
 		// The presence check is quality-agnostic (TMDB id only), so it must not
 		// force-complete a request whose targets are still in flight — that would
-		// orphan in-progress downloads. Only take the shortcut for legacy/no-live
-		// -target requests; otherwise let per-target reconcile + aggregate drive
+		// orphan in-progress downloads. Only take the shortcut for requests with
+		// no live target (pending, failed, waiting for the library without a
+		// router, or legacy); otherwise let per-target reconcile + aggregate drive
 		// completion.
 		live, err := s.liveTargets(ctx, req.ID)
 		if err != nil {
@@ -2202,14 +2282,6 @@ func (s *Service) retireStalledTargets(ctx context.Context, req Request, live []
 		)
 	}
 	return updated, retired, nil
-}
-
-func (s *Service) requestAvailable(ctx context.Context, req Request) (bool, error) {
-	matches, err := s.lookupPresence(ctx, req.MediaType, []PresenceCandidate{requestPresenceCandidate(req)})
-	if err != nil {
-		return false, err
-	}
-	return matches[req.TMDBID].Available, nil
 }
 
 func (s *Service) now() time.Time {

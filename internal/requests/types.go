@@ -179,10 +179,23 @@ type Request struct {
 type StateGuard struct {
 	Statuses []Status
 	Outcomes []Outcome
+	// UnsentOnly admits an approved request only while nothing has gone
+	// downstream for it: it has no target and no submission in flight.
+	UnsentOnly bool
 }
 
 // guardPending matches a request that is still waiting for an admin.
 var guardPending = StateGuard{Statuses: []Status{StatusPending}, Outcomes: []Outcome{OutcomeActive}}
+
+// guardWithdrawable matches a request nobody has sent anywhere yet: pending,
+// or approved but waiting for the library (no router), or backing off after a
+// failed attempt. Decline and cancel accept these; once a submission is in
+// flight or a target exists, the request stays in the pipeline.
+var guardWithdrawable = StateGuard{
+	Statuses:   []Status{StatusPending, StatusApproved},
+	Outcomes:   []Outcome{OutcomeActive},
+	UnsentOnly: true,
+}
 
 type RequestEvent struct {
 	ID             int64     `json:"id"`

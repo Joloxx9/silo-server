@@ -196,7 +196,9 @@ func TestCreateRequestActiveDuplicateBlocks(t *testing.T) {
 	}
 }
 
-func TestCreateRequestAutoApprovalRequiresConfiguredIntegration(t *testing.T) {
+// Auto-approval does not wait for a router: on a server without Sonarr/Radarr
+// the approved request waits for the title to reach the library (AC3, AC4).
+func TestCreateRequestAutoApprovesWithoutRouter(t *testing.T) {
 	store := newFakeStore()
 	store.settings.RequestsEnabled = true
 	store.settings.GlobalAutoApprovalEnabled = true
@@ -210,19 +212,15 @@ func TestCreateRequestAutoApprovalRequiresConfiguredIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRequest returned error: %v", err)
 	}
-	if req.Status != StatusPending {
-		t.Fatalf("status = %q, want pending", req.Status)
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive || req.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting for the library", req)
 	}
 }
 
-// TestCreateRequestAutoApprovalEmptyKeyTreatedAsUnconfigured guards that a router
-// connection that is enabled + bound but has no api key (empty after the repo's
-// decrypt) reads as "not configured": auto-approval is declined and the request
-// stays pending, rather than being auto-approved and then failing submission when
-// resolveRouterConnections skips the keyless connection. This pins the empty-key
-// check in integrationConfigured against the skip in resolveRouterConnections so
-// the two can't drift at the public CreateRequest surface.
-func TestCreateRequestAutoApprovalEmptyKeyTreatedAsUnconfigured(t *testing.T) {
+// A keyless connection is a setup problem: the auto-approved request keeps its
+// approval and records why it could not be sent, instead of failing, so it goes
+// through once an admin adds the key.
+func TestCreateRequestAutoApprovalDefersOnKeylessConnection(t *testing.T) {
 	store := newFakeStore()
 	store.settings.RequestsEnabled = true
 	store.settings.GlobalAutoApprovalEnabled = true
@@ -239,8 +237,9 @@ func TestCreateRequestAutoApprovalEmptyKeyTreatedAsUnconfigured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRequest returned error: %v", err)
 	}
-	if req.Status != StatusPending {
-		t.Fatalf("status = %q, want pending (empty-key connection is unconfigured)", req.Status)
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive ||
+		req.LastError != msgRouterNoKey {
+		t.Fatalf("request = %+v, want approved with the missing-key reason recorded", req)
 	}
 	if router.fulfillCalls != 0 {
 		t.Fatalf("fulfill calls = %d, want 0 (must not submit to a keyless connection)", router.fulfillCalls)
@@ -277,8 +276,8 @@ func TestCreateRequestAutoApprovalRespectsSupportedMediaTypes(t *testing.T) {
 	store := newFakeStore()
 	store.settings.RequestsEnabled = true
 	store.settings.GlobalAutoApprovalEnabled = true
-	// A router connection that only serves series must NOT auto-approve a movie
-	// request; the gate falls back to manual approval (pending).
+	// A router connection that only serves series is never handed a movie
+	// request; the auto-approved movie waits for the library instead.
 	seriesOnly := routerInst("router-series")
 	seriesOnly.SupportedMediaTypes = []string{string(MediaTypeSeries)}
 	store.integrations = []Integration{seriesOnly}
@@ -293,8 +292,8 @@ func TestCreateRequestAutoApprovalRespectsSupportedMediaTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRequest returned error: %v", err)
 	}
-	if req.Status != StatusPending {
-		t.Fatalf("status = %q, want pending (no router connection supports movie)", req.Status)
+	if req.Status != StatusApproved || req.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting (no router connection supports movie)", req)
 	}
 }
 
@@ -1415,11 +1414,12 @@ func TestCancelAdminCanCancelAnyPending(t *testing.T) {
 }
 
 func TestCancelRejectsRequestsAlreadyInFulfillment(t *testing.T) {
+	inFlight := time.Now().Add(time.Minute)
 	cases := []struct {
 		name string
 		req  Request
 	}{
-		{"approved", Request{Status: StatusApproved, Outcome: OutcomeActive}},
+		{"approved and being submitted", Request{Status: StatusApproved, Outcome: OutcomeActive, SubmitLeaseUntil: &inFlight}},
 		{"queued", Request{Status: StatusQueued, Outcome: OutcomeActive, IntegrationKind: "radarr", ExternalID: "42"}},
 		{"downloading", Request{Status: StatusDownloading, Outcome: OutcomeActive, IntegrationKind: "radarr", ExternalID: "42"}},
 		{"completed", Request{Status: StatusCompleted, Outcome: OutcomeActive}},
@@ -1442,18 +1442,65 @@ func TestCancelRejectsRequestsAlreadyInFulfillment(t *testing.T) {
 
 func TestDeclineRejectsApprovedRequests(t *testing.T) {
 	store := newFakeStore()
+	inFlight := time.Now().Add(time.Minute)
 	store.requests["req-approved"] = &Request{
-		ID:        "req-approved",
-		MediaType: MediaTypeMovie,
-		TMDBID:    550,
-		Status:    StatusApproved,
-		Outcome:   OutcomeActive,
+		ID:               "req-approved",
+		MediaType:        MediaTypeMovie,
+		TMDBID:           550,
+		Status:           StatusApproved,
+		Outcome:          OutcomeActive,
+		SubmitLeaseUntil: &inFlight,
 	}
 	service := newTestService(store)
 
 	_, err := service.Decline(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "req-approved", "changed mind")
 	if !errors.Is(err, ErrInvalidState) {
-		t.Fatalf("err = %v, want ErrInvalidState (approved is owned by the reconciler)", err)
+		t.Fatalf("err = %v, want ErrInvalidState (a submission is in flight)", err)
+	}
+}
+
+// An approved request nothing was sent for (no router, or backing off after a
+// failed attempt) can still be declined by an admin or withdrawn by its owner;
+// otherwise it could never be closed.
+func TestWithdrawApprovedRequestNothingWasSentFor(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		withdraw func(*Service) (*Request, error)
+		want     Outcome
+	}{
+		{"decline", func(s *Service) (*Request, error) {
+			return s.Decline(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "req-x", "not this month")
+		}, OutcomeDeclined},
+		{"cancel", func(s *Service) (*Request, error) {
+			return s.Cancel(context.Background(), Viewer{UserID: 7, ProfileID: "profile-1"}, "req-x", "")
+		}, OutcomeCancelled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newFakeStore()
+			backoff := time.Now().Add(time.Hour)
+			store.requests["req-x"] = &Request{
+				ID: "req-x", MediaType: MediaTypeMovie, TMDBID: 550, Status: StatusApproved, Outcome: OutcomeActive,
+				RequestedByUserID: 7, NextSubmitAt: &backoff, LastError: "radarr unreachable",
+			}
+			got, err := tc.withdraw(newTestService(store))
+			if err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if got.Outcome != tc.want {
+				t.Fatalf("outcome = %q, want %q", got.Outcome, tc.want)
+			}
+		})
+	}
+}
+
+func TestDeclineRejectsApprovedRequestWithTarget(t *testing.T) {
+	store := newFakeStore()
+	store.requests["req-x"] = &Request{ID: "req-x", MediaType: MediaTypeMovie, TMDBID: 550, Status: StatusApproved, Outcome: OutcomeActive}
+	store.targets = map[string][]Target{"req-x": {{ID: 1, RequestID: "req-x", Quality: Quality1080p, Status: StatusQueued}}}
+
+	_, err := newTestService(store).Decline(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "req-x", "")
+	if !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("err = %v, want ErrInvalidState (a target exists)", err)
 	}
 }
 
@@ -1546,6 +1593,7 @@ type fakeStore struct {
 	created       []CreateRequestRecord
 	integrations  []Integration
 	candidates    []*Request
+	waiting       []*Request
 	mine          []*Request
 	statusUpdates []Status
 	requests      map[string]*Request
@@ -1694,6 +1742,12 @@ func (f *fakeStore) ListReconciliationCandidates(context.Context, int) ([]*Reque
 	return f.candidates, nil
 }
 
+func (f *fakeStore) ListLibraryWaitCandidates(context.Context, int) ([]*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.waiting, nil
+}
+
 func (f *fakeStore) ListFulfilledUnnotified(context.Context, int) ([]*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -1731,19 +1785,28 @@ func (f *fakeStore) ListAdmin(context.Context, ListFilter) ([]*Request, error) {
 	return nil, nil
 }
 
-// guardAccepts mirrors the repository's guarded UPDATE.
-func guardAccepts(g StateGuard, req *Request) bool {
-	return (len(g.Statuses) == 0 || slices.Contains(g.Statuses, req.Status)) &&
-		(len(g.Outcomes) == 0 || slices.Contains(g.Outcomes, req.Outcome))
+// guardAccepts mirrors the repository's guarded UPDATE. Callers hold f.mu.
+func (f *fakeStore) guardAccepts(g StateGuard, req *Request) bool {
+	statusOK := len(g.Statuses) == 0 || slices.Contains(g.Statuses, req.Status)
+	outcomeOK := len(g.Outcomes) == 0 || slices.Contains(g.Outcomes, req.Outcome)
+	if !statusOK || !outcomeOK {
+		return false
+	}
+	if g.UnsentOnly && req.Status == StatusApproved {
+		leased := req.SubmitLeaseUntil != nil && req.SubmitLeaseUntil.After(time.Now())
+		return !leased && len(f.targets[req.ID]) == 0
+	}
+	return true
 }
 
-// lookupLocked finds a request by id, falling back to the reconcile candidates
-// so tests that only seed candidates still resolve. Callers hold f.mu.
+// lookupLocked finds a request by id, falling back to the reconcile and
+// library-wait candidates so tests that only seed those still resolve.
+// Callers hold f.mu.
 func (f *fakeStore) lookupLocked(id string) *Request {
 	if req := f.requests[id]; req != nil {
 		return req
 	}
-	for _, c := range f.candidates {
+	for _, c := range append(append([]*Request(nil), f.candidates...), f.waiting...) {
 		if c != nil && c.ID == id {
 			copy := *c
 			f.requests[id] = &copy
@@ -1760,7 +1823,7 @@ func (f *fakeStore) SetStatus(_ context.Context, id string, from StateGuard, sta
 	if req == nil {
 		req = &Request{ID: id, Outcome: OutcomeActive}
 		f.requests[id] = req
-	} else if !guardAccepts(from, req) {
+	} else if !f.guardAccepts(from, req) {
 		return nil, ErrInvalidState
 	}
 	f.statusUpdates = append(f.statusUpdates, status)
@@ -1781,7 +1844,7 @@ func (f *fakeStore) SetOutcome(_ context.Context, id string, from StateGuard, ou
 	if req == nil {
 		req = &Request{ID: id}
 		f.requests[id] = req
-	} else if !guardAccepts(from, req) {
+	} else if !f.guardAccepts(from, req) {
 		return nil, ErrInvalidState
 	}
 	req.Outcome = outcome
@@ -1853,13 +1916,22 @@ func (f *fakeStore) MarkAvailable(_ context.Context, id string, _ Viewer) (*Requ
 	if req == nil {
 		return nil, ErrNotFound
 	}
-	inFlight := req.Status == StatusApproved || req.Status == StatusQueued || req.Status == StatusDownloading
+	open := req.Status == StatusPending || req.Status == StatusApproved || req.Status == StatusQueued || req.Status == StatusDownloading
 	claimed := req.Status == StatusApproved && req.SubmitLeaseUntil != nil && req.SubmitLeaseUntil.After(time.Now())
-	if req.Outcome != OutcomeActive || !inFlight || claimed {
+	partlyDelivered := false
+	for _, t := range f.targets[id] {
+		if t.Status == StatusCompleted {
+			partlyDelivered = true
+		}
+	}
+	failedElsewhere := req.Outcome == OutcomeFailed && !partlyDelivered
+	if !failedElsewhere && (req.Outcome != OutcomeActive || !open || claimed) {
 		return nil, ErrInvalidState
 	}
 	f.statusUpdates = append(f.statusUpdates, StatusCompleted)
 	req.Status = StatusCompleted
+	req.Outcome = OutcomeActive
+	req.LastError = ""
 	copy := *req
 	return &copy, nil
 }
@@ -2660,7 +2732,7 @@ func TestSubmitApprovedUsesConfiguredOptional4KDefault(t *testing.T) {
 	}
 }
 
-func TestSubmitApprovedNoRouterFails(t *testing.T) {
+func TestSubmitApprovedNoRouterWaitsForLibrary(t *testing.T) {
 	store := newFakeStore()
 	store.integrations = []Integration{routerInst("router-1")}
 	svc := newTestService(store) // no router provider set
@@ -2671,12 +2743,12 @@ func TestSubmitApprovedNoRouterFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed {
-		t.Fatalf("outcome = %q, want failed (no router configured)", got.Outcome)
+	if got.Status != StatusApproved || got.Outcome != OutcomeActive || got.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting (no router configured)", got)
 	}
 }
 
-func TestSubmitApprovedNoConnectionsFails(t *testing.T) {
+func TestSubmitApprovedNoConnectionsWaitsForLibrary(t *testing.T) {
 	store := newFakeStore() // no integrations
 	svc := newTestService(store)
 	svc.SetRouterProvider(&fakeRouterProvider{})
@@ -2687,8 +2759,8 @@ func TestSubmitApprovedNoConnectionsFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed {
-		t.Fatalf("outcome = %q, want failed (no enabled router connections)", got.Outcome)
+	if got.Status != StatusApproved || got.Outcome != OutcomeActive || got.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting (no enabled router connections)", got)
 	}
 }
 
@@ -2887,8 +2959,9 @@ func TestSubmitApprovedSkipsMismatchedMediaType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed || got.LastError != "no fulfillment backend configured" {
-		t.Fatalf("request = %+v, want failed with no-backend message", got)
+	// No connection serves movies, so the request waits for the library.
+	if got.Status != StatusApproved || got.Outcome != OutcomeActive || got.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting for the library", got)
 	}
 	if router.fulfillCalls != 0 {
 		t.Fatalf("fulfill calls = %d, want 0 (series connection filtered out for a movie)", router.fulfillCalls)
@@ -2941,8 +3014,8 @@ func TestSubmitApprovedSkipsConnectionWithEmptyKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed {
-		t.Fatalf("outcome = %q, want failed (no usable connection)", got.Outcome)
+	if got.Outcome != OutcomeActive || got.LastError != msgRouterNoKey {
+		t.Fatalf("request = %+v, want the missing-key reason recorded and a retry scheduled", got)
 	}
 	if router.fulfillCalls != 0 {
 		t.Fatalf("fulfill calls = %d, want 0 (empty-key connection skipped)", router.fulfillCalls)
@@ -3064,7 +3137,7 @@ func TestSubmitApprovedSkipsTargetForHealthyQuality(t *testing.T) {
 	}
 }
 
-func TestSubmitApprovedUnboundInstallationFailsWithGuidance(t *testing.T) {
+func TestSubmitApprovedUnboundInstallationDefersWithGuidance(t *testing.T) {
 	store := newFakeStore()
 	// A router connection that exists but is not bound to a plugin installation
 	// (the migration leaves installation_id NULL for pre-existing rows).
@@ -3080,9 +3153,9 @@ func TestSubmitApprovedUnboundInstallationFailsWithGuidance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed ||
-		got.LastError != "request backend connection is not bound to a plugin installation; re-save it in admin" {
-		t.Fatalf("request = %+v, want failed with unbound-installation guidance", got)
+	if got.Status != StatusApproved || got.Outcome != OutcomeActive ||
+		got.LastError != msgRouterUnbound {
+		t.Fatalf("request = %+v, want approved with unbound-installation guidance and a retry scheduled", got)
 	}
 }
 

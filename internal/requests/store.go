@@ -14,7 +14,12 @@ type Store interface {
 	ListActiveByTMDB(ctx context.Context, mediaType MediaType, tmdbIDs []int) (map[int]*Request, error)
 	CreateRequest(ctx context.Context, input CreateRequestRecord) (*Request, error)
 	GetRequest(ctx context.Context, id string) (*Request, error)
+	// ListReconciliationCandidates returns in-flight requests (approved,
+	// queued, downloading); ListLibraryWaitCandidates returns the pending and
+	// recently failed ones only the library can complete. Both rotate by
+	// last_reconciled_at.
 	ListReconciliationCandidates(ctx context.Context, limit int) ([]*Request, error)
+	ListLibraryWaitCandidates(ctx context.Context, limit int) ([]*Request, error)
 	// ListFulfilledUnnotified returns completed requests whose fulfillment
 	// notification has not fired yet (presence-gated notify pass).
 	ListFulfilledUnnotified(ctx context.Context, limit int) ([]*Request, error)
@@ -42,10 +47,12 @@ type Store interface {
 	// MarkReconciled stamps last_reconciled_at so the reconcile pass rotates
 	// through every candidate.
 	MarkReconciled(ctx context.Context, id string) error
-	// MarkAvailable completes an in-flight request whose media is already in
-	// the library. It refuses (ErrInvalidState) a request another actor has
-	// moved on, and an approved request whose submission claim is live, so it
-	// cannot race a router call that is creating targets.
+	// MarkAvailable completes a request whose media is already in the library:
+	// a pending one (no approval needed once the title exists), an in-flight
+	// one, or a failed one none of whose targets completed. It refuses
+	// (ErrInvalidState) a request another actor has closed, and an approved
+	// request whose submission claim is live, so it cannot race a router call
+	// that is creating targets.
 	MarkAvailable(ctx context.Context, id string, actor Viewer) (*Request, error)
 	// RecomputeStatus re-derives an approved request's status and outcome from
 	// its targets, for a submission that found nothing left to send.

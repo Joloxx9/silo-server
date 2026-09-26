@@ -29,10 +29,13 @@ never check the state in Go and then write it unconditionally. The exception is
 the target aggregate: a target change always recomputes the request's status from
 its targets, because after submission the targets are the source of truth.
 
-Decline and cancel apply only to `pending` + `active` requests. An approved
-request may already be on its way to a downstream service, so it stays in the
-pipeline until it completes or fails. Retry reopens a `failed` request to
-`approved` + `active` in one guarded write.
+Decline and cancel apply to requests nothing has been sent for: `pending` ones,
+and `approved` ones with no target and no live submission lease (waiting for the
+library, or backing off after a failed send). Once a submission is in flight or
+a target exists, the request stays in the pipeline until it completes or fails,
+because withdrawing it could leave the downstream service's state diverged from
+Silo's. Retry reopens a `failed` request to `approved` + `active` in one guarded
+write.
 
 ## Submission is claimed
 
@@ -57,16 +60,38 @@ a connection skipped for a missing key also shrinks it, and must not erase a
 failure an admin still needs to see. If nothing is left to send, the remaining
 targets decide the status.
 
+## Without a router
+
+Requests do not need Sonarr, Radarr or any other router plugin. When no
+enabled router connection serves the request's media type, approval (by an
+admin or by the requester's auto-approve policy) leaves the request `approved`,
+and the reconcile pass completes it once the title is in the library. A
+connection that exists but cannot be used (no API key, not bound to a plugin
+installation) is a setup problem instead: the submission retries with backoff
+and records the reason in `last_error`, so fixing the connection lets the
+request through.
+
+The library also completes requests that never reached a router: a `pending`
+request whose title appears needs no approval any more, and a `failed` request
+whose title appears is complete, unless it failed after delivering one quality,
+in which case the failure stays for an admin to retry. Both go through the same
+guarded write as any other completion, and the requester is notified.
+
 ## Reconcile
 
 Every five minutes the reconcile pass submits approved requests, asks the router
-for target status, and completes requests whose media is present in the library.
+for target status, and completes open and failed requests whose media is present
+in the library.
 Completing from the library skips an approved request while its submission lease
 is live, so it cannot race a router call that is creating targets.
 Every API process runs the task manager, so an advisory lock lets one server run
-each pass. Candidates are taken in `last_reconciled_at` order and each one is
-stamped when checked, even if it errors, so a large backlog rotates instead of
-the same batch being checked every time.
+each pass. A pass has two rotations. In-flight requests (`approved`, `queued`,
+`downloading`) get router calls. Requests only the library can complete
+(`pending`, and `failed` in the last 30 days) get a presence check and nothing
+else, so a backlog of them cannot slow the router polling. Each rotation takes
+candidates in `last_reconciled_at` order, stamps each one when checked, even if
+it errors, and looks presence up in one batch per media type. The 30-day bound
+keeps an upgrade from completing, and notifying, a backlog of old failures.
 
 ## Re-requesting a failed title
 

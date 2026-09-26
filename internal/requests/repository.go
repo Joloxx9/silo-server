@@ -384,6 +384,42 @@ func (r *Repository) ListReconciliationCandidates(ctx context.Context, limit int
 	return out, nil
 }
 
+// ListLibraryWaitCandidates returns the requests that only the library can
+// complete: pending ones, and ones that failed in the last 30 days without
+// delivering anything. Older failures are left alone so an upgrade does not
+// suddenly complete, and notify, a backlog of stale requests.
+func (r *Repository) ListLibraryWaitCandidates(ctx context.Context, limit int) ([]*Request, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	rows, err := r.pool.Query(ctx, requestSelectSQL()+`
+		WHERE (outcome = 'active' AND status = 'pending')
+		   OR (outcome = 'failed'
+		       AND updated_at > now() - interval '30 days'
+		       AND NOT EXISTS (
+		         SELECT 1 FROM media_request_targets t
+		         WHERE t.request_id = media_requests.id AND t.status = 'completed'))
+		ORDER BY last_reconciled_at ASC NULLS FIRST, id
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list requests waiting for the library: %w", err)
+	}
+	defer rows.Close()
+	var out []*Request
+	for rows.Next() {
+		req, err := scanRequest(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, req)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate requests waiting for the library: %w", err)
+	}
+	return out, nil
+}
+
 // ListFulfilledUnnotified returns completed requests whose fulfillment
 // notification has not fired, oldest first. The horizon bounds how long a
 // completed request keeps being presence-polled when its media never appears
@@ -462,11 +498,15 @@ func (r *Repository) listRequests(ctx context.Context, sqlText string, args []an
 }
 
 // guardCondition restricts an UPDATE to rows a StateGuard accepts. $2 and $3
-// carry the guard's statuses and outcomes; an empty array accepts any value.
+// carry the guard's statuses and outcomes (an empty array accepts any value),
+// and $4 its UnsentOnly flag.
 const guardCondition = `(cardinality($2::text[]) = 0 OR status = ANY($2::text[]))
-		  AND (cardinality($3::text[]) = 0 OR outcome = ANY($3::text[]))`
+		  AND (cardinality($3::text[]) = 0 OR outcome = ANY($3::text[]))
+		  AND (NOT $4::boolean OR status <> 'approved' OR (
+		    (submit_lease_until IS NULL OR submit_lease_until <= now())
+		    AND NOT EXISTS (SELECT 1 FROM media_request_targets t WHERE t.request_id = media_requests.id)))`
 
-func guardArgs(g StateGuard) ([]string, []string) {
+func guardArgs(g StateGuard) ([]string, []string, bool) {
 	statuses := make([]string, 0, len(g.Statuses))
 	for _, s := range g.Statuses {
 		statuses = append(statuses, string(s))
@@ -475,7 +515,7 @@ func guardArgs(g StateGuard) ([]string, []string) {
 	for _, o := range g.Outcomes {
 		outcomes = append(outcomes, string(o))
 	}
-	return statuses, outcomes
+	return statuses, outcomes, g.UnsentOnly
 }
 
 // guardMiss explains a guarded UPDATE that matched no row: the request is
@@ -498,20 +538,20 @@ func (r *Repository) SetStatus(ctx context.Context, id string, from StateGuard, 
 	}
 	defer tx.Rollback(ctx)
 
-	statuses, outcomes := guardArgs(from)
+	statuses, outcomes, unsent := guardArgs(from)
 	// A fresh approval starts a fresh submission budget.
 	req, err := scanRequest(tx.QueryRow(ctx, `
 		UPDATE media_requests
-		SET status = $4,
+		SET status = $5,
 		    updated_at = now(),
-		    approved_at = CASE WHEN $4 = 'approved' AND approved_at IS NULL THEN now() ELSE approved_at END,
-		    completed_at = CASE WHEN $4 = 'completed' AND completed_at IS NULL THEN now() ELSE completed_at END,
-		    submit_attempts = CASE WHEN $4 = 'approved' THEN 0 ELSE submit_attempts END,
-		    submit_lease_until = CASE WHEN $4 = 'approved' THEN NULL ELSE submit_lease_until END,
-		    next_submit_at = CASE WHEN $4 = 'approved' THEN NULL ELSE next_submit_at END
+		    approved_at = CASE WHEN $5 = 'approved' AND approved_at IS NULL THEN now() ELSE approved_at END,
+		    completed_at = CASE WHEN $5 = 'completed' AND completed_at IS NULL THEN now() ELSE completed_at END,
+		    submit_attempts = CASE WHEN $5 = 'approved' THEN 0 ELSE submit_attempts END,
+		    submit_lease_until = CASE WHEN $5 = 'approved' THEN NULL ELSE submit_lease_until END,
+		    next_submit_at = CASE WHEN $5 = 'approved' THEN NULL ELSE next_submit_at END
 		WHERE id = $1
 		  AND `+guardCondition+`
-		RETURNING `+requestColumns(), id, statuses, outcomes, status))
+		RETURNING `+requestColumns(), id, statuses, outcomes, unsent, status))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, guardMiss(ctx, tx, id)
@@ -534,19 +574,19 @@ func (r *Repository) SetOutcome(ctx context.Context, id string, from StateGuard,
 	}
 	defer tx.Rollback(ctx)
 
-	statuses, outcomes := guardArgs(from)
+	statuses, outcomes, unsent := guardArgs(from)
 	req, err := scanRequest(tx.QueryRow(ctx, `
 		UPDATE media_requests
-		SET outcome = $4,
+		SET outcome = $5,
 		    last_error = CASE
-		      WHEN $4 = 'failed' THEN $5
-		      WHEN $4 = 'active' THEN ''
+		      WHEN $5 = 'failed' THEN $6
+		      WHEN $5 = 'active' THEN ''
 		      ELSE last_error
 		    END,
 		    updated_at = now()
 		WHERE id = $1
 		  AND `+guardCondition+`
-		RETURNING `+requestColumns(), id, statuses, outcomes, outcome, strings.TrimSpace(message)))
+		RETURNING `+requestColumns(), id, statuses, outcomes, unsent, outcome, strings.TrimSpace(message)))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, guardMiss(ctx, tx, id)
@@ -666,12 +706,22 @@ func (r *Repository) MarkAvailable(ctx context.Context, id string, actor Viewer)
 	req, err := scanRequest(tx.QueryRow(ctx, `
 		UPDATE media_requests
 		SET status = 'completed',
+		    outcome = 'active',
+		    last_error = '',
 		    completed_at = COALESCE(completed_at, now()),
 		    updated_at = now()
 		WHERE id = $1
-		  AND outcome = 'active'
-		  AND status IN ('approved', 'queued', 'downloading')
-		  AND (status <> 'approved' OR submit_lease_until IS NULL OR submit_lease_until <= now())
+		  AND (
+		    (outcome = 'active'
+		      AND status IN ('pending', 'approved', 'queued', 'downloading')
+		      AND (status <> 'approved' OR submit_lease_until IS NULL OR submit_lease_until <= now()))
+		    -- A failed request is complete only when the title came from
+		    -- elsewhere. One that failed after delivering some quality keeps
+		    -- its failure visible for an admin to retry.
+		    OR (outcome = 'failed' AND NOT EXISTS (
+		      SELECT 1 FROM media_request_targets t
+		      WHERE t.request_id = media_requests.id AND t.status = 'completed'))
+		  )
 		RETURNING `+requestColumns(), id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

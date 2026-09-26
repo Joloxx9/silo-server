@@ -119,6 +119,29 @@ func TestGuardedTransitionsDatabase(t *testing.T) {
 	}
 }
 
+func TestWithdrawGuardDatabase(t *testing.T) {
+	repo, pool := lifecycleTestRepository(t)
+	ctx := t.Context()
+	insertLifecycleRequest(t, repo, "waiting", 1, 111, StatusApproved)
+	insertLifecycleRequest(t, repo, "leased", 1, 112, StatusApproved)
+	insertLifecycleRequest(t, repo, "targeted", 1, 113, StatusApproved)
+	if _, claimed, err := repo.ClaimSubmission(ctx, "leased", time.Minute); err != nil || !claimed {
+		t.Fatalf("claim: claimed = %v, err = %v", claimed, err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO media_request_targets (request_id, quality, status, updated_at) VALUES ('targeted', '1080p', 'queued', now())`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := repo.SetOutcome(ctx, "waiting", guardWithdrawable, OutcomeDeclined, Viewer{}, ""); err != nil {
+		t.Fatalf("decline an approved request nothing was sent for: %v", err)
+	}
+	for _, id := range []string{"leased", "targeted"} {
+		if _, err := repo.SetOutcome(ctx, id, guardWithdrawable, OutcomeDeclined, Viewer{}, ""); !errors.Is(err, ErrInvalidState) {
+			t.Fatalf("decline %s: err = %v, want ErrInvalidState", id, err)
+		}
+	}
+}
+
 func TestSubmissionClaimDatabase(t *testing.T) {
 	repo, _ := lifecycleTestRepository(t)
 	ctx := t.Context()

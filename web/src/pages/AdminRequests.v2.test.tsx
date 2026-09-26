@@ -229,8 +229,8 @@ describe("request administration conflict handling", () => {
     expect(screen.queryByText("Connection name is rejected")).toBeNull();
     expect(name.getAttribute("aria-invalid")).toBe("false");
   });
-  it("offers Decline only for requests still waiting for approval", async () => {
-    const request = (id: string, title: string, status: string) => ({
+  it("offers Decline only for requests nothing has been sent for", async () => {
+    const request = (id: string, title: string, status: string, targets: unknown[] = []) => ({
       id,
       provider: "tmdb",
       media_type: "movie",
@@ -240,7 +240,7 @@ describe("request administration conflict handling", () => {
       outcome: "active",
       requested_by_user_id: "1",
       is_anime: false,
-      targets: [],
+      targets,
       created_at: "2026-09-01T00:00:00Z",
       updated_at: "2026-09-01T00:00:00Z",
     });
@@ -252,6 +252,17 @@ describe("request administration conflict handling", () => {
           items: [
             request("r1", "Waiting Title", "pending"),
             request("r2", "Approved Title", "approved"),
+            request("r3", "Sent Title", "queued", [
+              {
+                id: "1",
+                request_id: "r3",
+                quality: "1080p",
+                is_anime: false,
+                status: "queued",
+                created_at: "2026-09-01T00:00:00Z",
+                updated_at: "2026-09-01T00:00:00Z",
+              },
+            ]),
           ],
           page: { has_more: false },
         });
@@ -263,7 +274,8 @@ describe("request administration conflict handling", () => {
       return within(row).getByRole("button", { name: "Decline" }) as HTMLButtonElement;
     };
     expect((await declineFor("Waiting Title")).disabled).toBe(false);
-    expect((await declineFor("Approved Title")).disabled).toBe(true);
+    expect((await declineFor("Approved Title")).disabled).toBe(false);
+    expect((await declineFor("Sent Title")).disabled).toBe(true);
   });
 
   it("keeps user override edits and validator until explicit reload after a stale response", async () => {
