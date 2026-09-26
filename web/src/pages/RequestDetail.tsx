@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router";
-import { Library, Loader2, Plus, Star } from "lucide-react";
+import { Bell, BellOff, Library, Loader2, Plus, Star } from "lucide-react";
 import CastCarousel from "@/components/CastCarousel";
 import { CancelRequestDialog } from "@/components/CancelRequestDialog";
 import MediaCarousel from "@/components/MediaCarousel";
@@ -20,6 +20,7 @@ import type {
 import {
   useCancelMediaRequest,
   useCreateMediaRequest,
+  useToggleRequestFollow,
   useMyMediaRequests,
   useRequestMediaDetail,
 } from "@/hooks/queries/useRequests";
@@ -220,6 +221,15 @@ function RequestActions({
   const ownRequest = useOwnCancellableRequest(item);
   const cancelRequest = useCancelMediaRequest();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const toggleFollow = useToggleRequestFollow();
+  // Someone else's open request: the viewer can ask to hear when it lands
+  // instead of requesting the title again.
+  const canFollow =
+    state !== undefined &&
+    state !== "available" &&
+    item.request.reason === "already_requested" &&
+    !item.request.requested_by_viewer;
+  const following = item.request.following === true;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -278,6 +288,24 @@ function RequestActions({
                 isPending={cancelRequest.isPending}
               />
             </>
+          ) : null}
+          {canFollow ? (
+            <Button
+              variant="outline"
+              onClick={() =>
+                toggleFollow.mutate({
+                  mediaType: item.media_type,
+                  tmdbID: item.tmdb_id,
+                  follow: !following,
+                })
+              }
+              disabled={toggleFollow.isPending}
+              aria-pressed={following}
+              className="border-border/60 h-11 rounded-full px-5 text-sm font-semibold"
+            >
+              {following ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+              {following ? "Stop notifying me" : "Notify me when available"}
+            </Button>
           ) : null}
         </>
       ) : (

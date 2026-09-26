@@ -1602,6 +1602,7 @@ type fakeStore struct {
 	unnotified    []string
 	notified      []string
 	reconciled    []string
+	follows       map[string]Follower // key: media_type/tmdb_id/profile_id
 
 	listIntegrationsCalls int
 	getSettingsCalls      int
@@ -2033,6 +2034,89 @@ func (f *fakeStore) DeleteIntegration(_ context.Context, id string) error {
 		}
 	}
 	return ErrNotFound
+}
+
+func followKey(mediaType MediaType, tmdbID int, profileID string) string {
+	return fmt.Sprintf("%s/%d/%s", mediaType, tmdbID, profileID)
+}
+
+func (f *fakeStore) FollowTitle(_ context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if req := f.active[mediaType][tmdbID]; req == nil || req.Outcome != OutcomeActive || req.Status == StatusCompleted {
+		return ErrNotRequested
+	}
+	f.seedFollowLocked(mediaType, tmdbID, viewer)
+	return nil
+}
+
+// seedFollow records a follow directly, as one added before the request
+// completed. Tests use it for titles whose request is already closed.
+func (f *fakeStore) seedFollow(mediaType MediaType, tmdbID int, viewer Viewer) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.seedFollowLocked(mediaType, tmdbID, viewer)
+}
+
+func (f *fakeStore) seedFollowLocked(mediaType MediaType, tmdbID int, viewer Viewer) {
+	if f.follows == nil {
+		f.follows = map[string]Follower{}
+	}
+	f.follows[followKey(mediaType, tmdbID, viewer.ProfileID)] = Follower{UserID: viewer.UserID, ProfileID: viewer.ProfileID}
+}
+
+func (f *fakeStore) ForgetTitleFollows(_ context.Context, mediaType MediaType, tmdbID int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	prefix := fmt.Sprintf("%s/%d/", mediaType, tmdbID)
+	for key := range f.follows {
+		if strings.HasPrefix(key, prefix) {
+			delete(f.follows, key)
+		}
+	}
+	return nil
+}
+
+func (f *fakeStore) UnfollowTitle(_ context.Context, mediaType MediaType, tmdbID int, profileID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.follows, followKey(mediaType, tmdbID, profileID))
+	return nil
+}
+
+func (f *fakeStore) FollowedTitles(_ context.Context, mediaType MediaType, tmdbIDs []int, profileID string) (map[int]bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[int]bool{}
+	for _, id := range tmdbIDs {
+		if _, ok := f.follows[followKey(mediaType, id, profileID)]; ok {
+			out[id] = true
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) ListTitleFollowers(_ context.Context, mediaType MediaType, tmdbID int) ([]Follower, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	prefix := fmt.Sprintf("%s/%d/", mediaType, tmdbID)
+	var out []Follower
+	for key, follower := range f.follows {
+		if strings.HasPrefix(key, prefix) {
+			out = append(out, follower)
+		}
+	}
+	slices.SortFunc(out, func(a, b Follower) int { return strings.Compare(a.ProfileID, b.ProfileID) })
+	return out, nil
+}
+
+func (f *fakeStore) ClearTitleFollowers(_ context.Context, mediaType MediaType, tmdbID int, profileIDs []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, profileID := range profileIDs {
+		delete(f.follows, followKey(mediaType, tmdbID, profileID))
+	}
+	return nil
 }
 
 func (f *fakeStore) ListTargets(_ context.Context, requestID string) ([]Target, error) {

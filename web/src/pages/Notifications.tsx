@@ -71,6 +71,13 @@ function notificationDescription(notification: AppNotification): string {
   }
   if (notification.type === "request.fulfilled") {
     const mediaType = notification.reason_flags?.media_type;
+    if (notification.reason_flags?.follower) {
+      return mediaType === "movie"
+        ? "A movie you followed is now available"
+        : mediaType === "series"
+          ? "A series you followed is now available"
+          : "A title you followed is now available";
+    }
     return mediaType === "movie"
       ? "Your requested movie is now available"
       : mediaType === "series"

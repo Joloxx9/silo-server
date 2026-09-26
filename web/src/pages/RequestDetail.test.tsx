@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   mine: [] as unknown[],
   useMyMediaRequests: vi.fn(),
   cancel: vi.fn(),
+  toggleFollow: vi.fn(),
 }));
 
 vi.mock("@/hooks/queries/useRequests", () => ({
@@ -19,6 +20,7 @@ vi.mock("@/hooks/queries/useRequests", () => ({
     return { data: mocks.mine };
   },
   useCancelMediaRequest: () => ({ mutate: mocks.cancel, isPending: false }),
+  useToggleRequestFollow: () => ({ mutate: mocks.toggleFollow, isPending: false }),
 }));
 vi.mock("@/hooks/useDocumentTitle", () => ({ useDocumentTitle: () => {} }));
 vi.mock("@/pages/ItemDetail/DetailHero", () => ({
@@ -49,7 +51,14 @@ const baseDetail: RequestMediaDetail = {
   title: "The Matrix",
   runtime: 136,
   availability: "missing",
-  request: { requestable: false, status: "pending", request_id: "req-1" },
+  request: {
+    requestable: false,
+    status: "pending",
+    reason: "already_requested",
+    request_id: "req-1",
+    following: true,
+    requested_by_viewer: true,
+  },
 };
 
 const ownPending: MediaRequest = {
@@ -80,6 +89,56 @@ describe("RequestDetail", () => {
     mocks.mine = [ownPending];
     mocks.useMyMediaRequests.mockReset();
     mocks.cancel.mockReset();
+    mocks.toggleFollow.mockReset();
+  });
+
+  it("offers no follow toggle on the viewer's own request", () => {
+    renderDetail();
+
+    expect(screen.queryByRole("button", { name: /Notify me/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Stop notifying/ })).not.toBeInTheDocument();
+  });
+
+  it("lets the viewer follow a title someone else requested", () => {
+    mocks.detail = {
+      ...baseDetail,
+      request: { requestable: false, status: "approved", reason: "already_requested" },
+    };
+    mocks.mine = [];
+    renderDetail();
+
+    fireEvent.click(screen.getByRole("button", { name: "Notify me when available" }));
+
+    expect(mocks.toggleFollow).toHaveBeenCalledExactlyOnceWith({
+      mediaType: "movie",
+      tmdbID: 603,
+      follow: true,
+    });
+    expect(screen.queryByRole("button", { name: "Cancel request" })).not.toBeInTheDocument();
+  });
+
+  it("lets a follower stop the notification", () => {
+    mocks.detail = {
+      ...baseDetail,
+      request: {
+        requestable: false,
+        status: "queued",
+        reason: "already_requested",
+        following: true,
+      },
+    };
+    mocks.mine = [];
+    renderDetail();
+
+    const button = screen.getByRole("button", { name: "Stop notifying me" });
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(button);
+
+    expect(mocks.toggleFollow).toHaveBeenCalledExactlyOnceWith({
+      mediaType: "movie",
+      tmdbID: 603,
+      follow: false,
+    });
   });
 
   it("lets the viewer cancel their own pending request after confirming", () => {

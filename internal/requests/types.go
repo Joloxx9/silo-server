@@ -169,6 +169,9 @@ type Request struct {
 	SubmitAttempts   int        `json:"-"`
 	SubmitLeaseUntil *time.Time `json:"-"`
 	NextSubmitAt     *time.Time `json:"-"`
+	// Followers are the profiles, other than the requester's, that asked to be
+	// told when the title is available; loaded for the fulfilled notification.
+	Followers []Follower `json:"-"`
 }
 
 // StateGuard names the states a transition may start from. The store applies
@@ -212,6 +215,12 @@ type RequestState struct {
 	Requestable bool   `json:"requestable"`
 	Reason      string `json:"reason,omitempty"`
 	RequestID   string `json:"request_id,omitempty"`
+	// Following reports that the viewer will be notified when the title
+	// becomes available: they requested it or follow it. RequestedByViewer
+	// reports that the viewing profile made the active request, so there is
+	// nothing to follow. v2 only; the frozen v1 shape carries neither.
+	Following         bool `json:"-"`
+	RequestedByViewer bool `json:"-"`
 }
 
 type MediaResult struct {

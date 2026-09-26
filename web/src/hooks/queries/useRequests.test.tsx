@@ -33,6 +33,7 @@ import {
   useCreateMediaRequest,
   useRequestFeatureStatus,
   useRequestSearch,
+  useToggleRequestFollow,
 } from "./useRequests";
 
 function render(node: ReactNode) {
@@ -271,4 +272,38 @@ it("reads request capabilities through v2", async () => {
   const options = mocks.useQuery.mock.calls[0]![0] as { queryFn: () => Promise<unknown> };
   await options.queryFn();
   expect(mocks.api).toHaveBeenCalledWith("GET /api/v2/requests/status");
+});
+
+describe("useToggleRequestFollow", () => {
+  function wrapperFor(client: QueryClient) {
+    return function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    };
+  }
+
+  beforeEach(() => {
+    mocks.api.mockReset();
+    mocks.api.mockResolvedValue({ requestable: false, following: true });
+  });
+
+  it("follows and unfollows by title, then refreshes request surfaces", async () => {
+    const client = new QueryClient();
+    const invalidations = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useToggleRequestFollow(), { wrapper: wrapperFor(client) });
+
+    await result.current.mutateAsync({ mediaType: "movie", tmdbID: 603, follow: true });
+    await result.current.mutateAsync({ mediaType: "series", tmdbID: 1399, follow: false });
+
+    expect(mocks.api.mock.calls).toEqual([
+      [
+        "PUT /api/v2/requests/follows/{media_type}/{tmdb_id}",
+        { path: { media_type: "movie", tmdb_id: 603 } },
+      ],
+      [
+        "DELETE /api/v2/requests/follows/{media_type}/{tmdb_id}",
+        { path: { media_type: "series", tmdb_id: 1399 } },
+      ],
+    ]);
+    expect(invalidations).toHaveBeenCalledWith({ queryKey: ["requests"] });
+  });
 });

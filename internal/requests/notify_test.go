@@ -10,6 +10,7 @@ import (
 type fakeNotifier struct {
 	requestIDs []string
 	contentIDs []string
+	followers  [][]Follower
 	err        error
 }
 
@@ -42,6 +43,7 @@ func (f *fakeNotifier) NotifyFulfilled(_ context.Context, req Request, contentID
 	}
 	f.requestIDs = append(f.requestIDs, req.ID)
 	f.contentIDs = append(f.contentIDs, contentID)
+	f.followers = append(f.followers, req.Followers)
 	return nil
 }
 

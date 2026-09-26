@@ -20,8 +20,10 @@ import {
   browseDiscoverV2,
   cancelMediaRequestV2,
   createMediaRequestV2,
+  followRequestMediaV2,
   getDiscoverSectionV2,
   getRequestMediaDetailV2,
+  unfollowRequestMediaV2,
   listDiscoverGenresV2,
   listDiscoverNetworksV2,
   listDiscoverSectionsV2,
@@ -193,6 +195,33 @@ export function useCreateMediaRequest() {
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to submit request");
+    },
+  });
+}
+
+/** Follows or unfollows a title someone else has already requested. */
+export function useToggleRequestFollow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: ({
+      mediaType,
+      tmdbID,
+      follow,
+    }: {
+      mediaType: RequestMediaType;
+      tmdbID: number;
+      follow: boolean;
+    }) =>
+      follow
+        ? followRequestMediaV2(mediaType, tmdbID).then(() => undefined)
+        : unfollowRequestMediaV2(mediaType, tmdbID),
+    onSuccess: (_data, { follow }) => {
+      toast.success(follow ? "We'll let you know when it's available" : "Notification turned off");
+      invalidateRequestSurfaces(queryClient);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to update notification");
     },
   });
 }

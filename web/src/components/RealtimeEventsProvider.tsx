@@ -588,11 +588,18 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
           description: [episodeCode, notification.episode_title].filter(Boolean).join(" — "),
         });
       } else if (notification.type === "request.fulfilled") {
+        const follower = notification.reason_flags?.follower === true;
         toast(
           notification.series_title
             ? `${notification.series_title} is now available`
-            : "Your request is now available",
-          { description: "Your media request has arrived in the library." },
+            : follower
+              ? "A title you followed is now available"
+              : "Your request is now available",
+          {
+            description: follower
+              ? "A title you asked to hear about has arrived in the library."
+              : "Your media request has arrived in the library.",
+          },
         );
       } else if (
         notification.type === "request.approved" ||

@@ -60,6 +60,32 @@ a connection skipped for a missing key also shrinks it, and must not erase a
 failure an admin still needs to see. If nothing is left to send, the remaining
 targets decide the status.
 
+## Following a title
+
+A profile that finds a title someone else already requested can follow it
+instead of requesting it again (`PUT`/`DELETE
+/api/v2/requests/follows/{media_type}/{tmdb_id}`). Following needs the same
+access as requesting: requests enabled, the account allowed to request and not
+blocked by its request limit, and the title within the profile's rating
+ceiling. It is refused for a title with no open request (request it instead)
+and for one already in the library; the insert itself checks for the open
+request, so a follow cannot land just after the request completed.
+
+A follow belongs to the title and the profile (`media_request_follows`), not to
+one request, so it survives the request failing and being retried or requested
+again. Declining or cancelling the request clears the title's follows: the title
+is no longer on its way, and the follower can request it themselves. The
+requesting profile never needs a follow: the fulfilled notification always
+reaches it. When a request's fulfilled notification goes out, it is also sent
+to every follower of the title, marked `follower` so its wording does not say
+"your request", and those follows are then cleared. A dispatch failure leaves
+the follows for the retry, and the server-channel announcement waits until an
+attempt has reached every recipient, so a retry does not repeat it.
+
+Request state carries `following` (the viewer requested or follows the title)
+and `requested_by_viewer` (the viewing profile made the request, so there is
+nothing to follow); `GET /requests/status` advertises `follow_supported`.
+
 ## Without a router
 
 Requests do not need Sonarr, Radarr or any other router plugin. When no

@@ -658,6 +658,12 @@ func (s *Service) GetDetail(ctx context.Context, viewer Viewer, mediaType MediaT
 	if err != nil {
 		return nil, err
 	}
+	primaryFollowing, err := s.followedTitles(ctx, viewer, mediaType, primaryRequests)
+	if err != nil {
+		return nil, err
+	}
+	primaryState := requestStateFor(viewer, policy, primaryMatch.Available, primaryRequests[raw.ID])
+	primaryState.Following = primaryRequests[raw.ID] != nil && primaryFollowing[raw.ID]
 
 	detail := &MediaDetail{
 		MediaType:           mediaType,
@@ -688,7 +694,7 @@ func (s *Service) GetDetail(ctx context.Context, viewer Viewer, mediaType MediaT
 		Creators:            raw.Creators,
 		Availability:        availabilityValue(primaryMatch.Available),
 		LibraryContentID:    primaryMatch.ContentID,
-		Request:             requestStateFor(viewer, policy, primaryMatch.Available, primaryRequests[raw.ID]),
+		Request:             primaryState,
 	}
 	if raw.TVDBID > 0 {
 		tvdb := raw.TVDBID
@@ -960,6 +966,7 @@ func (s *Service) Decline(ctx context.Context, viewer Viewer, id, reason string)
 	}
 	declined.DeclineReason = strings.TrimSpace(reason)
 	s.notifyLifecycle(ctx, *declined, LifecycleNotifier.RequestDeclined)
+	s.forgetFollowsAfterWithdrawal(ctx, declined)
 	return declined, nil
 }
 
@@ -984,7 +991,12 @@ func (s *Service) Cancel(ctx context.Context, viewer Viewer, id, reason string) 
 	if !viewer.IsAdmin && req.RequestedByUserID != viewer.UserID {
 		return nil, ErrForbidden
 	}
-	return s.store.SetOutcome(ctx, req.ID, guardWithdrawable, OutcomeCancelled, viewer, reason)
+	withdrawn, err := s.store.SetOutcome(ctx, req.ID, guardWithdrawable, OutcomeCancelled, viewer, reason)
+	if err != nil {
+		return nil, err
+	}
+	s.forgetFollowsAfterWithdrawal(ctx, withdrawn)
+	return withdrawn, nil
 }
 
 func (s *Service) Retry(ctx context.Context, viewer Viewer, id string) (*Request, error) {
@@ -1499,6 +1511,7 @@ func (s *Service) enrichPageWithCeiling(ctx context.Context, viewer Viewer, raw 
 
 	available := map[MediaType]map[int]PresenceMatch{}
 	active := map[MediaType]map[int]*Request{}
+	following := map[MediaType]map[int]bool{}
 	for mediaType, ids := range idsByType {
 		presence, err := s.lookupAvailable(ctx, mediaType, ids)
 		if err != nil {
@@ -1510,6 +1523,9 @@ func (s *Service) enrichPageWithCeiling(ctx context.Context, viewer Viewer, raw 
 			return nil, err
 		}
 		active[mediaType] = requests
+		if following[mediaType], err = s.followedTitles(ctx, viewer, mediaType, requests); err != nil {
+			return nil, err
+		}
 	}
 
 	out := &MediaPage{
@@ -1525,6 +1541,8 @@ func (s *Service) enrichPageWithCeiling(ctx context.Context, viewer Viewer, raw 
 		}
 		match := available[mediaType][item.ID]
 		activeRequest := active[mediaType][item.ID]
+		state := requestStateFor(viewer, policy, match.Available, activeRequest)
+		state.Following = activeRequest != nil && following[mediaType][item.ID]
 		out.Results = append(out.Results, MediaResult{
 			MediaType:        mediaType,
 			TMDBID:           item.ID,
@@ -1538,7 +1556,7 @@ func (s *Service) enrichPageWithCeiling(ctx context.Context, viewer Viewer, raw 
 			VoteAverage:      item.VoteAverage,
 			Availability:     availabilityValue(match.Available),
 			LibraryContentID: match.ContentID,
-			Request:          requestStateFor(viewer, policy, match.Available, activeRequest),
+			Request:          state,
 		})
 	}
 	return out, nil
@@ -2293,15 +2311,7 @@ func (s *Service) now() time.Time {
 
 func requestStateFor(viewer Viewer, policy EffectivePolicy, available bool, req *Request) RequestState {
 	if req != nil {
-		state := RequestState{
-			Status:      req.Status,
-			Requestable: false,
-			Reason:      "already_requested",
-		}
-		if viewer.IsAdmin || req.RequestedByUserID == viewer.UserID {
-			state.RequestID = req.ID
-		}
-		return state
+		return activeRequestState(viewer, req)
 	}
 	switch {
 	case available:
@@ -2315,6 +2325,22 @@ func requestStateFor(viewer Viewer, policy EffectivePolicy, available bool, req 
 	default:
 		return RequestState{Requestable: true}
 	}
+}
+
+// activeRequestState is the state of a title that already has an active
+// request: not requestable, and the request is visible to its account and to
+// admins.
+func activeRequestState(viewer Viewer, req *Request) RequestState {
+	state := RequestState{
+		Status:      req.Status,
+		Requestable: false,
+		Reason:      "already_requested",
+	}
+	if viewer.IsAdmin || req.RequestedByUserID == viewer.UserID {
+		state.RequestID = req.ID
+	}
+	state.RequestedByViewer = req.RequestedByUserID == viewer.UserID && req.RequestedByProfileID == viewer.ProfileID
+	return state
 }
 
 // validateCreateAccess applies the policy rules a create decides up front. The

@@ -55,6 +55,14 @@ func (f *fakeRequestService) BrowseGenre(_ context.Context, _ mediarequests.View
 	return f.browseFn("genre", slug, mediaType, sort, page)
 }
 
+func (f *fakeRequestService) Follow(context.Context, mediarequests.Viewer, mediarequests.MediaType, int) (mediarequests.RequestState, error) {
+	return mediarequests.RequestState{}, nil
+}
+
+func (f *fakeRequestService) Unfollow(context.Context, mediarequests.Viewer, mediarequests.MediaType, int) error {
+	return nil
+}
+
 func (f *fakeRequestService) Search(context.Context, mediarequests.Viewer, string, mediarequests.MediaType, int) (*mediarequests.MediaPage, error) {
 	return nil, nil
 }

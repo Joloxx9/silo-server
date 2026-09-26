@@ -58,6 +58,20 @@ export function cancelMediaRequestV2(id: string, reason?: string): Promise<Media
   );
 }
 
+// Following is keyed by title: a viewer asks to hear when a title someone else
+// already requested becomes available.
+export function followRequestMediaV2(mediaType: RequestMediaType, tmdbID: number) {
+  return v2("PUT /api/v2/requests/follows/{media_type}/{tmdb_id}", {
+    path: { media_type: mediaType, tmdb_id: tmdbID },
+  });
+}
+
+export function unfollowRequestMediaV2(mediaType: RequestMediaType, tmdbID: number) {
+  return v2("DELETE /api/v2/requests/follows/{media_type}/{tmdb_id}", {
+    path: { media_type: mediaType, tmdb_id: tmdbID },
+  });
+}
+
 // v2 pages by cursor with a page size of at most 50; callers that asked for a
 // larger window (the Requests page shows up to 100) walk the pages.
 export async function listMyMediaRequestsV2(

@@ -37,6 +37,9 @@ type FeatureStatus struct {
 	Capability
 	RequestsEnabled            bool `json:"requests_enabled"`
 	RatingRestrictionsEnforced bool `json:"rating_restrictions_enforced"`
+	// FollowSupported advertises PUT/DELETE /requests/follows/{media_type}/{tmdb_id}
+	// and the following flag on request state.
+	FollowSupported bool `json:"follow_supported"`
 }
 type RequestFeatureStatusOutput struct {
 	Status       int
@@ -176,7 +179,7 @@ func registerRequestLifecycle(reg *Registry, requests RequestLifecycleService, p
 				return nil, requestProblem(err)
 			}
 		}
-		return &RequestFeatureStatusOutput{Body: FeatureStatus{Capability: Capability{State: enabledCapabilityState(status.RequestsEnabled), Allowed: &allowed}, RequestsEnabled: status.RequestsEnabled, RatingRestrictionsEnforced: status.RatingRestrictionsEnforced}}, nil
+		return &RequestFeatureStatusOutput{Body: FeatureStatus{Capability: Capability{State: enabledCapabilityState(status.RequestsEnabled), Allowed: &allowed}, RequestsEnabled: status.RequestsEnabled, RatingRestrictionsEnforced: status.RatingRestrictionsEnforced, FollowSupported: true}}, nil
 	})
 	Register(reg, op(http.MethodPost, "/requests/{id}/cancel", "cancelRequest", "Cancel an accessible request."), func(ctx context.Context, in *RequestCancelInput) (*MediaRequestOutput, error) {
 		if requests == nil {

@@ -1820,6 +1820,10 @@ export interface RequestState {
   requestable: boolean;
   reason?: string;
   request_id?: string;
+  /** The viewer is notified when the title becomes available: they requested or follow it. */
+  following?: boolean;
+  /** The viewing profile made the active request, so there is nothing to follow. */
+  requested_by_viewer?: boolean;
 }
 
 export interface RequestMediaResult {
@@ -2811,6 +2815,8 @@ export interface NotificationReasonFlags {
   title?: string;
   year?: number;
   reason?: string;
+  /** request.fulfilled sent to a profile that followed the title, not requested it. */
+  follower?: boolean;
 }
 
 export interface AppNotification {

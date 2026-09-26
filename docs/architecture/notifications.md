@@ -74,7 +74,12 @@ inbox rows to make rollback possible.
 
 Request lifecycle deliveries (`request.fulfilled`, `request.approved`,
 `request.declined`) are operational notices posted directly to the requesting
-profile — no interest index, no fanout. Their `reason_flags` carry request
+profile — no interest index, no fanout. `request.fulfilled` also goes to every
+profile that followed the title (see
+[media-requests.md](media-requests.md#following-a-title)), with `follower: true`
+in its `reason_flags` so every channel words it as a followed title rather than
+the recipient's own request. The same per-profile unique index keeps each
+follower's copy idempotent. Their `reason_flags` carry request
 identifiers (request ID, TMDB ID, media type; approved/declined also carry
 the title since no catalog item exists yet) rather than the four reason
 booleans. Partial unique indexes per `(profile_id, request_id, type)` make
