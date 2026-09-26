@@ -9,8 +9,47 @@ import {
   formatSeasonProgress,
   parseRequestMediaType,
   requestDetailHref,
+  requestDiscoverSectionHref,
   requestDisplayState,
+  requestSearchHref,
+  requestSearchTypeForScope,
 } from "./mediaRequests";
+
+describe("requestSearchHref", () => {
+  it("opens the app's search page on movies and series", () => {
+    expect(requestSearchHref(" the bear ")).toBe("/catalog?source=query&q=the+bear&type=video");
+  });
+
+  it("keeps a movie or series type and drops anything else", () => {
+    expect(requestSearchHref("dune", "movie")).toBe("/catalog?source=query&q=dune&type=movie");
+    expect(requestSearchHref("dune", "series")).toBe("/catalog?source=query&q=dune&type=series");
+    expect(requestSearchHref("dune", "all")).toBe("/catalog?source=query&q=dune&type=video");
+  });
+});
+
+describe("requestSearchTypeForScope", () => {
+  it("searches TMDB for what the catalog scope holds", () => {
+    expect(requestSearchTypeForScope(undefined)).toBe("all");
+    expect(requestSearchTypeForScope("video")).toBe("all");
+    expect(requestSearchTypeForScope("movie")).toBe("movie");
+    expect(requestSearchTypeForScope("series")).toBe("series");
+    expect(requestSearchTypeForScope("episode")).toBe("series");
+  });
+
+  it("skips TMDB for books", () => {
+    expect(requestSearchTypeForScope("audiobook")).toBeNull();
+    expect(requestSearchTypeForScope("ebook")).toBeNull();
+    expect(requestSearchTypeForScope("manga")).toBeNull();
+  });
+});
+
+describe("requestDiscoverSectionHref", () => {
+  it("builds a Discover row's page", () => {
+    expect(requestDiscoverSectionHref("trending_movies")).toBe(
+      "/requests/discover/trending_movies",
+    );
+  });
+});
 
 type CancelFields = Pick<MediaRequest, "status" | "outcome" | "targets">;
 

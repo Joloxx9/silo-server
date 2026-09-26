@@ -48,7 +48,13 @@ import { adminStatsKey } from "@/hooks/queries/admin/stats";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsActingAdmin } from "@/hooks/useIsActingAdmin";
 import { usePageActivity } from "@/hooks/usePageActivity";
-import { adminKeys, historyImportKeys, libraryKeys, sectionKeys } from "@/hooks/queries/keys";
+import {
+  adminKeys,
+  historyImportKeys,
+  libraryKeys,
+  requestKeys,
+  sectionKeys,
+} from "@/hooks/queries/keys";
 import {
   scheduleMediaSurfaceInvalidation,
   updateCatalogItemDetail,
@@ -571,9 +577,25 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
     dispatchChannelMessage(message.channel, "snapshot", message);
   }
 
-  function handleNotificationEvent(message: EventsEventMessage) {
+  function handleNotificationEvent(
+    message: EventsEventMessage,
+    refreshQueries: (...filters: QueryFilters[]) => void,
+  ) {
     if (message.event === "notification.created") {
       const notification = message.data as AppNotification;
+      // A request changed state (approved, declined, arrived). The account's
+      // request list and the request badges on title pages and Discover read
+      // it, whichever of its profiles the notice was for. The scheduler
+      // batches a burst (a scan fulfilling many requests) into one refetch.
+      // The feature status, brand lists, and search don't depend on it.
+      if (notification.type?.startsWith("request.")) {
+        refreshQueries(
+          { queryKey: requestKeys.mineAll() },
+          { queryKey: requestKeys.detailAll() },
+          { queryKey: requestKeys.discovery() },
+          { queryKey: requestKeys.discoverBrowseAll() },
+        );
+      }
       if (
         notification.profile_id &&
         activeProfileIDRef.current &&
@@ -699,7 +721,7 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
         );
         break;
       case "notifications":
-        handleNotificationEvent(message);
+        handleNotificationEvent(message, refreshQueries);
         break;
       default:
         break;
