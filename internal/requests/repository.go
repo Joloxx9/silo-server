@@ -165,6 +165,13 @@ func (r *Repository) upsertUserLimit(ctx context.Context, exec requestExecutor, 
 	return &row, nil
 }
 
+// quotaOutcomes are the outcomes whose requests count against the quota. A
+// decline or a failure gives the slot back; a cancellation does not, or
+// a request-and-withdraw loop could repeat without limit.
+const quotaOutcomes = `outcome IN ('active', 'cancelled')`
+
+// CountUserRequestsSince counts the requests an account made since a time
+// that count against its quota.
 func (r *Repository) CountUserRequestsSince(ctx context.Context, userID int, since time.Time) (int, error) {
 	var count int
 	if err := r.pool.QueryRow(ctx, `
@@ -172,7 +179,7 @@ func (r *Repository) CountUserRequestsSince(ctx context.Context, userID int, sin
 		FROM media_requests
 		WHERE requested_by_user_id = $1
 		  AND created_at >= $2
-	`, userID, since).Scan(&count); err != nil {
+		  AND `+quotaOutcomes, userID, since).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count user requests: %w", err)
 	}
 	return count, nil
@@ -228,8 +235,7 @@ func (r *Repository) CreateRequest(ctx context.Context, input CreateRequestRecor
 	}
 	if input.ReplaceFailed {
 		// Only the requester's own rows: other accounts' failed requests for
-		// the title are their history, and deleting them would also refund
-		// their quota.
+		// the title are their history.
 		if _, err := tx.Exec(ctx, `
 			DELETE FROM media_requests
 			WHERE requested_by_user_id = $1
@@ -248,7 +254,7 @@ func (r *Repository) CreateRequest(ctx context.Context, input CreateRequestRecor
 			FROM media_requests
 			WHERE requested_by_user_id = $1
 			  AND created_at >= $2
-		`, input.Quota.UserID, input.Quota.WindowStart).Scan(&count); err != nil {
+			  AND `+quotaOutcomes, input.Quota.UserID, input.Quota.WindowStart).Scan(&count); err != nil {
 			return nil, fmt.Errorf("count requests for quota: %w", err)
 		}
 		if count >= input.Quota.MaxRequests {

@@ -112,6 +112,43 @@ export async function putAdminRequestUserLimitV2(
   });
   return { ...body, user_id: Number(body.user_id), etag: requireETag(etag) };
 }
+
+/**
+ * An access group's request approval and limit, with the validator of the
+ * read it came from. A group with nothing saved reads as inherit at revision
+ * zero, and its first save sends that tag.
+ */
+export type RequestGroupLimit = Omit<Schemas["AdminRequestGroupLimit"], "group_id"> & {
+  group_id: number;
+  etag: string;
+};
+export type RequestGroupLimitBody = Schemas["AdminRequestGroupLimitBody"];
+
+export async function getAdminRequestGroupLimitV2(groupId: number): Promise<RequestGroupLimit> {
+  let etag = "";
+  const body = await v2("GET /api/v2/admin/request-groups/{group_id}/limit", {
+    path: { group_id: String(groupId) },
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...body, group_id: Number(body.group_id), etag: requireETag(etag) };
+}
+export async function putAdminRequestGroupLimitV2(
+  limit: Pick<RequestGroupLimit, "group_id" | "etag">,
+  body: RequestGroupLimitBody,
+): Promise<RequestGroupLimit> {
+  let etag = "";
+  const saved = await v2("PUT /api/v2/admin/request-groups/{group_id}/limit", {
+    path: { group_id: String(limit.group_id) },
+    headers: { "If-Match": requireETag(limit.etag) },
+    body,
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...saved, group_id: Number(saved.group_id), etag: requireETag(etag) };
+}
 function integrationBody(
   integration: RequestIntegration,
 ): V2Body<"POST /api/v2/admin/request-integrations"> {

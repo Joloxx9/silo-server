@@ -251,3 +251,22 @@ reports later updates only itself. A request's
 history is its `media_request_events` rows. Target updates record the
 request's status or outcome only when it changes, so neither a reconcile pass
 nor a second target repeats an entry.
+
+## Who can request
+
+Whether an account may request, whether its requests need approval, and how
+many it may make resolve in layers: the account's own settings, then its
+access group's (`request_group_limits`), then the server-wide request
+settings. A layer set to inherit defers to the next; admins are never capped
+by a group. An account is blocked in one of two places only: requests turned
+off server-wide, or the requests switch on the account or its access group
+(`requests_allowed`). The older `blocked` limit and approval modes on an
+account are still honored when an API client writes them, but the migration
+that added group limits moved existing ones onto the account's switch and no
+editor offers them.
+
+The quota counts the requests an account made in the window, except those
+declined or failed: those give their slot back. A cancelled request keeps
+counting, or requesting and cancelling could repeat without limit. The store
+checks the quota under the requester's advisory lock, so concurrent creates
+cannot both take the last slot.

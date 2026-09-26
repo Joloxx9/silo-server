@@ -428,6 +428,27 @@ describe("Requests settings: general", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it("calls approval and the limit server-wide defaults that groups and accounts override", async () => {
+    serve();
+    mount();
+    const limit = await screen.findByLabelText("Request limit");
+    const help = document.getElementById(limit.getAttribute("aria-describedby")!);
+    expect(help).toHaveTextContent(
+      "Declined and failed requests don't count. The server-wide default. Access groups and accounts can override this.",
+    );
+    expect(within(help!).getByRole("link", { name: "Access groups" })).toHaveAttribute(
+      "href",
+      "/admin/access-groups",
+    );
+    const approval = screen.getByRole("combobox", { name: "Approval" });
+    expect(document.getElementById(approval.getAttribute("aria-describedby")!)).toHaveTextContent(
+      "The server-wide default. Access groups and accounts can override this.",
+    );
+    // Per-account limits no longer have a page of their own.
+    expect(screen.queryByRole("link", { name: "User overrides" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/admin/users");
+  });
 });
 
 async function openServer(name: string) {

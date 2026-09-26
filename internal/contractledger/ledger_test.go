@@ -879,8 +879,9 @@ func TestConcurrencyMarkingIsRestricted(t *testing.T) {
 // is empty today; the reconcile test refuses an unmapped guarded operation
 // that is not listed here.
 var guardedWithoutLegacyRow = map[string]string{
-	"updateRequestRoute": "V2-only request routing rule: the rule's revision from request_editor_revision_seq is its ETag.",
-	"deleteRequestRoute": "V2-only request routing rule: deletion is guarded by the rule's revision.",
+	"updateRequestRoute":           "V2-only request routing rule: the rule's revision from request_editor_revision_seq is its ETag.",
+	"deleteRequestRoute":           "V2-only request routing rule: deletion is guarded by the rule's revision.",
+	"updateAdminRequestGroupLimit": "V2-only access-group request limit: the limit's revision from request_editor_revision_seq is its ETag; a group with none saved is revision zero.",
 }
 
 // TestGuardedOperationsAreMarkedIfMatch reconciles the v2 registry with the
@@ -1214,6 +1215,7 @@ var mutationWithoutLegacyRow = map[string]string{
 	"createRequestRoute":                   "V2-only request routing rule (routing replaced the router plugin's per-connection default switches). Creating a rule is non-retryable: a replay adds a second rule.",
 	"updateRequestRoute":                   "V2-only request routing rule replacement, guarded by If-Match on the rule's revision; a replay after success answers 412.",
 	"deleteRequestRoute":                   "V2-only request routing rule deletion, guarded by If-Match on the rule's revision; a replay finds no rule.",
+	"updateAdminRequestGroupLimit":         "V2-only access-group request limit replacement, guarded by If-Match on the limit's revision; a replay after success answers 412.",
 	"reorderRequestRoutes":                 "V2-only reorder of a media type's routing rules. The body names the full order, so a replay sets the same positions; it is non-retryable because it moves every rule to a new revision.",
 	"previewRequestRoute":                  "V2-only read-only route preview (POST for the request body). It reads TMDB and the rules and writes nothing, so a replay returns the same answer.",
 	"followRequestMedia":                   "V2-only title follow (Requests acceptance AC1/AC5): v1 had no way to follow a title someone else requested. The follow row is keyed by title and profile, so a replay converges on the same follow.",

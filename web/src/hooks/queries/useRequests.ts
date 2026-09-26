@@ -13,6 +13,8 @@ import {
   putAdminRequestSettingsV2,
   getAdminRequestUserLimitV2,
   putAdminRequestUserLimitV2,
+  getAdminRequestGroupLimitV2,
+  putAdminRequestGroupLimitV2,
   listAdminRequestIntegrationsV2,
   saveAdminRequestIntegrationV2,
   deleteAdminRequestIntegrationV2,
@@ -31,6 +33,8 @@ import {
   reorderAdminRequestRoutesV2,
   previewAdminRequestRouteV2,
   type AdminRequestQueueFilter,
+  type RequestGroupLimit,
+  type RequestGroupLimitBody,
   type RequestRoute,
   type RequestRouteBody,
   type RequestRouteMediaType,
@@ -832,13 +836,54 @@ export function useUpdateRequestUserLimit() {
     retry: false,
     mutationFn: ({ userId, body }: { userId: number; body: RequestUserLimit }) =>
       putAdminRequestUserLimitV2(userId, body),
-    onSuccess: (_data, variables) => {
-      toast.success("User request limit saved");
-      queryClient.invalidateQueries({ queryKey: adminKeys.requestUserLimit(variables.userId) });
+    onSuccess: (saved, variables) => {
+      toast.success("Request settings saved");
+      // The editor adopts the saved record; the cache has to hold it first,
+      // or a clean editor would follow the query back to the replaced one.
+      queryClient.setQueryData(adminKeys.requestUserLimit(variables.userId), saved);
       invalidateRequestSurfaces(queryClient);
     },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to save user limit");
+    onError: (err, variables) => {
+      toast.error(err instanceof Error ? err.message : "Failed to save the request settings");
+      // A refused save (412) means someone else saved; read their version so
+      // an explicit reload starts from it.
+      queryClient.invalidateQueries({ queryKey: adminKeys.requestUserLimit(variables.userId) });
+    },
+  });
+}
+
+/** An access group's request approval and limit. */
+export function useRequestGroupLimit(groupId?: number | null) {
+  return useQuery({
+    queryKey: adminKeys.requestGroupLimit(groupId ?? 0),
+    queryFn: () => getAdminRequestGroupLimitV2(groupId!),
+    enabled: Boolean(groupId && groupId > 0),
+    staleTime: REQUESTS_STALE_TIME,
+    retry: false,
+  });
+}
+
+/**
+ * Saves an access group's request approval and limit. Silent: the group
+ * editor saves it together with the group and reports both.
+ */
+export function useUpdateRequestGroupLimit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: ({
+      limit,
+      body,
+    }: {
+      limit: Pick<RequestGroupLimit, "group_id" | "etag">;
+      body: RequestGroupLimitBody;
+    }) => putAdminRequestGroupLimitV2(limit, body),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(adminKeys.requestGroupLimit(saved.group_id), saved);
+      invalidateRequestSurfaces(queryClient);
+    },
+    onError: (_err, { limit }) => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.requestGroupLimit(limit.group_id) });
     },
   });
 }

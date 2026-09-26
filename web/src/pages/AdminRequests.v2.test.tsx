@@ -2,6 +2,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { v2, V2ProblemError } from "@/api/v2/request";
 import AdminRequests from "./AdminRequests";
@@ -21,7 +22,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
   }),
   isProfileRequestContextCurrent: () => true,
 }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("@/hooks/queries/admin/users", () => ({
   useAdminUsers: () => ({
     data: [
@@ -33,19 +34,6 @@ vi.mock("@/hooks/queries/admin/users", () => ({
 }));
 
 const CREATED = "2026-09-01T00:00:00Z";
-const conflict = () =>
-  new V2ProblemError(
-    "updateRequestUserLimit",
-    {
-      type: "https://silo.test/problems/precondition_failed",
-      title: "Changed",
-      status: 412,
-      detail: "Changed",
-      instance: "test",
-    },
-    null,
-    '"newer"',
-  );
 function reply(options: unknown, body: unknown, etag = '"initial"') {
   (options as { onResponse?: (r: Response) => void })?.onResponse?.(
     new Response(null, { headers: { ETag: etag } }),
@@ -142,6 +130,7 @@ function mount(path: string) {
             }
           />
           <Route path="/admin/settings/requests" element={<h1>Request settings page</h1>} />
+          <Route path="/admin/users" element={<h1>Users page</h1>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -173,19 +162,29 @@ describe("request administration", () => {
     },
   );
 
-  it("links to the Requests settings page and keeps only the queue and overrides tabs", async () => {
+  it("links to the Requests settings page and shows only the queue", async () => {
     serve(queue({}));
     mount("/admin/requests");
     expect(await screen.findByRole("link", { name: "Request settings" })).toHaveAttribute(
       "href",
       "/admin/settings/requests",
     );
-    const sections = screen.getByRole("tablist", { name: "Request administration sections" });
-    expect(
-      within(sections)
-        .getAllByRole("tab")
-        .map((tab) => tab.textContent),
-    ).toEqual(["Queue", "User Overrides"]);
+    // The queue's views are the page's only tabs.
+    expect(screen.getAllByRole("tablist").map((list) => list.getAttribute("aria-label"))).toEqual([
+      "Request views",
+    ]);
+    expect(screen.queryByRole("tab", { name: "User Overrides" })).toBeNull();
+  });
+
+  it("sends the retired ?tab=overrides to the accounts list and says where limits went", async () => {
+    serve({ "GET /api/v2/admin/requests/capabilities": capabilities });
+    mount("/admin/requests?tab=overrides");
+    expect(await screen.findByRole("heading", { name: "Users page" })).toBeInTheDocument();
+    expect(toast.info).toHaveBeenCalledWith(
+      "Request limits moved to each account",
+      expect.objectContaining({ id: "request-overrides-moved" }),
+    );
+    expect(calls("GET /api/v2/admin/request-users/{user_id}/limit")).toHaveLength(0);
   });
 
   it("opens on In progress when nothing needs approval, and shows each view's count", async () => {
@@ -493,61 +492,5 @@ describe("request administration", () => {
         "7",
       ),
     );
-  });
-
-  it("keeps user override edits and validator until explicit reload after a stale response", async () => {
-    let reads = 0;
-    vi.mocked(v2).mockImplementation((operation, options) => {
-      if (operation === "GET /api/v2/admin/requests/capabilities")
-        return reply(options, { available: true, guarded_configuration: true });
-      if (operation === "GET /api/v2/admin/request-users/{user_id}/limit")
-        return reply(
-          options,
-          {
-            user_id: "1",
-            limit_mode: "custom",
-            max_requests: ++reads === 1 ? 3 : 6,
-            window_days: 7,
-            approval_mode: "inherit",
-          },
-          reads === 1 ? '"initial"' : '"reloaded"',
-        );
-      if (operation === "PUT /api/v2/admin/request-users/{user_id}/limit")
-        return Promise.reject(conflict());
-      throw new Error(operation);
-    });
-    mount("/admin/requests?tab=overrides");
-    await screen.findByText("Save Override");
-    const input = screen.getAllByRole("spinbutton")[0]!;
-    fireEvent.change(input, { target: { value: "11" } });
-    fireEvent.click(screen.getByText("Save Override"));
-    await screen.findByRole("alert");
-    expect((input as HTMLInputElement).value).toBe("11");
-    expect(
-      vi
-        .mocked(v2)
-        .mock.calls.filter(([op]) => op === "PUT /api/v2/admin/request-users/{user_id}/limit"),
-    ).toHaveLength(1);
-    const writes = () =>
-      vi
-        .mocked(v2)
-        .mock.calls.filter(([op]) => op === "PUT /api/v2/admin/request-users/{user_id}/limit");
-    expect(writes()[0]![1]).toMatchObject({
-      headers: { "If-Match": '"initial"' },
-      body: { max_requests: 11 },
-    });
-    expect(
-      (screen.getByText("Save Override").closest("button") as HTMLButtonElement).disabled,
-    ).toBe(true);
-    fireEvent.click(screen.getByText("Reload latest version"));
-    await waitFor(() =>
-      expect((screen.getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("6"),
-    );
-    fireEvent.click(screen.getByText("Save Override"));
-    await waitFor(() => expect(writes()).toHaveLength(2));
-    expect(writes()[1]![1]).toMatchObject({
-      headers: { "If-Match": '"reloaded"' },
-      body: { max_requests: 6 },
-    });
   });
 });

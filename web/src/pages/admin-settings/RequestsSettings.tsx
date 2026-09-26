@@ -72,6 +72,19 @@ function fallbackOf(routes: RequestRoute[] | undefined, mediaType: RequestRouteM
   return routes?.find((route) => route.is_fallback && route.media_type === mediaType);
 }
 
+/** Help text for the General group's defaults that groups and accounts can override. */
+function OverridableDefault() {
+  return (
+    <>
+      The server-wide default.{" "}
+      <Link to="/admin/access-groups" className="text-foreground underline underline-offset-2">
+        Access groups
+      </Link>{" "}
+      and accounts can override this.
+    </>
+  );
+}
+
 function PageSkeleton() {
   return (
     <div className="space-y-6" role="status" aria-label="Loading request settings">
@@ -319,6 +332,7 @@ function RequestsSettingsContent() {
                     { value: "auto", label: "Approve automatically" },
                     { value: "admin", label: "An admin approves" },
                   ]}
+                  description={<OverridableDefault />}
                   value={draft.auto_approve ? "auto" : "admin"}
                   onChange={(value) => editGeneral({ auto_approve: value === "auto" })}
                   dirty={draft.auto_approve !== baseGeneral.auto_approve}
@@ -327,7 +341,12 @@ function RequestsSettingsContent() {
                   label="Request limit"
                   type="number"
                   unit="requests"
-                  description="How many titles one account can request in the window below."
+                  description={
+                    <>
+                      How many titles one account can request in the window below. Declined and
+                      failed requests don&apos;t count. <OverridableDefault />
+                    </>
+                  }
                   value={draft.max_requests}
                   onChange={(value) => editGeneral({ max_requests: value })}
                   dirty={draft.max_requests !== baseGeneral.max_requests}
@@ -401,11 +420,14 @@ function RequestsSettingsContent() {
 
         <FieldGroup label="Related">
           <SettingFieldRow
-            label="Per-account limits"
-            description="Give one account its own request limit or approval."
+            label="Group and account limits"
+            description="Give an access group or one account its own approval and limit. An account's own setting wins, then its group's, then the defaults above."
           >
             <Button asChild variant="outline" size="sm">
-              <Link to="/admin/requests?tab=overrides">User overrides</Link>
+              <Link to="/admin/access-groups">Access groups</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/users">Users</Link>
             </Button>
           </SettingFieldRow>
           <SettingFieldRow

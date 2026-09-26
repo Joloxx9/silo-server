@@ -2010,7 +2010,9 @@ profile and filters. The v2 queue adds filters v1 never had: a `view`
 (`q`), `media_type` and `requested_by_user_id`. Two v2-only reads serve the queue:
 `GET /admin/requests/counts` counts each view, and
 `GET /admin/requests/{id}/events` returns a request's history, newest first and
-bounded to 200 entries. Integration lists return bounded ID-ordered pages over the
+bounded to 200 entries. An access group's request approval and limit
+(`/admin/request-groups/{group_id}/limit`) is v2-only and guarded by `If-Match`
+like an account's; a group with none saved reads as revision zero. Integration lists return bounded ID-ordered pages over the
 configured integrations. The service currently loads that small configuration set
 before slicing a page; it does not claim database-bounded enumeration.
 

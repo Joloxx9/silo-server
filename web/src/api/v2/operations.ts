@@ -178,6 +178,7 @@ export const v2Operations = {
   "GET /api/v2/admin/rate-limits/config": "getAdminRateLimitConfig",
   "GET /api/v2/admin/rate-limits/status": "getAdminRateLimitStatus",
   "GET /api/v2/admin/recommendations/status": "getAdminRecommendationsStatus",
+  "GET /api/v2/admin/request-groups/{group_id}/limit": "getAdminRequestGroupLimit",
   "GET /api/v2/admin/request-integrations": "listRequestIntegrations",
   "GET /api/v2/admin/request-integrations/{id}": "getRequestIntegration",
   "GET /api/v2/admin/request-routes": "listRequestRoutes",
@@ -744,6 +745,7 @@ export const v2Operations = {
   "PUT /api/v2/admin/plugins/uploads/chunked/{upload_id}/chunks/{chunk_index}":
     "putAdminPluginUploadChunk",
   "PUT /api/v2/admin/policy/documents/{id}/active-version": "activateAdminPolicyVersion",
+  "PUT /api/v2/admin/request-groups/{group_id}/limit": "updateAdminRequestGroupLimit",
   "PUT /api/v2/admin/request-integrations/{id}": "updateRequestIntegration",
   "PUT /api/v2/admin/request-routes/{id}": "updateRequestRoute",
   "PUT /api/v2/admin/request-settings": "updateAdminRequestSettings",

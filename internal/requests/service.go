@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -605,6 +606,7 @@ func (s *Service) DiscoverAll(ctx context.Context, viewer Viewer) ([]DiscoverySe
 	if s == nil || s.store == nil || s.tmdb == nil {
 		return nil, fmt.Errorf("request service is not configured")
 	}
+	ctx = withPolicyCache(ctx)
 	if err := s.ensureRequestsEnabled(ctx); err != nil {
 		return nil, err
 	}
@@ -639,6 +641,7 @@ func (s *Service) GetDetail(ctx context.Context, viewer Viewer, mediaType MediaT
 	if s == nil || s.store == nil || s.tmdb == nil {
 		return nil, fmt.Errorf("request service is not configured")
 	}
+	ctx = withPolicyCache(ctx)
 	if err := s.ensureRequestsEnabled(ctx); err != nil {
 		return nil, err
 	}
@@ -1598,11 +1601,50 @@ func classifyIntegrationTransportError(err error) error {
 }
 
 func (s *Service) EffectivePolicy(ctx context.Context, userID int) (EffectivePolicy, error) {
+	cache, _ := ctx.Value(policyCacheKey{}).(*policyCache)
+	if cache == nil {
+		return s.resolvePolicy(ctx, userID)
+	}
+	// Held while resolving, so sections enriched concurrently wait for the
+	// first rather than each reading the account, group and quota again.
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if policy, ok := cache.byUser[userID]; ok {
+		return policy, nil
+	}
+	policy, err := s.resolvePolicy(ctx, userID)
+	if err == nil {
+		cache.byUser[userID] = policy
+	}
+	return policy, err
+}
+
+// policyCache shares a viewer's resolved policy across the page enrichments
+// of one call (DiscoverAll's sections, a detail and its recommendations).
+type policyCache struct {
+	mu     sync.Mutex
+	byUser map[int]EffectivePolicy
+}
+
+type policyCacheKey struct{}
+
+func withPolicyCache(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(policyCacheKey{}).(*policyCache); ok {
+		return ctx
+	}
+	return context.WithValue(ctx, policyCacheKey{}, &policyCache{byUser: map[int]EffectivePolicy{}})
+}
+
+func (s *Service) resolvePolicy(ctx context.Context, userID int) (EffectivePolicy, error) {
 	settings, err := s.store.GetSettings(ctx)
 	if err != nil {
 		return EffectivePolicy{}, err
 	}
 	limit, err := s.store.GetUserLimit(ctx, userID)
+	if err != nil {
+		return EffectivePolicy{}, err
+	}
+	viewerAccess, err := s.viewerRequestAccess(ctx, userID)
 	if err != nil {
 		return EffectivePolicy{}, err
 	}
@@ -1612,32 +1654,50 @@ func (s *Service) EffectivePolicy(ctx context.Context, userID int) (EffectivePol
 		MaxRequests:     settings.GlobalMaxRequests,
 		WindowDays:      settings.GlobalWindowDays,
 		AutoApprove:     settings.GlobalAutoApprovalEnabled,
+		Blocked:         !viewerAccess.allowed,
 	}
 	if policy.WindowDays <= 0 {
 		policy.WindowDays = 7
 	}
+	// The account's own limits win, then its access group's, then the
+	// server's; a layer set to inherit defers to the next.
+	limitMode, maxRequests, windowDays := LimitModeInherit, (*int)(nil), (*int)(nil)
+	approval := ApprovalModeInherit
+	layers := []*UserLimit{}
+	if g := viewerAccess.group; g != nil {
+		layers = append(layers, &UserLimit{LimitMode: g.LimitMode, MaxRequests: g.MaxRequests, WindowDays: g.WindowDays, ApprovalMode: g.ApprovalMode})
+	}
 	if limit != nil {
-		switch limit.LimitMode {
-		case LimitModeBlocked:
-			policy.Blocked = true
-		case LimitModeUnlimited:
-			policy.Unlimited = true
-		case LimitModeCustom:
-			if limit.MaxRequests != nil {
-				policy.MaxRequests = *limit.MaxRequests
-			}
-			if limit.WindowDays != nil && *limit.WindowDays > 0 {
-				policy.WindowDays = *limit.WindowDays
-			}
+		layers = append(layers, limit)
+	}
+	for _, layer := range layers {
+		if layer.LimitMode != "" && layer.LimitMode != LimitModeInherit {
+			limitMode, maxRequests, windowDays = layer.LimitMode, layer.MaxRequests, layer.WindowDays
 		}
-		switch limit.ApprovalMode {
-		case ApprovalModeBlocked:
-			policy.Blocked = true
-		case ApprovalModeManual:
-			policy.AutoApprove = false
-		case ApprovalModeAuto:
-			policy.AutoApprove = true
+		if layer.ApprovalMode != "" && layer.ApprovalMode != ApprovalModeInherit {
+			approval = layer.ApprovalMode
 		}
+	}
+	switch limitMode {
+	case LimitModeBlocked:
+		policy.Blocked = true
+	case LimitModeUnlimited:
+		policy.Unlimited = true
+	case LimitModeCustom:
+		if maxRequests != nil {
+			policy.MaxRequests = *maxRequests
+		}
+		if windowDays != nil && *windowDays > 0 {
+			policy.WindowDays = *windowDays
+		}
+	}
+	switch approval {
+	case ApprovalModeBlocked:
+		policy.Blocked = true
+	case ApprovalModeManual:
+		policy.AutoApprove = false
+	case ApprovalModeAuto:
+		policy.AutoApprove = true
 	}
 
 	policy.WindowStart = s.now().AddDate(0, 0, -policy.WindowDays)
@@ -2698,9 +2758,8 @@ func activeRequestState(viewer Viewer, req *Request) RequestState {
 }
 
 // validateCreateAccess applies the policy rules a create decides up front. The
-// quota is not one of them: the store checks it under the requester's lock,
-// after it has replaced the requester's failed request for the same title, so
-// that re-request does not count against itself.
+// quota is not one of them: the store checks it under the requester's lock, so
+// concurrent creates cannot both take the last slot.
 func validateCreateAccess(policy EffectivePolicy) error {
 	switch {
 	case !policy.RequestsEnabled:
