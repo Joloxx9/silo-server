@@ -133,6 +133,9 @@ describe("RequestPosterCard (mine variant)", () => {
     [{ status: "completed" }, "Available"],
     [{ status: "pending", outcome: "cancelled" }, "Cancelled"],
     [{ status: "approved", outcome: "failed" }, "Failed"],
+    // The server's derived state wins: a downloaded title not yet scanned in
+    // is still processing.
+    [{ status: "completed", state: "processing" }, "Processing"],
   ])("labels %o as %s", (overrides, label) => {
     render(
       <MemoryRouter>
@@ -141,6 +144,25 @@ describe("RequestPosterCard (mine variant)", () => {
     );
 
     expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  it("shows why a request was declined", () => {
+    render(
+      <MemoryRouter>
+        <RequestPosterCard
+          variant="mine"
+          request={{
+            ...request,
+            status: "pending",
+            outcome: "declined",
+            outcome_reason: "Not this month",
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Declined")).toBeInTheDocument();
+    expect(screen.getByText("Not this month")).toBeInTheDocument();
   });
 
   it("shows Cancel request only when the page passes onCancel", () => {

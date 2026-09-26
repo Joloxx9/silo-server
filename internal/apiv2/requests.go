@@ -23,6 +23,7 @@ import (
 // acting viewer.
 type RequestMediaState struct {
 	Status      string `json:"status,omitempty" doc:"Status of the active request, when one exists" example:"pending"`
+	State       string `json:"state,omitempty" doc:"User-facing state of the active request, when one exists: pending, approved or processing" example:"pending"`
 	Requestable bool   `json:"requestable" doc:"Whether the viewer may request this media now" example:"true"`
 	Reason      string `json:"reason,omitempty" doc:"Why the media is not requestable" example:"already_requested"`
 	RequestID   ID     `json:"request_id,omitempty" doc:"The active request, when one exists" example:"1834729"`
@@ -179,7 +180,9 @@ type MediaRequest struct {
 	PosterPath           string          `json:"poster_path,omitempty" doc:"TMDB image path"`
 	BackdropPath         string          `json:"backdrop_path,omitempty" doc:"TMDB image path"`
 	Status               string          `json:"status" doc:"pending, approved, queued, downloading, completed" example:"pending"`
-	Outcome              string          `json:"outcome" doc:"active, declined, cancelled, failed" example:"active"` //nolint:misspell // the store's spelling
+	Outcome              string          `json:"outcome" doc:"active, declined, cancelled, failed" example:"active"`                                                                                   //nolint:misspell // the store's spelling
+	State                string          `json:"state" doc:"The one state to show a user: pending, approved, processing, available (in the library), declined, cancelled or failed" example:"pending"` //nolint:misspell // the store's spelling
+	OutcomeReason        string          `json:"outcome_reason,omitempty" doc:"Why the request was declined or withdrawn, when a reason was given"`
 	RequestedByUserID    ID              `json:"requested_by_user_id,omitempty" example:"1"`
 	RequestedByProfileID ID              `json:"requested_by_profile_id,omitempty" example:"p-owner"`
 	IntegrationKind      string          `json:"integration_kind,omitempty" example:"radarr"`
@@ -765,6 +768,8 @@ func mediaRequestOf(r *mediarequests.Request) MediaRequest {
 		BackdropPath:     r.BackdropPath,
 		Status:           string(r.Status),
 		Outcome:          string(r.Outcome),
+		State:            string(r.State()),
+		OutcomeReason:    r.OutcomeReason,
 		IntegrationKind:  r.IntegrationKind,
 		IsAnime:          r.IsAnime,
 		Targets:          make([]RequestTarget, 0, len(r.Targets)),
@@ -793,7 +798,7 @@ func mediaRequestOf(r *mediarequests.Request) MediaRequest {
 }
 
 func requestMediaStateOf(s mediarequests.RequestState) RequestMediaState {
-	return RequestMediaState{Status: string(s.Status), Requestable: s.Requestable, Reason: s.Reason, RequestID: ID(s.RequestID), Following: s.Following, RequestedByViewer: s.RequestedByViewer}
+	return RequestMediaState{Status: string(s.Status), Requestable: s.Requestable, Reason: s.Reason, RequestID: ID(s.RequestID), Following: s.Following, RequestedByViewer: s.RequestedByViewer, State: string(s.State)}
 }
 
 func requestMediaResultsOf(results []mediarequests.MediaResult) []RequestMediaResult {

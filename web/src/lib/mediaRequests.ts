@@ -5,6 +5,7 @@ import type {
   MediaRequestStatus,
   RequestMediaResult,
   RequestMediaType,
+  RequestUserState,
 } from "@/api/types";
 import { formatDate } from "@/lib/datetime";
 
@@ -89,23 +90,19 @@ export function requestOutcomeBadgeVariant(outcome?: MediaRequestOutcome): Badge
 
 /**
  * The request states the user-facing request pages show. Admin views keep the
- * raw status and outcome; these collapse them into one vocabulary: queued and
- * downloading read as Processing, completed as Available, and a closed outcome
- * wins over the status it closed at.
+ * raw status and outcome. The server derives this state (v2 `state`), and its
+ * value wins; the fallback for older servers collapses status and outcome the
+ * same way: queued and downloading read as Processing, completed as
+ * Available, and a closed outcome wins over the status it closed at.
  */
-export type RequestDisplayState =
-  | "pending"
-  | "approved"
-  | "processing"
-  | "available"
-  | "declined"
-  | "cancelled"
-  | "failed";
+export type RequestDisplayState = RequestUserState;
 
 export function requestDisplayState(
   status?: MediaRequestStatus,
   outcome?: MediaRequestOutcome,
+  state?: RequestUserState,
 ): RequestDisplayState | undefined {
+  if (state) return state;
   if (outcome === "declined" || outcome === "cancelled" || outcome === "failed") return outcome;
   switch (status) {
     case "pending":

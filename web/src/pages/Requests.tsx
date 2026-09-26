@@ -843,7 +843,7 @@ function groupMineRequests(requests: MediaRequest[]) {
 function countMineStates(requests: MediaRequest[]) {
   const counts = new Map<RequestDisplayState, number>();
   for (const request of requests) {
-    const state = requestDisplayState(request.status, request.outcome);
+    const state = requestDisplayState(request.status, request.outcome, request.state);
     if (state) counts.set(state, (counts.get(state) ?? 0) + 1);
   }
   return REQUEST_STATE_ORDER.flatMap((state) => {

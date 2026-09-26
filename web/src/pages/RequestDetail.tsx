@@ -216,7 +216,9 @@ function RequestActions({
   onRequest: () => void;
 }) {
   const requestable = item.request.requestable;
-  const state = item.request.status ? requestDisplayState(item.request.status) : undefined;
+  const state = item.request.status
+    ? requestDisplayState(item.request.status, undefined, item.request.state)
+    : undefined;
   const availableInLibrary = item.availability === "available" && !item.request.status;
   const ownRequest = useOwnCancellableRequest(item);
   const cancelRequest = useCancelMediaRequest();

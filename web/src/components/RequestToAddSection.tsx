@@ -183,7 +183,9 @@ function DialogRow({
   const poster = tmdbImageURL(item.poster_path);
   const Icon = item.media_type === "series" ? Tv : Film;
   const requestable = item.request.requestable;
-  const state = item.request.status ? requestDisplayState(item.request.status) : undefined;
+  const state = item.request.status
+    ? requestDisplayState(item.request.status, undefined, item.request.state)
+    : undefined;
   const reasonLabel = !state && !requestable ? unavailableReasonLabel(item) : null;
 
   // A plain click goes through the host so it can close the dialog; modified

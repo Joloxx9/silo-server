@@ -1850,6 +1850,9 @@ func (f *fakeStore) SetOutcome(_ context.Context, id string, from StateGuard, ou
 	}
 	req.Outcome = outcome
 	req.LastError = message
+	if outcome == OutcomeDeclined || outcome == OutcomeCancelled {
+		req.OutcomeReason = message
+	}
 	copy := *req
 	return &copy, nil
 }
@@ -3269,5 +3272,18 @@ func TestSubmitApprovedPopulatesRequesterIdentity(t *testing.T) {
 	}
 	if router.gotRequesterEmail != "u@example.com" || router.gotRequesterUsername != "bob" {
 		t.Fatalf("descriptor identity = %q/%q, want u@example.com/bob", router.gotRequesterEmail, router.gotRequesterUsername)
+	}
+}
+
+func TestDeclineKeepsReasonOnRequest(t *testing.T) {
+	store := newFakeStore()
+	store.requests["req-1"] = &Request{ID: "req-1", MediaType: MediaTypeMovie, TMDBID: 550, Status: StatusPending, Outcome: OutcomeActive}
+
+	got, err := newTestService(store).Decline(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "req-1", "Not this month")
+	if err != nil {
+		t.Fatalf("Decline: %v", err)
+	}
+	if got.OutcomeReason != "Not this month" || got.State() != StateDeclined {
+		t.Fatalf("request = %+v, want declined with the reason kept", got)
 	}
 }

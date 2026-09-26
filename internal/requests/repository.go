@@ -583,6 +583,11 @@ func (r *Repository) SetOutcome(ctx context.Context, id string, from StateGuard,
 		      WHEN $5 = 'active' THEN ''
 		      ELSE last_error
 		    END,
+		    outcome_reason = CASE
+		      WHEN $5 IN ('declined', 'cancelled') THEN $6
+		      WHEN $5 = 'active' THEN ''
+		      ELSE outcome_reason
+		    END,
 		    updated_at = now()
 		WHERE id = $1
 		  AND `+guardCondition+`
@@ -1027,7 +1032,7 @@ func requestColumns() string {
 	        overview, poster_path, backdrop_path, status, outcome,
 	        requested_by_user_id, requested_by_profile_id, is_anime,
 	        last_error, created_at, updated_at, approved_at, completed_at,
-	        submit_attempts, submit_lease_until, next_submit_at`
+	        submit_attempts, submit_lease_until, next_submit_at, outcome_reason`
 }
 
 type requestScanner interface {
@@ -1063,6 +1068,7 @@ func scanRequest(row requestScanner) (*Request, error) {
 		&req.SubmitAttempts,
 		&submitLeaseUntil,
 		&nextSubmitAt,
+		&req.OutcomeReason,
 	); err != nil {
 		return nil, err
 	}

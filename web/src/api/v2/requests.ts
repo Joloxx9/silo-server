@@ -13,6 +13,7 @@ import type {
   RequestMediaType,
   RequestSearchMediaType,
   RequestTarget,
+  RequestUserState,
 } from "@/api/types";
 import { v2, type V2Body } from "@/api/v2/request";
 import type { components, paths } from "@/api/v2/schema";
@@ -34,12 +35,13 @@ function requestTargetFromV2(t: Schemas["RequestTarget"]): RequestTarget {
 }
 
 export function mediaRequestFromV2(r: Schemas["MediaRequest"]): MediaRequest {
-  const { requested_by_user_id, targets, media_type, status, outcome, ...rest } = r;
+  const { requested_by_user_id, targets, media_type, status, outcome, state, ...rest } = r;
   return {
     ...rest,
     media_type: media_type as RequestMediaType,
     status: status as MediaRequestStatus,
     outcome: outcome as MediaRequestOutcome,
+    state: state as RequestUserState,
     ...(requested_by_user_id !== undefined
       ? { requested_by_user_id: Number(requested_by_user_id) }
       : {}),

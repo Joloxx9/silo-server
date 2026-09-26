@@ -27321,6 +27321,10 @@
             ],
             "type": "string"
           },
+          "outcome_reason": {
+            "description": "Why the request was declined or withdrawn, when a reason was given",
+            "type": "string"
+          },
           "overview": {
             "type": "string"
           },
@@ -27348,6 +27352,13 @@
               "1"
             ],
             "minLength": 1,
+            "type": "string"
+          },
+          "state": {
+            "description": "The one state to show a user: pending, approved, processing, available (in the library), declined, cancelled or failed",
+            "examples": [
+              "pending"
+            ],
             "type": "string"
           },
           "status": {
@@ -27409,6 +27420,7 @@
           "title",
           "status",
           "outcome",
+          "state",
           "is_anime",
           "targets",
           "created_at",
@@ -35401,6 +35413,13 @@
               false
             ],
             "type": "boolean"
+          },
+          "state": {
+            "description": "User-facing state of the active request, when one exists: pending, approved or processing",
+            "examples": [
+              "pending"
+            ],
+            "type": "string"
           },
           "status": {
             "description": "Status of the active request, when one exists",

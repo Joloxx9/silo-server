@@ -148,10 +148,9 @@ type Request struct {
 	RequestedByProfileID string    `json:"requested_by_profile_id,omitempty"`
 	RequesterEmail       string    `json:"-"`
 	RequesterUsername    string    `json:"-"`
-	// DeclineReason is the admin's decline message, populated transiently for
-	// the lifecycle notifier (the durable copy lives in the request event
-	// record, not on this row).
-	DeclineReason    string     `json:"-"`
+	// OutcomeReason is why the request was declined or withdrawn, when a
+	// reason was given. v2 only; the frozen v1 shape does not carry it.
+	OutcomeReason    string     `json:"-"`
 	IntegrationKind  string     `json:"integration_kind,omitempty"`
 	IsAnime          bool       `json:"is_anime"`
 	Targets          []Target   `json:"targets,omitempty"`
@@ -200,6 +199,48 @@ var guardWithdrawable = StateGuard{
 	UnsentOnly: true,
 }
 
+// State is the one lifecycle state a user sees for a request, derived from
+// its status, outcome and library presence. Status and outcome stay on the
+// wire for admin detail and older clients.
+type State string
+
+const (
+	StatePending    State = "pending"
+	StateApproved   State = "approved"
+	StateProcessing State = "processing"
+	StateAvailable  State = "available"
+	StateDeclined   State = "declined"
+	StateCancelled  State = "cancelled" //nolint:misspell // matches the outcome spelling
+	StateFailed     State = "failed"
+)
+
+// State derives the request's user-facing state. A completed request is
+// available once its title is in the library (LibraryContentID attached);
+// until the scan finds it, it is still processing.
+func (r *Request) State() State {
+	switch r.Outcome {
+	case OutcomeDeclined:
+		return StateDeclined
+	case OutcomeCancelled:
+		return StateCancelled
+	case OutcomeFailed:
+		return StateFailed
+	}
+	switch r.Status {
+	case StatusPending:
+		return StatePending
+	case StatusApproved:
+		return StateApproved
+	case StatusCompleted:
+		if r.LibraryContentID != "" {
+			return StateAvailable
+		}
+		return StateProcessing
+	default:
+		return StateProcessing
+	}
+}
+
 type RequestEvent struct {
 	ID             int64     `json:"id"`
 	RequestID      string    `json:"request_id"`
@@ -221,6 +262,8 @@ type RequestState struct {
 	// nothing to follow. v2 only; the frozen v1 shape carries neither.
 	Following         bool `json:"-"`
 	RequestedByViewer bool `json:"-"`
+	// State is the active request's user-facing state (v2 only).
+	State State `json:"-"`
 }
 
 type MediaResult struct {

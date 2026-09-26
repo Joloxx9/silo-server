@@ -277,7 +277,7 @@ func (s *System) dispatchRequestLifecycle(ctx context.Context, req requests.Requ
 		MediaType:  string(req.MediaType),
 		Title:      req.Title,
 		PosterPath: req.PosterPath,
-		Reason:     req.DeclineReason,
+		Reason:     req.OutcomeReason,
 	}
 	if req.Year != nil {
 		flags.Year = *req.Year

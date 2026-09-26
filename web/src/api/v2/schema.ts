@@ -20447,6 +20447,8 @@ export interface components {
        * @example active
        */
       outcome: string;
+      /** @description Why the request was declined or withdrawn, when a reason was given */
+      outcome_reason?: string;
       overview?: string;
       /** @description TMDB image path */
       poster_path?: string;
@@ -20462,6 +20464,11 @@ export interface components {
        * @example 1
        */
       requested_by_user_id?: string;
+      /**
+       * @description The one state to show a user: pending, approved, processing, available (in the library), declined, cancelled or failed
+       * @example pending
+       */
+      state: string;
       /**
        * @description pending, approved, queued, downloading, completed
        * @example pending
@@ -23774,6 +23781,11 @@ export interface components {
        * @example false
        */
       requested_by_viewer: boolean;
+      /**
+       * @description User-facing state of the active request, when one exists: pending, approved or processing
+       * @example pending
+       */
+      state?: string;
       /**
        * @description Status of the active request, when one exists
        * @example pending

@@ -499,3 +499,53 @@ func TestReconcileStampsEveryCandidate(t *testing.T) {
 		t.Fatalf("stamped = %v, want both candidates stamped even though they errored", store.reconciled)
 	}
 }
+
+func TestRequestState(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		req  Request
+		want State
+	}{
+		{"pending", Request{Status: StatusPending, Outcome: OutcomeActive}, StatePending},
+		{"approved", Request{Status: StatusApproved, Outcome: OutcomeActive}, StateApproved},
+		{"queued", Request{Status: StatusQueued, Outcome: OutcomeActive}, StateProcessing},
+		{"downloading", Request{Status: StatusDownloading, Outcome: OutcomeActive}, StateProcessing},
+		{"downloaded, not scanned in yet", Request{Status: StatusCompleted, Outcome: OutcomeActive}, StateProcessing},
+		{"in the library", Request{Status: StatusCompleted, Outcome: OutcomeActive, LibraryContentID: "movie-tmdb-1"}, StateAvailable},
+		{"declined", Request{Status: StatusPending, Outcome: OutcomeDeclined}, StateDeclined},
+		{"withdrawn", Request{Status: StatusPending, Outcome: OutcomeCancelled}, StateCancelled},
+		// A failed request keeps whatever status it failed at.
+		{"failed after queueing", Request{Status: StatusQueued, Outcome: OutcomeFailed}, StateFailed},
+	} {
+		if got := tc.req.State(); got != tc.want {
+			t.Errorf("%s: State() = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestOutcomeReasonDatabase(t *testing.T) {
+	repo, _ := lifecycleTestRepository(t)
+	ctx := t.Context()
+	insertLifecycleRequest(t, repo, "declined", 1, 901, StatusPending)
+	insertLifecycleRequest(t, repo, "retried", 1, 902, StatusApproved)
+
+	got, err := repo.SetOutcome(ctx, "declined", guardWithdrawable, OutcomeDeclined, Viewer{}, "  Not this month  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OutcomeReason != "Not this month" || got.LastError != "" {
+		t.Fatalf("declined = %+v, want the trimmed reason in outcome_reason and no last_error", got)
+	}
+	reread, err := repo.GetRequest(ctx, "declined")
+	if err != nil || reread.OutcomeReason != "Not this month" {
+		t.Fatalf("reread = %+v, %v; want the reason stored", reread, err)
+	}
+
+	failed, err := repo.SetOutcome(ctx, "retried", StateGuard{Statuses: []Status{StatusApproved}}, OutcomeFailed, Viewer{}, "radarr down")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.OutcomeReason != "" || failed.LastError != "radarr down" {
+		t.Fatalf("failed = %+v, want the error in last_error, not outcome_reason", failed)
+	}
+}

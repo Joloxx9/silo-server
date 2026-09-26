@@ -964,7 +964,6 @@ func (s *Service) Decline(ctx context.Context, viewer Viewer, id, reason string)
 	if err != nil {
 		return nil, err
 	}
-	declined.DeclineReason = strings.TrimSpace(reason)
 	s.notifyLifecycle(ctx, *declined, LifecycleNotifier.RequestDeclined)
 	s.forgetFollowsAfterWithdrawal(ctx, declined)
 	return declined, nil
@@ -2339,6 +2338,7 @@ func activeRequestState(viewer Viewer, req *Request) RequestState {
 	if viewer.IsAdmin || req.RequestedByUserID == viewer.UserID {
 		state.RequestID = req.ID
 	}
+	state.State = req.State()
 	state.RequestedByViewer = req.RequestedByUserID == viewer.UserID && req.RequestedByProfileID == viewer.ProfileID
 	return state
 }

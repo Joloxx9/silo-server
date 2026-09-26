@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MediaRequest } from "@/api/types";
-import { canCancelOwnRequest, requestDetailHref } from "./mediaRequests";
+import { canCancelOwnRequest, requestDetailHref, requestDisplayState } from "./mediaRequests";
 
 type CancelFields = Pick<MediaRequest, "status" | "outcome" | "targets">;
 
@@ -31,6 +31,17 @@ describe("canCancelOwnRequest", () => {
     ["declined", { ...pending, outcome: "declined" }],
   ])("refuses a request that is %s, as the server does", (_label, request) => {
     expect(canCancelOwnRequest(request)).toBe(false);
+  });
+});
+
+describe("requestDisplayState", () => {
+  it("prefers the state the server derived", () => {
+    expect(requestDisplayState("completed", "active", "processing")).toBe("processing");
+  });
+
+  it("derives a state for a server that sends none", () => {
+    expect(requestDisplayState("downloading", "active")).toBe("processing");
+    expect(requestDisplayState("queued", "failed")).toBe("failed");
   });
 });
 

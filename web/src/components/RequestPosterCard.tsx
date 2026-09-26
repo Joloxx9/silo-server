@@ -73,7 +73,7 @@ function DiscoverCard({
   const requestable = item.request.requestable;
   const availableInLibrary = item.availability === "available" && !item.request.status;
   const state: RequestDisplayState | undefined = item.request.status
-    ? requestDisplayState(item.request.status)
+    ? requestDisplayState(item.request.status, undefined, item.request.state)
     : availableInLibrary
       ? "available"
       : undefined;
@@ -163,7 +163,7 @@ function MineCard({
   isCancelling?: boolean;
 }) {
   const poster = tmdbImageURL(request.poster_path);
-  const state = requestDisplayState(request.status, request.outcome);
+  const state = requestDisplayState(request.status, request.outcome, request.state);
   const isClosed =
     request.outcome === "failed" ||
     request.outcome === "declined" ||
@@ -203,6 +203,13 @@ function MineCard({
             title={request.last_error}
           >
             {request.last_error}
+          </p>
+        ) : request.outcome_reason ? (
+          <p
+            className="text-muted-foreground mt-1 line-clamp-2 text-[11px] leading-tight"
+            title={request.outcome_reason}
+          >
+            {request.outcome_reason}
           </p>
         ) : null}
       </Link>
