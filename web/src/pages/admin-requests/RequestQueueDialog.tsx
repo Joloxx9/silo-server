@@ -5,14 +5,14 @@ import { AlertTriangle, ExternalLink, Library, X } from "lucide-react";
 import type { MediaRequest } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -44,7 +44,7 @@ import { RequestPoster, RequestStateSummary, TargetStatusBadge } from "./queuePa
 import { formatRequestEventType, requestQueueView, targetServerName } from "./requestQueueModel";
 
 /** Everything about one request: its servers, where it would go, and its history. */
-export function RequestQueueSheet({
+export function RequestQueueDialog({
   request,
   requesterName,
   handlers,
@@ -56,18 +56,21 @@ export function RequestQueueSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   return (
-    <Sheet open={request !== null} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-xl" showCloseButton={false}>
+    <Dialog open={request !== null} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="flex max-h-[min(46rem,calc(100dvh-4rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        showCloseButton={false}
+      >
         {/* Its own close button, with a backing that stays visible over the backdrop. */}
-        <SheetClose className="bg-background/75 hover:bg-background focus-visible:ring-ring absolute top-3 right-3 z-10 rounded-md p-1.5 backdrop-blur transition-colors focus-visible:ring-2 focus-visible:outline-none">
+        <DialogClose className="bg-background/75 hover:bg-background focus-visible:ring-ring absolute top-3 right-3 z-10 rounded-md p-1.5 backdrop-blur transition-colors focus-visible:ring-2 focus-visible:outline-none">
           <X className="size-4" aria-hidden="true" />
           <span className="sr-only">Close</span>
-        </SheetClose>
+        </DialogClose>
         {request ? (
           <RequestDetail request={request} requesterName={requesterName} handlers={handlers} />
         ) : null}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -88,112 +91,120 @@ function RequestDetail({
   const requestedAgo = formatRelativeTime(request.created_at, { absoluteAfterDays: 30 });
   return (
     <>
-      <div className="relative">
-        {backdrop ? (
-          <div className="relative h-36 overflow-hidden sm:h-44">
-            <img src={backdrop} alt="" className="h-full w-full object-cover" />
-            <div className="from-background absolute inset-0 bg-gradient-to-t to-transparent" />
-          </div>
-        ) : (
-          <div className="h-10" />
-        )}
-        <SheetHeader className={backdrop ? "-mt-16 flex-row items-end gap-4" : "flex-row gap-4"}>
-          <RequestPoster request={request} size="w185" className="relative w-20 shadow-md" />
-          <div className="min-w-0 space-y-1 pr-6">
-            <SheetTitle className="text-lg leading-tight text-balance">
-              <Link
-                to={requestDetailHref(request.media_type, request.tmdb_id)}
-                className="hover:underline"
-              >
-                {request.title}
-              </Link>
-            </SheetTitle>
-            <SheetDescription>
-              {[request.year, formatMediaType(request.media_type)].filter(Boolean).join(" · ")}
-            </SheetDescription>
-          </div>
-        </SheetHeader>
-      </div>
-
-      <div className="space-y-6 px-4 pb-4">
-        <Section title="Request">
-          <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
-            <Term label="Requested by">
-              {request.requested_by_user_id ? (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="relative">
+          {backdrop ? (
+            <div className="relative h-36 overflow-hidden sm:h-44">
+              <img src={backdrop} alt="" className="h-full w-full object-cover" />
+              <div className="from-background absolute inset-0 bg-gradient-to-t to-transparent" />
+            </div>
+          ) : (
+            <div className="h-10" />
+          )}
+          <DialogHeader
+            className={
+              backdrop
+                ? "-mt-16 flex-row items-end gap-4 px-6 text-left"
+                : "flex-row gap-4 px-6 pt-6 text-left"
+            }
+          >
+            <RequestPoster request={request} size="w185" className="relative w-20 shadow-md" />
+            <div className="min-w-0 space-y-1 pr-6">
+              <DialogTitle className="text-lg leading-tight text-balance">
                 <Link
-                  to={`/admin/users/${request.requested_by_user_id}`}
+                  to={requestDetailHref(request.media_type, request.tmdb_id)}
                   className="hover:underline"
                 >
-                  {requester}
+                  {request.title}
                 </Link>
-              ) : (
-                requester
-              )}
-            </Term>
-            <Term label="Requested">
-              {formatDateTime(request.created_at)}
-              {requestedAgo ? (
-                <span className="text-muted-foreground"> · {requestedAgo}</span>
-              ) : null}
-            </Term>
-            {request.approved_at ? (
-              <Term label="Approved">{formatDateTime(request.approved_at)}</Term>
-            ) : null}
-            {request.completed_at ? (
-              <Term label="Completed">{formatDateTime(request.completed_at)}</Term>
-            ) : null}
-            {request.media_type === "series" ? (
-              <Term label="Seasons">
-                {request.seasons?.length ? formatSeasonList(request.seasons) : "Whole series"}
-                {request.season_progress?.length ? (
-                  <ul className="text-muted-foreground mt-1 space-y-0.5 text-xs">
-                    {request.season_progress.map((season) => (
-                      <li key={season.season_number}>
-                        Season {season.season_number}: {season.episodes_available}
-                        {season.episodes_aired > 0 ? ` of ${season.episodes_aired}` : ""}{" "}
-                        {season.episodes_available === 1 ? "episode" : "episodes"} in the library
-                      </li>
-                    ))}
-                  </ul>
+              </DialogTitle>
+              <DialogDescription>
+                {[request.year, formatMediaType(request.media_type)].filter(Boolean).join(" · ")}
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+        </div>
+
+        <div className="space-y-6 px-6 pt-5 pb-6">
+          <Section title="Request">
+            <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+              <Term label="Requested by">
+                {request.requested_by_user_id ? (
+                  <Link
+                    to={`/admin/users/${request.requested_by_user_id}`}
+                    className="hover:underline"
+                  >
+                    {requester}
+                  </Link>
+                ) : (
+                  requester
+                )}
+              </Term>
+              <Term label="Requested">
+                {formatDateTime(request.created_at)}
+                {requestedAgo ? (
+                  <span className="text-muted-foreground"> · {requestedAgo}</span>
                 ) : null}
               </Term>
-            ) : null}
-            <Term label="State">
-              <RequestStateSummary request={request} />
-            </Term>
-            <Term label="TMDB ID">{request.tmdb_id}</Term>
-            {request.library_content_id ? (
-              <Term label="Library">
-                <Link
-                  to={`/item/${encodeURIComponent(request.library_content_id)}`}
-                  className="inline-flex items-center gap-1 hover:underline"
-                >
-                  <Library className="h-3.5 w-3.5" aria-hidden="true" />
-                  Open in the library
-                </Link>
+              {request.approved_at ? (
+                <Term label="Approved">{formatDateTime(request.approved_at)}</Term>
+              ) : null}
+              {request.completed_at ? (
+                <Term label="Completed">{formatDateTime(request.completed_at)}</Term>
+              ) : null}
+              {request.media_type === "series" ? (
+                <Term label="Seasons">
+                  {request.seasons?.length ? formatSeasonList(request.seasons) : "Whole series"}
+                  {request.season_progress?.length ? (
+                    <ul className="text-muted-foreground mt-1 space-y-0.5 text-xs">
+                      {request.season_progress.map((season) => (
+                        <li key={season.season_number}>
+                          Season {season.season_number}: {season.episodes_available}
+                          {season.episodes_aired > 0 ? ` of ${season.episodes_aired}` : ""}{" "}
+                          {season.episodes_available === 1 ? "episode" : "episodes"} in the library
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </Term>
+              ) : null}
+              <Term label="State">
+                <RequestStateSummary request={request} />
               </Term>
-            ) : null}
-          </dl>
-        </Section>
-
-        {request.targets?.length ? (
-          <Section title="Servers">
-            <TargetsTable request={request} />
+              <Term label="TMDB ID">{request.tmdb_id}</Term>
+              {request.library_content_id ? (
+                <Term label="Library">
+                  <Link
+                    to={`/item/${encodeURIComponent(request.library_content_id)}`}
+                    className="inline-flex items-center gap-1 hover:underline"
+                  >
+                    <Library className="h-3.5 w-3.5" aria-hidden="true" />
+                    Open in the library
+                  </Link>
+                </Term>
+              ) : null}
+            </dl>
           </Section>
-        ) : null}
 
-        {view === "needs_approval" || view === "failed" ? (
-          <Section title="Where it would go">
-            <RoutePreviewSection request={request} />
+          {request.targets?.length ? (
+            <Section title="Servers">
+              <TargetsTable request={request} />
+            </Section>
+          ) : null}
+
+          {view === "needs_approval" || view === "failed" ? (
+            <Section title="Where it would go">
+              <RoutePreviewSection request={request} />
+            </Section>
+          ) : null}
+
+          <Section title="History">
+            <RequestHistory requestId={request.id} />
           </Section>
-        ) : null}
-
-        <Section title="History">
-          <RequestHistory requestId={request.id} />
-        </Section>
+        </div>
       </div>
 
-      <SheetFooter className="bg-background border-border sticky bottom-0 mt-auto flex-row flex-wrap items-center justify-between gap-2 border-t">
+      <DialogFooter className="border-border shrink-0 flex-row flex-wrap items-center justify-between gap-2 border-t px-6 py-3 sm:justify-between">
         <RequestActionButtons request={request} handlers={handlers} />
         <Button asChild variant="ghost" size="sm">
           <Link to={requestDetailHref(request.media_type, request.tmdb_id)}>
@@ -201,7 +212,7 @@ function RequestDetail({
             Title page
           </Link>
         </Button>
-      </SheetFooter>
+      </DialogFooter>
     </>
   );
 }

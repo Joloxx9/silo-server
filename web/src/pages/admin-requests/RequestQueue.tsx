@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { Link, useSearchParams } from "react-router";
-import { AlertTriangle, PanelRightOpen, RefreshCw, Search, X } from "lucide-react";
+import { AlertTriangle, Maximize2, RefreshCw, Search, X } from "lucide-react";
 import type { MediaRequest } from "@/api/types";
 import type { AdminRequestCounts } from "@/api/v2/adminRequests";
 import { BulkSelectionCheckbox } from "@/components/BulkSelectionCheckbox";
@@ -28,7 +28,7 @@ import { formatDateTime } from "@/lib/datetime";
 import { formatMediaType, formatSeasonList, requestDetailHref } from "@/lib/mediaRequests";
 import { cn } from "@/lib/utils";
 import { RequestActionButtons, type RequestQueueActionHandlers } from "./RequestActionButtons";
-import { RequestQueueSheet } from "./RequestQueueSheet";
+import { RequestQueueDialog } from "./RequestQueueDialog";
 import {
   EmptyPanel,
   ReasonDialog,
@@ -95,7 +95,7 @@ export function RequestQueue() {
     [users.data],
   );
 
-  const [sheetRequest, setSheetRequest] = useState<MediaRequest | null>(null);
+  const [openRequest, setOpenRequest] = useState<MediaRequest | null>(null);
   const [prompt, setPrompt] = useState<ReasonPrompt | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
   const approve = useApproveMediaRequest();
@@ -115,8 +115,8 @@ export function RequestQueue() {
     setBusy((current) => new Set(current).add(request.id));
     send()
       .then((updated) => {
-        // The sheet follows the request, which may have left this view.
-        setSheetRequest((open) => (open?.id === updated.id ? updated : open));
+        // The dialog follows the request, which may have left this view.
+        setOpenRequest((open) => (open?.id === updated.id ? updated : open));
       })
       // The mutation already said what went wrong.
       .catch(() => undefined)
@@ -258,7 +258,7 @@ export function RequestQueue() {
                 username={username}
                 handlers={handlers}
                 bulk={bulk}
-                onOpen={setSheetRequest}
+                onOpen={setOpenRequest}
                 onFilterUser={filterByUser}
                 onBulkDecline={(requests, onDone) =>
                   setPrompt({ action: "bulk-decline", requests, onDone })
@@ -271,12 +271,12 @@ export function RequestQueue() {
         )}
       </Tabs>
 
-      <RequestQueueSheet
-        request={sheetRequest}
-        requesterName={username(sheetRequest?.requested_by_user_id)}
+      <RequestQueueDialog
+        request={openRequest}
+        requesterName={username(openRequest?.requested_by_user_id)}
         handlers={handlers}
         onOpenChange={(open) => {
-          if (!open) setSheetRequest(null);
+          if (!open) setOpenRequest(null);
         }}
       />
       <ReasonDialog
@@ -600,7 +600,7 @@ function BulkProgress({
   );
 }
 
-/** Clicks on the row's own controls do their own thing; anywhere else opens the sheet. */
+/** Clicks on the row's own controls do their own thing; anywhere else opens the dialog. */
 function fromControl(event: MouseEvent) {
   return (event.target as HTMLElement).closest("a, button, input, label") !== null;
 }
@@ -694,7 +694,7 @@ function QueueRow({
           aria-label={`Details: ${request.title}`}
           onClick={onOpen}
         >
-          <PanelRightOpen aria-hidden="true" />
+          <Maximize2 aria-hidden="true" />
         </Button>
       </div>
     </li>

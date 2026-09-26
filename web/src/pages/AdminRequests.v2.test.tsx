@@ -431,11 +431,11 @@ describe("request administration", () => {
     });
     mount("/admin/requests?view=needs_approval");
     const row = await rowOf("Waiting Title");
-    // A click anywhere on the row but its controls opens the sheet.
+    // A click anywhere on the row but its controls opens the dialog.
     fireEvent.click(within(row).getByText("Radarr did not answer"));
-    const sheet = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog");
 
-    const history = await within(sheet).findByRole("list", { name: "Request history" });
+    const history = await within(dialog).findByRole("list", { name: "Request history" });
     const entries = within(history).getAllByRole("listitem");
     expect(entries).toHaveLength(4);
     // Newest first; a type this client doesn't know shows as it is.
@@ -444,30 +444,30 @@ describe("request administration", () => {
     expect(entries[2]).toHaveTextContent(/^Approved by admin/);
     expect(entries[3]).toHaveTextContent(/^Requested by User 9/);
 
-    const servers = within(sheet).getByRole("table");
+    const servers = within(dialog).getByRole("table");
     expect(servers).toHaveTextContent("2160p");
     expect(servers).toHaveTextContent("Radarr 4K");
     expect(servers).toHaveTextContent("4K rule");
     expect(servers).toHaveTextContent("rejected");
     expect(servers).toHaveTextContent("quality profile missing");
 
-    expect(await within(sheet).findByText("Radarr (Everything else)")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Radarr (Everything else)")).toBeInTheDocument();
     expect(
-      within(sheet).getByText("no copy (Everything else doesn't make 4K copies)"),
+      within(dialog).getByText("no copy (Everything else doesn't make 4K copies)"),
     ).toBeInTheDocument();
-    // How it was decided starts collapsed in the sheet.
-    const how = within(sheet).getByRole("button", { name: "How it was decided" });
+    // How it was decided starts collapsed in the dialog.
+    const how = within(dialog).getByRole("button", { name: "How it was decided" });
     expect(how).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(how);
     expect(
-      within(sheet).getByText("Everything else — decides HD · decides 4K: no copy"),
+      within(dialog).getByText("Everything else — decides HD · decides 4K: no copy"),
     ).toBeTruthy();
     expect(calls("POST /api/v2/admin/request-routes/preview")[0]?.body).toEqual({
       media_type: "movie",
       tmdb_id: 1,
       requester_user_id: "1",
     });
-    expect(within(sheet).getByRole("button", { name: "Approve: Waiting Title" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Approve: Waiting Title" })).toBeEnabled();
   });
 
   it("loads the next page from the cursor the last one returned", async () => {
