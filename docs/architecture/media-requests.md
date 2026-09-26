@@ -18,6 +18,17 @@ quality. Each target change recomputes the request's status and outcome in the
 same transaction (`aggregateStatus`), so after submission the targets own the
 request's state.
 
+## Routing facts
+
+Creating a request reads the title's TMDB detail once, after the cheap refusals
+(already in the library, already requested). The server's copy of the title and
+year replaces the client's, and a snapshot of what routing can match on is
+stored with the request as `routing_facts`: TMDB genre, keyword, network and
+company IDs, original language, origin countries, year, and whether TMDB tags it
+anime. IDs rather than names, because names follow the configured TMDB
+language. When TMDB cannot answer, the request is still created from the
+client's copy, and the facts stay uncaptured until routing fetches them.
+
 ## Transitions are guarded
 
 Every status or outcome write made by an admin, a user, or the reconcile pass

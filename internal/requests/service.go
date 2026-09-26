@@ -745,7 +745,6 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 		return nil, err
 	}
 	s.enrichExternalIDs(ctx, &normalized)
-	isAnime := s.detectRequestAnime(ctx, normalized.MediaType, normalized.TMDBID)
 
 	matches, err := s.lookupPresence(ctx, normalized.MediaType, []PresenceCandidate{createPresenceCandidate(normalized)})
 	if err != nil {
@@ -762,6 +761,21 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 	if active[normalized.TMDBID] != nil {
 		return nil, ErrAlreadyRequested
 	}
+
+	// One TMDB detail read, after the cheap refusals, serves routing and the
+	// stored title: the server's copy of the title and year wins over the
+	// client's.
+	detail := s.requestDetail(ctx, normalized.MediaType, normalized.TMDBID)
+	if detail != nil {
+		if title := strings.TrimSpace(detail.Title); title != "" {
+			normalized.Title = title
+		}
+		if detail.Year > 0 {
+			year := detail.Year
+			normalized.Year = &year
+		}
+	}
+	facts := routingFactsFrom(detail, s.now())
 
 	policy, err := s.EffectivePolicy(ctx, viewer.UserID)
 	if err != nil {
@@ -786,7 +800,8 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 		Input:     normalized,
 		Status:    status,
 		Outcome:   OutcomeActive,
-		IsAnime:   isAnime,
+		IsAnime:   facts.Anime,
+		Facts:     facts,
 		Requester: viewer,
 		Now:       s.now(),
 		// Re-requesting a title that failed for this user (e.g. a transient
@@ -1696,14 +1711,6 @@ func (s *Service) enrichExternalIDs(ctx context.Context, input *CreateRequestInp
 		tvdbID := externalIDs.TVDBID
 		input.TVDBID = &tvdbID
 	}
-}
-
-func (s *Service) detectRequestAnime(ctx context.Context, mediaType MediaType, tmdbID int) bool {
-	detail, err := s.tmdb.GetMediaDetail(ctx, tmdbMediaType(mediaType), tmdbID)
-	if err != nil || detail == nil {
-		return false
-	}
-	return detectAnime(detail.KeywordIDs)
 }
 
 // integrationSupportsMediaType reports whether a router connection serves the

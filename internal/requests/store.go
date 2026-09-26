@@ -89,6 +89,7 @@ type CreateRequestRecord struct {
 	Status    Status
 	Outcome   Outcome
 	IsAnime   bool
+	Facts     RoutingFacts
 	Requester Viewer
 	Now       time.Time
 	// Quota, when non-nil, instructs the store to atomically verify the

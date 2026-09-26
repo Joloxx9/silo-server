@@ -193,6 +193,13 @@ type MediaDetail struct {
 	ProductionCompanies []string
 	OriginalLanguage    string
 	KeywordIDs          []int
+	// GenreIDs, CompanyIDs (movies) and NetworkIDs (series) are TMDB's stable
+	// identifiers for Genres, ProductionCompanies and Networks, whose names
+	// follow the configured language. OriginCountries holds ISO 3166-1 codes.
+	GenreIDs        []int
+	CompanyIDs      []int
+	NetworkIDs      []int
+	OriginCountries []string
 
 	NumberOfSeasons  int
 	NumberOfEpisodes int
@@ -312,6 +319,7 @@ type movieDetailResponse struct {
 		Results  []idEntry `json:"results"`  // tv
 	} `json:"keywords"`
 	Genres              []genreEntry                  `json:"genres"`
+	OriginCountry       []string                      `json:"origin_country"`
 	VoteAverage         float64                       `json:"vote_average"`
 	VoteCount           int                           `json:"vote_count"`
 	Status              string                        `json:"status"`
@@ -342,6 +350,7 @@ type tvDetailResponse struct {
 		Results  []idEntry `json:"results"`  // tv
 	} `json:"keywords"`
 	Genres          []genreEntry               `json:"genres"`
+	OriginCountry   []string                   `json:"origin_country"`
 	VoteAverage     float64                    `json:"vote_average"`
 	VoteCount       int                        `json:"vote_count"`
 	Status          string                     `json:"status"`

@@ -880,10 +880,15 @@ func normalizeMovieDetail(resp *movieDetailResponse) *MediaDetail {
 		ContentRating:    pickMovieCertification(resp.ReleaseDates),
 		OriginalLanguage: resp.OriginalLanguage,
 		KeywordIDs:       keywordIDs(resp.Keywords.Keywords, resp.Keywords.Results),
+		GenreIDs:         idsFromGenres(resp.Genres),
+		OriginCountries:  resp.OriginCountry,
 	}
 	for _, company := range resp.ProductionCompanies {
 		if name := strings.TrimSpace(company.Name); name != "" {
 			detail.ProductionCompanies = append(detail.ProductionCompanies, name)
+		}
+		if company.ID > 0 {
+			detail.CompanyIDs = append(detail.CompanyIDs, company.ID)
 		}
 	}
 	if resp.ExternalIDs != nil {
@@ -940,6 +945,8 @@ func normalizeTVDetail(resp *tvDetailResponse) *MediaDetail {
 		ContentRating:    pickTVRating(resp.ContentRatings),
 		OriginalLanguage: resp.OriginalLanguage,
 		KeywordIDs:       keywordIDs(resp.Keywords.Keywords, resp.Keywords.Results),
+		GenreIDs:         idsFromGenres(resp.Genres),
+		OriginCountries:  resp.OriginCountry,
 	}
 	if len(resp.EpisodeRunTime) > 0 {
 		detail.Runtime = resp.EpisodeRunTime[0]
@@ -947,6 +954,9 @@ func normalizeTVDetail(resp *tvDetailResponse) *MediaDetail {
 	for _, network := range resp.Networks {
 		if name := strings.TrimSpace(network.Name); name != "" {
 			detail.Networks = append(detail.Networks, name)
+		}
+		if network.ID > 0 {
+			detail.NetworkIDs = append(detail.NetworkIDs, network.ID)
 		}
 	}
 	if resp.ExternalIDs != nil {
@@ -979,6 +989,16 @@ func normalizeTVDetail(resp *tvDetailResponse) *MediaDetail {
 		}
 	}
 	return detail
+}
+
+func idsFromGenres(genres []genreEntry) []int {
+	var out []int
+	for _, g := range genres {
+		if g.ID > 0 {
+			out = append(out, g.ID)
+		}
+	}
+	return out
 }
 
 func namesFromGenres(genres []genreEntry) []string {

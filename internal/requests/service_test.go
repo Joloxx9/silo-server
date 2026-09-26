@@ -1716,6 +1716,7 @@ func (f *fakeStore) CreateRequest(_ context.Context, input CreateRequestRecord) 
 		Status:               input.Status,
 		Outcome:              input.Outcome,
 		IsAnime:              input.IsAnime,
+		RoutingFacts:         input.Facts,
 		RequestedByUserID:    input.Requester.UserID,
 		RequestedByProfileID: input.Requester.ProfileID,
 		CreatedAt:            input.Now,
