@@ -193,6 +193,9 @@ func (s *Service) UpdateIntegrationConditional(ctx context.Context, v Viewer, in
 	if err = validateInstance(&in); err != nil {
 		return nil, err
 	}
+	if err = s.ensureRoutesKeepServerKind(ctx, in); err != nil {
+		return nil, err
+	}
 	if err = s.validateViaPlugin(ctx, in); err != nil {
 		return nil, err
 	}

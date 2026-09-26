@@ -2467,6 +2467,7 @@ type fakeTMDBClient struct {
 	externalIDsByID   map[int]*tmdb.ExternalIDs
 	externalIDCalls   []int
 	detail            *tmdb.MediaDetail
+	detailErr         error
 	discoverPage      *tmdb.MediaPage
 	discoverErr       error
 	searchMediaType   string
@@ -2506,7 +2507,7 @@ func (f *fakeTMDBClient) GetExternalIDs(_ context.Context, _ string, id int) (*t
 }
 
 func (f *fakeTMDBClient) GetMediaDetail(context.Context, string, int) (*tmdb.MediaDetail, error) {
-	return f.detail, nil
+	return f.detail, f.detailErr
 }
 
 // certTMDBClient layers GetCertification onto fakeTMDBClient so a service

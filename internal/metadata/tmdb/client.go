@@ -3,6 +3,7 @@ package tmdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -51,6 +52,10 @@ type Client struct {
 // NewClient creates a TMDB API client with the given API key and rate limit
 // (requests per second). If apiKey is empty, Silo's public project API key is
 // used.
+
+// ErrNotFound is wrapped by errors for titles TMDB does not have (HTTP 404).
+var ErrNotFound = errors.New("tmdb: not found")
+
 func NewClient(apiKey string, rateLimit int) *Client {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
@@ -149,11 +154,17 @@ func (c *Client) doGet(ctx context.Context, path string, dest any) error {
 		if resp.StatusCode >= 400 {
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 			resp.Body.Close()
+			// A 404 wraps ErrNotFound so callers can tell a missing title
+			// from TMDB being unreachable.
+			var notFound error
+			if resp.StatusCode == http.StatusNotFound {
+				notFound = ErrNotFound
+			}
 			var apiErr apiError
 			if err := json.Unmarshal(body, &apiErr); err == nil && apiErr.StatusMessage != "" {
-				return fmt.Errorf("tmdb: HTTP %d: %s", resp.StatusCode, apiErr.StatusMessage)
+				return errors.Join(notFound, fmt.Errorf("tmdb: HTTP %d: %s", resp.StatusCode, apiErr.StatusMessage))
 			}
-			return fmt.Errorf("tmdb: HTTP %d", resp.StatusCode)
+			return errors.Join(notFound, fmt.Errorf("tmdb: HTTP %d", resp.StatusCode))
 		}
 
 		decodeErr := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBody)).Decode(dest)

@@ -53,13 +53,24 @@ Sonarr/Radarr plugin's terms, with the plugin's own anime overlay off, so the
 existing plugin follows the route without knowing about routing. Each target
 records the route that sent it. A server a route sends to cannot be deleted
 until the route stops using it, so deleting a server never silently reroutes
-titles. A chosen server that is disabled, not set up (no installation, no key)
-or since switched to the other kind is an admin-fixable problem: when nothing has been
+titles, and it cannot be switched to the type the route's media type cannot use
+(Sonarr for movies, Radarr for series). A chosen server that is disabled, not
+set up (no installation, no key) or of the wrong type anyway is an admin-fixable
+problem: when nothing has been
 sent yet, the submission retries with backoff; a later tier that fails that way
 becomes a failed target. Status checks go through the plugin installation that
 owns each target's server, and one plugin failing does not discard the statuses
 another reported. A media type with no routes keeps the plugin's own routing:
 every usable connection is handed over and the plugin picks.
+
+Admins manage routes through `/api/v2/admin/request-routes`. Each media type
+always has its fallback ("Everything else"); until it is saved it has no servers
+and routing leaves the media type to the plugin. Saving it requires an HD server,
+since a saved fallback moves the media type to Silo's routing. A rule cannot be added before
+the fallback has an HD server, because the first rule switches the media type to
+Silo's routing and titles no rule matches would otherwise have nowhere to go.
+Rules must narrow (at least one condition) and must do something (a destination,
+or skip 4K), and cannot override the config keys routing sets itself.
 
 The migration that introduced routes carried the Sonarr/Radarr plugin's routing
 over unchanged: each media type's first usable default and default-4K servers

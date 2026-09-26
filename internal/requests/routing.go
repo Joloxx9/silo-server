@@ -26,6 +26,9 @@ const (
 	kindSonarr         = "sonarr"
 )
 
+// fallbackRouteName names a media type's fallback until an admin renames it.
+const fallbackRouteName = "Everything else"
+
 // Route sends the requests it matches to a server per quality tier.
 type Route struct {
 	ID         string

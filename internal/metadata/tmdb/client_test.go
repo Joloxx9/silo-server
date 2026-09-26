@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1171,5 +1172,19 @@ func TestDetailCarriesRoutingIdentifiers(t *testing.T) {
 	if !slices.Equal(s.GenreIDs, []int{18}) || !slices.Equal(s.NetworkIDs, []int{2552}) ||
 		!slices.Equal(s.OriginCountries, []string{"US"}) || s.Year != 2022 {
 		t.Fatalf("series = %+v", s)
+	}
+}
+
+func TestNotFoundWrapsErrNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"status_message":"The resource you requested could not be found."}`))
+	}))
+	defer srv.Close()
+	client := NewClient("key", 40)
+	client.baseURL = srv.URL
+	_, err := client.GetMediaDetail(context.Background(), "movie", 1)
+	if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "HTTP 404") {
+		t.Fatalf("err = %v, want ErrNotFound with the HTTP detail", err)
 	}
 }
