@@ -259,3 +259,27 @@ func TestHandleBrowseGenreRequiresMediaType(t *testing.T) {
 		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestWholeSeriesRequestStateKeepsV1Rule(t *testing.T) {
+	partial := &mediarequests.MediaDetail{MediaType: mediarequests.MediaTypeSeries,
+		Availability: mediarequests.AvailabilityAvailable, Request: mediarequests.RequestState{Requestable: true}}
+	wholeSeriesRequestState(partial)
+	if partial.Request.Requestable || partial.Request.Reason != "already_available" {
+		t.Fatalf("series in the library = %+v, want already_available", partial.Request)
+	}
+
+	requested := &mediarequests.MediaDetail{MediaType: mediarequests.MediaTypeSeries,
+		Availability: mediarequests.AvailabilityAvailable,
+		Request:      mediarequests.RequestState{Status: mediarequests.StatusQueued, Reason: "already_requested"}}
+	wholeSeriesRequestState(requested)
+	if requested.Request.Reason != "already_requested" {
+		t.Fatalf("active request = %+v, want it kept", requested.Request)
+	}
+
+	missing := &mediarequests.MediaDetail{MediaType: mediarequests.MediaTypeSeries,
+		Availability: mediarequests.AvailabilityMissing, Request: mediarequests.RequestState{Requestable: true}}
+	wholeSeriesRequestState(missing)
+	if !missing.Request.Requestable {
+		t.Fatalf("series not in the library = %+v, want requestable", missing.Request)
+	}
+}

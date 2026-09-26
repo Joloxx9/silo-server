@@ -23988,6 +23988,10 @@
           "follow_supported": {
             "type": "boolean"
           },
+          "missing_seasons_requestable": {
+            "description": "Whether a series already in the library can be requested for the seasons it is missing. False while a download server takes series: router plugins cannot receive seasons yet, so such a series stays already_available.",
+            "type": "boolean"
+          },
           "rating_restrictions_enforced": {
             "type": "boolean"
           },
@@ -23997,6 +24001,9 @@
           "revision": {
             "description": "Opaque revision of this document",
             "type": "string"
+          },
+          "season_requests_supported": {
+            "type": "boolean"
           },
           "state": {
             "description": "Support and configuration state, not health",
@@ -24013,6 +24020,8 @@
           "requests_enabled",
           "rating_restrictions_enforced",
           "follow_supported",
+          "season_requests_supported",
+          "missing_seasons_requestable",
           "revision",
           "state",
           "allowed"
@@ -27756,8 +27765,23 @@
             "minLength": 1,
             "type": "string"
           },
+          "season_progress": {
+            "description": "Series season requests: each requested season's episodes, once the series is in the library; empty otherwise",
+            "items": {
+              "$ref": "#/components/schemas/RequestSeasonProgress"
+            },
+            "type": "array"
+          },
+          "seasons": {
+            "description": "Series: the requested season numbers; empty means the whole series (requests made through v1 or before season requests)",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "state": {
-            "description": "The one state to show a user: pending, approved, processing, available (in the library), declined, cancelled or failed",
+            "description": "The one state to show a user: pending, approved, processing, partially_available (some requested seasons are in the library), available (in the library), declined, cancelled or failed",
             "examples": [
               "pending"
             ],
@@ -27823,6 +27847,8 @@
           "status",
           "outcome",
           "state",
+          "seasons",
+          "season_progress",
           "is_anime",
           "targets",
           "created_at",
@@ -27879,6 +27905,21 @@
           "poster_path": {
             "description": "TMDB image path",
             "type": "string"
+          },
+          "seasons": {
+            "description": "Series only: the season numbers to request. Omitted: every aired season not yet complete in the library",
+            "examples": [
+              [
+                2,
+                3
+              ]
+            ],
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "maxItems": 200,
+            "type": "array"
           },
           "title": {
             "examples": [
@@ -35590,6 +35631,13 @@
             "format": "int64",
             "type": "integer"
           },
+          "seasons": {
+            "description": "Series: the regular seasons (specials excluded) with library availability and request coverage; empty for movies",
+            "items": {
+              "$ref": "#/components/schemas/RequestMediaSeason"
+            },
+            "type": "array"
+          },
           "status": {
             "description": "TMDB release status",
             "examples": [
@@ -35646,7 +35694,8 @@
           "creators",
           "recommendations",
           "availability",
-          "request"
+          "request",
+          "seasons"
         ],
         "type": "object"
       },
@@ -35777,6 +35826,66 @@
         ],
         "type": "object"
       },
+      "RequestMediaSeason": {
+        "additionalProperties": false,
+        "properties": {
+          "air_date": {
+            "description": "Calendar date, YYYY-MM-DD",
+            "examples": [
+              "2025-01-17"
+            ],
+            "type": "string"
+          },
+          "availability": {
+            "description": "Whether every aired episode is in the library",
+            "enum": [
+              "missing",
+              "partial",
+              "available"
+            ],
+            "examples": [
+              "partial"
+            ],
+            "type": "string"
+          },
+          "episode_count": {
+            "description": "Episodes TMDB lists for the season, aired or not",
+            "examples": [
+              10
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "examples": [
+              "Season 2"
+            ],
+            "type": "string"
+          },
+          "poster_path": {
+            "description": "TMDB image path",
+            "type": "string"
+          },
+          "requested": {
+            "description": "The title's active request covers this season",
+            "type": "boolean"
+          },
+          "season_number": {
+            "examples": [
+              2
+            ],
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "season_number",
+          "episode_count",
+          "availability",
+          "requested"
+        ],
+        "type": "object"
+      },
       "RequestMediaState": {
         "additionalProperties": false,
         "properties": {
@@ -35835,6 +35944,40 @@
           "requestable",
           "following",
           "requested_by_viewer"
+        ],
+        "type": "object"
+      },
+      "RequestSeasonProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "episodes_aired": {
+            "description": "Aired episodes by the library's own metadata; 0 when it has no air dates yet",
+            "examples": [
+              10
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "episodes_available": {
+            "description": "Episodes with a file in an enabled library",
+            "examples": [
+              4
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "season_number": {
+            "examples": [
+              2
+            ],
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "season_number",
+          "episodes_aired",
+          "episodes_available"
         ],
         "type": "object"
       },

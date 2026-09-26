@@ -19085,10 +19085,13 @@ export interface components {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
       follow_supported: boolean;
+      /** @description Whether a series already in the library can be requested for the seasons it is missing. False while a download server takes series: router plugins cannot receive seasons yet, so such a series stays already_available. */
+      missing_seasons_requestable: boolean;
       rating_restrictions_enforced: boolean;
       requests_enabled: boolean;
       /** @description Opaque revision of this document */
       revision: string;
+      season_requests_supported: boolean;
       /**
        * @description Support and configuration state, not health
        * @enum {string}
@@ -20677,8 +20680,12 @@ export interface components {
        * @example 1
        */
       requested_by_user_id?: string;
+      /** @description Series season requests: each requested season's episodes, once the series is in the library; empty otherwise */
+      season_progress: components["schemas"]["RequestSeasonProgress"][];
+      /** @description Series: the requested season numbers; empty means the whole series (requests made through v1 or before season requests) */
+      seasons: number[];
       /**
-       * @description The one state to show a user: pending, approved, processing, available (in the library), declined, cancelled or failed
+       * @description The one state to show a user: pending, approved, processing, partially_available (some requested seasons are in the library), available (in the library), declined, cancelled or failed
        * @example pending
        */
       state: string;
@@ -20733,6 +20740,14 @@ export interface components {
       overview?: string;
       /** @description TMDB image path */
       poster_path?: string;
+      /**
+       * @description Series only: the season numbers to request. Omitted: every aired season not yet complete in the library
+       * @example [
+       *       2,
+       *       3
+       *     ]
+       */
+      seasons?: number[];
       /** @example Heat */
       title: string;
       /**
@@ -23872,6 +23887,8 @@ export interface components {
        * @example 170
        */
       runtime?: number;
+      /** @description Series: the regular seasons (specials excluded) with library availability and request coverage; empty for movies */
+      seasons: components["schemas"]["RequestMediaSeason"][];
       /**
        * @description TMDB release status
        * @example Released
@@ -23968,6 +23985,36 @@ export interface components {
        */
       year?: number;
     };
+    RequestMediaSeason: {
+      /**
+       * @description Calendar date, YYYY-MM-DD
+       * @example 2025-01-17
+       */
+      air_date?: string;
+      /**
+       * @description Whether every aired episode is in the library
+       * @example partial
+       * @enum {string}
+       */
+      availability: "missing" | "partial" | "available";
+      /**
+       * Format: int64
+       * @description Episodes TMDB lists for the season, aired or not
+       * @example 10
+       */
+      episode_count: number;
+      /** @example Season 2 */
+      name?: string;
+      /** @description TMDB image path */
+      poster_path?: string;
+      /** @description The title's active request covers this season */
+      requested: boolean;
+      /**
+       * Format: int64
+       * @example 2
+       */
+      season_number: number;
+    };
     RequestMediaState: {
       /**
        * @description Whether the viewer will be notified when the media becomes available: they requested it or follow it
@@ -24004,6 +24051,25 @@ export interface components {
        * @example pending
        */
       status?: string;
+    };
+    RequestSeasonProgress: {
+      /**
+       * Format: int64
+       * @description Aired episodes by the library's own metadata; 0 when it has no air dates yet
+       * @example 10
+       */
+      episodes_aired: number;
+      /**
+       * Format: int64
+       * @description Episodes with a file in an enabled library
+       * @example 4
+       */
+      episodes_available: number;
+      /**
+       * Format: int64
+       * @example 2
+       */
+      season_number: number;
     };
     RequestTarget: {
       /**

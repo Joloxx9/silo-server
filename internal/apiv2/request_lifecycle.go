@@ -40,6 +40,12 @@ type FeatureStatus struct {
 	// FollowSupported advertises PUT/DELETE /requests/follows/{media_type}/{tmdb_id}
 	// and the following flag on request state.
 	FollowSupported bool `json:"follow_supported"`
+	// SeasonRequestsSupported advertises seasons on createRequest, the season
+	// list on series detail, and season progress on requests.
+	SeasonRequestsSupported bool `json:"season_requests_supported"`
+	// MissingSeasonsRequestable reports whether a series already in the
+	// library can be requested for its missing seasons.
+	MissingSeasonsRequestable bool `json:"missing_seasons_requestable" doc:"Whether a series already in the library can be requested for the seasons it is missing. False while a download server takes series: router plugins cannot receive seasons yet, so such a series stays already_available."`
 }
 type RequestFeatureStatusOutput struct {
 	Status       int
@@ -179,7 +185,7 @@ func registerRequestLifecycle(reg *Registry, requests RequestLifecycleService, p
 				return nil, requestProblem(err)
 			}
 		}
-		return &RequestFeatureStatusOutput{Body: FeatureStatus{Capability: Capability{State: enabledCapabilityState(status.RequestsEnabled), Allowed: &allowed}, RequestsEnabled: status.RequestsEnabled, RatingRestrictionsEnforced: status.RatingRestrictionsEnforced, FollowSupported: true}}, nil
+		return &RequestFeatureStatusOutput{Body: FeatureStatus{Capability: Capability{State: enabledCapabilityState(status.RequestsEnabled), Allowed: &allowed}, RequestsEnabled: status.RequestsEnabled, RatingRestrictionsEnforced: status.RatingRestrictionsEnforced, FollowSupported: true, SeasonRequestsSupported: true, MissingSeasonsRequestable: status.MissingSeasonsRequestable}}, nil
 	})
 	Register(reg, op(http.MethodPost, "/requests/{id}/cancel", "cancelRequest", "Cancel an accessible request."), func(ctx context.Context, in *RequestCancelInput) (*MediaRequestOutput, error) {
 		if requests == nil {

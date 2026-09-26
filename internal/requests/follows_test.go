@@ -75,13 +75,19 @@ func TestFollowRefusesTitleWithoutActiveRequest(t *testing.T) {
 	}
 }
 
-func TestFollowRefusesTitleAlreadyInLibrary(t *testing.T) {
+// A title's open request is what makes it followable: a series partly in the
+// library can have one for its missing seasons, and a title in the library
+// with no open request has nothing to follow.
+func TestFollowNeedsAnOpenRequestNotAnEmptyLibrary(t *testing.T) {
 	store := newFakeStore()
 	activeRequestFor(store, 949)
 	svc := NewService(store, &fakeTMDBClient{}, presentMovie(949))
 	svc.SetUserRepository(requestUserRepo{})
-	if _, err := svc.Follow(context.Background(), testViewer(1), MediaTypeMovie, 949); !errors.Is(err, ErrAlreadyAvailable) {
-		t.Fatalf("err = %v, want ErrAlreadyAvailable", err)
+	if _, err := svc.Follow(context.Background(), testViewer(1), MediaTypeMovie, 949); err != nil {
+		t.Fatalf("follow an open request for a title partly in the library: %v", err)
+	}
+	if _, err := svc.Follow(context.Background(), testViewer(1), MediaTypeMovie, 950); !errors.Is(err, ErrNotRequested) {
+		t.Fatalf("follow a title with no open request: err = %v, want ErrNotRequested", err)
 	}
 }
 

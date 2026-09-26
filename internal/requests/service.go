@@ -479,6 +479,24 @@ func unusableRouterMessage(fc *fulfillContext, mediaType MediaType) string {
 // serve the media type, including a misconfigured one (no installation bound,
 // no key). Only when none is does a request fall back to waiting for the
 // library; a misconfigured connection surfaces as a submission failure instead.
+// moreSeasonsRequestable reports whether a series already in the library can
+// be requested for the seasons it is missing. Router plugins take a whole
+// series today (the request descriptor carries no seasons), so sending such a
+// request would add the series again: refused by a download server that has
+// it, every season downloaded by one that does not. Until they can take
+// seasons, only the library fulfills one, so it is offered only when no
+// download server takes series.
+func (s *Service) moreSeasonsRequestable(ctx context.Context) (bool, error) {
+	if s.router == nil {
+		return true, nil
+	}
+	fc, err := s.newFulfillContext(ctx)
+	if err != nil {
+		return false, err
+	}
+	return !routerConfiguredFor(fc, MediaTypeSeries), nil
+}
+
 func routerConfiguredFor(fc *fulfillContext, mediaType MediaType) bool {
 	for _, in := range fc.integrations {
 		if in.Enabled && in.CapabilityID != "" && integrationSupportsMediaType(in, mediaType) {
@@ -681,7 +699,25 @@ func (s *Service) GetDetail(ctx context.Context, viewer Viewer, mediaType MediaT
 	if err != nil {
 		return nil, err
 	}
-	primaryState := requestStateFor(viewer, policy, primaryMatch.Available, primaryRequests[raw.ID])
+	// A series counts as available only when every aired season is complete;
+	// until then its missing seasons can be requested.
+	available := primaryMatch.Available
+	var seasons []RequestSeason
+	if mediaType == MediaTypeSeries {
+		counts, err := s.seasonCounts(ctx, primaryMatch)
+		if err != nil {
+			return nil, err
+		}
+		seasons = requestSeasons(raw, counts, primaryRequests[raw.ID])
+		if available && seriesHasOpenSeason(raw, counts) {
+			more, err := s.moreSeasonsRequestable(ctx)
+			if err != nil {
+				return nil, err
+			}
+			available = !more
+		}
+	}
+	primaryState := requestStateFor(viewer, policy, available, primaryRequests[raw.ID])
 	primaryState.Following = primaryRequests[raw.ID] != nil && primaryFollowing[raw.ID]
 
 	detail := &MediaDetail{
@@ -714,6 +750,7 @@ func (s *Service) GetDetail(ctx context.Context, viewer Viewer, mediaType MediaT
 		Availability:        availabilityValue(primaryMatch.Available),
 		LibraryContentID:    primaryMatch.ContentID,
 		Request:             primaryState,
+		Seasons:             seasons,
 	}
 	if raw.TVDBID > 0 {
 		tvdb := raw.TVDBID
@@ -769,8 +806,18 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 	if err != nil {
 		return nil, err
 	}
-	if matches[normalized.TMDBID].Available {
-		return nil, ErrAlreadyAvailable
+	match := matches[normalized.TMDBID]
+	if match.Available {
+		if normalized.MediaType == MediaTypeMovie || normalized.WholeSeries {
+			return nil, ErrAlreadyAvailable
+		}
+		more, err := s.moreSeasonsRequestable(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !more {
+			return nil, ErrAlreadyAvailable
+		}
 	}
 
 	active, err := s.store.ListActiveByTMDB(ctx, normalized.MediaType, []int{normalized.TMDBID})
@@ -795,6 +842,15 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 		}
 	}
 	facts := routingFactsFrom(detail, s.now())
+	if normalized.MediaType == MediaTypeSeries && !normalized.WholeSeries {
+		// A series partly in the library can still be requested for the
+		// seasons it is missing.
+		seasons, err := s.resolveRequestedSeasons(ctx, normalized.Seasons, detail, match)
+		if err != nil {
+			return nil, err
+		}
+		normalized.Seasons = seasons
+	}
 
 	policy, err := s.EffectivePolicy(ctx, viewer.UserID)
 	if err != nil {
@@ -937,6 +993,9 @@ func (s *Service) attachLibraryContent(ctx context.Context, reqs ...*Request) er
 		candidatesByType[req.MediaType] = append(candidatesByType[req.MediaType], requestPresenceCandidate(*req))
 	}
 
+	// Season requests whose series is in the library, by series content ID,
+	// so one query reads every series' season counts.
+	seasonRequests := map[string][]*Request{}
 	for mediaType, candidates := range candidatesByType {
 		matches, err := s.lookupPresence(ctx, mediaType, candidates)
 		if err != nil {
@@ -948,7 +1007,23 @@ func (s *Service) attachLibraryContent(ctx context.Context, reqs ...*Request) er
 			}
 			for _, req := range requestsByKey[requestKey{mediaType: mediaType, tmdbID: tmdbID}] {
 				req.LibraryContentID = match.ContentID
+				if req.MediaType == MediaTypeSeries && len(req.Seasons) > 0 {
+					seasonRequests[match.ContentID] = append(seasonRequests[match.ContentID], req)
+				}
 			}
+		}
+	}
+	resolver, ok := s.presence.(SeasonPresenceResolver)
+	if !ok || len(seasonRequests) == 0 {
+		return nil
+	}
+	bySeries, err := resolver.SeasonAvailability(ctx, slices.Collect(maps.Keys(seasonRequests)))
+	if err != nil {
+		return err
+	}
+	for series, reqs := range seasonRequests {
+		for _, req := range reqs {
+			req.SeasonProgress = seasonProgress(req.Seasons, bySeries[series])
 		}
 	}
 	return nil
@@ -1129,10 +1204,16 @@ func (s *Service) GetFeatureStatus(ctx context.Context, _ Viewer) (FeatureStatus
 	// server behaves like an older version, and clients should know that.
 	_, hasRatings := s.entitlements.(ContentRatingResolver)
 	_, hasCerts := s.tmdb.(TMDBCertificationClient)
-	return FeatureStatus{
+	status := FeatureStatus{
 		RequestsEnabled:            settings.RequestsEnabled,
 		RatingRestrictionsEnforced: hasRatings && hasCerts,
-	}, nil
+	}
+	if settings.RequestsEnabled {
+		if status.MissingSeasonsRequestable, err = s.moreSeasonsRequestable(ctx); err != nil {
+			return FeatureStatus{}, err
+		}
+	}
+	return status, nil
 }
 
 func (s *Service) ensureRequestsEnabled(ctx context.Context) error {
@@ -2238,8 +2319,9 @@ func (s *Service) completeWaitingFromLibrary(ctx context.Context, limit int, res
 	return nil
 }
 
-// presentRequests reports which requests' titles are in the library, with one
-// presence lookup per media type.
+// presentRequests reports which requests are fulfilled by the library, with
+// one presence lookup per media type: the title is in, or, for a season
+// request, every requested season is complete.
 func (s *Service) presentRequests(ctx context.Context, reqs []*Request) (map[string]bool, error) {
 	byType := map[MediaType][]*Request{}
 	for _, req := range reqs {
@@ -2258,7 +2340,11 @@ func (s *Service) presentRequests(ctx context.Context, reqs []*Request) (map[str
 			return nil, err
 		}
 		for _, req := range group {
-			out[req.ID] = matches[req.TMDBID].Available
+			fulfilled, _, err := s.requestFulfilled(ctx, *req, matches[req.TMDBID])
+			if err != nil {
+				return nil, err
+			}
+			out[req.ID] = fulfilled
 		}
 	}
 	return out, nil
@@ -2583,6 +2669,14 @@ func normalizeCreateInput(input CreateRequestInput) (CreateRequestInput, error) 
 	}
 	if input.Title == "" {
 		return CreateRequestInput{}, fmt.Errorf("%w: title is required", ErrInvalidInput)
+	}
+	if len(input.Seasons) > 0 && mediaType != MediaTypeSeries {
+		return CreateRequestInput{}, fmt.Errorf("%w: only a series request names seasons", ErrInvalidInput)
+	}
+	for _, season := range input.Seasons {
+		if season <= 0 {
+			return CreateRequestInput{}, fmt.Errorf("%w: season numbers start at 1", ErrInvalidInput)
+		}
 	}
 	return input, nil
 }
