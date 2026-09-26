@@ -63,6 +63,7 @@ import {
 } from "@/hooks/queries/useRequests";
 import {
   formatMediaType,
+  formatSeasonList,
   formatRequestDate,
   formatRequestOutcome,
   formatRequestStatus,
@@ -372,6 +373,9 @@ function RequestQueueRow({
               {request.title}
             </Link>
             <Badge variant="secondary">{formatMediaType(request.media_type)}</Badge>
+            {request.seasons?.length ? (
+              <Badge variant="outline">{formatSeasonList(request.seasons)}</Badge>
+            ) : null}
           </div>
           <div className="text-muted-foreground mt-1 flex flex-wrap gap-x-3 text-xs">
             {request.year ? <span>{request.year}</span> : null}

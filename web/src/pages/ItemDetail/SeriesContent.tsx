@@ -8,6 +8,8 @@ import { useAmbientColor } from "@/hooks/useAmbientColor";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsActingAdmin } from "@/hooks/useIsActingAdmin";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import { useMissingSeasonsRequestable } from "@/hooks/useCanRequest";
+import { RequestSeasonsDialog } from "@/components/RequestSeasonsDialog";
 import CastCarousel from "@/components/CastCarousel";
 import CrewList from "@/components/CrewList";
 import EditMetadataDialog from "@/components/EditMetadataDialog";
@@ -52,6 +54,9 @@ export default function SeriesContent({
   const [editOpen, setEditOpen] = useState(false);
   const [matchOpen, setMatchOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
+  const [requestSeasonsOpen, setRequestSeasonsOpen] = useState(false);
+  const tmdbID = Number(item.tmdb_id) || 0;
+  const canRequestSeasons = useMissingSeasonsRequestable(Boolean(currentProfile?.id) && tmdbID > 0);
   const { data: seasonsData, isLoading: seasonsLoading } = useSeasons(item.content_id);
   const { data: similarData, isLoading: similarLoading } = useSimilarItems(item.content_id);
   const seasons = useMemo(() => seasonsData?.seasons ?? [], [seasonsData?.seasons]);
@@ -167,9 +172,18 @@ export default function SeriesContent({
                 onEditMetadata={canCurateMetadata ? () => setEditOpen(true) : undefined}
                 onMatchItem={canCurateMetadata ? () => setMatchOpen(true) : undefined}
                 onSplitItem={canCurateMetadata ? () => setSplitOpen(true) : undefined}
+                onRequestSeasons={canRequestSeasons ? () => setRequestSeasonsOpen(true) : undefined}
               />
             }
           />
+          {canRequestSeasons ? (
+            <RequestSeasonsDialog
+              open={requestSeasonsOpen}
+              onOpenChange={setRequestSeasonsOpen}
+              tmdbID={tmdbID}
+              title={title}
+            />
+          ) : null}
 
           {(seasonsLoading || seasons.length > 0) && (
             <div

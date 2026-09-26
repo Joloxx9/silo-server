@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { MediaRequest, RequestMediaDetail } from "@/api/types";
 import { CancelRequestDialog } from "@/components/CancelRequestDialog";
+import { RequestSeasonsDialog } from "@/components/RequestSeasonsDialog";
 import {
   useCancelMediaRequest,
   useCreateMediaRequest,
@@ -38,6 +39,7 @@ const STATE_ICONS: Record<RequestDisplayState, LucideIcon> = {
   pending: Clock,
   approved: CircleCheck,
   processing: Hourglass,
+  partially_available: Library,
   available: Library,
   declined: Ban,
   cancelled: Ban,
@@ -67,6 +69,9 @@ export default function RequestActionBar({ item, libraryHref }: RequestActionBar
   const toggleFollow = useToggleRequestFollow();
   const ownRequest = useOwnCancellableRequest(item);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [pickSeasons, setPickSeasons] = useState(false);
+  // A series TMDB lists seasons for is requested season by season.
+  const seasonPicker = item.media_type === "series" && (item.seasons?.length ?? 0) > 0;
 
   const state = requestDisplayState(item.request.status, undefined, item.request.state);
   const inLibrary =
@@ -86,7 +91,9 @@ export default function RequestActionBar({ item, libraryHref }: RequestActionBar
       label: item.media_type === "series" ? "Request series" : "Request movie",
       icon: Plus,
       pending: createRequest.isPending,
-      onClick: () => createRequest.mutate(requestInputFromMediaResult(item)),
+      onClick: seasonPicker
+        ? () => setPickSeasons(true)
+        : () => createRequest.mutate(requestInputFromMediaResult(item)),
     };
   } else if (inLibrary) {
     primaryAction = libraryHref
@@ -148,6 +155,15 @@ export default function RequestActionBar({ item, libraryHref }: RequestActionBar
           onOpenChange={setConfirmCancel}
           onConfirm={() => cancelRequest.mutate(ownRequest.id)}
           isPending={cancelRequest.isPending}
+        />
+      ) : null}
+      {seasonPicker ? (
+        <RequestSeasonsDialog
+          open={pickSeasons}
+          onOpenChange={setPickSeasons}
+          tmdbID={item.tmdb_id}
+          title={item.title}
+          detail={item}
         />
       ) : null}
     </>

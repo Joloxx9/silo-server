@@ -1817,6 +1817,7 @@ export type RequestUserState =
   | "pending"
   | "approved"
   | "processing"
+  | "partially_available"
   | "available"
   | "declined"
   | "cancelled"
@@ -1897,9 +1898,34 @@ export interface RequestMediaDetail {
   director?: string;
   creators?: string[];
   recommendations?: RequestMediaResult[];
+  /** Series: the regular seasons with library availability and request coverage. */
+  seasons?: RequestMediaSeason[];
   availability: RequestAvailability;
   library_content_id?: string;
   request: RequestState;
+}
+
+/** One regular season of a series, as the request detail reports it. */
+export interface RequestMediaSeason {
+  season_number: number;
+  name?: string;
+  /** YYYY-MM-DD; absent until TMDB dates the season. */
+  air_date?: string;
+  /** Episodes TMDB lists for the season, aired or not. */
+  episode_count: number;
+  poster_path?: string;
+  /** Whether every aired episode is in the library. */
+  availability: "missing" | "partial" | "available";
+  /** The title's active request covers this season. */
+  requested: boolean;
+}
+
+/** How far one requested season is, once the series is in the library. */
+export interface RequestSeasonProgress {
+  season_number: number;
+  /** Aired episodes by the library's own metadata; 0 when it has no air dates yet. */
+  episodes_aired: number;
+  episodes_available: number;
 }
 
 export interface RequestDiscoverySection extends RequestMediaPage {
@@ -1957,6 +1983,8 @@ export interface CreateMediaRequestInput {
   overview?: string;
   poster_path?: string;
   backdrop_path?: string;
+  /** Series only: the seasons to request. Omitted: every aired season not yet in the library. */
+  seasons?: number[];
 }
 
 export interface RequestTarget {
@@ -1996,6 +2024,10 @@ export interface MediaRequest {
   requested_by_user_id?: number;
   requested_by_profile_id?: string;
   is_anime?: boolean;
+  /** Series: the requested seasons; empty means the whole series. */
+  seasons?: number[];
+  /** Series season requests: each requested season's episodes, once the series is in the library. */
+  season_progress?: RequestSeasonProgress[];
   targets?: RequestTarget[];
   integration_kind?: string;
   external_id?: string;

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { MediaRequest } from "@/api/types";
+import type { MediaRequest, RequestMediaSeason } from "@/api/types";
 import {
   canCancelOwnRequest,
+  defaultRequestSeasons,
+  formatRequestDisplayState,
+  formatRequestSeasonMeta,
+  formatSeasonList,
+  formatSeasonProgress,
   parseRequestMediaType,
   requestDetailHref,
   requestDisplayState,
@@ -65,5 +70,52 @@ describe("parseRequestMediaType", () => {
 
   it.each([undefined, "", "tv", "Movie", "browse"])("rejects %j", (value) => {
     expect(parseRequestMediaType(value)).toBeUndefined();
+  });
+});
+
+describe("season requests", () => {
+  const now = new Date(Date.UTC(2026, 4, 24, 12));
+  const season = (overrides: Partial<RequestMediaSeason>): RequestMediaSeason => ({
+    season_number: 1,
+    episode_count: 10,
+    air_date: "2022-01-01",
+    availability: "missing",
+    requested: false,
+    ...overrides,
+  });
+
+  it("names seasons compactly", () => {
+    expect(formatSeasonList([2])).toBe("Season 2");
+    expect(formatSeasonList([5, 1, 2, 3, 3])).toBe("Seasons 1–3, 5");
+  });
+
+  it("picks the aired seasons the library lacks and nobody requested", () => {
+    const seasons = [
+      season({ season_number: 1, availability: "available" }),
+      season({ season_number: 2, availability: "partial" }),
+      season({ season_number: 3, requested: true }),
+      season({ season_number: 4 }),
+      season({ season_number: 5, air_date: "2026-05-24" }),
+      season({ season_number: 6, air_date: "2026-09-01" }),
+      season({ season_number: 7, air_date: undefined, episode_count: 0 }),
+    ];
+    expect(defaultRequestSeasons(seasons, now)).toEqual([2, 4, 5]);
+  });
+
+  it("describes a season and a request's progress", () => {
+    expect(formatRequestSeasonMeta(season({ episode_count: 1 }))).toBe("2022 · 1 episode");
+    expect(formatRequestSeasonMeta(season({ air_date: undefined, episode_count: 0 }))).toBe(
+      "Not announced",
+    );
+    expect(
+      formatSeasonProgress([
+        { season_number: 1, episodes_aired: 9, episodes_available: 9 },
+        { season_number: 2, episodes_aired: 10, episodes_available: 4 },
+      ]),
+    ).toBe("13 of 19 episodes in the library");
+    expect(
+      formatSeasonProgress([{ season_number: 1, episodes_aired: 0, episodes_available: 3 }]),
+    ).toBe("");
+    expect(formatRequestDisplayState("partially_available")).toBe("Partially available");
   });
 });

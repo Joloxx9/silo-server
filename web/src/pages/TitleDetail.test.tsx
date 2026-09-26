@@ -199,6 +199,62 @@ describe("TitleDetail", () => {
       );
     });
 
+    it("requests a series season by season", () => {
+      renderDetail({
+        ...baseDetail,
+        media_type: "series",
+        title: "Severance",
+        request: { requestable: true },
+        seasons: [
+          {
+            season_number: 1,
+            episode_count: 9,
+            air_date: "2022-02-18",
+            availability: "available",
+            requested: false,
+          },
+          {
+            season_number: 2,
+            episode_count: 10,
+            air_date: "2025-01-17",
+            availability: "partial",
+            requested: false,
+          },
+          {
+            season_number: 3,
+            episode_count: 10,
+            air_date: "2999-01-01",
+            availability: "missing",
+            requested: false,
+          },
+        ],
+      });
+
+      // The page lists the seasons with what the library has.
+      const seasons = screen.getByRole("heading", { name: "Seasons" }).parentElement!;
+      expect(within(seasons).getByText("In library")).toBeInTheDocument();
+      expect(within(seasons).getByText("Partly in library")).toBeInTheDocument();
+      expect(within(seasons).getByText("Not aired yet")).toBeInTheDocument();
+
+      fireEvent.click(primaryButton("Request series"));
+      const dialog = screen.getByRole("dialog", { name: "Request seasons" });
+      // Season 1 is in the library; the aired, incomplete season 2 starts
+      // picked; the unaired season 3 can be picked but is not by default.
+      expect(within(dialog).getByRole("switch", { name: "Season 1" })).toBeDisabled();
+      expect(within(dialog).getByRole("switch", { name: "Season 2" })).toBeChecked();
+      const season3 = within(dialog).getByRole("switch", { name: "Season 3" });
+      expect(season3).not.toBeChecked();
+      fireEvent.click(season3);
+      fireEvent.click(within(dialog).getByRole("button", { name: "Request Seasons 2–3" }));
+
+      expect(mocks.create).toHaveBeenCalledOnce();
+      expect(mocks.create.mock.calls[0]![0]).toMatchObject({
+        media_type: "series",
+        tmdb_id: 603,
+        seasons: [2, 3],
+      });
+    });
+
     it("shows the viewer's own pending request as Requested, with Cancel request", () => {
       renderDetail();
 

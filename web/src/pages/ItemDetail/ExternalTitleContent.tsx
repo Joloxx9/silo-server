@@ -5,14 +5,20 @@ import type {
   RequestMediaCastMember,
   RequestMediaDetail,
   RequestMediaResult,
+  RequestMediaSeason,
 } from "@/api/types";
 import CastCarousel from "@/components/CastCarousel";
 import PageBack from "@/components/PageBack";
 import { MoreLikeThisRow } from "@/components/RecommendationGrid";
 import RequestPosterCard from "@/components/RequestPosterCard";
+import { SeasonStatus } from "@/components/RequestSeasonsDialog";
 import { useCreateMediaRequest } from "@/hooks/queries/useRequests";
 import { formatRuntimeMinutes } from "@/lib/mediaFormat";
-import { requestInputFromMediaResult, tmdbImageURL } from "@/lib/mediaRequests";
+import {
+  formatRequestSeasonMeta,
+  requestInputFromMediaResult,
+  tmdbImageURL,
+} from "@/lib/mediaRequests";
 import DetailHero from "./DetailHero";
 import DetailLayout, { DetailSection } from "./DetailLayout";
 import HeroCrewLine from "./components/HeroCrewLine";
@@ -76,6 +82,8 @@ export default function ExternalTitleContent({ item, libraryHref }: ExternalTitl
         />
       }
     >
+      {isSeries && (item.seasons?.length ?? 0) > 0 && <TitleSeasons seasons={item.seasons!} />}
+
       {cast.length > 0 && (
         <DetailSection title="Cast">
           <CastCarousel cast={cast} />
@@ -84,6 +92,44 @@ export default function ExternalTitleContent({ item, libraryHref }: ExternalTitl
 
       {recommendations.length > 0 && <TitleRecommendations items={recommendations} />}
     </DetailLayout>
+  );
+}
+
+/** A series' seasons with what the library has and what is requested, like the library's season row. */
+function TitleSeasons({ seasons }: { seasons: RequestMediaSeason[] }) {
+  return (
+    <DetailSection title="Seasons">
+      <ul role="list" className="-mt-1 flex list-none gap-4 overflow-x-auto pt-1 pb-5">
+        {seasons.map((season) => {
+          const name = `Season ${season.season_number}`;
+          const poster = tmdbImageURL(season.poster_path);
+          return (
+            <li key={season.season_number} className="w-[160px] shrink-0 sm:w-[170px]">
+              <div className="media-card-image relative aspect-[2/3] overflow-hidden rounded-xl">
+                {poster ? (
+                  <img
+                    src={poster}
+                    alt={name}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <div className="text-muted-foreground bg-surface flex h-full items-center justify-center p-4 text-center text-sm font-medium">
+                    {name}
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 truncate text-sm font-medium">{season.name || name}</p>
+              <p className="text-muted-foreground truncate text-xs">
+                {formatRequestSeasonMeta(season)}
+              </p>
+              <SeasonStatus season={season} className="mt-0.5 block" />
+            </li>
+          );
+        })}
+      </ul>
+    </DetailSection>
   );
 }
 

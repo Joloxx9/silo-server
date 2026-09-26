@@ -3,6 +3,8 @@ import { Film, Library, Loader2, Plus, Tv } from "lucide-react";
 import type { MediaRequest, RequestMediaResult } from "@/api/types";
 import { cn } from "@/lib/utils";
 import {
+  formatSeasonList,
+  formatSeasonProgress,
   requestDetailHref,
   requestDisplayState,
   tmdbImageURL,
@@ -164,6 +166,8 @@ function MineCard({
 }) {
   const poster = tmdbImageURL(request.poster_path);
   const state = requestDisplayState(request.status, request.outcome, request.state);
+  const progress =
+    state === "partially_available" ? formatSeasonProgress(request.season_progress ?? []) : "";
   const isClosed =
     request.outcome === "failed" ||
     request.outcome === "declined" ||
@@ -196,6 +200,17 @@ function MineCard({
         </PosterFrame>
 
         <CardMeta title={request.title} year={request.year} mediaType={request.media_type} />
+
+        {request.seasons?.length ? (
+          <p className="text-muted-foreground mt-0.5 truncate text-[11px] leading-tight">
+            {formatSeasonList(request.seasons)}
+          </p>
+        ) : null}
+        {progress ? (
+          <p className="text-muted-foreground mt-0.5 truncate text-[11px] leading-tight">
+            {progress}
+          </p>
+        ) : null}
 
         {request.last_error ? (
           <p

@@ -20,6 +20,7 @@ import {
   Download,
   ExternalLink,
   FolderPlus,
+  Inbox,
   Info,
   Loader2,
   MoreVertical,
@@ -212,6 +213,8 @@ export interface ActionBarProps {
   onSelectVersion?: (version: FileVersion) => void;
   onDownload?: () => void;
   onSearchSubtitles?: () => void;
+  /** Opens the season picker to request seasons the library is missing. */
+  onRequestSeasons?: () => void;
   rating?: number | null;
   onRatingChange?: (rating: number | null) => void;
   qualityPreference?: string | null;
@@ -269,6 +272,7 @@ export default function ActionBar({
   onSelectVersion,
   onDownload,
   onSearchSubtitles,
+  onRequestSeasons,
   rating,
   onRatingChange,
   audioSelectionMode = "auto",
@@ -540,7 +544,7 @@ export default function ActionBar({
     items[nextIndex]?.focus({ preventScroll: true });
   };
   const hasOverflowActions = Boolean(
-    restartHref || onToggleWatchlist || onDownload || onSearchSubtitles,
+    restartHref || onToggleWatchlist || onDownload || onSearchSubtitles || onRequestSeasons,
   );
   const hasAdminActions = Boolean(isAdmin && (contentId || onRedetectIntro));
   const hasMetadataActions = Boolean(
@@ -805,6 +809,12 @@ export default function ActionBar({
                 <DetailOverflowMenuItem closeMenu={closeOverflowMenu} onAction={onSearchSubtitles}>
                   <Captions className="size-4" />
                   Add Subtitles
+                </DetailOverflowMenuItem>
+              )}
+              {onRequestSeasons && (
+                <DetailOverflowMenuItem closeMenu={closeOverflowMenu} onAction={onRequestSeasons}>
+                  <Inbox className="size-4" />
+                  Request Seasons
                 </DetailOverflowMenuItem>
               )}
               {watchTogether && (

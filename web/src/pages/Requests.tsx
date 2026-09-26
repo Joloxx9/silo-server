@@ -81,6 +81,11 @@ const REQUEST_PROGRESS_GUIDE: StatusGuideItem[] = [
     description: "Sent to the download automation: queued, downloading, or importing.",
   },
   {
+    state: "partially_available",
+    description:
+      "Some episodes of the requested seasons are in your library; the rest are on their way.",
+  },
+  {
     state: "available",
     description: "In your Silo library and ready to watch.",
   },
@@ -831,7 +836,11 @@ function groupMineRequests(requests: MediaRequest[]) {
   for (const request of requests) {
     if (isIssueOutcome(request.outcome)) {
       buckets.issues.push(request);
-    } else if (request.status === "completed") {
+    } else if (
+      // A download the library has not scanned yet is still on its way, and a
+      // season request lands only when all of its seasons have.
+      requestDisplayState(request.status, request.outcome, request.state) === "available"
+    ) {
       buckets.completed.push(request);
     } else {
       buckets.motion.push(request);

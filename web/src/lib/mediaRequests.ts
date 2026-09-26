@@ -4,6 +4,8 @@ import type {
   MediaRequestOutcome,
   MediaRequestStatus,
   RequestMediaResult,
+  RequestMediaSeason,
+  RequestSeasonProgress,
   RequestMediaType,
   RequestUserState,
 } from "@/api/types";
@@ -125,6 +127,8 @@ export function formatRequestDisplayState(state: RequestDisplayState): string {
       return formatRequestStatus(state);
     case "processing":
       return "Processing";
+    case "partially_available":
+      return "Partially available";
     case "available":
       return "Available";
     default:
@@ -185,6 +189,71 @@ export function formatRequestReason(reason?: string): string {
     default:
       return "Unavailable";
   }
+}
+
+/** Names requested seasons compactly: "Season 2", "Seasons 1–3, 5". */
+export function formatSeasonList(seasons: number[]): string {
+  const sorted = [...new Set(seasons)].sort((a, b) => a - b);
+  const runs: string[] = [];
+  for (let i = 0; i < sorted.length; ) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j]! + 1) j++;
+    runs.push(j > i ? `${sorted[i]}–${sorted[j]}` : String(sorted[i]));
+    i = j + 1;
+  }
+  return `${sorted.length === 1 ? "Season" : "Seasons"} ${runs.join(", ")}`;
+}
+
+/**
+ * A season has started airing, by TMDB's dates, compared with today's UTC
+ * date as the server compares them.
+ */
+export function seasonHasAired(season: RequestMediaSeason, now = new Date()): boolean {
+  return (
+    season.episode_count > 0 &&
+    Boolean(season.air_date) &&
+    season.air_date! <= now.toISOString().slice(0, 10)
+  );
+}
+
+/** A season a new request can still ask for: not complete in the library, not already asked for. */
+export function seasonRequestable(season: RequestMediaSeason): boolean {
+  return season.availability !== "available" && !season.requested;
+}
+
+/**
+ * The seasons a series request asks for unless the viewer changes them: every
+ * aired season not yet in the library, as the server picks when given none.
+ */
+export function defaultRequestSeasons(seasons: RequestMediaSeason[], now = new Date()): number[] {
+  return seasons
+    .filter((season) => seasonRequestable(season) && seasonHasAired(season, now))
+    .map((season) => season.season_number);
+}
+
+/** "2022 · 9 episodes", or "Not announced" before TMDB dates or fills the season. */
+export function formatRequestSeasonMeta(season: RequestMediaSeason): string {
+  const parts: string[] = [];
+  if (season.air_date) parts.push(season.air_date.slice(0, 4));
+  if (season.episode_count > 0) {
+    parts.push(`${season.episode_count} ${season.episode_count === 1 ? "episode" : "episodes"}`);
+  }
+  return parts.join(" · ") || "Not announced";
+}
+
+/**
+ * "14 of 20 episodes in the library", counting the aired episodes of the
+ * requested seasons; "" when none has aired by the library's dates.
+ */
+export function formatSeasonProgress(progress: RequestSeasonProgress[]): string {
+  let aired = 0;
+  let have = 0;
+  for (const season of progress) {
+    aired += season.episodes_aired;
+    have += Math.min(season.episodes_available, season.episodes_aired);
+  }
+  if (aired === 0) return "";
+  return `${have} of ${aired} ${aired === 1 ? "episode" : "episodes"} in the library`;
 }
 
 export function tmdbImageURL(path?: string, size = "w342"): string | null {
