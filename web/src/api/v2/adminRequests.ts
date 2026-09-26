@@ -13,6 +13,24 @@ import type {
 } from "@/api/types";
 import { v2, type V2Body, type V2Result, V2ProblemError } from "./request";
 import { mediaRequestFromV2 } from "./requests";
+import type { components } from "./schema";
+
+type Schemas = components["schemas"];
+
+export type RequestRouteMediaType = Schemas["AdminRequestRoute"]["media_type"];
+export type RequestRouteConditions = Schemas["AdminRequestRouteConditions"];
+export type RequestRouteDestination = Schemas["AdminRequestRouteDestination"];
+/** The editable part of a routing rule; `media_type` is read on create only. */
+export type RequestRouteBody = Schemas["AdminRequestRouteBody"];
+export type RequestRoutePreview = Schemas["AdminRequestRoutePreviewOutputBody"];
+export type RequestRoutePreviewTier = Schemas["AdminRequestRoutePreviewTier"];
+
+/**
+ * A routing rule, or a media type's fallback, with the validator of the read
+ * it came from. A fallback that was never saved still has one: the server
+ * answers it at revision zero, and its first save sends that tag.
+ */
+export type RequestRoute = Schemas["AdminRequestRoute"] & { etag: string };
 
 function requireETag(etag?: string) {
   if (!etag) throw new Error("Reload this editor before saving.");
@@ -227,6 +245,79 @@ export function declineAdminRequestV2(id: string, reason?: string) {
   return v2("POST /api/v2/admin/requests/{id}/decline", { path: { id }, body: { reason } }).then(
     mediaRequestFromV2,
   );
+}
+export async function getAdminRequestRouteV2(
+  id: string,
+  profileContext?: ProfileRequestContextSnapshot,
+): Promise<RequestRoute> {
+  let etag = "";
+  const body = await v2("GET /api/v2/admin/request-routes/{id}", {
+    profileContext,
+    path: { id },
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...body, etag: requireETag(etag) };
+}
+/**
+ * Every route, in evaluation order per media type, each from its own read so
+ * an editor always starts from a row and the validator that read returned.
+ */
+export async function listAdminRequestRoutesV2(): Promise<RequestRoute[]> {
+  const profileContext = captureProfileRequestContext();
+  if (!profileContext) throw new StaleApiRequestContextError();
+  const list = await v2("GET /api/v2/admin/request-routes", { profileContext });
+  const rows = await Promise.all(
+    list.items.map((route) => getAdminRequestRouteV2(route.id, profileContext)),
+  );
+  if (!isProfileRequestContextCurrent(profileContext)) throw new StaleApiRequestContextError();
+  return rows;
+}
+export async function createAdminRequestRouteV2(body: RequestRouteBody): Promise<RequestRoute> {
+  let etag = "";
+  const saved = await v2("POST /api/v2/admin/request-routes", {
+    body,
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...saved, etag: requireETag(etag) };
+}
+export async function updateAdminRequestRouteV2(
+  route: Pick<RequestRoute, "id" | "etag">,
+  body: RequestRouteBody,
+): Promise<RequestRoute> {
+  let etag = "";
+  const saved = await v2("PUT /api/v2/admin/request-routes/{id}", {
+    path: { id: route.id },
+    headers: { "If-Match": requireETag(route.etag) },
+    body,
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...saved, etag: requireETag(etag) };
+}
+export function deleteAdminRequestRouteV2(route: Pick<RequestRoute, "id" | "etag">) {
+  return v2("DELETE /api/v2/admin/request-routes/{id}", {
+    path: { id: route.id },
+    headers: { "If-Match": requireETag(route.etag) },
+  });
+}
+/** Sets the order of a media type's rules; `ids` lists every rule, fallback excluded. */
+export function reorderAdminRequestRoutesV2(mediaType: RequestRouteMediaType, ids: string[]) {
+  return v2("POST /api/v2/admin/request-routes/order", {
+    body: { media_type: mediaType, ids },
+  }).then((result) => result.items);
+}
+export function previewAdminRequestRouteV2(
+  mediaType: RequestRouteMediaType,
+  tmdbId: number,
+): Promise<RequestRoutePreview> {
+  return v2("POST /api/v2/admin/request-routes/preview", {
+    body: { media_type: mediaType, tmdb_id: tmdbId },
+  });
 }
 export function loadAdminRequestIntegrationOptionsV2(
   id: string,

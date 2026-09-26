@@ -116,8 +116,10 @@ export const ADMIN_NAV_SECTIONS: AdminNavGroup[] = [
       },
       {
         label: "Requests",
-        description: "User media requests and request handling.",
-        keywords: ["requested media", "approvals", "overseerr"],
+        description: "Review, approve, and decline media requests; per-account request limits.",
+        // Servers, routing, and the request limit itself live on the Requests
+        // settings page, which the command palette lists with its own keywords.
+        keywords: ["requested media", "approvals", "request queue", "decline", "user overrides"],
         icon: Send,
         href: "/admin/requests",
       },

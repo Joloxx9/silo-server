@@ -63,7 +63,9 @@ owns each target's server, and one plugin failing does not discard the statuses
 another reported. A media type with no routes keeps the plugin's own routing:
 every usable connection is handed over and the plugin picks.
 
-Admins manage routes through `/api/v2/admin/request-routes`. Each media type
+Admins manage routes through `/api/v2/admin/request-routes` (in the web admin,
+Settings › Requests, which also hides the server switches routing now owns).
+Each media type
 always has its fallback ("Everything else"); until it is saved it has no servers
 and routing leaves the media type to the plugin. Saving it requires an HD server,
 since a saved fallback moves the media type to Silo's routing. A rule cannot be added before

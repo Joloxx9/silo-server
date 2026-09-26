@@ -1,40 +1,27 @@
-import {
-  getAdminRequestIntegrationV2,
-  isRequestEditorConflict,
-  requestValidationErrors,
-} from "@/api/v2/adminRequests";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { isRequestEditorConflict } from "@/api/v2/adminRequests";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, Navigate, useSearchParams } from "react-router";
 import {
   AlertTriangle,
   Check,
   Library,
-  Plug,
-  Plus,
   RefreshCw,
   Save,
   Settings2,
   SlidersHorizontal,
-  Trash2,
   X,
 } from "lucide-react";
 import type {
   MediaRequest,
   MediaRequestOutcome,
   MediaRequestStatus,
-  PluginCapability,
-  PluginInstallation,
   RequestApprovalMode,
-  RequestIntegration,
-  RequestIntegrationOptions,
   RequestLimitMode,
-  RequestSettings,
   RequestTarget,
   RequestUserLimit,
 } from "@/api/types";
-import { SchemaForm } from "@/components/admin/plugins/SchemaForm";
-import { buildSchemaValues, parseFieldTypes } from "@/components/admin/plugins/schemaFormUtils";
+import { EditorConflict } from "@/components/admin/EditorConflict";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,7 +42,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -65,23 +51,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useDebounce } from "@/hooks/useDebounce";
-import { useAdminPluginInstallations } from "@/hooks/queries/admin/plugins";
 import { useAdminUsers } from "@/hooks/queries/admin/users";
 import {
   useAdminMediaRequests,
   useAdminRequestCapabilities,
   useApproveMediaRequest,
-  useCreateRequestIntegration,
   useDeclineMediaRequest,
-  useDeleteRequestIntegration,
-  useLoadRequestIntegrationOptions,
-  useRequestIntegrations,
-  useRequestSettings,
   useRequestUserLimit,
   useRetryMediaRequest,
-  useUpdateRequestIntegration,
-  useUpdateRequestSettings,
   useUpdateRequestUserLimit,
 } from "@/hooks/queries/useRequests";
 import {
@@ -94,14 +71,19 @@ import {
   REQUEST_OUTCOMES,
   REQUEST_STATUSES,
 } from "@/lib/mediaRequests";
-import { applyExclusivity } from "./requestExclusivity";
-import { supportedMediaTypesForConfig } from "./requestIntegrationMediaTypes";
 
 type StatusFilter = MediaRequestStatus | "all";
 type OutcomeFilter = MediaRequestOutcome | "all";
 
-const ADMIN_REQUEST_TABS = ["queue", "settings", "integrations", "overrides"] as const;
+const ADMIN_REQUEST_TABS = ["queue", "overrides"] as const;
 type AdminRequestTab = (typeof ADMIN_REQUEST_TABS)[number];
+
+/** Where request settings, servers, and routing live now. */
+export const REQUEST_SETTINGS_HREF = "/admin/settings/requests";
+
+// Tabs this page used to have. Their content moved to Settings → Requests, so
+// bookmarks to them land there instead of on the queue.
+const MOVED_TABS = new Set(["settings", "integrations"]);
 
 function normalizeAdminRequestTab(value: string | null): AdminRequestTab {
   return ADMIN_REQUEST_TABS.includes(value as AdminRequestTab)
@@ -111,7 +93,8 @@ function normalizeAdminRequestTab(value: string | null): AdminRequestTab {
 
 export default function AdminRequests() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = normalizeAdminRequestTab(searchParams.get("tab"));
+  const requestedTab = searchParams.get("tab");
+  const activeTab = normalizeAdminRequestTab(requestedTab);
   const capabilities = useAdminRequestCapabilities();
 
   function setActiveTab(value: string) {
@@ -127,6 +110,9 @@ export default function AdminRequests() {
     setSearchParams(next, { replace: true });
   }
 
+  if (requestedTab !== null && MOVED_TABS.has(requestedTab)) {
+    return <Navigate to={REQUEST_SETTINGS_HREF} replace />;
+  }
   if (capabilities.isLoading) return <RowsSkeleton />;
   if (
     !capabilities.data?.available ||
@@ -142,14 +128,22 @@ export default function AdminRequests() {
 
   return (
     <div className="space-y-6">
+      {/* The action sits under the text, as on the other admin pages: the
+          shell's search button floats over the header's top-right corner. */}
       <div className="page-header">
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-normal text-balance sm:text-4xl">
             Requests
           </h1>
           <p className="text-muted-foreground max-w-2xl text-sm leading-6">
-            Review media requests, set limits, and manage Radarr or Sonarr routing.
+            Review media requests and give one account its own request limit.
           </p>
+          <Button asChild variant="outline" size="sm">
+            <Link to={REQUEST_SETTINGS_HREF}>
+              <Settings2 aria-hidden="true" />
+              Request settings
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -161,19 +155,11 @@ export default function AdminRequests() {
             className="border-border w-max min-w-full justify-start border-b"
           >
             <TabsTrigger value="queue">Queue</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="integrations">Integrations</TabsTrigger>
             <TabsTrigger value="overrides">User Overrides</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="queue">
           <RequestQueueTab />
-        </TabsContent>
-        <TabsContent value="settings">
-          <RequestSettingsTab />
-        </TabsContent>
-        <TabsContent value="integrations">
-          <RequestIntegrationsTab />
         </TabsContent>
         <TabsContent value="overrides">
           <UserOverridesTab />
@@ -490,846 +476,6 @@ function RequestTargetBadge({ target }: { target: RequestTarget }) {
   );
 }
 
-type SettingsFormState = {
-  requests_enabled: boolean;
-  global_max_requests: string;
-  global_window_days: string;
-  global_auto_approval_enabled: boolean;
-  force_dual_quality: boolean;
-  updated_at: string;
-};
-
-function RequestSettingsTab() {
-  const settings = useRequestSettings();
-  const [generation, setGeneration] = useState(0);
-
-  if (settings.isLoading) return <RowsSkeleton />;
-  if (settings.isError && !settings.data) {
-    return <EmptyPanel title="Settings failed" detail="Request settings could not be loaded." />;
-  }
-  if (!settings.data) {
-    return <EmptyPanel title="No settings" detail="Request settings are not available." />;
-  }
-
-  return (
-    <RequestSettingsForm
-      key={generation}
-      settings={settings.data}
-      onReload={async () => {
-        const result = await settings.refetch();
-        if (result.isSuccess) setGeneration((n) => n + 1);
-      }}
-    />
-  );
-}
-
-function RequestSettingsForm({
-  settings,
-  onReload,
-}: {
-  settings: RequestSettings;
-  onReload: () => Promise<void>;
-}) {
-  const [etag, setETag] = useState(settings.etag);
-  const [conflict, setConflict] = useState(false);
-  const updateSettings = useUpdateRequestSettings();
-  const [form, setForm] = useState<SettingsFormState>(() => ({
-    requests_enabled: settings.requests_enabled,
-    global_max_requests: String(settings.global_max_requests),
-    global_window_days: String(settings.global_window_days),
-    global_auto_approval_enabled: settings.global_auto_approval_enabled,
-    force_dual_quality: settings.force_dual_quality,
-    updated_at: settings.updated_at,
-  }));
-
-  function saveSettings() {
-    const payload: RequestSettings = {
-      requests_enabled: form.requests_enabled,
-      global_max_requests: Math.max(0, Number(form.global_max_requests) || 0),
-      global_window_days: Math.max(1, Number(form.global_window_days) || 1),
-      global_auto_approval_enabled: form.global_auto_approval_enabled,
-      force_dual_quality: form.force_dual_quality,
-      updated_at: form.updated_at,
-      etag,
-    };
-    updateSettings.mutate(payload, {
-      onSuccess: (saved) => setETag(saved.etag),
-      onError: (error) => setConflict(isRequestEditorConflict(error)),
-    });
-  }
-
-  return (
-    <div className="border-border bg-card max-w-3xl space-y-5 rounded-lg border p-5">
-      <div className="flex items-center gap-2">
-        <Settings2 className="text-primary h-4 w-4" />
-        <h2 className="text-lg font-semibold tracking-normal">Global Settings</h2>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <SwitchField
-          label="Requests enabled"
-          checked={form.requests_enabled}
-          onCheckedChange={(checked) =>
-            setForm((current) => ({ ...current, requests_enabled: checked }))
-          }
-        />
-        <SwitchField
-          label="Auto approval"
-          checked={form.global_auto_approval_enabled}
-          onCheckedChange={(checked) =>
-            setForm((current) => ({ ...current, global_auto_approval_enabled: checked }))
-          }
-        />
-        <Field label="Max requests">
-          <Input
-            type="number"
-            min={0}
-            value={form.global_max_requests}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, global_max_requests: event.target.value }))
-            }
-          />
-        </Field>
-        <Field label="Window days">
-          <Input
-            type="number"
-            min={1}
-            value={form.global_window_days}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, global_window_days: event.target.value }))
-            }
-          />
-        </Field>
-        <div className="sm:col-span-2">
-          <SwitchField
-            label="Always fulfill in both 1080p and 4K"
-            description="Applies to all requests when both a Default HD and Default 4K instance exist, regardless of user role."
-            checked={form.force_dual_quality}
-            onCheckedChange={(checked) =>
-              setForm((current) => ({ ...current, force_dual_quality: checked }))
-            }
-          />
-        </div>
-      </div>
-
-      {conflict ? <EditorConflict onReload={onReload} /> : null}
-      <Button onClick={saveSettings} disabled={updateSettings.isPending || conflict || !etag}>
-        <Save className="h-4 w-4" />
-        Save Settings
-      </Button>
-    </div>
-  );
-}
-
-// Host chrome owned by Silo; everything arr-specific now lives in pluginConfig
-// and is rendered by the plugin's connection descriptor via <SchemaForm>.
-type IntegrationFormState = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  base_url: string;
-  api_key_ref: string;
-  has_api_key: boolean;
-  // Selected installed plugin (which request-router plugin fulfills this connection).
-  // Empty string means "none selected"; the backend requires a non-empty value.
-  installation_id: string;
-  // The specific request_router.v1 capability sub-id on that installation. Tracked
-  // alongside installation_id because one installation can expose more than one
-  // capability, so installation_id alone can't identify the chosen backend.
-  capability_id: string;
-};
-
-// All request integrations are fulfilled by a plugin exposing this capability.
-const REQUEST_ROUTER_CAPABILITY = "request_router.v1";
-
-type RequestRouterInstallation = {
-  installationID: number;
-  pluginID: string;
-  capability: PluginCapability;
-};
-
-// requestRouterInstallations flattens installed plugins to one entry per
-// request_router.v1 capability so the form can offer an installation selector.
-function requestRouterInstallations(
-  installations: PluginInstallation[],
-): RequestRouterInstallation[] {
-  const out: RequestRouterInstallation[] = [];
-  for (const installation of installations) {
-    for (const capability of installation.capabilities ?? []) {
-      if (
-        capability.type === REQUEST_ROUTER_CAPABILITY ||
-        capability.id === REQUEST_ROUTER_CAPABILITY
-      ) {
-        out.push({
-          installationID: installation.id,
-          pluginID: installation.plugin_id,
-          capability,
-        });
-      }
-    }
-  }
-  return out;
-}
-
-function installationOptionLabel(entry: RequestRouterInstallation): string {
-  const name = entry.capability.display_name || entry.pluginID;
-  return `${name} (${entry.capability.id})`;
-}
-
-// installationOptionValue is the <Select> option value: it encodes both the
-// installation and the capability sub-id so multiple capabilities on one
-// installation stay distinct (installation_id alone would collide).
-function installationOptionValue(entry: RequestRouterInstallation): string {
-  return `${entry.installationID}:${entry.capability.id}`;
-}
-
-function RequestIntegrationsTab() {
-  const integrations = useRequestIntegrations();
-
-  if (integrations.isLoading) return <RowsSkeleton />;
-  if (integrations.isError && !integrations.data) {
-    return (
-      <EmptyPanel title="Integrations failed" detail="Request integrations could not be loaded." />
-    );
-  }
-
-  const list = integrations.data ?? [];
-  return <RequestIntegrationsForm integrations={list} />;
-}
-
-type IntegrationCard = {
-  key: string;
-  form: IntegrationFormState;
-  pluginConfig: Record<string, unknown>;
-  source: RequestIntegration | null;
-};
-
-let integrationCardCounter = 0;
-
-function nextCardKey(): string {
-  integrationCardCounter += 1;
-  return `card-${integrationCardCounter}`;
-}
-
-function integrationToForm(integration?: RequestIntegration): IntegrationFormState {
-  return {
-    id: integration?.id ?? "",
-    name: integration?.name ?? "",
-    enabled: integration?.enabled ?? true,
-    base_url: integration?.base_url ?? "",
-    api_key_ref: "",
-    has_api_key: integration?.has_api_key ?? false,
-    installation_id: integration?.installation_id ? String(integration.installation_id) : "",
-    capability_id: integration?.capability_id ?? "",
-  };
-}
-
-type ConnectionOptionsStatus = "idle" | "loading" | "error";
-
-// useConnectionOptions debounces a ListConfigOptions probe keyed on the connection
-// IDENTITY (base URL + key ref + installation + capability) — NOT the full
-// plugin_config, so editing a quality profile / switch doesn't re-probe the arr
-// API. It backs the dynamic SELECT options (root folders, quality profiles, tags)
-// the descriptor declares. The probe is silent (no toasts); callers surface
-// failures inline via `status`. A generation counter enforces latest-wins so a
-// slow older probe can't overwrite a newer result, and options are cleared
-// whenever a probe can't run.
-function useConnectionOptions(
-  connectionID: string,
-  draft: {
-    base_url: string;
-    api_key_ref: string;
-    has_api_key: boolean;
-    installation_id?: number;
-    capability_id: string;
-    plugin_config: Record<string, unknown>;
-  },
-) {
-  const load = useLoadRequestIntegrationOptions();
-  const [options, setOptions] = useState<RequestIntegrationOptions>({});
-  const [status, setStatus] = useState<ConnectionOptionsStatus>("idle");
-  // Latest-wins guard: each probe captures the generation it started with and
-  // only commits its result if no newer probe has begun since.
-  const genRef = useRef(0);
-
-  const canLoad =
-    draft.base_url.trim().length > 0 &&
-    Boolean(draft.installation_id) &&
-    draft.capability_id.trim().length > 0 &&
-    Boolean(draft.api_key_ref.trim() || draft.has_api_key);
-
-  // Options depend ONLY on the connection identity. plugin_config is still sent
-  // in the request body so the plugin can resolve options, but it is not part of
-  // the signature — see #2.
-  const sig = JSON.stringify({
-    u: draft.base_url,
-    k: draft.api_key_ref,
-    i: draft.installation_id,
-    c: draft.capability_id,
-  });
-  const debouncedSig = useDebounce(sig, 400);
-
-  // Snapshot the latest connection inputs so the debounced effect sends the
-  // current plugin_config without re-firing when only plugin_config changes.
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
-
-  useEffect(() => {
-    if (!canLoad) {
-      // Bump the generation so any in-flight probe is invalidated, and clear any
-      // stale options from a previous/invalid connection so they never linger.
-      genRef.current += 1;
-      setOptions({});
-      setStatus("idle");
-      return;
-    }
-    const current = draftRef.current;
-    const gen = ++genRef.current;
-    setStatus("loading");
-    load
-      .mutateAsync({
-        id: connectionID || "new",
-        body: {
-          base_url: current.base_url,
-          api_key_ref: current.api_key_ref.trim() || undefined,
-          capability_id: current.capability_id,
-          installation_id: current.installation_id,
-          plugin_config: current.plugin_config,
-        },
-      })
-      .then((loaded) => {
-        if (gen === genRef.current) {
-          setOptions(loaded);
-          setStatus("idle");
-        }
-      })
-      .catch(() => {
-        if (gen === genRef.current) {
-          setOptions({});
-          setStatus("error");
-        }
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSig, canLoad]);
-  return { options, status };
-}
-
-function RequestIntegrationsForm({ integrations }: { integrations: RequestIntegration[] }) {
-  const installationsQuery = useAdminPluginInstallations();
-  const routerInstallations = useMemo(
-    () => requestRouterInstallations(installationsQuery.data ?? []),
-    [installationsQuery.data],
-  );
-  // When exactly one request-router plugin is installed, default new/unseeded
-  // connections to it so the admin doesn't have to pick.
-  const defaultSelection: Pick<IntegrationFormState, "installation_id" | "capability_id"> =
-    routerInstallations.length === 1
-      ? {
-          installation_id: String(routerInstallations[0]?.installationID ?? ""),
-          capability_id: routerInstallations[0]?.capability.id ?? "",
-        }
-      : { installation_id: "", capability_id: "" };
-
-  const [cards, setCards] = useState<IntegrationCard[]>(() =>
-    integrations.map((integration) => ({
-      key: integration.id || nextCardKey(),
-      form: integrationToForm(integration),
-      pluginConfig: { ...(integration.plugin_config ?? {}) },
-      source: integration,
-    })),
-  );
-
-  function updateCard(key: string, patch: Partial<IntegrationFormState>) {
-    setCards((current) =>
-      current.map((card) =>
-        card.key === key ? { ...card, form: { ...card.form, ...patch } } : card,
-      ),
-    );
-  }
-
-  function updateCardConfig(key: string, pluginConfig: Record<string, unknown>) {
-    setCards((current) => {
-      const mapped = current.map((card) => ({
-        key: card.key,
-        installationId: card.form.installation_id,
-        config: card.key === key ? pluginConfig : card.pluginConfig,
-      }));
-      const fieldsFor = (installationId: string) =>
-        routerInstallations.find((entry) => String(entry.installationID) === installationId)
-          ?.capability.config_schema?.[0]?.admin_form?.fields ?? [];
-      const next = applyExclusivity(mapped, key, pluginConfig, fieldsFor);
-      const byKey = new Map(next.map((entry) => [entry.key, entry.config]));
-      return current.map((card) => ({
-        ...card,
-        pluginConfig: byKey.get(card.key) ?? card.pluginConfig,
-      }));
-    });
-  }
-
-  function addCard() {
-    setCards((current) => [
-      ...current,
-      {
-        key: nextCardKey(),
-        form: { ...integrationToForm(), ...defaultSelection },
-        pluginConfig: {},
-        source: null,
-      },
-    ]);
-  }
-
-  function removeCard(key: string) {
-    setCards((current) => current.filter((card) => card.key !== key));
-  }
-
-  const noRouterPlugin = !installationsQuery.isLoading && routerInstallations.length === 0;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-normal">Connections</h2>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={addCard}
-          disabled={noRouterPlugin}
-        >
-          <Plus className="h-4 w-4" />
-          Add connection
-        </Button>
-      </div>
-      {noRouterPlugin ? (
-        <EmptyPanel
-          title="No request-router plugin installed"
-          detail={`Install a plugin that exposes the ${REQUEST_ROUTER_CAPABILITY} capability before adding connections.`}
-        />
-      ) : cards.length === 0 ? (
-        <EmptyPanel
-          title="No connections"
-          detail="Add a connection and pick a plugin to route requests."
-        />
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {cards.map((card) => (
-            <IntegrationEditor
-              key={`${card.key}:${card.source?.etag ?? "new"}`}
-              form={card.form}
-              pluginConfig={card.pluginConfig}
-              installations={routerInstallations}
-              installationsLoading={installationsQuery.isLoading}
-              source={card.source}
-              onChange={(patch) => updateCard(card.key, patch)}
-              onConfigChange={(config) => updateCardConfig(card.key, config)}
-              onRemove={() => removeCard(card.key)}
-              onSaved={(saved) =>
-                setCards((current) =>
-                  current.map((c) =>
-                    c.key === card.key
-                      ? {
-                          key: c.key,
-                          form: integrationToForm(saved),
-                          pluginConfig: { ...(saved.plugin_config ?? {}) },
-                          source: saved,
-                        }
-                      : c,
-                  ),
-                )
-              }
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function IntegrationEditor({
-  form,
-  pluginConfig,
-  installations,
-  installationsLoading,
-  source,
-  onChange,
-  onConfigChange,
-  onRemove,
-  onSaved,
-}: {
-  form: IntegrationFormState;
-  pluginConfig: Record<string, unknown>;
-  installations: RequestRouterInstallation[];
-  installationsLoading: boolean;
-  source: RequestIntegration | null;
-  onChange: (patch: Partial<IntegrationFormState>) => void;
-  onConfigChange: (config: Record<string, unknown>) => void;
-  onRemove: () => void;
-  onSaved: (saved: RequestIntegration) => void;
-}) {
-  const isNew = form.id === "";
-  const createIntegration = useCreateRequestIntegration();
-  const updateIntegration = useUpdateRequestIntegration();
-  const deleteIntegration = useDeleteRequestIntegration();
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [conflict, setConflict] = useState(false);
-  const etag = source?.etag;
-  const reload = async () => {
-    try {
-      onSaved(await getAdminRequestIntegrationV2(form.id));
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Reload failed");
-    }
-  };
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [formError, setFormError] = useState<string | null>(null);
-  // SchemaForm owns config validation and reports it up; the editor consumes the
-  // result instead of re-running validateSchemaValues itself.
-  const [schemaValid, setSchemaValid] = useState(true);
-
-  // Any edit invalidates a prior failed save's server-side errors, so clear them
-  // wholesale on edit. A corrected field's stale "does not exist" then disappears.
-  function clearSaveErrors() {
-    setFieldErrors((current) => (Object.keys(current).length === 0 ? current : {}));
-    setFormError((current) => (current === null ? current : null));
-  }
-
-  function patchForm(patch: Partial<IntegrationFormState>) {
-    clearSaveErrors();
-    onChange(patch);
-  }
-
-  function patchConfig(config: Record<string, unknown>) {
-    clearSaveErrors();
-    onConfigChange(config);
-  }
-
-  // Default-select the only installed request-router plugin once installations
-  // have loaded, when this connection has no installation set yet. Depend on a
-  // stable scalar (not the array identity) so a refetch returning the same single
-  // plugin does not re-fire and re-select after a deliberate clear.
-  const soleInstallation = installations.length === 1 ? installations[0] : undefined;
-  const soleInstallationID =
-    soleInstallation !== undefined ? String(soleInstallation.installationID) : undefined;
-  useEffect(() => {
-    if (form.installation_id || soleInstallation === undefined) return;
-    onChange({
-      installation_id: String(soleInstallation.installationID),
-      capability_id: soleInstallation.capability.id,
-    });
-    // onChange identity is stable per card; intentionally depend on the data only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.installation_id, soleInstallationID]);
-
-  const selectedInstallationID = Number(form.installation_id);
-  const hasInstallation = Number.isInteger(selectedInstallationID) && selectedInstallationID > 0;
-  // Match on both installation and capability sub-id so a multi-capability
-  // installation resolves the exact backend; fall back to installation-only for
-  // connections whose capability_id isn't set yet (adopts that installation's
-  // capability).
-  const selected =
-    installations.find(
-      (entry) =>
-        entry.installationID === selectedInstallationID &&
-        entry.capability.id === form.capability_id,
-    ) ?? installations.find((entry) => entry.installationID === selectedInstallationID);
-
-  // Switching the selected plugin must drop the previous plugin's config (so its
-  // keys never reach the new plugin's schema in the options probe or save) and
-  // clear stale save errors (handled by patchForm -> clearSaveErrors).
-  function handlePluginChange(value: string) {
-    const entry = installations.find((e) => installationOptionValue(e) === value);
-    if (!entry) return;
-    if (
-      entry.installationID === selectedInstallationID &&
-      entry.capability.id === form.capability_id
-    ) {
-      return; // no actual change; keep existing config
-    }
-    patchForm({
-      installation_id: String(entry.installationID),
-      capability_id: entry.capability.id,
-    });
-    onConfigChange({});
-  }
-  const selectedConfigSchema = selected?.capability.config_schema?.[0];
-  const descriptor = selectedConfigSchema?.admin_form;
-  const title = selected?.capability.display_name || selected?.pluginID || "Connection";
-
-  const { options, status: optionsStatus } = useConnectionOptions(form.id, {
-    base_url: form.base_url,
-    api_key_ref: form.api_key_ref,
-    has_api_key: form.has_api_key,
-    installation_id: hasInstallation ? selectedInstallationID : undefined,
-    capability_id: selected?.capability.id ?? "",
-    plugin_config: pluginConfig,
-  });
-
-  // Once dynamic options arrive, default each empty single-SELECT field to its
-  // first option (restores the old root_folder/quality_profile pre-selection
-  // generically). MULTI_SELECT (tags) is left empty; values the admin already
-  // chose are never clobbered. Read config/onChange from refs so the effect keys
-  // only on options + descriptor and doesn't re-fire on unrelated edits.
-  const configRef = useRef(pluginConfig);
-  configRef.current = pluginConfig;
-  const onConfigChangeRef = useRef(onConfigChange);
-  onConfigChangeRef.current = onConfigChange;
-  useEffect(() => {
-    if (!descriptor) return;
-    const current = configRef.current;
-    const patch: Record<string, unknown> = {};
-    for (const field of descriptor.fields) {
-      if (field.control !== "SELECT" || !field.dynamic_options) continue;
-      const first = options[field.key]?.[0];
-      if (!first) continue;
-      const value = current[field.key];
-      const empty = value === undefined || value === null || value === "";
-      if (empty) patch[field.key] = first.value;
-    }
-    if (Object.keys(patch).length > 0) {
-      onConfigChangeRef.current({ ...current, ...patch });
-    }
-  }, [options, descriptor]);
-
-  const saving = createIntegration.isPending || updateIntegration.isPending;
-  // New instances must carry an API key (there's no saved key to fall back on);
-  // edits may leave it blank to keep the stored key (has_api_key).
-  const hasApiKey = form.api_key_ref.trim().length > 0 || form.has_api_key;
-  // schemaValid is reported by SchemaForm via onValidityChange. With no descriptor
-  // (no plugin form) there's nothing to validate, so the chrome checks govern.
-  const canSave =
-    !conflict &&
-    (isNew || Boolean(etag)) &&
-    form.name.trim().length > 0 &&
-    form.base_url.trim().length > 0 &&
-    hasApiKey &&
-    hasInstallation &&
-    (!descriptor || schemaValid);
-
-  function handleSave() {
-    // Coercion is driven by the plugin's declared json_schema types so e.g. a
-    // numeric string isn't sent where a string is declared (and vice versa).
-    const fieldTypes = parseFieldTypes(selectedConfigSchema?.json_schema);
-    const nextPluginConfig = descriptor
-      ? buildSchemaValues(descriptor, pluginConfig, fieldTypes)
-      : pluginConfig;
-    // plugin_config is the sole source of truth for fulfillment; the host owns
-    // only the generic connection chrome (name, base_url, api_key, installation).
-    const payload = {
-      id: form.id,
-      etag,
-      name: form.name.trim(),
-      enabled: form.enabled,
-      base_url: form.base_url.trim(),
-      api_key_ref: form.api_key_ref.trim() || undefined,
-      capability_id: selected?.capability.id ?? "",
-      installation_id: hasInstallation ? selectedInstallationID : undefined,
-      supported_media_types: supportedMediaTypesForConfig(nextPluginConfig, source),
-      plugin_config: nextPluginConfig,
-    } as RequestIntegration;
-
-    setFieldErrors({});
-    setFormError(null);
-    const mut = isNew ? createIntegration : updateIntegration;
-    mut.mutate(payload, {
-      onSuccess: onSaved,
-      onError: (err) => {
-        if (isRequestEditorConflict(err)) setConflict(true);
-        const validation = requestValidationErrors(err);
-        if (validation) {
-          setFieldErrors(validation.fields);
-          setFormError(validation.message);
-        }
-      },
-    });
-  }
-
-  return (
-    <div className="border-border bg-card space-y-5 rounded-lg border p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Plug className="text-primary h-4 w-4" />
-          <h2 className="text-lg font-semibold tracking-normal">{title}</h2>
-          {form.has_api_key ? <Badge variant="secondary">Key saved</Badge> : null}
-          {isNew ? <Badge variant="outline">New</Badge> : null}
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 text-sm select-none">
-          <span className="text-muted-foreground">{form.enabled ? "Enabled" : "Disabled"}</span>
-          <Switch checked={form.enabled} onCheckedChange={(enabled) => patchForm({ enabled })} />
-        </label>
-      </div>
-
-      {formError ? (
-        <p className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm">
-          {formError}
-        </p>
-      ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Name" error={fieldErrors.name}>
-          <Input
-            aria-invalid={Boolean(fieldErrors.name)}
-            value={form.name}
-            onChange={(event) => patchForm({ name: event.target.value })}
-            placeholder="Connection name"
-          />
-        </Field>
-        <Field label="API key or setting key" error={fieldErrors.api_key_ref}>
-          <Input
-            aria-invalid={Boolean(fieldErrors.api_key_ref)}
-            value={form.api_key_ref}
-            onChange={(event) => patchForm({ api_key_ref: event.target.value })}
-            placeholder={form.has_api_key ? "Leave blank to keep saved key" : "API key"}
-          />
-        </Field>
-      </div>
-
-      <Field label="Base URL" error={fieldErrors.base_url}>
-        <Input
-          aria-invalid={Boolean(fieldErrors.base_url)}
-          value={form.base_url}
-          onChange={(event) => patchForm({ base_url: event.target.value })}
-          placeholder="http://localhost:7878"
-        />
-      </Field>
-
-      <Field
-        label="Plugin"
-        error={[fieldErrors.installation_id, fieldErrors.capability_id].filter(Boolean).join(" ")}
-      >
-        {installationsLoading ? (
-          <Skeleton className="h-9 w-full rounded-md" />
-        ) : installations.length === 0 ? (
-          <p className="text-destructive text-xs">
-            No installed plugin exposes the {REQUEST_ROUTER_CAPABILITY} capability. Install a
-            request-router plugin before adding connections.
-          </p>
-        ) : (
-          <Select
-            value={selected ? installationOptionValue(selected) : ""}
-            onValueChange={handlePluginChange}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select plugin" />
-            </SelectTrigger>
-            <SelectContent>
-              {installations.map((entry) => (
-                <SelectItem
-                  key={installationOptionValue(entry)}
-                  value={installationOptionValue(entry)}
-                >
-                  {installationOptionLabel(entry)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        {!installationsLoading && installations.length > 0 && !hasInstallation ? (
-          <p className="text-destructive text-xs">Select a plugin to fulfill this connection.</p>
-        ) : null}
-      </Field>
-
-      {descriptor ? (
-        <div className="space-y-2">
-          <SchemaForm
-            descriptor={descriptor}
-            values={pluginConfig}
-            onChange={patchConfig}
-            dynamicOptions={options}
-            optionsLoading={optionsStatus === "loading"}
-            errors={fieldErrors}
-            onValidityChange={setSchemaValid}
-            idPrefix={`conn-${form.id || form.installation_id || "new"}`}
-          />
-          {optionsStatus === "error" && form.base_url.trim().length > 0 ? (
-            <p className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-xs">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                Couldn&apos;t load options from the service — check the base URL and API key, then
-                edit a field to retry.
-              </span>
-            </p>
-          ) : null}
-        </div>
-      ) : hasInstallation ? (
-        <p className="text-muted-foreground text-sm">
-          This plugin does not expose a connection configuration form.
-        </p>
-      ) : (
-        <p className="text-muted-foreground text-sm">
-          Select a plugin to configure this connection.
-        </p>
-      )}
-
-      {conflict ? <EditorConflict onReload={reload} /> : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" onClick={handleSave} disabled={!canSave || saving}>
-          <Save className="h-4 w-4" />
-          {isNew ? "Create connection" : "Save"}
-        </Button>
-        {isNew ? (
-          <Button type="button" variant="ghost" onClick={onRemove}>
-            <X className="h-4 w-4" />
-            Discard
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            className="text-destructive"
-            onClick={() => setConfirmDelete(true)}
-            disabled={deleteIntegration.isPending || conflict || !etag}
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </Button>
-        )}
-      </div>
-
-      <Dialog
-        open={confirmDelete}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDelete(false);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete connection</DialogTitle>
-            <DialogDescription>
-              {`"${form.name.trim() || title}" will be permanently removed. New requests will no longer route to this connection.`}
-            </DialogDescription>
-          </DialogHeader>
-          {conflict ? <EditorConflict onReload={reload} /> : null}
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                deleteIntegration.mutate(
-                  { id: form.id, etag },
-                  {
-                    onSuccess: () => {
-                      setConfirmDelete(false);
-                      onRemove();
-                    },
-                    onError: (error) => {
-                      if (isRequestEditorConflict(error)) setConflict(true);
-                    },
-                  },
-                );
-              }}
-              disabled={deleteIntegration.isPending || conflict || !etag}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
 type UserLimitFormState = {
   limit_mode: RequestLimitMode;
   max_requests: string;
@@ -1519,33 +665,6 @@ function UserLimitEditor({
   );
 }
 
-function EditorConflict({ onReload }: { onReload: () => Promise<void> }) {
-  const [loading, setLoading] = useState(false);
-  return (
-    <div role="alert" className="space-y-2 text-sm">
-      <p>
-        This was changed by another administrator. Your edits have been kept. Reload to review the
-        latest version before saving again.
-      </p>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={loading}
-        onClick={async () => {
-          setLoading(true);
-          try {
-            await onReload();
-          } finally {
-            setLoading(false);
-          }
-        }}
-      >
-        Reload latest version
-      </Button>
-    </div>
-  );
-}
-
 function Field({ label, children, error }: { label: string; children: ReactNode; error?: string }) {
   return (
     <div className="space-y-2">
@@ -1556,30 +675,6 @@ function Field({ label, children, error }: { label: string; children: ReactNode;
           {error}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-function SwitchField({
-  label,
-  checked,
-  onCheckedChange,
-  description,
-  disabled,
-}: {
-  label: string;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-  description?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="border-border flex items-center justify-between gap-3 rounded-lg border p-3">
-      <div className="space-y-1">
-        <Label>{label}</Label>
-        {description ? <p className="text-muted-foreground text-xs">{description}</p> : null}
-      </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
     </div>
   );
 }

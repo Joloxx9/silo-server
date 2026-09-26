@@ -402,6 +402,14 @@ export const adminKeys = {
   requests: (params: Record<string, unknown>) => ["admin", "requests", params] as const,
   requestSettings: () => ["admin", "requests", "settings"] as const,
   requestIntegrations: () => ["admin", "requests", "integrations"] as const,
+  // The next three sit outside requestsRoot on purpose: every request, server,
+  // and settings write invalidates that root. Nothing those writes change shows
+  // up in a route, and reading the routes is one GET per route; the options
+  // each call out to the server's Sonarr or Radarr.
+  requestRoutes: () => ["admin", "requestRoutes"] as const,
+  requestIntegrationOptionsRoot: () => ["admin", "requestIntegrationOptions"] as const,
+  requestIntegrationOptions: (integrationId: string) =>
+    ["admin", "requestIntegrationOptions", integrationId] as const,
   requestUserLimit: (userId: number) => ["admin", "requests", "users", userId, "limit"] as const,
   recommendationsStatus: () => ["admin", "recommendationsStatus"] as const,
   inviteCodes: () => ["admin", "inviteCodes"] as const,

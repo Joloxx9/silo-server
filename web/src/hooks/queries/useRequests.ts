@@ -14,6 +14,15 @@ import {
   declineAdminRequestV2,
   retryAdminRequestV2,
   loadAdminRequestIntegrationOptionsV2,
+  listAdminRequestRoutesV2,
+  createAdminRequestRouteV2,
+  updateAdminRequestRouteV2,
+  deleteAdminRequestRouteV2,
+  reorderAdminRequestRoutesV2,
+  previewAdminRequestRouteV2,
+  type RequestRoute,
+  type RequestRouteBody,
+  type RequestRouteMediaType,
 } from "@/api/v2/adminRequests";
 import { v2 } from "@/api/v2/request";
 import {
@@ -94,19 +103,30 @@ export function useRequestDiscoverySection(section: string, page = 1) {
   });
 }
 
-export function useDiscoverStudios() {
+export interface DiscoverBrandQueryOptions {
+  /** When false, the list is not read. Default: true. */
+  enabled?: boolean;
+  /** Retry policy; the admin routing editor passes false so a refusal is not repeated. */
+  retry?: boolean;
+}
+
+export function useDiscoverStudios(options: DiscoverBrandQueryOptions = {}) {
   return useQuery({
     queryKey: requestKeys.discoverStudios(),
     queryFn: listDiscoverStudiosV2,
     staleTime: DISCOVER_BRAND_STALE_TIME,
+    enabled: options.enabled ?? true,
+    ...(options.retry !== undefined ? { retry: options.retry } : {}),
   });
 }
 
-export function useDiscoverNetworks() {
+export function useDiscoverNetworks(options: DiscoverBrandQueryOptions = {}) {
   return useQuery({
     queryKey: requestKeys.discoverNetworks(),
     queryFn: listDiscoverNetworksV2,
     staleTime: DISCOVER_BRAND_STALE_TIME,
+    enabled: options.enabled ?? true,
+    ...(options.retry !== undefined ? { retry: options.retry } : {}),
   });
 }
 
@@ -322,14 +342,19 @@ export function useUpdateRequestSettings() {
   return useMutation({
     retry: false,
     mutationFn: putAdminRequestSettingsV2,
-    onSuccess: () => {
+    onSuccess: (saved) => {
       toast.success("Request settings saved");
-      queryClient.invalidateQueries({ queryKey: adminKeys.requestSettings() });
+      // The editor adopts the saved record; the cache has to hold it first,
+      // or a clean editor would follow the query back to the replaced one.
+      queryClient.setQueryData(adminKeys.requestSettings(), saved);
       queryClient.invalidateQueries({ queryKey: requestKeys.status() });
       invalidateRequestSurfaces(queryClient);
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to save request settings");
+      // A refused save (412) means someone else saved; read their version so
+      // a discarded draft starts from it.
+      queryClient.invalidateQueries({ queryKey: adminKeys.requestSettings() });
     },
   });
 }
@@ -342,6 +367,14 @@ export function useRequestIntegrations() {
   });
 }
 
+// A saved server's connection may have changed, so the root folders, quality
+// profiles, and tags read from it are stale too.
+function invalidateRequestServers(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: adminKeys.requestIntegrations() });
+  queryClient.invalidateQueries({ queryKey: adminKeys.requestIntegrationOptionsRoot() });
+  invalidateRequestSurfaces(queryClient);
+}
+
 export function useCreateRequestIntegration() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -349,13 +382,12 @@ export function useCreateRequestIntegration() {
     mutationFn: (integration: RequestIntegration) =>
       saveAdminRequestIntegrationV2(integration, true),
     onSuccess: () => {
-      toast.success("Integration created");
-      queryClient.invalidateQueries({ queryKey: adminKeys.requestIntegrations() });
-      invalidateRequestSurfaces(queryClient);
+      toast.success("Server added");
+      invalidateRequestServers(queryClient);
     },
     onError: (err) => {
       if (isValidationFailure(err)) return;
-      toast.error(err instanceof Error ? err.message : "Failed to create integration");
+      toast.error(err instanceof Error ? err.message : "Failed to add server");
     },
   });
 }
@@ -366,13 +398,12 @@ export function useUpdateRequestIntegration() {
     retry: false,
     mutationFn: (integration: RequestIntegration) => saveAdminRequestIntegrationV2(integration),
     onSuccess: () => {
-      toast.success("Integration saved");
-      queryClient.invalidateQueries({ queryKey: adminKeys.requestIntegrations() });
-      invalidateRequestSurfaces(queryClient);
+      toast.success("Server saved");
+      invalidateRequestServers(queryClient);
     },
     onError: (err) => {
       if (isValidationFailure(err)) return;
-      toast.error(err instanceof Error ? err.message : "Failed to save integration");
+      toast.error(err instanceof Error ? err.message : "Failed to save server");
     },
   });
 }
@@ -383,13 +414,138 @@ export function useDeleteRequestIntegration() {
     retry: false,
     mutationFn: deleteAdminRequestIntegrationV2,
     onSuccess: () => {
-      toast.success("Integration deleted");
-      queryClient.invalidateQueries({ queryKey: adminKeys.requestIntegrations() });
-      invalidateRequestSurfaces(queryClient);
+      toast.success("Server deleted");
+      invalidateRequestServers(queryClient);
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to delete integration");
+      toast.error(err instanceof Error ? err.message : "Failed to delete server");
     },
+  });
+}
+
+/**
+ * The root folders, quality profiles, and tags a saved server offers, read
+ * through the server's own stored connection. A routing destination picks its
+ * overrides from these.
+ */
+export function useRequestIntegrationOptions(integrationId: string | undefined) {
+  return useQuery({
+    queryKey: adminKeys.requestIntegrationOptions(integrationId ?? ""),
+    queryFn: () => loadAdminRequestIntegrationOptionsV2(integrationId!, { base_url: "" }),
+    enabled: Boolean(integrationId),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
+export function useRequestRoutes() {
+  return useQuery({
+    queryKey: adminKeys.requestRoutes(),
+    queryFn: listAdminRequestRoutesV2,
+    staleTime: REQUESTS_STALE_TIME,
+  });
+}
+
+// Reordering, like any save, advances the revision of every route it touches,
+// so the whole list is read again rather than patched in place. The promise
+// is returned so a mutation stays pending until the list is fresh: a second
+// reorder or toggle computed from the old list would undo the first or carry
+// a replaced validator.
+function invalidateRequestRoutes(queryClient: ReturnType<typeof useQueryClient>) {
+  return queryClient.invalidateQueries({ queryKey: adminKeys.requestRoutes() });
+}
+
+/** Writes a saved route into the list, so an editor adopting it is not pulled back. */
+function storeRequestRoute(queryClient: ReturnType<typeof useQueryClient>, saved: RequestRoute) {
+  queryClient.setQueryData<RequestRoute[]>(adminKeys.requestRoutes(), (routes) =>
+    routes?.map((route) => (route.id === saved.id ? saved : route)),
+  );
+}
+
+/** A problem in one line: its detail and every field error it carries. */
+function problemMessage(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) return fallback;
+  if (!(err instanceof V2ProblemError)) return err.message;
+  const details = [err.message, ...(err.problem.errors ?? []).map((e) => e.detail)];
+  return [...new Set(details.filter(Boolean))].join(" ");
+}
+
+/**
+ * Toasts a failed route write. A caller that shows validation errors beside
+ * its fields passes `inline`; anyone else (a toggle, a reorder) would
+ * otherwise fail without a word.
+ */
+function routeMutationError(err: unknown, fallback: string, inline = false) {
+  if (inline && isValidationFailure(err)) return;
+  toast.error(problemMessage(err, fallback));
+}
+
+/** Adds a rule from the rule editor, which shows validation errors itself. */
+export function useCreateRequestRoute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (body: RequestRouteBody) => createAdminRequestRouteV2(body),
+    onSuccess: () => {
+      toast.success("Rule added");
+      return invalidateRequestRoutes(queryClient);
+    },
+    onError: (err) => routeMutationError(err, "Failed to add rule", true),
+  });
+}
+
+/** `inlineErrors`: the caller shows validation errors beside its fields. */
+export function useUpdateRequestRoute({ inlineErrors = false }: { inlineErrors?: boolean } = {}) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: ({
+      route,
+      body,
+    }: {
+      route: Pick<RequestRoute, "id" | "etag">;
+      body: RequestRouteBody;
+    }) => updateAdminRequestRouteV2(route, body),
+    onSuccess: (saved) => {
+      toast.success(saved.is_fallback ? "Default destination saved" : "Rule saved");
+      storeRequestRoute(queryClient, saved);
+    },
+    onError: (err) => routeMutationError(err, "Failed to save routing", inlineErrors),
+    // After a refused save too: the list then carries the other admin's version.
+    onSettled: () => invalidateRequestRoutes(queryClient),
+  });
+}
+
+export function useDeleteRequestRoute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (route: Pick<RequestRoute, "id" | "etag">) => deleteAdminRequestRouteV2(route),
+    onSuccess: () => {
+      toast.success("Rule deleted");
+    },
+    onError: (err) => routeMutationError(err, "Failed to delete rule"),
+    onSettled: () => invalidateRequestRoutes(queryClient),
+  });
+}
+
+export function useReorderRequestRoutes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: ({ mediaType, ids }: { mediaType: RequestRouteMediaType; ids: string[] }) =>
+      reorderAdminRequestRoutesV2(mediaType, ids),
+    onError: (err) => routeMutationError(err, "Failed to reorder rules"),
+    onSettled: () => invalidateRequestRoutes(queryClient),
+  });
+}
+
+/** Asks where each quality tier of a title would go; failures are shown inline. */
+export function usePreviewRequestRoute() {
+  return useMutation({
+    retry: false,
+    mutationFn: ({ mediaType, tmdbId }: { mediaType: RequestRouteMediaType; tmdbId: number }) =>
+      previewAdminRequestRouteV2(mediaType, tmdbId),
   });
 }
 
