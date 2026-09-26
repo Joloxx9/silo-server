@@ -260,6 +260,7 @@ GET /api/v2/admin/request-routes	non-media
 POST /api/v2/admin/request-routes	non-media
 POST /api/v2/admin/request-routes/order	non-media
 POST /api/v2/admin/request-routes/preview	non-media
+GET /api/v2/admin/request-routes/titles	non-media
 DELETE /api/v2/admin/request-routes/{id}	non-media
 GET /api/v2/admin/request-routes/{id}	non-media
 PUT /api/v2/admin/request-routes/{id}	non-media
@@ -1433,6 +1434,7 @@ GET /api/v2/admin/request-routes	non-media
 POST /api/v2/admin/request-routes	non-media
 POST /api/v2/admin/request-routes/order	non-media
 POST /api/v2/admin/request-routes/preview	non-media
+GET /api/v2/admin/request-routes/titles	non-media
 DELETE /api/v2/admin/request-routes/{id}	non-media
 GET /api/v2/admin/request-routes/{id}	non-media
 PUT /api/v2/admin/request-routes/{id}	non-media

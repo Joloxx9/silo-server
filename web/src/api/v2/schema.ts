@@ -3372,6 +3372,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/admin/request-routes/titles": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Search TMDB for titles to try the routing rules on; works while requests are turned off. */
+    get: operations["searchRequestRouteTitles"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/admin/request-settings": {
     parameters: {
       query?: never;
@@ -14672,7 +14689,7 @@ export interface components {
        * @example fallback-movie
        */
       id: string;
-      /** @description The media type's default destination: it has no conditions and cannot be deleted */
+      /** @description The media type's Everything else: it has no conditions, comes last and cannot be deleted; with no 4K server it makes no 4K copy */
       is_fallback: boolean;
       /** @enum {string} */
       media_type: "movie" | "series";
@@ -14706,10 +14723,34 @@ export interface components {
       anime?: boolean;
       /** @description TMDB production company IDs (movies) */
       company_ids?: number[];
+      /** @description Match movies from none of these TMDB companies */
+      exclude_company_ids?: number[];
+      /** @description Match titles with none of these TMDB genre IDs */
+      exclude_genre_ids?: number[];
+      /** @description Match titles with none of these TMDB keyword IDs */
+      exclude_keyword_ids?: number[];
+      /** @description Match series on none of these TMDB networks */
+      exclude_network_ids?: number[];
+      /** @description Match titles from none of these ISO 3166-1 countries */
+      exclude_origin_countries?: string[];
+      /**
+       * @description Match titles whose original language is none of these ISO 639-1 codes
+       * @example [
+       *       "en"
+       *     ]
+       */
+      exclude_original_languages?: string[];
+      /** @description Match requests from none of these accounts */
+      exclude_requester_user_ids?: number[];
       /** @description TMDB genre IDs */
       genre_ids?: number[];
       /** @description TMDB keyword IDs */
       keyword_ids?: number[];
+      /**
+       * @description Match titles whose US rating is at most this one; a title with no US rating does not match
+       * @example PG
+       */
+      max_content_rating?: string;
       /** @description TMDB network IDs (series) */
       network_ids?: number[];
       /**
@@ -14752,6 +14793,11 @@ export interface components {
     AdminRequestRouteFacts: {
       anime: boolean;
       company_ids: number[];
+      /**
+       * @description The title's US rating; absent when TMDB has none
+       * @example TV-14
+       */
+      content_rating?: string;
       genre_ids: number[];
       keyword_ids: number[];
       network_ids: number[];
@@ -14764,7 +14810,7 @@ export interface components {
       /** @enum {string} */
       media_type: "movie" | "series";
       /**
-       * @description Route as this account's request; account conditions are skipped when absent
+       * @description Route as this account's request; without it, rules for certain accounts do not match
        * @example 1
        */
       requester_user_id?: string;
@@ -14777,7 +14823,27 @@ export interface components {
     };
     AdminRequestRoutePreviewOutputBody: {
       facts: components["schemas"]["AdminRequestRouteFacts"];
+      /** @description Every route of the media type in evaluation order, with what it did */
+      rules: components["schemas"]["AdminRequestRoutePreviewRule"][];
       tiers: components["schemas"]["AdminRequestRoutePreviewTier"][];
+    };
+    AdminRequestRoutePreviewRule: {
+      enabled: boolean;
+      /**
+       * @description What the route did for the HD copy
+       * @enum {string}
+       */
+      hd: "sends" | "skips" | "passes" | "no_match" | "already_decided";
+      is_fallback: boolean;
+      route_id: string;
+      route_name: string;
+      /**
+       * @description What the route did for the 4K copy
+       * @enum {string}
+       */
+      uhd: "sends" | "skips" | "passes" | "no_match" | "already_decided";
+      /** @description The conditions the title fails, by field name (e.g. genre_ids); empty when it matches */
+      unmet_conditions: string[];
     };
     AdminRequestRoutePreviewTier: {
       integration_id?: string;
@@ -14797,6 +14863,31 @@ export interface components {
       ids: string[];
       /** @enum {string} */
       media_type: "movie" | "series";
+    };
+    AdminRequestRouteTitle: {
+      /** @enum {string} */
+      media_type: "movie" | "series";
+      /** @description TMDB image path */
+      poster_path?: string;
+      /** @example Spirited Away */
+      title: string;
+      /**
+       * Format: int64
+       * @description TMDB identifier (external, not a Silo ID)
+       * @example 129
+       */
+      tmdb_id: number;
+      /**
+       * Format: int64
+       * @example 2001
+       */
+      year?: number;
+    };
+    AdminRequestRouteTitleCollection: {
+      /** @description The page's items; empty, never null */
+      items: components["schemas"]["AdminRequestRouteTitle"][];
+      /** @description Cursor state; absent for bounded unpaginated collections */
+      page?: components["schemas"]["PageInfo"];
     };
     AdminRequestSettings: {
       force_dual_quality: boolean;
@@ -59342,6 +59433,125 @@ export interface operations {
       };
       /** @description Unsupported Media Type */
       415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  searchRequestRouteTitles: {
+    parameters: {
+      query: {
+        media_type: "movie" | "series";
+        /** @description Title to search TMDB for */
+        q: string;
+      };
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminRequestRouteTitleCollection"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
         headers: {
           [name: string]: unknown;
         };

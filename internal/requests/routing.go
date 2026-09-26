@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/Silo-Server/silo-server/internal/access"
 )
 
 // Routing: Silo decides which server each quality tier of a request goes to,
@@ -56,8 +58,9 @@ type RouteDestination struct {
 }
 
 // RouteConditions narrow a route to some requests. Every set field must match
-// (AND); a list matches when the request has any of its values (OR). An empty
-// condition set matches everything.
+// (AND); a list matches when the request has any of its values (OR), and an
+// exclude list when it has none of them. An empty condition set matches
+// everything.
 type RouteConditions struct {
 	Anime             *bool    `json:"anime,omitempty"`
 	GenreIDs          []int    `json:"genre_ids,omitempty"`
@@ -71,35 +74,112 @@ type RouteConditions struct {
 	NetworkIDs       []int `json:"network_ids,omitempty"`
 	CompanyIDs       []int `json:"company_ids,omitempty"`
 	RequesterUserIDs []int `json:"requester_user_ids,omitempty"`
+
+	ExcludeGenreIDs          []int    `json:"exclude_genre_ids,omitempty"`
+	ExcludeKeywordIDs        []int    `json:"exclude_keyword_ids,omitempty"`
+	ExcludeOriginalLanguages []string `json:"exclude_original_languages,omitempty"`
+	ExcludeOriginCountries   []string `json:"exclude_origin_countries,omitempty"`
+	ExcludeNetworkIDs        []int    `json:"exclude_network_ids,omitempty"`
+	ExcludeCompanyIDs        []int    `json:"exclude_company_ids,omitempty"`
+	ExcludeRequesterUserIDs  []int    `json:"exclude_requester_user_ids,omitempty"`
+	// MaxContentRating matches titles whose US rating is at most this one
+	// ("PG" takes G and PG). A title with no US rating does not match, as a
+	// parental ceiling treats it.
+	MaxContentRating string `json:"max_content_rating,omitempty"`
 }
+
+// Condition keys, as the JSON fields name them; Unmet reports them.
+const (
+	condAnime                    = "anime"
+	condGenreIDs                 = "genre_ids"
+	condKeywordIDs               = "keyword_ids"
+	condOriginalLanguages        = "original_languages"
+	condOriginCountries          = "origin_countries"
+	condYearFrom                 = "year_from"
+	condYearTo                   = "year_to"
+	condNetworkIDs               = "network_ids"
+	condCompanyIDs               = "company_ids"
+	condRequesterUserIDs         = "requester_user_ids"
+	condExcludeGenreIDs          = "exclude_genre_ids"
+	condExcludeKeywordIDs        = "exclude_keyword_ids"
+	condExcludeOriginalLanguages = "exclude_original_languages"
+	condExcludeOriginCountries   = "exclude_origin_countries"
+	condExcludeNetworkIDs        = "exclude_network_ids"
+	condExcludeCompanyIDs        = "exclude_company_ids"
+	condExcludeRequesterUserIDs  = "exclude_requester_user_ids"
+	condMaxContentRating         = "max_content_rating"
+)
 
 // Matches reports whether a request satisfies every set condition, judged on
 // its stored routing facts.
 func (c RouteConditions) Matches(req Request) bool {
+	return len(c.Unmet(req)) == 0
+}
+
+// Unmet lists the set conditions a request fails, by key, in a fixed order.
+// Routing and the admin preview's explanation share it.
+func (c RouteConditions) Unmet(req Request) []string {
 	f := req.RoutingFacts
-	switch {
-	case c.Anime != nil && *c.Anime != f.Anime:
-		return false
-	case len(c.GenreIDs) > 0 && !anyInt(c.GenreIDs, f.GenreIDs):
-		return false
-	case len(c.KeywordIDs) > 0 && !anyInt(c.KeywordIDs, f.KeywordIDs):
-		return false
-	case len(c.OriginalLanguages) > 0 && !anyFold(c.OriginalLanguages, []string{f.OriginalLanguage}):
-		return false
-	case len(c.OriginCountries) > 0 && !anyFold(c.OriginCountries, f.OriginCountries):
-		return false
-	case c.YearFrom > 0 && (f.Year == 0 || f.Year < c.YearFrom):
-		return false
-	case c.YearTo > 0 && (f.Year == 0 || f.Year > c.YearTo):
-		return false
-	case len(c.NetworkIDs) > 0 && !anyInt(c.NetworkIDs, f.NetworkIDs):
-		return false
-	case len(c.CompanyIDs) > 0 && !anyInt(c.CompanyIDs, f.CompanyIDs):
-		return false
-	case len(c.RequesterUserIDs) > 0 && !slices.Contains(c.RequesterUserIDs, req.RequestedByUserID):
+	language := []string{f.OriginalLanguage}
+	var out []string
+	fail := func(failed bool, key string) {
+		if failed {
+			out = append(out, key)
+		}
+	}
+	fail(c.Anime != nil && *c.Anime != f.Anime, condAnime)
+	fail(len(c.GenreIDs) > 0 && !anyInt(c.GenreIDs, f.GenreIDs), condGenreIDs)
+	fail(len(c.KeywordIDs) > 0 && !anyInt(c.KeywordIDs, f.KeywordIDs), condKeywordIDs)
+	fail(len(c.OriginalLanguages) > 0 && !anyFold(c.OriginalLanguages, language), condOriginalLanguages)
+	fail(len(c.OriginCountries) > 0 && !anyFold(c.OriginCountries, f.OriginCountries), condOriginCountries)
+	fail(c.YearFrom > 0 && (f.Year == 0 || f.Year < c.YearFrom), condYearFrom)
+	fail(c.YearTo > 0 && (f.Year == 0 || f.Year > c.YearTo), condYearTo)
+	fail(len(c.NetworkIDs) > 0 && !anyInt(c.NetworkIDs, f.NetworkIDs), condNetworkIDs)
+	fail(len(c.CompanyIDs) > 0 && !anyInt(c.CompanyIDs, f.CompanyIDs), condCompanyIDs)
+	fail(len(c.RequesterUserIDs) > 0 && !slices.Contains(c.RequesterUserIDs, req.RequestedByUserID), condRequesterUserIDs)
+	fail(anyInt(c.ExcludeGenreIDs, f.GenreIDs), condExcludeGenreIDs)
+	fail(anyInt(c.ExcludeKeywordIDs, f.KeywordIDs), condExcludeKeywordIDs)
+	fail(anyFold(c.ExcludeOriginalLanguages, language), condExcludeOriginalLanguages)
+	fail(anyFold(c.ExcludeOriginCountries, f.OriginCountries), condExcludeOriginCountries)
+	fail(anyInt(c.ExcludeNetworkIDs, f.NetworkIDs), condExcludeNetworkIDs)
+	fail(anyInt(c.ExcludeCompanyIDs, f.CompanyIDs), condExcludeCompanyIDs)
+	fail(slices.Contains(c.ExcludeRequesterUserIDs, req.RequestedByUserID) && req.RequestedByUserID != 0, condExcludeRequesterUserIDs)
+	fail(c.MaxContentRating != "" && !ratingWithin(f.ContentRating, c.MaxContentRating), condMaxContentRating)
+	return out
+}
+
+// routesCheckRating reports whether an enabled route of the media type
+// matches on content rating.
+func routesCheckRating(routes []Route, mediaType MediaType) bool {
+	for _, route := range routes {
+		if route.Enabled && route.MediaType == mediaType && route.Conditions.MaxContentRating != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// ratingWithin reports whether a title's US rating is at most max, by each
+// rating's own minimum age (not the parental-control tiers, which would let
+// "TV-Y7 or lower" take TV-PG). An unknown or unrated title is not.
+func ratingWithin(rating *string, max string) bool {
+	if rating == nil || strings.TrimSpace(*rating) == "" {
 		return false
 	}
-	return true
+	maxAge, ok := ratingAge(max)
+	if !ok {
+		return false
+	}
+	age, ok := ratingAge(*rating)
+	return ok && age <= maxAge
+}
+
+func ratingAge(rating string) (int, bool) {
+	_, age, ok := access.Normalize(rating)
+	if !ok || age == nil {
+		return 0, false
+	}
+	return *age, true
 }
 
 func anyInt(want, have []int) bool {
@@ -153,34 +233,89 @@ func orderRoutes(routes []Route) []Route {
 // anywhere is absent from the result; a tier a route skips is present with
 // Skip set.
 func decideRoutes(routes []Route, req Request, qualities []Quality) map[Quality]RouteDecision {
-	ordered := orderRoutes(routes)
-	out := make(map[Quality]RouteDecision, len(qualities))
+	decisions, _ := traceRoutes(routes, req, qualities)
+	return decisions
+}
+
+// RouteStep is what one route did for one quality tier.
+type RouteStep string
+
+const (
+	// RouteStepSends: the route matched and sent the tier to its server.
+	RouteStepSends RouteStep = "sends"
+	// RouteStepSkips: the route matched and made no copy in the tier.
+	RouteStepSkips RouteStep = "skips"
+	// RouteStepPasses: the route matched but has no server for the tier, so
+	// a later route decides.
+	RouteStepPasses RouteStep = "passes"
+	// RouteStepNoMatch: the route is off, or the request fails a condition.
+	RouteStepNoMatch RouteStep = "no_match"
+	// RouteStepDecided: an earlier route already decided the tier.
+	RouteStepDecided RouteStep = "already_decided"
+)
+
+// RouteTrace is one route's part in a decision, for the admin preview.
+type RouteTrace struct {
+	Route Route
+	Unmet []string
+	Steps map[Quality]RouteStep
+}
+
+// traceRoutes decides like decideRoutes and records, for every route of the
+// request's media type in evaluation order, what it did for each tier.
+//
+// Everything else with no 4K server makes no 4K copy: the tier is skipped,
+// even when every request asks for 4K (force-dual), rather than left
+// undecided and failed.
+func traceRoutes(routes []Route, req Request, qualities []Quality) (map[Quality]RouteDecision, []RouteTrace) {
+	var ordered []Route
+	for _, route := range orderRoutes(routes) {
+		if route.MediaType == req.MediaType {
+			ordered = append(ordered, route)
+		}
+	}
+	decisions := make(map[Quality]RouteDecision, len(qualities))
+	traces := make([]RouteTrace, len(ordered))
+	for i, route := range ordered {
+		traces[i] = RouteTrace{Route: route, Steps: make(map[Quality]RouteStep, len(qualities))}
+		if route.Enabled {
+			traces[i].Unmet = route.Conditions.Unmet(req)
+		}
+	}
 	for _, q := range qualities {
-		for _, route := range ordered {
-			if !route.Enabled || route.MediaType != req.MediaType || !route.Conditions.Matches(req) {
+		for i, route := range ordered {
+			trace := &traces[i]
+			if !route.Enabled || len(trace.Unmet) > 0 {
+				trace.Steps[q] = RouteStepNoMatch
 				continue
 			}
-			if q == Quality2160p && route.SkipUHD {
-				out[q] = RouteDecision{RouteID: route.ID, RouteName: route.Name, Skip: true}
-				break
+			if _, done := decisions[q]; done {
+				trace.Steps[q] = RouteStepDecided
+				continue
 			}
 			dest := route.HD
 			if q == Quality2160p {
 				dest = route.UHD
 			}
-			if dest.IntegrationID == "" {
+			if q == Quality2160p && (route.SkipUHD || (route.IsFallback && dest.IntegrationID == "")) {
+				decisions[q] = RouteDecision{RouteID: route.ID, RouteName: route.Name, Skip: true}
+				trace.Steps[q] = RouteStepSkips
 				continue
 			}
-			out[q] = RouteDecision{
+			if dest.IntegrationID == "" {
+				trace.Steps[q] = RouteStepPasses
+				continue
+			}
+			decisions[q] = RouteDecision{
 				RouteID:       route.ID,
 				RouteName:     route.Name,
 				IntegrationID: dest.IntegrationID,
 				Overrides:     dest.Overrides,
 			}
-			break
+			trace.Steps[q] = RouteStepSends
 		}
 	}
-	return out
+	return decisions, traces
 }
 
 // routedConnection builds the one connection a routed tier is sent to. The
@@ -219,9 +354,8 @@ func routedConnection(fc *fulfillContext, d RouteDecision, mediaType MediaType, 
 	maps.Copy(config, d.Overrides)
 	config[configIsDefault] = q == Quality1080p
 	config[configIsDefault4K] = q == Quality2160p
-	if q == Quality2160p {
-		config[configIs4K] = true
-	}
+	// The server's own 4K flag must not follow an HD copy there.
+	config[configIs4K] = q == Quality2160p
 	config[configAnimeEnabled] = false
 	return ResolvedRouterConnection{
 		ID:      in.ID,

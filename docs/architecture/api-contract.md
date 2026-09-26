@@ -2020,7 +2020,8 @@ Request routing rules (`/admin/request-routes`) are v2-only: list (bounded,
 unpaginated, in evaluation order, always including each media type's fallback),
 read, create, replace and delete by ID, reorder a media type's rules, and a
 read-only `preview` that shows which server each quality tier of a title would
-go to. Replacement and deletion require `If-Match` on the rule's revision; a
+go to and, rule by rule, why, plus an admin title search
+(`GET /admin/request-routes/titles`) for trying titles while requests are off. Replacement and deletion require `If-Match` on the rule's revision; a
 fallback that was never saved reads as revision zero and its first replacement
 creates it. The fallback cannot be deleted, and a rule cannot be created until
 its media type's fallback has an HD server.

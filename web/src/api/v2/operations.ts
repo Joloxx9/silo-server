@@ -182,6 +182,7 @@ export const v2Operations = {
   "GET /api/v2/admin/request-integrations": "listRequestIntegrations",
   "GET /api/v2/admin/request-integrations/{id}": "getRequestIntegration",
   "GET /api/v2/admin/request-routes": "listRequestRoutes",
+  "GET /api/v2/admin/request-routes/titles": "searchRequestRouteTitles",
   "GET /api/v2/admin/request-routes/{id}": "getRequestRoute",
   "GET /api/v2/admin/request-settings": "getAdminRequestSettings",
   "GET /api/v2/admin/request-users/{user_id}/limit": "getAdminRequestUserLimit",

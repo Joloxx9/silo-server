@@ -45,6 +45,9 @@ var (
 type RoutePreview struct {
 	Facts RoutingFacts
 	Tiers []RoutePreviewTier
+	// Rules explains the decision: every route of the media type in
+	// evaluation order, the conditions it failed, and what it did per tier.
+	Rules []RouteTrace
 }
 
 // RoutePreviewTier is one quality tier's outcome. RouteID is empty when no
@@ -177,7 +180,7 @@ func (s *Service) CreateRoute(ctx context.Context, viewer Viewer, route Route) (
 		return nil, &ValidationError{FormError: fmt.Sprintf("A media type can have at most %d rules.", maxRoutesPerMediaType)}
 	}
 	if !fallbackReady {
-		return nil, &ValidationError{FormError: "Choose the default server for " + mediaTypePlural(route.MediaType) + " before adding rules; titles no rule matches go there."}
+		return nil, &ValidationError{FormError: "Choose where everything else goes before adding rules."}
 	}
 	return store.SaveRouteConditional(ctx, route, 0)
 }
@@ -223,7 +226,7 @@ func (s *Service) DeleteRouteConditional(ctx context.Context, viewer Viewer, id 
 		return err
 	}
 	if current.IsFallback {
-		return &ValidationError{FormError: "The default destination cannot be deleted; change its servers instead."}
+		return &ValidationError{FormError: "Everything else can't be deleted; change where it sends requests instead."}
 	}
 	return store.DeleteRouteConditional(ctx, current.ID, expected)
 }
@@ -301,8 +304,8 @@ func (s *Service) PreviewRoute(ctx context.Context, viewer Viewer, mediaType Med
 	req := Request{MediaType: mediaType, TMDBID: tmdbID, RequestedByUserID: requesterUserID, RoutingFacts: routingFactsFrom(detail, s.now())}
 	routes := fc.routesFor(mediaType)
 	qualities := []Quality{Quality1080p, Quality2160p}
-	decisions := decideRoutes(routes, req, qualities)
-	preview := &RoutePreview{Facts: req.RoutingFacts}
+	decisions, traces := traceRoutes(routes, req, qualities)
+	preview := &RoutePreview{Facts: req.RoutingFacts, Rules: traces}
 	for _, q := range qualities {
 		tier := RoutePreviewTier{Quality: q}
 		decision, ok := decisions[q]
@@ -313,7 +316,7 @@ func (s *Service) PreviewRoute(ctx context.Context, viewer Viewer, mediaType Med
 			tier.Reason = "No rule sends " + qualityLabel(q) + " for this title."
 		case decision.Skip:
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
-			tier.Reason = decision.RouteName + " skips 4K for this title."
+			tier.Reason = decision.RouteName + " makes no 4K copy."
 		default:
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
 			tier.IntegrationID, tier.Overrides = decision.IntegrationID, decision.Overrides
@@ -401,22 +404,22 @@ func (s *Service) validateRoute(ctx context.Context, route *Route) error {
 		route.Enabled = true
 		route.SkipUHD = false
 		if !conditionsEmpty(route.Conditions) {
-			fields["conditions"] = "The default destination applies to everything; it takes no conditions."
+			fields["conditions"] = "Everything else takes every request; it can't have conditions."
 		}
 		// A saved fallback moves the media type to Silo's routing; without an
 		// HD server, every title no rule matches would fail.
 		if route.HD.IntegrationID == "" && fields["hd.integration_id"] == "" {
-			fields["hd.integration_id"] = "Choose the server titles no rule matches go to."
+			fields["hd.integration_id"] = "Choose the server that gets everything else."
 		}
 	} else {
 		if conditionsEmpty(route.Conditions) {
-			fields["conditions"] = "Add at least one condition; the default destination handles everything else."
+			fields["conditions"] = "Add at least one condition. Requests no rule matches go to Everything else."
 		}
 		if route.HD.IntegrationID == "" && route.UHD.IntegrationID == "" && !route.SkipUHD {
-			fields["hd"] = "Choose a server for HD or 4K, or skip 4K."
+			fields["hd"] = "Choose where HD or 4K copies go, or don't make a 4K copy."
 		}
 		if route.SkipUHD && route.UHD.IntegrationID != "" {
-			fields["uhd"] = "A rule that skips 4K cannot also send 4K somewhere."
+			fields["uhd"] = "A rule can't both send 4K copies somewhere and skip them."
 		}
 	}
 	if len(fields) > 0 {
@@ -444,7 +447,7 @@ func validateDestination(field string, dest *RouteDestination, mediaType MediaTy
 	if kind, _ := in.PluginConfig[configServiceKind].(string); kind != "" {
 		wantKind := map[MediaType]string{MediaTypeMovie: kindRadarr, MediaTypeSeries: kindSonarr}[mediaType]
 		if wantKind != "" && kind != wantKind {
-			fields[field+".integration_id"] = fmt.Sprintf("%s is a %s server; %s go to %s.", in.Name, kind, mediaTypePlural(mediaType), wantKind)
+			fields[field+".integration_id"] = fmt.Sprintf("%s is a %s server; %s need %s.", in.Name, kindLabel(kind), mediaTypePlural(mediaType), kindLabel(wantKind))
 		}
 	}
 	for _, key := range routingOwnedConfigKeys {
@@ -492,13 +495,21 @@ func normalizeConditions(c RouteConditions) RouteConditions {
 	c.NetworkIDs, c.CompanyIDs = ids(c.NetworkIDs), ids(c.CompanyIDs)
 	c.RequesterUserIDs = ids(c.RequesterUserIDs)
 	c.OriginalLanguages, c.OriginCountries = lower(c.OriginalLanguages), upper(c.OriginCountries)
+	c.ExcludeGenreIDs, c.ExcludeKeywordIDs = ids(c.ExcludeGenreIDs), ids(c.ExcludeKeywordIDs)
+	c.ExcludeNetworkIDs, c.ExcludeCompanyIDs = ids(c.ExcludeNetworkIDs), ids(c.ExcludeCompanyIDs)
+	c.ExcludeRequesterUserIDs = ids(c.ExcludeRequesterUserIDs)
+	c.ExcludeOriginalLanguages, c.ExcludeOriginCountries = lower(c.ExcludeOriginalLanguages), upper(c.ExcludeOriginCountries)
+	c.MaxContentRating = strings.TrimSpace(c.MaxContentRating)
 	return c
 }
 
 func validateConditions(c RouteConditions, fields map[string]string) {
 	for field, values := range map[string][]int{
-		"genre_ids": c.GenreIDs, "keyword_ids": c.KeywordIDs, "network_ids": c.NetworkIDs,
-		"company_ids": c.CompanyIDs, "requester_user_ids": c.RequesterUserIDs,
+		condGenreIDs: c.GenreIDs, condKeywordIDs: c.KeywordIDs, condNetworkIDs: c.NetworkIDs,
+		condCompanyIDs: c.CompanyIDs, condRequesterUserIDs: c.RequesterUserIDs,
+		condExcludeGenreIDs: c.ExcludeGenreIDs, condExcludeKeywordIDs: c.ExcludeKeywordIDs,
+		condExcludeNetworkIDs: c.ExcludeNetworkIDs, condExcludeCompanyIDs: c.ExcludeCompanyIDs,
+		condExcludeRequesterUserIDs: c.ExcludeRequesterUserIDs,
 	} {
 		for _, v := range values {
 			if v <= 0 {
@@ -507,16 +518,36 @@ func validateConditions(c RouteConditions, fields map[string]string) {
 			}
 		}
 	}
-	for _, v := range c.OriginalLanguages {
-		if !languageCode.MatchString(v) {
-			fields["conditions.original_languages"] = "Use ISO 639-1 language codes such as ja or en."
-			break
+	for field, values := range map[string][]string{condOriginalLanguages: c.OriginalLanguages, condExcludeOriginalLanguages: c.ExcludeOriginalLanguages} {
+		for _, v := range values {
+			if !languageCode.MatchString(v) {
+				fields["conditions."+field] = "Use ISO 639-1 language codes such as ja or en."
+				break
+			}
 		}
 	}
-	for _, v := range c.OriginCountries {
-		if !countryCode.MatchString(v) {
-			fields["conditions.origin_countries"] = "Use ISO 3166-1 country codes such as JP or US."
-			break
+	for field, values := range map[string][]string{condOriginCountries: c.OriginCountries, condExcludeOriginCountries: c.ExcludeOriginCountries} {
+		for _, v := range values {
+			if !countryCode.MatchString(v) {
+				fields["conditions."+field] = "Use ISO 3166-1 country codes such as JP or US."
+				break
+			}
+		}
+	}
+	// A value both wanted and excluded makes the rule match nothing.
+	overlaps := slices.ContainsFunc(c.GenreIDs, func(v int) bool { return slices.Contains(c.ExcludeGenreIDs, v) }) ||
+		slices.ContainsFunc(c.KeywordIDs, func(v int) bool { return slices.Contains(c.ExcludeKeywordIDs, v) }) ||
+		slices.ContainsFunc(c.NetworkIDs, func(v int) bool { return slices.Contains(c.ExcludeNetworkIDs, v) }) ||
+		slices.ContainsFunc(c.CompanyIDs, func(v int) bool { return slices.Contains(c.ExcludeCompanyIDs, v) }) ||
+		slices.ContainsFunc(c.RequesterUserIDs, func(v int) bool { return slices.Contains(c.ExcludeRequesterUserIDs, v) }) ||
+		slices.ContainsFunc(c.OriginalLanguages, func(v string) bool { return slices.Contains(c.ExcludeOriginalLanguages, v) }) ||
+		slices.ContainsFunc(c.OriginCountries, func(v string) bool { return slices.Contains(c.ExcludeOriginCountries, v) })
+	if overlaps {
+		fields["conditions"] = "Remove the values that are in both \u201cis any of\u201d and \u201cis none of\u201d."
+	}
+	if c.MaxContentRating != "" {
+		if _, ok := ratingAge(c.MaxContentRating); !ok {
+			fields["conditions."+condMaxContentRating] = "Choose a rating such as G, PG, PG-13 or TV-Y7."
 		}
 	}
 	for field, year := range map[string]int{"year_from": c.YearFrom, "year_to": c.YearTo} {
@@ -530,9 +561,23 @@ func validateConditions(c RouteConditions, fields map[string]string) {
 }
 
 func conditionsEmpty(c RouteConditions) bool {
-	return c.Anime == nil && len(c.GenreIDs) == 0 && len(c.KeywordIDs) == 0 && len(c.OriginalLanguages) == 0 &&
-		len(c.OriginCountries) == 0 && c.YearFrom == 0 && c.YearTo == 0 && len(c.NetworkIDs) == 0 &&
-		len(c.CompanyIDs) == 0 && len(c.RequesterUserIDs) == 0
+	lists := len(c.GenreIDs) + len(c.KeywordIDs) + len(c.OriginalLanguages) + len(c.OriginCountries) +
+		len(c.NetworkIDs) + len(c.CompanyIDs) + len(c.RequesterUserIDs) +
+		len(c.ExcludeGenreIDs) + len(c.ExcludeKeywordIDs) + len(c.ExcludeOriginalLanguages) +
+		len(c.ExcludeOriginCountries) + len(c.ExcludeNetworkIDs) + len(c.ExcludeCompanyIDs) +
+		len(c.ExcludeRequesterUserIDs)
+	return c.Anime == nil && lists == 0 && c.YearFrom == 0 && c.YearTo == 0 && c.MaxContentRating == ""
+}
+
+// kindLabel names a server kind as admins see it.
+func kindLabel(kind string) string {
+	switch kind {
+	case kindRadarr:
+		return "Radarr"
+	case kindSonarr:
+		return "Sonarr"
+	}
+	return kind
 }
 
 func (r *Repository) GetRoute(ctx context.Context, id string) (*Route, error) {
@@ -627,4 +672,44 @@ func (r *Repository) ReorderRoutes(ctx context.Context, mediaType MediaType, ids
 		return fmt.Errorf("reorder request routes: %w", err)
 	}
 	return nil
+}
+
+// maxRouteTitleResults bounds the admin title search.
+const maxRouteTitleResults = 10
+
+// SearchRouteTitles finds titles to try the routing rules on. It is the
+// admins' own search: it works while requests are turned off and applies no
+// viewer's rating ceiling.
+func (s *Service) SearchRouteTitles(ctx context.Context, viewer Viewer, mediaType MediaType, query string) ([]tmdb.MediaResult, error) {
+	if !viewer.IsAdmin {
+		return nil, ErrForbidden
+	}
+	mediaType, err := normalizeMediaType(mediaType)
+	if err != nil {
+		return nil, err
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, fmt.Errorf("%w: search text is required", ErrInvalidInput)
+	}
+	if s.tmdb == nil {
+		return nil, ErrIntegrationUnreachable
+	}
+	page, err := s.tmdb.SearchMedia(ctx, string(mediaType), query, 1)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrIntegrationUnreachable, err)
+	}
+	out := []tmdb.MediaResult{}
+	if page == nil {
+		return out, nil
+	}
+	for _, result := range page.Results {
+		if len(out) == maxRouteTitleResults {
+			break
+		}
+		if resultType, err := normalizeMediaType(MediaType(result.MediaType)); err == nil && resultType == mediaType && result.ID > 0 {
+			out = append(out, result)
+		}
+	}
+	return out, nil
 }

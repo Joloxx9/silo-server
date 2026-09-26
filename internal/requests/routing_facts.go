@@ -22,6 +22,10 @@ type RoutingFacts struct {
 	NetworkIDs []int `json:"network_ids,omitempty"`
 	CompanyIDs []int `json:"company_ids,omitempty"`
 	Anime      bool  `json:"anime,omitempty"`
+	// ContentRating is the title's US rating ("PG", "TV-14"); "" when TMDB
+	// has none, nil when it was never looked up (requests from before it
+	// was captured).
+	ContentRating *string `json:"content_rating,omitempty"`
 	// CapturedAt is unset on requests from before capture, which is how
 	// routing tells "no facts yet" from a title TMDB knows little about.
 	CapturedAt *time.Time `json:"captured_at,omitempty"`
@@ -45,6 +49,7 @@ func routingFactsFrom(detail *tmdb.MediaDetail, now time.Time) RoutingFacts {
 		NetworkIDs:       detail.NetworkIDs,
 		CompanyIDs:       detail.CompanyIDs,
 		Anime:            detectAnime(detail.KeywordIDs),
+		ContentRating:    &detail.USCertification,
 		CapturedAt:       &now,
 	}
 }

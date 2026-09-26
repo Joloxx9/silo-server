@@ -171,25 +171,28 @@ type apiError struct {
 // MediaType is Silo-facing: "movie" or "series". Series-specific fields are
 // zero-valued for movies and vice versa.
 type MediaDetail struct {
-	MediaType           string
-	ID                  int
-	IMDbID              string
-	TVDBID              int
-	Title               string
-	OriginalTitle       string
-	Tagline             string
-	Overview            string
-	PosterPath          string
-	BackdropPath        string
-	ReleaseDate         string
-	Year                int
-	Runtime             int
-	Genres              []string
-	VoteAverage         float64
-	VoteCount           int
-	Status              string
-	Homepage            string
-	ContentRating       string
+	MediaType     string
+	ID            int
+	IMDbID        string
+	TVDBID        int
+	Title         string
+	OriginalTitle string
+	Tagline       string
+	Overview      string
+	PosterPath    string
+	BackdropPath  string
+	ReleaseDate   string
+	Year          int
+	Runtime       int
+	Genres        []string
+	VoteAverage   float64
+	VoteCount     int
+	Status        string
+	Homepage      string
+	ContentRating string
+	// USCertification is the US rating alone (the one GetCertification
+	// reports); ContentRating falls back to other countries for display.
+	USCertification     string
 	ProductionCompanies []string
 	OriginalLanguage    string
 	KeywordIDs          []int

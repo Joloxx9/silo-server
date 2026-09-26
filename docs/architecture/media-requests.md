@@ -37,15 +37,25 @@ media type and hold conditions and a destination per tier: a server plus
 overrides for its plugin config (root folder, quality profile, tags, series type,
 minimum availability, ...). Conditions match on the request's routing facts and
 requester: anime, genre, keyword, original language, origin country, year range,
-network, studio, requesting account. Every set condition must hold, and a list
-matches any of its values.
+network, studio, requesting account, and US content rating ("at most PG"). Every
+set condition must hold; a list matches any of its values, and each list has an
+exclude form that matches when the title has none of them ("original language
+is not English"). A title with no US rating never matches a rating condition,
+as a parental ceiling treats it. Ratings compare by their own minimum ages
+("TV-Y7 or lower" does not take TV-PG), and a title TMDB had not rated yet is
+asked about again a day later. The rating is captured with the other facts
+from the detail TMDB already returns; a request captured before the rating was
+gets it at submission, only when a route checks ratings.
 
 Each tier is decided on its own: the first enabled route, in position order,
 whose conditions match and that has a destination for the tier wins, and the
 media type's fallback route (no conditions) comes last. A route with no
 destination for a tier lets that tier fall through; `skip_uhd` stops a matching
-title from getting a 4K copy at all, even with `force_dual_quality`. Without
-`force_dual_quality`, a title no route sends to a 4K server gets no 4K copy.
+title from getting a 4K copy at all, even with `force_dual_quality`, and so
+does Everything else with no 4K server: "no 4K copy" means the same on a rule
+and on the fallback. The admin preview explains a decision route by route: the
+conditions each failed and what it did per tier (sent, skipped, passed on, did
+not match, came after the tier was decided).
 
 A routed submission calls the plugin once per tier with only the chosen server.
 Its config carries the route's overrides and marks it the tier's default in the
@@ -71,6 +81,12 @@ and routing leaves the media type to the plugin. Saving it requires an HD server
 since a saved fallback moves the media type to Silo's routing. A rule cannot be added before
 the fallback has an HD server, because the first rule switches the media type to
 Silo's routing and titles no rule matches would otherwise have nowhere to go.
+The first Radarr (Sonarr) server added becomes Everything else for movies
+(series) in the same transaction, unless another enabled server already takes
+that media type (another of the kind, or a Seerr connection) or the new one is
+flagged 4K; a migration did the same for installs with exactly one usable
+server of a kind, so a single-server setup needs no routing. Deleting the last server of a kind removes that Everything else with
+it when no rule routes the media type; otherwise the delete is refused.
 Rules must narrow (at least one condition) and must do something (a destination,
 or skip 4K), and cannot override the config keys routing sets itself.
 

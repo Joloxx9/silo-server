@@ -2092,7 +2092,7 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 // for it, one plugin call per tier with only that server, so the plugin
 // cannot pick another.
 func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, fc *fulfillContext, routes []Route) (*Request, error) {
-	if err := s.ensureRoutingFacts(ctx, &req); err != nil {
+	if err := s.ensureRoutingFacts(ctx, &req, routes); err != nil {
 		return nil, err
 	}
 	allowed, resolved := s.allowedQualities(ctx, req, fc.settings)
@@ -2162,12 +2162,40 @@ func qualityLabel(q Quality) string {
 	return "HD"
 }
 
+// unratedRecheck is how long a title with no US rating goes before routing
+// asks TMDB again.
+const unratedRecheck = 24 * time.Hour
+
 // ensureRoutingFacts fetches the routing facts of a request created before
 // they were captured, or while TMDB was unreachable, and stores them. Routing
 // without them could send a title to the wrong server, so a TMDB failure is a
-// submission error and the submission retries.
-func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request) error {
+// submission error and the submission retries. A request captured before its
+// US rating was is given one, only when an enabled route checks ratings.
+func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request, routes []Route) error {
 	if req.RoutingFacts.Captured() {
+		// A title TMDB had not rated yet (unreleased) is asked again a day
+		// later, so a rating route can still match it once it is rated.
+		stored := req.RoutingFacts.ContentRating
+		known := stored != nil && (*stored != "" || s.now().Sub(*req.RoutingFacts.CapturedAt) < unratedRecheck)
+		if known || !routesCheckRating(routes, req.MediaType) {
+			return nil
+		}
+		certs, ok := s.tmdb.(TMDBCertificationClient)
+		if !ok {
+			return errors.New("could not read the title's US rating from TMDB to route it")
+		}
+		rating, err := certs.GetCertification(ctx, string(req.MediaType), req.TMDBID)
+		if err != nil {
+			return fmt.Errorf("could not read the title's US rating from TMDB to route it: %w", err)
+		}
+		facts := req.RoutingFacts
+		now := s.now()
+		facts.ContentRating, facts.CapturedAt = &rating, &now
+		updated, err := s.store.SetRoutingFacts(ctx, req.ID, facts)
+		if err != nil {
+			return err
+		}
+		req.RoutingFacts = updated.RoutingFacts
 		return nil
 	}
 	detail := s.requestDetail(ctx, req.MediaType, req.TMDBID)

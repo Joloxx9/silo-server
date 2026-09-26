@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Silo-Server/silo-server/internal/metadata/tmdb"
 	mediarequests "github.com/Silo-Server/silo-server/internal/requests"
 )
 
@@ -14,17 +15,18 @@ import (
 // "Routing").
 
 const (
-	opListRequestRoutes    = "listRequestRoutes"
-	opGetRequestRoute      = "getRequestRoute"
-	opCreateRequestRoute   = "createRequestRoute"
-	opUpdateRequestRoute   = "updateRequestRoute"
-	opDeleteRequestRoute   = "deleteRequestRoute"
-	opReorderRequestRoutes = "reorderRequestRoutes"
-	opPreviewRequestRoute  = "previewRequestRoute"
+	opListRequestRoutes        = "listRequestRoutes"
+	opGetRequestRoute          = "getRequestRoute"
+	opCreateRequestRoute       = "createRequestRoute"
+	opUpdateRequestRoute       = "updateRequestRoute"
+	opDeleteRequestRoute       = "deleteRequestRoute"
+	opReorderRequestRoutes     = "reorderRequestRoutes"
+	opPreviewRequestRoute      = "previewRequestRoute"
+	opSearchRequestRouteTitles = "searchRequestRouteTitles"
 )
 
 var adminRequestRouteOperationIDs = []string{opListRequestRoutes, opGetRequestRoute, opCreateRequestRoute,
-	opUpdateRequestRoute, opDeleteRequestRoute, opReorderRequestRoutes, opPreviewRequestRoute}
+	opUpdateRequestRoute, opDeleteRequestRoute, opReorderRequestRoutes, opPreviewRequestRoute, opSearchRequestRouteTitles}
 
 // adminRequestRoutes is the route administration slice of the request
 // service.
@@ -36,10 +38,12 @@ type adminRequestRoutes interface {
 	DeleteRouteConditional(context.Context, mediarequests.Viewer, string, int64) error
 	ReorderRoutes(context.Context, mediarequests.Viewer, mediarequests.MediaType, []string) ([]mediarequests.Route, error)
 	PreviewRoute(context.Context, mediarequests.Viewer, mediarequests.MediaType, int, int) (*mediarequests.RoutePreview, error)
+	SearchRouteTitles(context.Context, mediarequests.Viewer, mediarequests.MediaType, string) ([]tmdb.MediaResult, error)
 }
 
 // AdminRequestRouteConditions narrow a route. Every set field must match; a
-// list matches when the title has any of its values.
+// list matches when the title has any of its values, and an exclude list when
+// it has none of them. Its fields mirror the service's, in the same order.
 type AdminRequestRouteConditions struct {
 	Anime             *bool    `json:"anime,omitempty" doc:"Match titles TMDB tags as anime (true) or not (false)"`
 	GenreIDs          []int    `json:"genre_ids,omitempty" doc:"TMDB genre IDs"`
@@ -51,6 +55,15 @@ type AdminRequestRouteConditions struct {
 	NetworkIDs        []int    `json:"network_ids,omitempty" doc:"TMDB network IDs (series)"`
 	CompanyIDs        []int    `json:"company_ids,omitempty" doc:"TMDB production company IDs (movies)"`
 	RequesterUserIDs  []int    `json:"requester_user_ids,omitempty" doc:"Accounts whose requests the route applies to"`
+
+	ExcludeGenreIDs          []int    `json:"exclude_genre_ids,omitempty" doc:"Match titles with none of these TMDB genre IDs"`
+	ExcludeKeywordIDs        []int    `json:"exclude_keyword_ids,omitempty" doc:"Match titles with none of these TMDB keyword IDs"`
+	ExcludeOriginalLanguages []string `json:"exclude_original_languages,omitempty" doc:"Match titles whose original language is none of these ISO 639-1 codes" example:"[\"en\"]"`
+	ExcludeOriginCountries   []string `json:"exclude_origin_countries,omitempty" doc:"Match titles from none of these ISO 3166-1 countries"`
+	ExcludeNetworkIDs        []int    `json:"exclude_network_ids,omitempty" doc:"Match series on none of these TMDB networks"`
+	ExcludeCompanyIDs        []int    `json:"exclude_company_ids,omitempty" doc:"Match movies from none of these TMDB companies"`
+	ExcludeRequesterUserIDs  []int    `json:"exclude_requester_user_ids,omitempty" doc:"Match requests from none of these accounts"`
+	MaxContentRating         string   `json:"max_content_rating,omitempty" doc:"Match titles whose US rating is at most this one; a title with no US rating does not match" example:"PG"`
 }
 
 // AdminRequestRouteDestination is where a route sends one quality tier.
@@ -66,7 +79,7 @@ type AdminRequestRoute struct {
 	Position   int                          `json:"position" doc:"Evaluation order within the media type; the fallback is always last"`
 	Name       string                       `json:"name" example:"Anime"`
 	Enabled    bool                         `json:"enabled"`
-	IsFallback bool                         `json:"is_fallback" doc:"The media type's default destination: it has no conditions and cannot be deleted"`
+	IsFallback bool                         `json:"is_fallback" doc:"The media type's Everything else: it has no conditions, comes last and cannot be deleted; with no 4K server it makes no 4K copy"`
 	Conditions AdminRequestRouteConditions  `json:"conditions"`
 	HD         AdminRequestRouteDestination `json:"hd" doc:"Where the HD (1080p) copy goes"`
 	UHD        AdminRequestRouteDestination `json:"uhd" doc:"Where the 4K copy goes"`
@@ -124,7 +137,7 @@ type AdminRequestRoutePreviewInput struct {
 	Body struct {
 		MediaType       string `json:"media_type" enum:"movie,series"`
 		TMDBID          int    `json:"tmdb_id" minimum:"1" doc:"TMDB identifier (external, not a Silo ID)" example:"129"`
-		RequesterUserID *ID    `json:"requester_user_id,omitempty" doc:"Route as this account's request; account conditions are skipped when absent"`
+		RequesterUserID *ID    `json:"requester_user_id,omitempty" doc:"Route as this account's request; without it, rules for certain accounts do not match"`
 	}
 }
 
@@ -138,6 +151,40 @@ type AdminRequestRouteFacts struct {
 	NetworkIDs       []int    `json:"network_ids"`
 	CompanyIDs       []int    `json:"company_ids"`
 	Anime            bool     `json:"anime"`
+	ContentRating    string   `json:"content_rating,omitempty" doc:"The title's US rating; absent when TMDB has none" example:"TV-14"`
+}
+
+// AdminRequestRoutePreviewRule is what one route did in a preview.
+type AdminRequestRoutePreviewRule struct {
+	RouteID    string   `json:"route_id"`
+	RouteName  string   `json:"route_name"`
+	IsFallback bool     `json:"is_fallback"`
+	Enabled    bool     `json:"enabled"`
+	Unmet      []string `json:"unmet_conditions" doc:"The conditions the title fails, by field name (e.g. genre_ids); empty when it matches"`
+	HD         string   `json:"hd" enum:"sends,skips,passes,no_match,already_decided" doc:"What the route did for the HD copy"`
+	UHD        string   `json:"uhd" enum:"sends,skips,passes,no_match,already_decided" doc:"What the route did for the 4K copy"`
+}
+
+// AdminRequestRouteTitle is a title the admin can try the rules on.
+type AdminRequestRouteTitle struct {
+	TMDBID     int    `json:"tmdb_id" doc:"TMDB identifier (external, not a Silo ID)" example:"129"`
+	MediaType  string `json:"media_type" enum:"movie,series"`
+	Title      string `json:"title" example:"Spirited Away"`
+	Year       int    `json:"year,omitempty" example:"2001"`
+	PosterPath string `json:"poster_path,omitempty" doc:"TMDB image path"`
+}
+
+type AdminRequestRouteTitleSearchInput struct {
+	MediaType string `query:"media_type" enum:"movie,series" required:"true"`
+	Q         string `query:"q" minLength:"1" maxLength:"200" required:"true" doc:"Title to search TMDB for" example:"spirited away"`
+}
+
+type AdminRequestRouteTitleCollection struct {
+	Collection[AdminRequestRouteTitle]
+}
+
+type AdminRequestRouteTitleCollectionOutput struct {
+	Body AdminRequestRouteTitleCollection
 }
 
 // AdminRequestRoutePreviewTier is one tier's outcome.
@@ -155,6 +202,7 @@ type AdminRequestRoutePreviewOutput struct {
 	Body struct {
 		Facts AdminRequestRouteFacts         `json:"facts"`
 		Tiers []AdminRequestRoutePreviewTier `json:"tiers"`
+		Rules []AdminRequestRoutePreviewRule `json:"rules" doc:"Every route of the media type in evaluation order, with what it did"`
 	}
 }
 
@@ -182,6 +230,7 @@ func registerAdminRequestRoutes(reg *Registry) {
 	preview.RetrySafety = RetrySafetyNaturalIdempotent
 	preview.DemoRestricted = false
 	Register(reg, preview, reg.previewAdminRequestRoute)
+	Register(reg, op(http.MethodGet, "/admin/request-routes/titles", opSearchRequestRouteTitles, "Search TMDB for titles to try the routing rules on; works while requests are turned off.", false), reg.searchAdminRequestRouteTitles)
 }
 
 func (reg *Registry) adminRequestRouteService() (adminRequestRoutes, *Problem) {
@@ -197,13 +246,9 @@ func adminRequestRouteOf(r mediarequests.Route) AdminRequestRoute {
 	return AdminRequestRoute{
 		ID: r.ID, MediaType: string(r.MediaType), Position: r.Position, Name: r.Name, Enabled: r.Enabled,
 		IsFallback: r.IsFallback, SkipUHD: r.SkipUHD,
-		Conditions: AdminRequestRouteConditions{
-			Anime: c.Anime, GenreIDs: c.GenreIDs, KeywordIDs: c.KeywordIDs, OriginalLanguages: c.OriginalLanguages,
-			OriginCountries: c.OriginCountries, YearFrom: c.YearFrom, YearTo: c.YearTo, NetworkIDs: c.NetworkIDs,
-			CompanyIDs: c.CompanyIDs, RequesterUserIDs: c.RequesterUserIDs,
-		},
-		HD:  AdminRequestRouteDestination{IntegrationID: r.HD.IntegrationID, Overrides: r.HD.Overrides},
-		UHD: AdminRequestRouteDestination{IntegrationID: r.UHD.IntegrationID, Overrides: r.UHD.Overrides},
+		Conditions: AdminRequestRouteConditions(c),
+		HD:         AdminRequestRouteDestination{IntegrationID: r.HD.IntegrationID, Overrides: r.HD.Overrides},
+		UHD:        AdminRequestRouteDestination{IntegrationID: r.UHD.IntegrationID, Overrides: r.UHD.Overrides},
 	}
 }
 
@@ -211,13 +256,9 @@ func (b AdminRequestRouteBody) domain(id string) mediarequests.Route {
 	c := b.Conditions
 	return mediarequests.Route{
 		ID: id, MediaType: mediarequests.MediaType(b.MediaType), Name: b.Name, Enabled: b.Enabled, SkipUHD: b.SkipUHD,
-		Conditions: mediarequests.RouteConditions{
-			Anime: c.Anime, GenreIDs: c.GenreIDs, KeywordIDs: c.KeywordIDs, OriginalLanguages: c.OriginalLanguages,
-			OriginCountries: c.OriginCountries, YearFrom: c.YearFrom, YearTo: c.YearTo, NetworkIDs: c.NetworkIDs,
-			CompanyIDs: c.CompanyIDs, RequesterUserIDs: c.RequesterUserIDs,
-		},
-		HD:  mediarequests.RouteDestination{IntegrationID: b.HD.IntegrationID, Overrides: b.HD.Overrides},
-		UHD: mediarequests.RouteDestination{IntegrationID: b.UHD.IntegrationID, Overrides: b.UHD.Overrides},
+		Conditions: mediarequests.RouteConditions(c),
+		HD:         mediarequests.RouteDestination{IntegrationID: b.HD.IntegrationID, Overrides: b.HD.Overrides},
+		UHD:        mediarequests.RouteDestination{IntegrationID: b.UHD.IntegrationID, Overrides: b.UHD.Overrides},
 	}
 }
 
@@ -366,6 +407,16 @@ func (reg *Registry) previewAdminRequestRoute(ctx context.Context, in *AdminRequ
 		OriginCountries: NonNil(f.OriginCountries), Year: f.Year, NetworkIDs: NonNil(f.NetworkIDs),
 		CompanyIDs: NonNil(f.CompanyIDs), Anime: f.Anime,
 	}
+	if f.ContentRating != nil {
+		out.Body.Facts.ContentRating = *f.ContentRating
+	}
+	out.Body.Rules = make([]AdminRequestRoutePreviewRule, 0, len(preview.Rules))
+	for _, rule := range preview.Rules {
+		out.Body.Rules = append(out.Body.Rules, AdminRequestRoutePreviewRule{
+			RouteID: rule.Route.ID, RouteName: rule.Route.Name, IsFallback: rule.Route.IsFallback, Enabled: rule.Route.Enabled,
+			Unmet: NonNil(rule.Unmet), HD: string(rule.Steps[mediarequests.Quality1080p]), UHD: string(rule.Steps[mediarequests.Quality2160p]),
+		})
+	}
 	out.Body.Tiers = make([]AdminRequestRoutePreviewTier, 0, len(preview.Tiers))
 	for _, t := range preview.Tiers {
 		out.Body.Tiers = append(out.Body.Tiers, AdminRequestRoutePreviewTier{
@@ -374,4 +425,20 @@ func (reg *Registry) previewAdminRequestRoute(ctx context.Context, in *AdminRequ
 		})
 	}
 	return out, nil
+}
+
+func (reg *Registry) searchAdminRequestRouteTitles(ctx context.Context, in *AdminRequestRouteTitleSearchInput) (*AdminRequestRouteTitleCollectionOutput, error) {
+	s, p := reg.adminRequestRouteService()
+	if p != nil {
+		return nil, p
+	}
+	results, err := s.SearchRouteTitles(ctx, adminRequestViewer(ctx), mediarequests.MediaType(in.MediaType), in.Q)
+	if err != nil {
+		return nil, requestProblem(err)
+	}
+	items := make([]AdminRequestRouteTitle, 0, len(results))
+	for _, r := range results {
+		items = append(items, AdminRequestRouteTitle{TMDBID: r.ID, MediaType: in.MediaType, Title: r.Title, Year: r.Year, PosterPath: r.PosterPath})
+	}
+	return &AdminRequestRouteTitleCollectionOutput{Body: AdminRequestRouteTitleCollection{Collection: Paginated(items, "")}}, nil
 }

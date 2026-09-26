@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -56,7 +58,7 @@ func TestRouteAdministrationDatabase(t *testing.T) {
 		Conditions: RouteConditions{Anime: boolPtr(true)}, HD: RouteDestination{IntegrationID: "radarr-anime"},
 	})
 	var verr *ValidationError
-	if !errors.As(err, &verr) || !strings.Contains(verr.FormError, "default server for movies") {
+	if !errors.As(err, &verr) || !strings.Contains(verr.FormError, "Choose where everything else goes") {
 		t.Fatalf("rule before the fallback: err = %v, want the default server asked for", err)
 	}
 	unsaved, err := svc.GetRoute(ctx, routeAdmin, FallbackRouteID(MediaTypeMovie))
@@ -273,5 +275,146 @@ func TestServerTypeSwitchKeepsRoutesWorking(t *testing.T) {
 	}
 	if hd := preview.Tiers[0]; !strings.Contains(hd.Reason, "a sonarr server") {
 		t.Fatalf("hd tier = %+v, want the type mismatch noted", hd)
+	}
+}
+
+// The first Radarr (Sonarr) added becomes Everything else for movies
+// (series); later ones change nothing. Deleting the last server of its kind
+// takes that Everything else with it, unless rules still route the media type.
+func TestFirstServerBecomesEverythingElseDatabase(t *testing.T) {
+	repo, pool := lifecycleTestRepository(t)
+	ctx := t.Context()
+	for _, stmt := range []string{
+		`CREATE TABLE request_routes (LIKE public.request_routes INCLUDING ALL)`,
+		`CREATE TRIGGER route_revision BEFORE INSERT OR UPDATE ON request_routes FOR EACH ROW EXECUTE FUNCTION public.advance_request_editor_revision()`,
+	} {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add := func(id, kind string) {
+		t.Helper()
+		config := map[string]any{}
+		if kind != "" {
+			config["service_kind"] = kind
+		}
+		if _, err := repo.SaveIntegrationWithDefaults(ctx, Integration{ID: id, Name: id, Enabled: true, CapabilityID: "arr", PluginConfig: config}, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fallbacks := func() map[string]string {
+		t.Helper()
+		rows, err := pool.Query(ctx, `SELECT media_type, coalesce(hd_integration_id, '') FROM request_routes WHERE is_fallback`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		out := map[string]string{}
+		for rows.Next() {
+			var mediaType, id string
+			if err := rows.Scan(&mediaType, &id); err != nil {
+				t.Fatal(err)
+			}
+			out[mediaType] = id
+		}
+		return out
+	}
+
+	add("other", "") // a plugin that serves no media type named by the fixture's supported types
+	if _, err := pool.Exec(ctx, `UPDATE request_integrations SET supported_media_types = '{audiobook}' WHERE id = 'other'`); err != nil {
+		t.Fatal(err)
+	}
+	add("radarr-a", kindRadarr)
+	add("radarr-b", kindRadarr)
+	add("sonarr", kindSonarr)
+	if got := fallbacks(); got["movie"] != "radarr-a" || got["series"] != "sonarr" || len(got) != 2 {
+		t.Fatalf("fallbacks = %v, want movies to radarr-a and series to sonarr", got)
+	}
+
+	// radarr-a is Everything else and another Radarr exists: refused.
+	if err := repo.DeleteIntegration(ctx, "radarr-a"); err == nil {
+		t.Fatal("deleted the Everything else server while another Radarr remains")
+	}
+	// The sole Sonarr goes with its Everything else.
+	if err := repo.DeleteIntegration(ctx, "sonarr"); err != nil {
+		t.Fatalf("delete the sole Sonarr: %v", err)
+	}
+	if got := fallbacks(); got["series"] != "" {
+		t.Fatalf("fallbacks = %v, want series cleared", got)
+	}
+	// A rule keeps Everything else, and so the server, in place.
+	if _, err := pool.Exec(ctx, `INSERT INTO request_routes (id, media_type, position, name, conditions, hd_integration_id)
+		VALUES ('anime', 'movie', 0, 'Anime', '{"anime":true}', 'radarr-b')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.DeleteIntegration(ctx, "radarr-b"); err == nil {
+		t.Fatal("deleted a server a rule sends to")
+	}
+
+	// A Seerr connection already serves series, and a 4K-flagged server is no
+	// HD destination: neither first Sonarr becomes Everything else.
+	if _, err := repo.SaveIntegrationWithDefaults(ctx, Integration{ID: "seerr", Name: "seerr", Enabled: true, CapabilityID: "seerr",
+		SupportedMediaTypes: []string{"series"}, PluginConfig: map[string]any{}}, true); err != nil {
+		t.Fatal(err)
+	}
+	add("sonarr-2", kindSonarr)
+	if got := fallbacks(); got["series"] != "" {
+		t.Fatalf("fallbacks = %v, want series left to the Seerr connection", got)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM request_integrations WHERE id IN ('seerr', 'sonarr-2')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.SaveIntegrationWithDefaults(ctx, Integration{ID: "sonarr-4k", Name: "sonarr-4k", Enabled: true, CapabilityID: "arr",
+		PluginConfig: map[string]any{"service_kind": kindSonarr, "is_4k": true}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := fallbacks(); got["series"] != "" {
+		t.Fatalf("fallbacks = %v, want a 4K server left alone", got)
+	}
+}
+
+func TestSingleServerFallbackMigrationDatabase(t *testing.T) {
+	matches, err := filepath.Glob("../../migrations/sql/*_request_routes_single_server_fallback.sql")
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("find migration: %v %v", matches, err)
+	}
+	raw, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	up := string(raw)
+	up = up[strings.Index(up, "-- +goose Up"):strings.Index(up, "-- +goose Down")]
+	up = strings.NewReplacer("-- +goose StatementBegin", "", "-- +goose StatementEnd", "").Replace(up)
+
+	_, pool := lifecycleTestRepository(t)
+	ctx := t.Context()
+	if _, err := pool.Exec(ctx, `CREATE TABLE request_routes (LIKE public.request_routes INCLUDING ALL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, seed := range []struct {
+		id, kind, key string
+		enabled       bool
+	}{
+		{"radarr", kindRadarr, "k", true},
+		{"radarr-off", kindRadarr, "k", false}, // not usable: disabled
+		{"sonarr-a", kindSonarr, "k", true},
+		{"sonarr-b", kindSonarr, "k", true},
+	} {
+		if _, err := pool.Exec(ctx, `INSERT INTO request_integrations (id, name, enabled, capability_id, installation_id, api_key_ref, plugin_config)
+			VALUES ($1, $1, $2, 'arr', 1, $3, jsonb_build_object('service_kind', $4::text))`, seed.id, seed.enabled, seed.key, seed.kind); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(ctx, up); err != nil {
+		t.Fatal(err)
+	}
+	var mediaType, hd string
+	if err := pool.QueryRow(ctx, `SELECT media_type, hd_integration_id FROM request_routes WHERE is_fallback`).Scan(&mediaType, &hd); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	_ = pool.QueryRow(ctx, `SELECT count(*) FROM request_routes`).Scan(&n)
+	if mediaType != "movie" || hd != "radarr" || n != 1 {
+		t.Fatalf("seeded %d routes, movie to %q; want only movies to the one usable Radarr (two Sonarrs pick nothing)", n, hd)
 	}
 }
