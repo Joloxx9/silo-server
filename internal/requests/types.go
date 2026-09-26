@@ -163,7 +163,26 @@ type Request struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 	ApprovedAt       *time.Time `json:"approved_at,omitempty"`
 	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+	// SubmitAttempts counts router submissions claimed for the current
+	// approval. SubmitLeaseUntil is set while a claimed submission is in
+	// flight; NextSubmitAt is the backoff after a failed attempt.
+	SubmitAttempts   int        `json:"-"`
+	SubmitLeaseUntil *time.Time `json:"-"`
+	NextSubmitAt     *time.Time `json:"-"`
 }
+
+// StateGuard names the states a transition may start from. The store applies
+// the write only while the row is still in one of them and otherwise answers
+// ErrInvalidState, so two actors racing on one request (two admins, or an
+// admin and the reconciler) cannot both apply a transition. An empty list
+// accepts any value.
+type StateGuard struct {
+	Statuses []Status
+	Outcomes []Outcome
+}
+
+// guardPending matches a request that is still waiting for an admin.
+var guardPending = StateGuard{Statuses: []Status{StatusPending}, Outcomes: []Outcome{OutcomeActive}}
 
 type RequestEvent struct {
 	ID             int64     `json:"id"`
@@ -312,5 +331,7 @@ type ReconcileResult struct {
 	Completed   int `json:"completed"`
 	Failed      int `json:"failed"`
 	Skipped     int `json:"skipped"`
-	Errors      int `json:"errors"`
+	// Deferred counts submissions that failed and were rescheduled.
+	Deferred int `json:"deferred"`
+	Errors   int `json:"errors"`
 }

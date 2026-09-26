@@ -123,15 +123,17 @@ func (s *Service) populateRequesterIdentity(ctx context.Context, req *Request) {
 	req.RequesterEmail, req.RequesterUsername = email, username
 }
 
-func (s *Service) requesterCeiling(ctx context.Context, userID int, profileID string) string {
+// requesterCeiling resolves the requester's playback quality ceiling. resolved
+// is false when the lookup failed and the HD-only fail-safe was used instead.
+func (s *Service) requesterCeiling(ctx context.Context, userID int, profileID string) (ceiling string, resolved bool) {
 	if s.entitlements == nil {
-		return "" // no resolver -> unlimited (1080p baseline still applies)
+		return "", true // no resolver -> unlimited (1080p baseline still applies)
 	}
 	q, err := s.entitlements.MaxPlaybackQuality(ctx, userID, profileID)
 	if err != nil {
-		return access.PlaybackQualityStandard // fail safe: HD only
+		return access.PlaybackQualityStandard, false // fail safe: HD only
 	}
-	return q
+	return q, true
 }
 
 // viewerContentCeiling resolves the viewer's parental rating ceiling. Empty
@@ -349,16 +351,19 @@ func (s *Service) filterPageByCeiling(ctx context.Context, raw *tmdb.MediaPage, 
 
 // allowedQualities returns the qualities a request may receive: 1080p always,
 // plus 2160p when force-dual is on or the requester's entitlement ceiling allows 4K.
-func (s *Service) allowedQualities(ctx context.Context, req Request, settings Settings) []Quality {
+// allowedQualities returns the qualities the request should be fulfilled in.
+// resolved is false when the requester's entitlement could not be looked up,
+// so the answer is the HD-only fail-safe rather than the real policy.
+func (s *Service) allowedQualities(ctx context.Context, req Request, settings Settings) (qualities []Quality, resolved bool) {
 	out := []Quality{Quality1080p}
-	ceiling := s.requesterCeiling(ctx, req.RequestedByUserID, req.RequestedByProfileID)
+	ceiling, resolved := s.requesterCeiling(ctx, req.RequestedByUserID, req.RequestedByProfileID)
 	// QualityAllowed treats an empty ceiling as "no cap" (the "Any" preset), so a
 	// requester with unlimited playback quality correctly gets 4K. A raw
 	// CompareQuality would rank "" as the LOWEST quality and wrongly drop 4K.
 	if settings.ForceDualQuality || access.QualityAllowed(access.PlaybackQuality4K, ceiling) {
 		out = append(out, Quality2160p)
 	}
-	return out
+	return out, resolved
 }
 
 // fulfillContext caches the global fulfillment inputs for one reconcile cycle
@@ -423,6 +428,18 @@ func (s *Service) resolveRouterConnections(ctx context.Context, fc *fulfillConte
 		conns = append(conns, ResolvedRouterConnection{ID: in.ID, BaseURL: in.BaseURL, APIKey: apiKey, Config: in.PluginConfig})
 	}
 	return conns, installationID, capabilityID, nil
+}
+
+// skippedRouterConnection reports whether resolveRouterConnections leaves out
+// a connection that would otherwise serve the media type, because its API key
+// is missing.
+func skippedRouterConnection(fc *fulfillContext, mediaType MediaType) bool {
+	for _, in := range fc.integrations {
+		if eligibleRouterConnection(in, mediaType) && strings.TrimSpace(in.APIKeyRef) == "" {
+			return true
+		}
+	}
+	return false
 }
 
 // eligibleRouterConnection reports whether a connection is a candidate fulfillment
@@ -702,17 +719,11 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 		return nil, ErrAlreadyRequested
 	}
 
-	// Re-requesting media that previously failed (e.g., transient integration
-	// error) should not leave stale failed rows behind in user/admin lists.
-	if _, err := s.store.DeleteFailedByTMDB(ctx, normalized.MediaType, normalized.TMDBID); err != nil {
-		return nil, err
-	}
-
 	policy, err := s.EffectivePolicy(ctx, viewer.UserID)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateCreatePolicy(policy); err != nil {
+	if err := validateCreateAccess(policy); err != nil {
 		return nil, err
 	}
 
@@ -735,6 +746,9 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 		IsAnime:   isAnime,
 		Requester: viewer,
 		Now:       s.now(),
+		// Re-requesting a title that failed for this user (e.g. a transient
+		// integration error) replaces their failed row.
+		ReplaceFailed: true,
 	}
 	if !policy.Unlimited {
 		record.Quota = &QuotaCheck{
@@ -762,7 +776,7 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 		// Auto-approval is a real approval transition; channels subscribed to
 		// approvals see it alongside the submission.
 		s.notifyApproval(ctx, *req, ApprovalOriginPolicy)
-		return s.submitApprovedRequest(ctx, *req, viewer, nil)
+		return s.submitAfterCommit(ctx, *req, viewer), nil
 	}
 	return req, nil
 }
@@ -887,41 +901,22 @@ func (s *Service) Approve(ctx context.Context, viewer Viewer, id string) (*Reque
 	if !viewer.IsAdmin {
 		return nil, ErrForbidden
 	}
-	req, err := s.store.GetRequest(ctx, strings.TrimSpace(id))
-	if err != nil {
-		return nil, err
-	}
-	if req.Outcome != OutcomeActive || req.Status != StatusPending {
-		return nil, ErrInvalidState
-	}
-	approved, err := s.store.SetStatus(ctx, req.ID, StatusApproved, viewer)
+	approved, err := s.store.SetStatus(ctx, strings.TrimSpace(id), guardPending, StatusApproved, viewer)
 	if err != nil {
 		return nil, err
 	}
 	s.notifyApproval(ctx, *approved, ApprovalOriginAdmin)
-	return s.submitApprovedRequest(ctx, *approved, viewer, nil)
+	return s.submitAfterCommit(ctx, *approved, viewer), nil
 }
 
+// Decline rejects a request that is still pending. Approved requests may
+// already be on their way to a downstream service, so declining one could leave
+// the external state diverged from Silo's; the guard refuses it.
 func (s *Service) Decline(ctx context.Context, viewer Viewer, id, reason string) (*Request, error) {
 	if !viewer.IsAdmin {
 		return nil, ErrForbidden
 	}
-	req, err := s.store.GetRequest(ctx, strings.TrimSpace(id))
-	if err != nil {
-		return nil, err
-	}
-	// Approved requests are pending submission by the reconciler; declining
-	// while submission may be in flight risks a divergent external state.
-	if req.Outcome != OutcomeActive ||
-		req.Status == StatusApproved ||
-		req.Status == StatusCompleted ||
-		req.Status == StatusQueued ||
-		req.Status == StatusDownloading ||
-		strings.TrimSpace(req.ExternalID) != "" ||
-		strings.TrimSpace(req.IntegrationKind) != "" {
-		return nil, ErrInvalidState
-	}
-	declined, err := s.store.SetOutcome(ctx, req.ID, OutcomeDeclined, viewer, reason)
+	declined, err := s.store.SetOutcome(ctx, strings.TrimSpace(id), guardPending, OutcomeDeclined, viewer, reason)
 	if err != nil {
 		return nil, err
 	}
@@ -931,10 +926,9 @@ func (s *Service) Decline(ctx context.Context, viewer Viewer, id, reason string)
 }
 
 // Cancel withdraws a request that has not yet been submitted to a downstream
-// integration. Owners can cancel their own pending requests; admins can cancel
-// any active request that has not entered the fulfillment pipeline. Requests
-// already approved, queued, downloading, or completed cannot be cancelled —
-// callers should decline (admin) or wait for completion in those cases.
+// integration. Owners can withdraw their own pending requests; admins can
+// withdraw any pending request. Once a request is approved it stays in the
+// fulfillment pipeline until it completes or fails.
 func (s *Service) Cancel(ctx context.Context, viewer Viewer, id, reason string) (*Request, error) {
 	if viewer.UserID == 0 {
 		return nil, ErrForbidden
@@ -951,39 +945,18 @@ func (s *Service) Cancel(ctx context.Context, viewer Viewer, id, reason string) 
 	if !viewer.IsAdmin && req.RequestedByUserID != viewer.UserID {
 		return nil, ErrForbidden
 	}
-	if req.Outcome != OutcomeActive ||
-		req.Status == StatusApproved ||
-		req.Status == StatusCompleted ||
-		req.Status == StatusQueued ||
-		req.Status == StatusDownloading ||
-		strings.TrimSpace(req.ExternalID) != "" ||
-		strings.TrimSpace(req.IntegrationKind) != "" {
-		return nil, ErrInvalidState
-	}
-	return s.store.SetOutcome(ctx, req.ID, OutcomeCancelled, viewer, reason)
+	return s.store.SetOutcome(ctx, req.ID, guardPending, OutcomeCancelled, viewer, reason)
 }
 
 func (s *Service) Retry(ctx context.Context, viewer Viewer, id string) (*Request, error) {
 	if !viewer.IsAdmin {
 		return nil, ErrForbidden
 	}
-	req, err := s.store.GetRequest(ctx, strings.TrimSpace(id))
+	reopened, err := s.store.ReopenFailed(ctx, strings.TrimSpace(id), viewer)
 	if err != nil {
 		return nil, err
 	}
-	if req.Outcome != OutcomeFailed {
-		return nil, ErrInvalidState
-	}
-	if _, err := s.store.SetOutcome(ctx, req.ID, OutcomeActive, viewer, "retry requested"); err != nil {
-		return nil, err
-	}
-	// submitApprovedRequest only re-submits qualities lacking a healthy target, so
-	// it is idempotent; gate it on the approved status it expects.
-	active, err := s.store.SetStatus(ctx, req.ID, StatusApproved, viewer)
-	if err != nil {
-		return nil, err
-	}
-	return s.submitApprovedRequest(ctx, *active, viewer, nil)
+	return s.submitAfterCommit(ctx, *reopened, viewer), nil
 }
 
 func (s *Service) ReconcileRequests(ctx context.Context, limit int) (ReconcileResult, error) {
@@ -1007,6 +980,11 @@ func (s *Service) ReconcileRequests(ctx context.Context, limit int) (ReconcileRe
 			return result, err
 		}
 		change, err := s.reconcileRequest(ctx, *req, fc)
+		// Stamp every candidate, including ones that errored, so the next pass
+		// starts with the requests this one did not reach.
+		if markErr := s.store.MarkReconciled(ctx, req.ID); markErr != nil {
+			slog.WarnContext(ctx, "request reconcile stamp failed", "component", "requests", "request_id", req.ID, "err", markErr)
+		}
 		if err != nil {
 			slog.WarnContext(ctx, "request reconcile failed", "component", "requests",
 				"request_id", req.ID,
@@ -1028,6 +1006,8 @@ func (s *Service) ReconcileRequests(ctx context.Context, limit int) (ReconcileRe
 			result.Completed++
 		case reconcileFailed:
 			result.Failed++
+		case reconcileDeferred:
+			result.Deferred++
 		case reconcileSkipped:
 			result.Skipped++
 		}
@@ -1697,10 +1677,87 @@ func integrationSupportsMediaType(in Integration, mediaType MediaType) bool {
 	return false
 }
 
+// submitLease bounds how long one server's submission claim keeps the others
+// out. It must outlast a router call; if the claiming server dies mid-call, a
+// reconcile pass after the lease picks the request up.
+const submitLease = 10 * time.Minute
+
+// maxSubmitAttempts is how many claimed submissions may fail before the request
+// is marked failed for an admin to retry. With submitBackoff that is about six
+// hours of retries, enough to ride out a restarting or briefly offline service.
+const maxSubmitAttempts = 10
+
+// submitBackoff is the wait after the given number of failed attempts: 5
+// minutes doubling to a one-hour cap. The reconcile pass runs every 5 minutes,
+// so shorter waits would not be honored anyway.
+func submitBackoff(attempts int) time.Duration {
+	d := 5 * time.Minute
+	for i := 1; i < attempts && d < time.Hour; i++ {
+		d *= 2
+	}
+	return min(d, time.Hour)
+}
+
+// submitAfterCommit submits a request whose approval is already committed. The
+// approval stands whatever happens next, so a submission error is logged and
+// the committed request returned: answering an error would tell the caller the
+// approval failed, and the reconcile pass retries the submission anyway.
+func (s *Service) submitAfterCommit(ctx context.Context, req Request, actor Viewer) *Request {
+	submitted, err := s.submitApprovedRequest(ctx, req, actor, nil)
+	if err != nil {
+		slog.WarnContext(ctx, "requests: submission after approval failed; reconcile will retry", "component", "requests",
+			"request_id", req.ID, "err", err)
+		return &req
+	}
+	return submitted
+}
+
+// submitApprovedRequest sends an approved request to the router plugin. Only
+// the caller that claims the submission sends it, so concurrent approvals and
+// reconcile passes on any server cannot double-submit. A failed attempt is
+// recorded on the request and retried with backoff until maxSubmitAttempts,
+// after which the request is marked failed.
 func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor Viewer, fc *fulfillContext) (*Request, error) {
 	if req.Outcome != OutcomeActive || req.Status != StatusApproved {
 		return &req, nil
 	}
+	claimed, ok, err := s.store.ClaimSubmission(ctx, req.ID, submitLease)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		// Another caller holds the claim, or a failed attempt's backoff has
+		// not elapsed; a later reconcile pass submits it.
+		return &req, nil
+	}
+	submitted, submitErr := s.submitClaimed(ctx, *claimed, actor, fc)
+	if submitErr == nil {
+		return submitted, nil
+	}
+	if claimed.SubmitAttempts >= maxSubmitAttempts {
+		return s.markSubmissionFailed(ctx, claimed.ID, actor, submitErr)
+	}
+	deferred, err := s.store.DeferSubmission(ctx, claimed.ID, submitBackoff(claimed.SubmitAttempts), submitErr.Error())
+	if err != nil {
+		if errors.Is(err, ErrInvalidState) {
+			// The attempt created targets before failing, which moved the
+			// request past approved; the per-target state now owns it.
+			return s.store.GetRequest(ctx, claimed.ID)
+		}
+		return nil, fmt.Errorf("submit request: %w; schedule retry: %w", submitErr, err)
+	}
+	slog.WarnContext(ctx, "requests: submission failed; will retry", "component", "requests",
+		"request_id", claimed.ID,
+		"attempt", claimed.SubmitAttempts,
+		"retry_in", submitBackoff(claimed.SubmitAttempts),
+		"err", submitErr,
+	)
+	return deferred, nil
+}
+
+// submitClaimed does the submission work for a request whose claim the caller
+// holds.
+func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, fc *fulfillContext) (*Request, error) {
 	if s.router == nil {
 		return s.markSubmissionFailed(ctx, req.ID, actor, fmt.Errorf("no fulfillment backend configured"))
 	}
@@ -1738,9 +1795,28 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 			healthy[t.Quality] = true
 		}
 	}
-	allowed := s.allowedQualities(ctx, req, fc.settings)
+	allowed, resolved := s.allowedQualities(ctx, req, fc.settings)
 	if !fc.settings.ForceDualQuality {
 		allowed = filterUnconfiguredOptionalQualities(allowed, conns)
+	}
+	// A failed target for a quality the request no longer wants (4K turned
+	// off, the requester lost 4K, the 4K server removed) would keep the request
+	// failed forever; converge to the current quality set instead. Only when
+	// that set is certain: an entitlement lookup error or a connection skipped
+	// for a missing key also shrinks it, and a transient error must not
+	// discard the failed target an admin still needs to see.
+	if resolved && !skippedRouterConnection(fc, req.MediaType) {
+		allowedSet := make(map[Quality]bool, len(allowed))
+		for _, q := range allowed {
+			allowedSet[q] = true
+		}
+		for _, t := range existing {
+			if t.Status == StatusFailed && !allowedSet[t.Quality] {
+				if err := s.store.DeleteTarget(ctx, t.ID); err != nil && !errors.Is(err, ErrNotFound) {
+					return nil, err
+				}
+			}
+		}
 	}
 	var want []Quality
 	for _, q := range allowed {
@@ -1749,7 +1825,13 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 		}
 	}
 	if len(want) == 0 {
-		return &req, nil
+		// Nothing left to send: let the remaining targets decide the status so
+		// the request does not sit in approved.
+		updated, err := s.store.RecomputeStatus(ctx, req.ID, actor)
+		if errors.Is(err, ErrInvalidState) {
+			return s.store.GetRequest(ctx, req.ID)
+		}
+		return updated, err
 	}
 	for _, t := range existing { // drop stale failed targets for the qualities we re-submit
 		if t.Status == StatusFailed {
@@ -1907,8 +1989,12 @@ func boolConfig(config map[string]any, key string) bool {
 }
 
 func (s *Service) markSubmissionFailed(ctx context.Context, requestID string, actor Viewer, submitErr error) (*Request, error) {
-	failed, err := s.store.SetOutcome(ctx, requestID, OutcomeFailed, actor, submitErr.Error())
+	guard := StateGuard{Statuses: []Status{StatusApproved}, Outcomes: []Outcome{OutcomeActive}}
+	failed, err := s.store.SetOutcome(ctx, requestID, guard, OutcomeFailed, actor, submitErr.Error())
 	if err != nil {
+		if errors.Is(err, ErrInvalidState) {
+			return s.store.GetRequest(ctx, requestID)
+		}
 		return nil, fmt.Errorf("submit request failed: %w; mark failed: %v", submitErr, err)
 	}
 	return failed, nil
@@ -1923,6 +2009,7 @@ const (
 	reconcileDownloading reconcileChange = "downloading"
 	reconcileCompleted   reconcileChange = "completed"
 	reconcileFailed      reconcileChange = "failed"
+	reconcileDeferred    reconcileChange = "deferred"
 )
 
 func (s *Service) reconcileRequest(ctx context.Context, req Request, fc *fulfillContext) (reconcileChange, error) {
@@ -1944,7 +2031,12 @@ func (s *Service) reconcileRequest(ctx context.Context, req Request, fc *fulfill
 			if req.Status == StatusCompleted {
 				return reconcileUnchanged, nil
 			}
-			if _, err := s.store.SetStatus(ctx, req.ID, StatusCompleted, Viewer{}); err != nil {
+			if _, err := s.store.MarkAvailable(ctx, req.ID, Viewer{}); err != nil {
+				if errors.Is(err, ErrInvalidState) {
+					// Another actor moved it first, or a submission holds the
+					// claim; a later pass completes it.
+					return reconcileUnchanged, nil
+				}
 				return reconcileUnchanged, err
 			}
 			return reconcileCompleted, nil
@@ -1968,6 +2060,10 @@ func (s *Service) reconcileRequest(ctx context.Context, req Request, fc *fulfill
 			return reconcileFailed, nil
 		case updated.Status == StatusQueued:
 			return reconcileSubmitted, nil
+		case updated.Status == StatusApproved && updated.SubmitAttempts > req.SubmitAttempts:
+			// This pass made an attempt and it failed; a request still in
+			// backoff comes back unchanged and counts as skipped.
+			return reconcileDeferred, nil
 		default:
 			return reconcileSkipped, nil
 		}
@@ -2149,14 +2245,16 @@ func requestStateFor(viewer Viewer, policy EffectivePolicy, available bool, req 
 	}
 }
 
-func validateCreatePolicy(policy EffectivePolicy) error {
+// validateCreateAccess applies the policy rules a create decides up front. The
+// quota is not one of them: the store checks it under the requester's lock,
+// after it has replaced the requester's failed request for the same title, so
+// that re-request does not count against itself.
+func validateCreateAccess(policy EffectivePolicy) error {
 	switch {
 	case !policy.RequestsEnabled:
 		return ErrRequestsDisabled
 	case policy.Blocked:
 		return ErrUserBlocked
-	case !policy.Unlimited && policy.Used >= policy.MaxRequests:
-		return QuotaError{Used: policy.Used, Limit: policy.MaxRequests, WindowDays: policy.WindowDays}
 	default:
 		return nil
 	}

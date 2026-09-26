@@ -12,9 +12,6 @@ type Store interface {
 	UpsertUserLimit(ctx context.Context, limit UserLimit) (*UserLimit, error)
 	CountUserRequestsSince(ctx context.Context, userID int, since time.Time) (int, error)
 	ListActiveByTMDB(ctx context.Context, mediaType MediaType, tmdbIDs []int) (map[int]*Request, error)
-	// DeleteFailedByTMDB removes prior failed requests for a given media so a
-	// re-request does not leave behind stale rows in user/admin lists.
-	DeleteFailedByTMDB(ctx context.Context, mediaType MediaType, tmdbID int) (int, error)
 	CreateRequest(ctx context.Context, input CreateRequestRecord) (*Request, error)
 	GetRequest(ctx context.Context, id string) (*Request, error)
 	ListReconciliationCandidates(ctx context.Context, limit int) ([]*Request, error)
@@ -26,8 +23,33 @@ type Store interface {
 	MarkFulfilledNotified(ctx context.Context, id string) error
 	ListMine(ctx context.Context, userID int, filter ListFilter) ([]*Request, error)
 	ListAdmin(ctx context.Context, filter ListFilter) ([]*Request, error)
-	SetStatus(ctx context.Context, id string, status Status, actor Viewer) (*Request, error)
-	SetOutcome(ctx context.Context, id string, outcome Outcome, actor Viewer, message string) (*Request, error)
+	// SetStatus and SetOutcome apply a transition only while the request is in
+	// a state the guard accepts; otherwise they return ErrInvalidState.
+	SetStatus(ctx context.Context, id string, from StateGuard, status Status, actor Viewer) (*Request, error)
+	SetOutcome(ctx context.Context, id string, from StateGuard, outcome Outcome, actor Viewer, message string) (*Request, error)
+	// ReopenFailed moves a failed request back to active + approved with a
+	// fresh submission budget, in one guarded write.
+	ReopenFailed(ctx context.Context, id string, actor Viewer) (*Request, error)
+	// ClaimSubmission takes the right to submit an approved request: it
+	// succeeds for one caller at a time, only while the request is active,
+	// approved, not leased, and past its backoff, and it counts the attempt.
+	// The claim holds for lease. claimed is false when another caller holds it
+	// or the backoff has not elapsed.
+	ClaimSubmission(ctx context.Context, id string, lease time.Duration) (req *Request, claimed bool, err error)
+	// DeferSubmission records a failed submission attempt on a still-approved
+	// request, releases the claim, and schedules the next attempt after delay.
+	DeferSubmission(ctx context.Context, id string, delay time.Duration, message string) (*Request, error)
+	// MarkReconciled stamps last_reconciled_at so the reconcile pass rotates
+	// through every candidate.
+	MarkReconciled(ctx context.Context, id string) error
+	// MarkAvailable completes an in-flight request whose media is already in
+	// the library. It refuses (ErrInvalidState) a request another actor has
+	// moved on, and an approved request whose submission claim is live, so it
+	// cannot race a router call that is creating targets.
+	MarkAvailable(ctx context.Context, id string, actor Viewer) (*Request, error)
+	// RecomputeStatus re-derives an approved request's status and outcome from
+	// its targets, for a submission that found nothing left to send.
+	RecomputeStatus(ctx context.Context, id string, actor Viewer) (*Request, error)
 	ListTargets(ctx context.Context, requestID string) ([]Target, error)
 	CreateTarget(ctx context.Context, target Target) (Target, error)
 	DeleteTarget(ctx context.Context, id int64) error
@@ -55,6 +77,10 @@ type CreateRequestRecord struct {
 	// runs inside the same transaction as the insert with a per-user
 	// advisory lock so concurrent submissions cannot both exceed the limit.
 	Quota *QuotaCheck
+	// ReplaceFailed deletes the requester's own failed requests for the same
+	// title in the insert transaction, before the quota check, so a re-request
+	// replaces the failed row instead of sitting next to it.
+	ReplaceFailed bool
 }
 
 type QuotaCheck struct {

@@ -361,8 +361,10 @@ function RequestQueueRow({
   onDecline: () => void;
   onRetry: () => void;
 }) {
+  // The server declines only requests still waiting for approval; an approved
+  // request may already be on its way to a downstream service.
   const canApprove = request.status === "pending" && request.outcome === "active";
-  const canDecline = request.status !== "completed" && request.outcome === "active";
+  const canDecline = canApprove;
   const canRetry = request.outcome === "failed";
   const requesterLabel = requesterUsername ?? `User ${request.requested_by_user_id}`;
   const requestDetailHref = `/requests/${request.media_type}/${request.tmdb_id}`;
