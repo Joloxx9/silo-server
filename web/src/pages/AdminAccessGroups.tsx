@@ -457,7 +457,7 @@ function AccessGroupEditor({ initialEditor, onSaved, onDeleted }: AccessGroupEdi
 
   // The group's request approval and limit are their own record with their
   // own validator; Save writes them after the group when they changed.
-  const groupLimit = useRequestGroupLimit(Number(group.id));
+  const groupLimit = useRequestGroupLimit(Number(group.id), editor.profileContext);
   const requestSettings = useRequestSettings();
   const requestLimit = useStagedDraft(groupLimit.data, requestLimitDraft, requestLimitChanges);
   const updateGroupLimit = useUpdateRequestGroupLimit();
@@ -536,6 +536,7 @@ function AccessGroupEditor({ initialEditor, onSaved, onDeleted }: AccessGroupEdi
           await updateGroupLimit.mutateAsync({
             limit: limitBase,
             body: requestLimitBody(limitDraft),
+            profileContext: editor.profileContext,
           }),
         );
       }

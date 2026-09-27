@@ -425,8 +425,10 @@ export const adminKeys = {
   requestIntegrationOptions: (integrationId: string) =>
     ["admin", "requestIntegrationOptions", integrationId] as const,
   requestUserLimit: (userId: number) => ["admin", "requests", "users", userId, "limit"] as const,
-  requestGroupLimit: (groupId: number) =>
-    ["admin", "requests", "groups", groupId, "limit"] as const,
+  // Scoped to the admin authority: the limit's validator names the profile
+  // that read it, so another profile's cached copy would fail its save.
+  requestGroupLimit: (groupId: number, scope: string) =>
+    ["admin", "requests", "groups", groupId, "limit", scope] as const,
   recommendationsStatus: () => ["admin", "recommendationsStatus"] as const,
   inviteCodes: () => ["admin", "inviteCodes"] as const,
   invitations: () => ["admin", "invitations"] as const,
