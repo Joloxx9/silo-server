@@ -2339,7 +2339,7 @@ func activeRequestState(viewer Viewer, req *Request) RequestState {
 		state.RequestID = req.ID
 	}
 	state.State = req.State()
-	state.RequestedByViewer = req.RequestedByUserID == viewer.UserID && req.RequestedByProfileID == viewer.ProfileID
+	state.RequestedByViewer = req.requestedBy(viewer)
 	return state
 }
 

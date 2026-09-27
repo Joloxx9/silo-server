@@ -129,11 +129,7 @@ func (s *Service) notifyFulfilledPending(ctx context.Context) {
 		// The followers have been told. Only the listed rows are cleared:
 		// FollowTitle needs an open request, so none can have been added
 		// since this request completed.
-		profileIDs := make([]string, 0, len(followers))
-		for _, f := range followers {
-			profileIDs = append(profileIDs, f.ProfileID)
-		}
-		if err := s.store.ClearTitleFollowers(ctx, req.MediaType, req.TMDBID, profileIDs); err != nil {
+		if err := s.store.ClearTitleFollowers(ctx, req.MediaType, req.TMDBID, followers); err != nil {
 			slog.WarnContext(ctx, "request fulfill-notify: clear followers failed", "component", "requests",
 				"request_id", req.ID, "err", err)
 		}

@@ -33,7 +33,7 @@ func TestFollowTitleSomeoneElseRequested(t *testing.T) {
 	if !state.Following || state.RequestedByViewer || state.Requestable || state.Reason != "already_requested" || state.RequestID != "" {
 		t.Fatalf("state = %+v, want following, not requestable, request id hidden from another account", state)
 	}
-	followed, _ := store.FollowedTitles(context.Background(), MediaTypeMovie, []int{949}, "profile-1")
+	followed, _ := store.FollowedTitles(context.Background(), MediaTypeMovie, []int{949}, testViewer(1))
 	if !followed[949] {
 		t.Fatal("follow was not stored")
 	}
@@ -44,7 +44,7 @@ func TestFollowTitleSomeoneElseRequested(t *testing.T) {
 	if err := svc.Unfollow(context.Background(), testViewer(1), MediaTypeMovie, 949); err != nil {
 		t.Fatalf("Unfollow: %v", err)
 	}
-	followed, _ = store.FollowedTitles(context.Background(), MediaTypeMovie, []int{949}, "profile-1")
+	followed, _ = store.FollowedTitles(context.Background(), MediaTypeMovie, []int{949}, testViewer(1))
 	if followed[949] {
 		t.Fatal("follow survived Unfollow")
 	}
@@ -65,6 +65,29 @@ func TestFollowOwnRequestStoresNothing(t *testing.T) {
 	}
 	if len(store.follows) != 0 {
 		t.Fatalf("follows = %v, want none: the requester is always notified", store.follows)
+	}
+}
+
+// Profile ids repeat across accounts (every account from before profiles has
+// a "default" one), so a profile on another account with the requester's
+// profile id is a follower, not the requester.
+func TestFollowSameProfileIDOnAnotherAccount(t *testing.T) {
+	store := newFakeStore()
+	req := activeRequestFor(store, 949)
+	req.RequestedByProfileID = "default"
+	svc := newTestService(store)
+	viewer := Viewer{UserID: 1, ProfileID: "default"}
+
+	state, err := svc.Follow(context.Background(), viewer, MediaTypeMovie, 949)
+	if err != nil {
+		t.Fatalf("Follow: %v", err)
+	}
+	if !state.Following || state.RequestedByViewer {
+		t.Fatalf("state = %+v, want following and not requested by the viewer", state)
+	}
+	followers, _ := store.ListTitleFollowers(context.Background(), MediaTypeMovie, 949)
+	if len(followers) != 1 || followers[0] != (Follower{UserID: 1, ProfileID: "default"}) {
+		t.Fatalf("followers = %+v, want the other account's default profile", followers)
 	}
 }
 
@@ -240,7 +263,7 @@ func TestFollowsDatabase(t *testing.T) {
 	if len(followers) != 2 {
 		t.Fatalf("movie followers = %+v, want two (the series follow is a different title)", followers)
 	}
-	followed, err := repo.FollowedTitles(ctx, MediaTypeMovie, []int{949, 950}, "profile-a")
+	followed, err := repo.FollowedTitles(ctx, MediaTypeMovie, []int{949, 950}, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,10 +271,10 @@ func TestFollowsDatabase(t *testing.T) {
 		t.Fatalf("followed = %v, want only 949", followed)
 	}
 
-	if err := repo.ClearTitleFollowers(ctx, MediaTypeMovie, 949, []string{"profile-a"}); err != nil {
+	if err := repo.ClearTitleFollowers(ctx, MediaTypeMovie, 949, []Follower{{UserID: a.UserID, ProfileID: a.ProfileID}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.UnfollowTitle(ctx, MediaTypeMovie, 949, "profile-b"); err != nil {
+	if err := repo.UnfollowTitle(ctx, MediaTypeMovie, 949, b); err != nil {
 		t.Fatal(err)
 	}
 	if followers, _ := repo.ListTitleFollowers(ctx, MediaTypeMovie, 949); len(followers) != 0 {
@@ -260,6 +283,38 @@ func TestFollowsDatabase(t *testing.T) {
 	if followers, _ := repo.ListTitleFollowers(ctx, MediaTypeSeries, 949); len(followers) != 1 {
 		t.Fatalf("series followers = %+v, want the one untouched follow", followers)
 	}
+
+	// Two accounts' profiles can share an id; each keeps its own follow.
+	mine := Viewer{UserID: 1, ProfileID: "default"}
+	theirs := Viewer{UserID: 2, ProfileID: "default"}
+	for _, v := range []Viewer{mine, theirs} {
+		if err := repo.FollowTitle(ctx, MediaTypeMovie, 949, v); err != nil {
+			t.Fatalf("follow as account %d: %v", v.UserID, err)
+		}
+	}
+	if followers, _ := repo.ListTitleFollowers(ctx, MediaTypeMovie, 949); len(followers) != 2 {
+		t.Fatalf("followers sharing a profile id = %+v, want one per account", followers)
+	}
+	if followed, _ := repo.FollowedTitles(ctx, MediaTypeMovie, []int{949}, Viewer{UserID: 3, ProfileID: "default"}); followed[949] {
+		t.Fatal("a third account's default profile sees the others' follow")
+	}
+	if err := repo.UnfollowTitle(ctx, MediaTypeMovie, 949, mine); err != nil {
+		t.Fatal(err)
+	}
+	followers, err = repo.ListTitleFollowers(ctx, MediaTypeMovie, 949)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(followers) != 1 || followers[0] != (Follower{UserID: theirs.UserID, ProfileID: theirs.ProfileID}) {
+		t.Fatalf("followers after one account unfollowed = %+v, want only the other account's", followers)
+	}
+	if err := repo.ClearTitleFollowers(ctx, MediaTypeMovie, 949, []Follower{{UserID: mine.UserID, ProfileID: mine.ProfileID}}); err != nil {
+		t.Fatal(err)
+	}
+	if followers, _ := repo.ListTitleFollowers(ctx, MediaTypeMovie, 949); len(followers) != 1 {
+		t.Fatalf("clearing one account's follow removed %+v, want the other account's kept", followers)
+	}
+
 	if err := repo.ForgetTitleFollows(ctx, MediaTypeSeries, 949); err != nil {
 		t.Fatal(err)
 	}

@@ -71,7 +71,8 @@ ceiling. It is refused for a title with no open request (request it instead)
 and for one already in the library; the insert itself checks for the open
 request, so a follow cannot land just after the request completed.
 
-A follow belongs to the title and the profile (`media_request_follows`), not to
+A follow belongs to the title and the profile (`media_request_follows`, keyed
+by account and profile id, since profile ids repeat across accounts), not to
 one request, so it survives the request failing and being retried or requested
 again. Declining or cancelling the request clears the title's follows: the title
 is no longer on its way, and the follower can request it themselves. The
