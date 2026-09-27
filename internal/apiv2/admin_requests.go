@@ -174,7 +174,7 @@ type AdminRequestCapabilitiesOutputBody struct {
 	Capability
 	Available            bool `json:"available"`
 	GuardedConfiguration bool `json:"guarded_configuration"`
-	Routing              bool `json:"routing" doc:"Whether the request routing rules under /admin/request-routes are available"`
+	Routing              bool `json:"routing" doc:"Whether request routing is available: the routing rules under /admin/request-routes and the Standard/Advanced routing mode under /admin/request-routing"`
 }
 
 func adminRequestViewer(ctx context.Context) mediarequests.Viewer {
