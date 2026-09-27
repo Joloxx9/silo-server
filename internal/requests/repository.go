@@ -319,22 +319,29 @@ func (r *Repository) insertRequest(
 	if input.Input.Year != nil {
 		year = *input.Input.Year
 	}
+	facts, err := encodeRoutingFacts(input.Facts)
+	if err != nil {
+		return nil, err
+	}
 	row := exec.QueryRow(ctx, `
 		INSERT INTO media_requests (
 			id, provider, media_type, tmdb_id, tvdb_id, imdb_id, title, year,
 			overview, poster_path, backdrop_path, status, outcome,
-			requested_by_user_id, requested_by_profile_id, is_anime, created_at, updated_at, approved_at
+			requested_by_user_id, requested_by_profile_id, is_anime, created_at, updated_at, approved_at,
+			routing_facts
 		)
 		VALUES (
 			$1, 'tmdb', $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12,
-			$13, $14, $15, $16, $16, $17
+			$13, $14, $15, $16, $16, $17,
+			$18
 		)
 		RETURNING `+requestColumns(), input.ID, input.Input.MediaType, input.Input.TMDBID, tvdbID,
 		strings.TrimSpace(input.Input.IMDbID), strings.TrimSpace(input.Input.Title), year,
 		strings.TrimSpace(input.Input.Overview), strings.TrimSpace(input.Input.PosterPath),
 		strings.TrimSpace(input.Input.BackdropPath), status, outcome,
-		input.Requester.UserID, input.Requester.ProfileID, input.IsAnime, now, approvedAt)
+		input.Requester.UserID, input.Requester.ProfileID, input.IsAnime, now, approvedAt,
+		facts)
 	req, err := scanRequest(row)
 	if err != nil {
 		return nil, fmt.Errorf("insert request: %w", err)
@@ -1014,6 +1021,31 @@ func (r *Repository) deleteIntegration(ctx context.Context, tx pgx.Tx, id string
 		return ErrInvalidState
 	}
 
+	// Deleting a server a route sends to would silently reroute its titles.
+	rows, err := tx.Query(ctx, `
+		SELECT name FROM request_routes
+		WHERE hd_integration_id = $1 OR uhd_integration_id = $1
+		ORDER BY media_type, is_fallback, position`, id)
+	if err != nil {
+		return fmt.Errorf("check integration routes: %w", err)
+	}
+	var routes []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		routes = append(routes, name)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(routes) > 0 {
+		return &ValidationError{FormError: "Routing still sends requests to this server (" + strings.Join(routes, ", ") + "); change those routes first."}
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM request_integrations WHERE id = $1`, id); err != nil {
 		return fmt.Errorf("delete request integration: %w", err)
 	}
@@ -1076,7 +1108,7 @@ func requestColumns() string {
 	        overview, poster_path, backdrop_path, status, outcome,
 	        requested_by_user_id, requested_by_profile_id, is_anime,
 	        last_error, created_at, updated_at, approved_at, completed_at,
-	        submit_attempts, submit_lease_until, next_submit_at, outcome_reason`
+	        submit_attempts, submit_lease_until, next_submit_at, outcome_reason, routing_facts`
 }
 
 type requestScanner interface {
@@ -1087,6 +1119,7 @@ func scanRequest(row requestScanner) (*Request, error) {
 	var req Request
 	var tvdbID, year sql.NullInt64
 	var approvedAt, completedAt, submitLeaseUntil, nextSubmitAt sql.NullTime
+	var rawFacts []byte
 	if err := row.Scan(
 		&req.ID,
 		&req.Provider,
@@ -1113,9 +1146,15 @@ func scanRequest(row requestScanner) (*Request, error) {
 		&submitLeaseUntil,
 		&nextSubmitAt,
 		&req.OutcomeReason,
+		&rawFacts,
 	); err != nil {
 		return nil, err
 	}
+	facts, err := decodeRoutingFacts(rawFacts)
+	if err != nil {
+		return nil, err
+	}
+	req.RoutingFacts = facts
 	if tvdbID.Valid {
 		v := int(tvdbID.Int64)
 		req.TVDBID = &v

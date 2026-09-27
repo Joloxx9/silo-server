@@ -11,7 +11,7 @@ import (
 
 const targetColumns = `t.id, t.request_id, t.integration_id, t.integration_kind,
 	COALESCE(ri.name, ''), t.quality, t.is_anime, t.external_id, t.external_status,
-	t.status, t.last_error, t.created_at, t.updated_at`
+	t.status, t.last_error, t.created_at, t.updated_at, COALESCE(t.route_id, ''), t.route_name`
 
 // aggregateStatus derives a request's status/outcome from its targets.
 func aggregateStatus(targets []Target) (Status, Outcome) {
@@ -57,7 +57,7 @@ func scanTarget(row requestScanner) (Target, error) {
 	var integrationID *string
 	if err := row.Scan(&t.ID, &t.RequestID, &integrationID, &t.IntegrationKind,
 		&t.InstanceName, &t.Quality, &t.IsAnime, &t.ExternalID, &t.ExternalStatus,
-		&t.Status, &t.LastError, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		&t.Status, &t.LastError, &t.CreatedAt, &t.UpdatedAt, &t.RouteID, &t.RouteName); err != nil {
 		return Target{}, err
 	}
 	if integrationID != nil {
@@ -91,18 +91,21 @@ func (r *Repository) CreateTarget(ctx context.Context, t Target) (Target, error)
 }
 
 func insertTarget(ctx context.Context, exec requestExecutor, t Target) (Target, error) {
-	var integrationID any
+	var integrationID, routeID any
 	if t.IntegrationID != "" {
 		integrationID = t.IntegrationID
+	}
+	if t.RouteID != "" {
+		routeID = t.RouteID
 	}
 	row := exec.QueryRow(ctx, `
 		INSERT INTO media_request_targets
 			(request_id, integration_id, integration_kind, quality, is_anime,
-			 external_id, external_status, status, last_error, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
+			 external_id, external_status, status, last_error, updated_at, route_id, route_name)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now(), $10, $11)
 		RETURNING id`,
 		t.RequestID, integrationID, t.IntegrationKind, t.Quality, t.IsAnime,
-		t.ExternalID, t.ExternalStatus, t.Status, t.LastError)
+		t.ExternalID, t.ExternalStatus, t.Status, t.LastError, routeID, t.RouteName)
 	if err := row.Scan(&t.ID); err != nil {
 		return Target{}, fmt.Errorf("create target: %w", err)
 	}

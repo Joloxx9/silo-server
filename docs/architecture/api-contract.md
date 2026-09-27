@@ -2004,6 +2004,16 @@ profile and filters. Integration lists return bounded ID-ordered pages over the
 configured integrations. The service currently loads that small configuration set
 before slicing a page; it does not claim database-bounded enumeration.
 
+Request routing rules (`/admin/request-routes`) are v2-only: list (bounded,
+unpaginated, in evaluation order, always including each media type's fallback),
+read, create, replace and delete by ID, reorder a media type's rules, and a
+read-only `preview` that shows which server each quality tier of a title would
+go to. Replacement and deletion require `If-Match` on the rule's revision; a
+fallback that was never saved reads as revision zero and its first replacement
+creates it. The fallback cannot be deleted, and a rule cannot be created until
+its media type's fallback has an HD server. The `routing` field of
+`getAdminRequestCapabilities` reports whether the server offers these operations.
+
 Settings, account limits and integrations require `If-Match` for replacement and
 integration deletion. A shared PostgreSQL sequence assigns a new revision on every
 insert or update, including legacy and background writers, and distinguishes a

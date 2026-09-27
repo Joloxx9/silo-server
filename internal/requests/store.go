@@ -83,6 +83,12 @@ type Store interface {
 	FollowedTitles(ctx context.Context, mediaType MediaType, tmdbIDs []int, viewer Viewer) (map[int]bool, error)
 	ListTitleFollowers(ctx context.Context, mediaType MediaType, tmdbID int) ([]Follower, error)
 	ClearTitleFollowers(ctx context.Context, mediaType MediaType, tmdbID int, followers []Follower) error
+	// ListRoutes returns every routing rule, in no particular order;
+	// decideRoutes orders them.
+	ListRoutes(ctx context.Context) ([]Route, error)
+	// SetRoutingFacts stores facts fetched after the request was created (and
+	// the anime flag they imply).
+	SetRoutingFacts(ctx context.Context, id string, facts RoutingFacts) (*Request, error)
 	ListTargets(ctx context.Context, requestID string) ([]Target, error)
 	CreateTarget(ctx context.Context, target Target) (Target, error)
 	DeleteTarget(ctx context.Context, id int64) error
@@ -103,6 +109,7 @@ type CreateRequestRecord struct {
 	Status    Status
 	Outcome   Outcome
 	IsAnime   bool
+	Facts     RoutingFacts
 	Requester Viewer
 	Now       time.Time
 	// Quota, when non-nil, instructs the store to atomically verify the

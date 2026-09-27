@@ -657,7 +657,7 @@ func TestRetryDropsFailedTargetForUnwantedQuality(t *testing.T) {
 	store.requests["r1"] = &Request{ID: "r1", MediaType: MediaTypeMovie, TMDBID: 550, Status: StatusQueued, Outcome: OutcomeFailed}
 	store.targets = map[string][]Target{"r1": {
 		{ID: 1, RequestID: "r1", IntegrationID: "router-1", Quality: Quality1080p, Status: StatusCompleted},
-		{ID: 2, RequestID: "r1", Quality: Quality2160p, Status: StatusFailed, LastError: "fulfillment backend returned no target for this quality"},
+		{ID: 2, RequestID: "r1", Quality: Quality2160p, Status: StatusFailed, LastError: msgNoTargetForQuality},
 	}}
 	store.targetSeq = 2
 	router := &fakeRouterProvider{}

@@ -162,6 +162,7 @@ type RequestTarget struct {
 	ExternalStatus  string  `json:"external_status,omitempty"`
 	Status          string  `json:"status" example:"queued"`
 	LastError       string  `json:"last_error,omitempty"`
+	RouteName       string  `json:"route_name,omitempty" doc:"The routing rule that sent this target to its server, as named when it was sent"`
 	CreatedAt       Instant `json:"created_at" example:"2026-01-02T03:04:05.000Z"`
 	UpdatedAt       Instant `json:"updated_at" example:"2026-01-02T03:04:05.000Z"`
 }
@@ -791,7 +792,7 @@ func mediaRequestOf(r *mediarequests.Request) MediaRequest {
 			ID: IDFromInt(t.ID), RequestID: ID(t.RequestID), IntegrationID: t.IntegrationID,
 			IntegrationKind: t.IntegrationKind, InstanceName: t.InstanceName, Quality: string(t.Quality),
 			IsAnime: t.IsAnime, ExternalID: t.ExternalID, ExternalStatus: t.ExternalStatus, Status: string(t.Status),
-			LastError: t.LastError, CreatedAt: NewInstant(t.CreatedAt), UpdatedAt: NewInstant(t.UpdatedAt),
+			LastError: t.LastError, RouteName: t.RouteName, CreatedAt: NewInstant(t.CreatedAt), UpdatedAt: NewInstant(t.UpdatedAt),
 		})
 	}
 	return out

@@ -1604,6 +1604,8 @@ type fakeStore struct {
 	reconciled    []string
 	follows       map[string]Follower // key: media_type/tmdb_id/user_id/profile_id
 	clearErr      error               // returned by ClearTitleFollowers when set
+	routes        []Route
+	factsSet      map[string]RoutingFacts
 
 	listIntegrationsCalls int
 	getSettingsCalls      int
@@ -1717,6 +1719,7 @@ func (f *fakeStore) CreateRequest(_ context.Context, input CreateRequestRecord) 
 		Status:               input.Status,
 		Outcome:              input.Outcome,
 		IsAnime:              input.IsAnime,
+		RoutingFacts:         input.Facts,
 		RequestedByUserID:    input.Requester.UserID,
 		RequestedByProfileID: input.Requester.ProfileID,
 		CreatedAt:            input.Now,
@@ -2144,6 +2147,29 @@ func (f *fakeStore) ClearTitleFollowers(_ context.Context, mediaType MediaType, 
 	return nil
 }
 
+func (f *fakeStore) ListRoutes(context.Context) ([]Route, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.routes), nil
+}
+
+func (f *fakeStore) SetRoutingFacts(_ context.Context, id string, facts RoutingFacts) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return nil, ErrNotFound
+	}
+	if f.factsSet == nil {
+		f.factsSet = map[string]RoutingFacts{}
+	}
+	f.factsSet[id] = facts
+	req.RoutingFacts = facts
+	req.IsAnime = facts.Anime
+	copy := *req
+	return &copy, nil
+}
+
 func (f *fakeStore) ListTargets(_ context.Context, requestID string) ([]Target, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -2501,6 +2527,7 @@ type fakeTMDBClient struct {
 	externalIDsByID   map[int]*tmdb.ExternalIDs
 	externalIDCalls   []int
 	detail            *tmdb.MediaDetail
+	detailErr         error
 	discoverPage      *tmdb.MediaPage
 	discoverErr       error
 	searchMediaType   string
@@ -2540,7 +2567,7 @@ func (f *fakeTMDBClient) GetExternalIDs(_ context.Context, _ string, id int) (*t
 }
 
 func (f *fakeTMDBClient) GetMediaDetail(context.Context, string, int) (*tmdb.MediaDetail, error) {
-	return f.detail, nil
+	return f.detail, f.detailErr
 }
 
 // certTMDBClient layers GetCertification onto fakeTMDBClient so a service
@@ -2593,6 +2620,20 @@ func (f ratedCeiling) MaxContentRating(context.Context, int, string) (string, er
 // fakeRouterProvider is a canned RequestRouterProvider standing in for a
 // request_router.v1 plugin. Fulfill emits one target per requested quality
 // (unless noTargets is set), recording the qualities and connections it saw.
+// fulfillCall and statusCall record one plugin call each.
+type fulfillCall struct {
+	installationID int
+	qualities      []Quality
+	conns          []ResolvedRouterConnection
+}
+
+type statusCall struct {
+	installationID int
+	capabilityID   string
+	refs           []RouterTargetRef
+	conns          []ResolvedRouterConnection
+}
+
 type fakeRouterProvider struct {
 	mu sync.Mutex
 
@@ -2605,14 +2646,18 @@ type fakeRouterProvider struct {
 	gotConns          []ResolvedRouterConnection
 	gotInstallationID int
 	fulfillCalls      int
+	fulfillLog        []fulfillCall
 
 	gotRequesterEmail    string
 	gotRequesterUsername string
 
 	// CheckStatus behavior.
-	statuses    []RouterTargetStatus
-	statusErr   error
-	statusCalls int
+	statuses  []RouterTargetStatus
+	statusErr error
+	// statusErrFor fails CheckStatus for one installation only.
+	statusErrFor map[int]error
+	statusCalls  int
+	statusLog    []statusCall
 
 	// ListConfigOptions behavior.
 	options        map[string][]RouterOption
@@ -2634,6 +2679,7 @@ func (f *fakeRouterProvider) Fulfill(_ context.Context, installationID int, _ st
 	f.gotRequesterEmail = req.RequesterEmail
 	f.gotRequesterUsername = req.RequesterUsername
 	f.fulfillCalls++
+	f.fulfillLog = append(f.fulfillLog, fulfillCall{installationID: installationID, qualities: slices.Clone(qualities), conns: slices.Clone(conns)})
 	f.gotQualities = append(f.gotQualities, qualities...)
 	f.gotConns = conns
 	f.gotInstallationID = installationID
@@ -2663,10 +2709,14 @@ func (f *fakeRouterProvider) Fulfill(_ context.Context, installationID int, _ st
 	return out, f.fulfillMsg, nil
 }
 
-func (f *fakeRouterProvider) CheckStatus(_ context.Context, _ int, _ string, _ Request, _ []RouterTargetRef, _ []ResolvedRouterConnection) ([]RouterTargetStatus, error) {
+func (f *fakeRouterProvider) CheckStatus(_ context.Context, installationID int, capabilityID string, _ Request, refs []RouterTargetRef, conns []ResolvedRouterConnection) ([]RouterTargetStatus, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.statusCalls++
+	f.statusLog = append(f.statusLog, statusCall{installationID: installationID, capabilityID: capabilityID, refs: slices.Clone(refs), conns: slices.Clone(conns)})
+	if err := f.statusErrFor[installationID]; err != nil {
+		return nil, err
+	}
 	return f.statuses, f.statusErr
 }
 
@@ -2713,9 +2763,8 @@ func routerInstOn(id string, installID int) Integration {
 	}
 }
 
-// autoApproveRouterInst is a router connection that satisfies the auto-approval
-// gate (integrationConfigured: an enabled request_router connection bound to an
-// installation with a base URL and api key).
+// autoApproveRouterInst is an enabled request_router connection bound to an
+// installation, with the given api key.
 func autoApproveRouterInst(id, apiKeyRef string) Integration {
 	in := routerInst(id)
 	in.APIKeyRef = apiKeyRef
@@ -2985,7 +3034,7 @@ func TestSubmitApprovedRecordsDroppedQualityAsFailed(t *testing.T) {
 	if failed2160 == nil || failed2160.Status != StatusFailed {
 		t.Fatalf("2160p target = %+v, want a failed target", failed2160)
 	}
-	if failed2160.LastError != "fulfillment backend returned no target for this quality" {
+	if failed2160.LastError != msgNoTargetForQuality {
 		t.Fatalf("2160p last error = %q, want the no-target message", failed2160.LastError)
 	}
 

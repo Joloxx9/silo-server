@@ -56,6 +56,10 @@ type Target struct {
 	LastError       string    `json:"last_error,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+	// RouteID and RouteName record which routing rule sent the target (v2
+	// only); empty when the plugin routed it.
+	RouteID   string `json:"-"`
+	RouteName string `json:"-"`
 }
 
 type Availability string
@@ -168,6 +172,8 @@ type Request struct {
 	SubmitAttempts   int        `json:"-"`
 	SubmitLeaseUntil *time.Time `json:"-"`
 	NextSubmitAt     *time.Time `json:"-"`
+	// RoutingFacts is the TMDB snapshot routing rules match on.
+	RoutingFacts RoutingFacts `json:"-"`
 	// Followers are the profiles, other than the requester's, that asked to be
 	// told when the title is available; loaded for the fulfilled notification.
 	Followers []Follower `json:"-"`

@@ -2,9 +2,12 @@ package tmdb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1136,5 +1139,52 @@ func TestGetCertificationSingleflightsConcurrentCallers(t *testing.T) {
 	}
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("upstream calls = %d, want 1 (singleflight)", got)
+	}
+}
+
+func TestDetailCarriesRoutingIdentifiers(t *testing.T) {
+	var movie movieDetailResponse
+	if err := json.Unmarshal([]byte(`{
+		"id": 129, "title": "Spirited Away", "release_date": "2001-07-20", "original_language": "ja",
+		"origin_country": ["JP"],
+		"genres": [{"id": 16, "name": "Animation"}, {"id": 14, "name": "Fantasy"}],
+		"production_companies": [{"id": 10342, "name": "Studio Ghibli"}],
+		"keywords": {"keywords": [{"id": 210024, "name": "anime"}]}
+	}`), &movie); err != nil {
+		t.Fatal(err)
+	}
+	m := normalizeMovieDetail(&movie)
+	if !slices.Equal(m.GenreIDs, []int{16, 14}) || !slices.Equal(m.CompanyIDs, []int{10342}) ||
+		!slices.Equal(m.OriginCountries, []string{"JP"}) || m.OriginalLanguage != "ja" || m.Year != 2001 {
+		t.Fatalf("movie = %+v", m)
+	}
+
+	var tv tvDetailResponse
+	if err := json.Unmarshal([]byte(`{
+		"id": 95396, "name": "Severance", "first_air_date": "2022-02-17", "original_language": "en",
+		"origin_country": ["US"],
+		"genres": [{"id": 18, "name": "Drama"}],
+		"networks": [{"id": 2552, "name": "Apple TV+"}]
+	}`), &tv); err != nil {
+		t.Fatal(err)
+	}
+	s := normalizeTVDetail(&tv)
+	if !slices.Equal(s.GenreIDs, []int{18}) || !slices.Equal(s.NetworkIDs, []int{2552}) ||
+		!slices.Equal(s.OriginCountries, []string{"US"}) || s.Year != 2022 {
+		t.Fatalf("series = %+v", s)
+	}
+}
+
+func TestNotFoundWrapsErrNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"status_message":"The resource you requested could not be found."}`))
+	}))
+	defer srv.Close()
+	client := NewClient("key", 40)
+	client.baseURL = srv.URL
+	_, err := client.GetMediaDetail(context.Background(), "movie", 1)
+	if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "HTTP 404") {
+		t.Fatalf("err = %v, want ErrNotFound with the HTTP detail", err)
 	}
 }
