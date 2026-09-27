@@ -506,3 +506,34 @@ func TestStandardSendsAnimeSeriesWithTheAnimeSeriesType(t *testing.T) {
 		}
 	}
 }
+
+func TestStandardRoutesLegacySeriesByItsAnimeFlagWhenTMDBIsDown(t *testing.T) {
+	for _, anime := range []bool{true, false} {
+		// A request from before routing facts were captured, with TMDB down:
+		// Standard still routes it, by the anime flag stored with it.
+		store := standardStore(RoutingFacts{})
+		store.integrations = []Integration{arrServer("sonarr", kindSonarr, map[string]any{"series_type": "standard"})}
+		req := store.requests["r1"]
+		req.MediaType, req.IsAnime = MediaTypeSeries, anime
+		router := &fakeRouterProvider{}
+		svc := modeService(store, &fakeTMDBClient{detailErr: errors.New("tmdb unavailable")})
+		svc.SetRouterProvider(router)
+
+		if _, err := svc.submitApprovedRequest(context.Background(), *req, Viewer{}, nil); err != nil {
+			t.Fatalf("anime=%v: submit: %v", anime, err)
+		}
+		want := "standard"
+		if anime {
+			want = seriesTypeAnime
+		}
+		if len(router.fulfillLog) != 1 {
+			t.Fatalf("anime=%v: fulfill calls = %+v, want one", anime, router.fulfillLog)
+		}
+		if got := router.fulfillLog[0].conns[0].Config[configSeriesType]; got != want {
+			t.Errorf("anime=%v: series type %v, want %s", anime, got, want)
+		}
+		if store.requests["r1"].RoutingFacts.Captured() {
+			t.Errorf("anime=%v: facts stored as captured without TMDB", anime)
+		}
+	}
+}

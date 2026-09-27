@@ -123,8 +123,9 @@ default and anime switches no longer decide anything.
 A request created before facts were captured, or while TMDB was unreachable, has
 them fetched when it is first routed; if TMDB still cannot answer, the
 submission retries rather than route on missing facts, unless no enabled route
-of its media type has a condition (Everything else or Standard alone decides),
-when it goes without them.
+of its media type has a condition (Everything else alone decides), when it
+goes without them. Standard needs only the anime fact, so without TMDB it
+routes on the anime flag stored with the request.
 
 ### Standard and Advanced
 

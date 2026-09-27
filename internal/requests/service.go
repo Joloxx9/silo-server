@@ -2276,8 +2276,14 @@ func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request, routes [
 	}
 	detail := s.requestDetail(ctx, req.MediaType, req.TMDBID)
 	if detail == nil {
+		if isStandardRouting(routes, req.MediaType) {
+			// Standard's only condition is anime, which the request's stored
+			// anime flag already answers, so it is sent without the facts.
+			req.RoutingFacts.Anime = req.IsAnime
+			return nil
+		}
 		if !routesUseConditions(routes, req.MediaType) {
-			// Only Everything else (or Standard) decides: the facts would
+			// Only Everything else decides: the facts would
 			// not change where the request goes, so it is sent without them.
 			return nil
 		}
