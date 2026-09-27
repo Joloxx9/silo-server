@@ -2050,13 +2050,9 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 		return submitted, nil
 	}
 	if claimed.SubmitAttempts >= maxSubmitAttempts {
-		return s.markSubmissionFailed(ctx, claimed.ID, actor, submitErr)
+		return s.markSubmissionFailed(ctx, *claimed, actor, submitErr)
 	}
-	var leaseUntil time.Time
-	if claimed.SubmitLeaseUntil != nil {
-		leaseUntil = *claimed.SubmitLeaseUntil
-	}
-	deferred, err := s.store.DeferSubmission(ctx, claimed.ID, leaseUntil, submitBackoff(claimed.SubmitAttempts), submitErr.Error())
+	deferred, err := s.store.DeferSubmission(ctx, claimed.ID, claimLease(*claimed), submitBackoff(claimed.SubmitAttempts), submitErr.Error())
 	if err != nil {
 		if errors.Is(err, ErrInvalidState) {
 			// The attempt created targets before failing, which moved the
@@ -2110,7 +2106,7 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 		if msg == "" {
 			msg = "fulfillment backend created no targets"
 		}
-		return s.markSubmissionFailed(ctx, req.ID, actor, errors.New(msg))
+		return s.markSubmissionFailed(ctx, req, actor, errors.New(msg))
 	}
 	return s.recordTargets(ctx, req, actor, plan, targets, connectionKindByID(conns), nil, nil)
 }
@@ -2418,12 +2414,24 @@ func boolConfig(config map[string]any, key string) bool {
 	return ok && b
 }
 
-func (s *Service) markSubmissionFailed(ctx context.Context, requestID string, actor Viewer, submitErr error) (*Request, error) {
-	guard := StateGuard{Statuses: []Status{StatusApproved}, Outcomes: []Outcome{OutcomeActive}}
-	failed, err := s.store.SetOutcome(ctx, requestID, guard, OutcomeFailed, actor, submitErr.Error())
+// claimLease returns the lease a claimed request holds, which fences the
+// writes that end the claim.
+func claimLease(claimed Request) time.Time {
+	if claimed.SubmitLeaseUntil == nil {
+		return time.Time{}
+	}
+	return *claimed.SubmitLeaseUntil
+}
+
+// markSubmissionFailed ends a claimed submission as failed. claimed is the
+// request as ClaimSubmission returned it; its lease fences the write.
+func (s *Service) markSubmissionFailed(ctx context.Context, claimed Request, actor Viewer, submitErr error) (*Request, error) {
+	failed, err := s.store.FailSubmission(ctx, claimed.ID, claimLease(claimed), actor, submitErr.Error())
 	if err != nil {
 		if errors.Is(err, ErrInvalidState) {
-			return s.store.GetRequest(ctx, requestID)
+			// The attempt created targets before failing, or it outlived its
+			// lease and another claim holds the request now.
+			return s.store.GetRequest(ctx, claimed.ID)
 		}
 		return nil, fmt.Errorf("submit request failed: %w; mark failed: %v", submitErr, err)
 	}

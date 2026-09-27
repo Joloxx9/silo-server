@@ -1973,6 +1973,24 @@ func (f *fakeStore) DeferSubmission(_ context.Context, id string, leaseUntil tim
 	return &copy, nil
 }
 
+func (f *fakeStore) FailSubmission(_ context.Context, id string, leaseUntil time.Time, _ Viewer, message string) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return nil, ErrNotFound
+	}
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive ||
+		req.SubmitLeaseUntil == nil || !req.SubmitLeaseUntil.Equal(leaseUntil) {
+		return nil, ErrInvalidState
+	}
+	req.Outcome = OutcomeFailed
+	req.SubmitLeaseUntil = nil
+	req.LastError = message
+	copy := *req
+	return &copy, nil
+}
+
 func (f *fakeStore) MarkAvailable(_ context.Context, id string, _ Viewer) (*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Silo-Server/silo-server/internal/metadata/tmdb"
 )
@@ -352,5 +353,63 @@ func TestFollowsDatabase(t *testing.T) {
 	}
 	if followers, _ := repo.ListTitleFollowers(ctx, MediaTypeSeries, 949); len(followers) != 0 {
 		t.Fatalf("series followers after forgetting = %+v, want none", followers)
+	}
+}
+
+// A follow racing a withdrawal must not outlive it: the follow waits for the
+// withdrawal to commit, sees the request closed, and inserts nothing, so the
+// follow cleanup that ran with the withdrawal leaves no stray follower behind.
+func TestFollowWaitsForConcurrentWithdrawalDatabase(t *testing.T) {
+	repo, pool := lifecycleTestRepository(t)
+	ctx := t.Context()
+	if _, err := pool.Exec(ctx, `CREATE TABLE media_request_follows (LIKE public.media_request_follows INCLUDING ALL)`); err != nil {
+		t.Fatal(err)
+	}
+	insertLifecycleRequest(t, repo, "req-race", 5, 959, StatusPending)
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	var withdrawer int
+	if err := tx.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&withdrawer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE media_requests SET outcome = 'cancelled', updated_at = now() WHERE id = 'req-race'`); err != nil {
+		t.Fatal(err)
+	}
+
+	followed := make(chan error, 1)
+	go func() {
+		followed <- repo.FollowTitle(ctx, MediaTypeMovie, 959, Viewer{UserID: 1, ProfileID: "profile-a"})
+	}()
+	// Wait until the follow is blocked behind the open withdrawal. A follow
+	// that does not wait finishes first and is caught below.
+	for blocked := false; !blocked; {
+		select {
+		case err := <-followed:
+			t.Fatalf("follow finished while the withdrawal was open: err = %v, want it to wait", err)
+		default:
+		}
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid)))`, withdrawer).Scan(&blocked); err != nil {
+			t.Fatal(err)
+		}
+		if !blocked {
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM media_request_follows WHERE media_type = 'movie' AND tmdb_id = 959`); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := <-followed; !errors.Is(err, ErrNotRequested) {
+		t.Fatalf("follow after the withdrawal: err = %v, want ErrNotRequested", err)
+	}
+	if followers, err := repo.ListTitleFollowers(ctx, MediaTypeMovie, 959); err != nil || len(followers) != 0 {
+		t.Fatalf("followers after the withdrawal = %+v, err = %v; want none", followers, err)
 	}
 }
