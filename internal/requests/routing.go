@@ -24,6 +24,8 @@ const (
 	configIsDefault4K  = "is_default_4k"
 	configIs4K         = "is_4k"
 	configAnimeEnabled = "anime_enabled"
+	configSeriesType   = "series_type"
+	seriesTypeAnime    = "anime"
 	kindRadarr         = "radarr"
 	kindSonarr         = "sonarr"
 )

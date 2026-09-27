@@ -440,3 +440,41 @@ func TestAdvancedSeedUsesOnlyServersThatStillFitDatabase(t *testing.T) {
 		}
 	})
 }
+
+func TestStandardSendsAnimeSeriesWithTheAnimeSeriesType(t *testing.T) {
+	for _, anime := range []bool{true, false} {
+		store := standardStore(capturedFacts(RoutingFacts{Anime: anime}))
+		store.integrations = []Integration{
+			arrServer("sonarr", kindSonarr, map[string]any{"series_type": "standard"}),
+			arrServer("sonarr-4k", kindSonarr, map[string]any{"is_4k": true, "series_type": "standard"}),
+		}
+		req := store.requests["r1"]
+		req.MediaType, req.IsAnime = MediaTypeSeries, anime
+		router := &fakeRouterProvider{}
+		svc := modeService(store, &fakeTMDBClient{})
+		svc.SetRouterProvider(router)
+		svc.SetEntitlementResolver(fixedCeiling{q: "2160p"})
+
+		if _, err := svc.submitApprovedRequest(context.Background(), *req, Viewer{}, nil); err != nil {
+			t.Fatalf("anime=%v: submit: %v", anime, err)
+		}
+		want := "standard"
+		if anime {
+			want = seriesTypeAnime
+		}
+		if len(router.fulfillLog) != 2 {
+			t.Fatalf("anime=%v: fulfill calls = %+v, want HD and 4K", anime, router.fulfillLog)
+		}
+		for _, call := range router.fulfillLog {
+			if conn := call.conns[0]; conn.Config[configSeriesType] != want {
+				t.Errorf("anime=%v: %s to %s with series type %v, want %s", anime, call.qualities[0], conn.ID, conn.Config[configSeriesType], want)
+			}
+		}
+		targets, _ := store.ListTargets(context.Background(), "r1")
+		for _, target := range targets {
+			if target.RouteName != standardRouteName {
+				t.Errorf("anime=%v: target route %q, want Standard", anime, target.RouteName)
+			}
+		}
+	}
+}
