@@ -403,6 +403,20 @@ func (fc *fulfillContext) routesFor(mediaType MediaType) []Route {
 }
 
 func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error) {
+	// The mode is read before the servers and the rules, in separate queries.
+	// A switch to Advanced writes Everything else and the mode in one commit,
+	// so reading the mode first sees either Standard, which ignores the rules
+	// (and routes with the rules read after it when the servers read after it
+	// no longer allow Standard), or Advanced with the rules it was committed
+	// with. Reading the rules first could pair the old rules with Advanced.
+	mode := RoutingAdvanced
+	if store, ok := s.store.(RoutingModeStore); ok {
+		routing, err := store.GetRoutingSettings(ctx)
+		if err != nil {
+			return nil, err
+		}
+		mode = routing.Mode
+	}
 	integrations, err := s.store.ListIntegrations(ctx)
 	if err != nil {
 		return nil, err
@@ -416,17 +430,11 @@ func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error
 		return nil, err
 	}
 	fc := &fulfillContext{integrations: integrations, settings: settings, routes: routes}
-	if store, ok := s.store.(RoutingModeStore); ok {
-		routing, err := store.GetRoutingSettings(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if routing.Mode == RoutingStandard {
-			// Standard with two servers of a kind (saved around a server
-			// change) routes with the rules until an admin sorts it out.
-			layout, blocker := standardLayout(integrations)
-			fc.standard, fc.standardOn = layout, blocker == ""
-		}
+	if mode == RoutingStandard {
+		// Standard with two servers of a kind (saved around a server
+		// change) routes with the rules until an admin sorts it out.
+		layout, blocker := standardLayout(integrations)
+		fc.standard, fc.standardOn = layout, blocker == ""
 	}
 	return fc, nil
 }

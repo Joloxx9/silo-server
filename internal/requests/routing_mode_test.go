@@ -195,6 +195,37 @@ func TestStandardWithTwoServersRoutesWithTheRules(t *testing.T) {
 	}
 }
 
+// switchingStore turns Advanced on, with Everything else, right after the
+// rules are read, as a switch committed between two reads would.
+type switchingStore struct {
+	*modeStore
+}
+
+func (s *switchingStore) ListRoutes(ctx context.Context) ([]Route, error) {
+	routes, err := s.modeStore.ListRoutes(ctx)
+	s.mode = RoutingAdvanced
+	s.routes = append(s.routes, Route{ID: FallbackRouteID(MediaTypeMovie), MediaType: MediaTypeMovie, Position: 1000,
+		Name: fallbackRouteName, Enabled: true, IsFallback: true, HD: RouteDestination{IntegrationID: "radarr-hd"}})
+	return routes, err
+}
+
+func TestFulfillContextReadsTheModeBeforeTheRules(t *testing.T) {
+	store := standardStore(RoutingFacts{})
+	store.routes = nil
+	svc := modeService(store, &fakeTMDBClient{})
+	svc.store = &switchingStore{modeStore: store}
+
+	fc, err := svc.newFulfillContext(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Standard read before the switch routes with Standard; Advanced read
+	// after it would have come with no rules at all.
+	if !fc.standardOn && len(fc.routesFor(MediaTypeMovie)) == 0 {
+		t.Fatalf("mode read after the rules: Advanced with the rules from before the switch (%+v)", fc.routes)
+	}
+}
+
 func TestPreviewUnderStandard(t *testing.T) {
 	store := standardStore(RoutingFacts{})
 	store.integrations = store.integrations[:1]
