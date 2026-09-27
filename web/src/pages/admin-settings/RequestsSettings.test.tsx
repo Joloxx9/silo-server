@@ -410,13 +410,30 @@ describe("Requests settings: general", () => {
     });
   });
 
-  it("does not offer a request limit below 1", async () => {
-    serve();
+  it("saves a request limit of 0 and refuses a negative or empty one", async () => {
+    serve({
+      handlers: {
+        "PUT /api/v2/admin/request-settings": (options) =>
+          reply(options, { ...settings, global_max_requests: 0 }, '"saved"'),
+      },
+    });
     mount();
     const limit = await screen.findByLabelText("Request limit");
+    const save = () => screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    for (const value of ["-1", ""]) {
+      fireEvent.change(limit, { target: { value } });
+      expect(screen.getByText(/0 or more/)).toBeInTheDocument();
+      expect(save().disabled).toBe(true);
+    }
+
+    // 0 with per-account limits lets only those accounts request.
     fireEvent.change(limit, { target: { value: "0" } });
-    expect(screen.getByText(/Allow at least 1/)).toBeInTheDocument();
-    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(/0 or more/)).toBeNull();
+    fireEvent.click(save());
+    await waitFor(() => expect(calls("PUT /api/v2/admin/request-settings")).toHaveLength(1));
+    expect(calls("PUT /api/v2/admin/request-settings")[0]).toMatchObject({
+      body: { global_max_requests: 0 },
+    });
   });
 
   it("explains what the 4K switch does", async () => {
@@ -435,7 +452,7 @@ describe("Requests settings: general", () => {
     const limit = await screen.findByLabelText("Request limit");
     const help = document.getElementById(limit.getAttribute("aria-describedby")!);
     expect(help).toHaveTextContent(
-      "Declined and failed requests don't count. The server-wide default. Access groups and accounts can override this.",
+      "Declined and failed requests don't count. At 0, only accounts with a group or account limit of their own can request. The server-wide default. Access groups and accounts can override this.",
     );
     expect(within(help!).getByRole("link", { name: "Access groups" })).toHaveAttribute(
       "href",

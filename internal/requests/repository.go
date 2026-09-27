@@ -620,6 +620,15 @@ func (r *Repository) SetOutcome(ctx context.Context, id string, from StateGuard,
 		}
 		return nil, fmt.Errorf("set request outcome: %w", err)
 	}
+	// A declined or withdrawn title is no longer on its way, so its follows
+	// go in the same transaction. Once this commits, another request for the
+	// title can open and gather followers, and a cleanup run after the commit
+	// would remove theirs.
+	if outcome == OutcomeDeclined || outcome == OutcomeCancelled {
+		if err := forgetTitleFollows(ctx, tx, req); err != nil {
+			return nil, err
+		}
+	}
 	if err := r.recordEvent(ctx, tx, id, "outcome_"+string(outcome), actor, message); err != nil {
 		return nil, err
 	}
