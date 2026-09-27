@@ -1857,6 +1857,12 @@ func (f *fakeStore) SetOutcome(_ context.Context, id string, from StateGuard, ou
 	req.LastError = message
 	if outcome == OutcomeDeclined || outcome == OutcomeCancelled {
 		req.OutcomeReason = message
+		prefix := fmt.Sprintf("%s/%d/", req.MediaType, req.TMDBID)
+		for key := range f.follows {
+			if strings.HasPrefix(key, prefix) {
+				delete(f.follows, key)
+			}
+		}
 	}
 	copy := *req
 	return &copy, nil
@@ -2090,18 +2096,6 @@ func (f *fakeStore) seedFollowLocked(mediaType MediaType, tmdbID int, viewer Vie
 		f.follows = map[string]Follower{}
 	}
 	f.follows[followKey(mediaType, tmdbID, viewer.UserID, viewer.ProfileID)] = Follower{UserID: viewer.UserID, ProfileID: viewer.ProfileID}
-}
-
-func (f *fakeStore) ForgetTitleFollows(_ context.Context, mediaType MediaType, tmdbID int) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	prefix := fmt.Sprintf("%s/%d/", mediaType, tmdbID)
-	for key := range f.follows {
-		if strings.HasPrefix(key, prefix) {
-			delete(f.follows, key)
-		}
-	}
-	return nil
 }
 
 func (f *fakeStore) UnfollowTitle(_ context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error {
