@@ -413,7 +413,9 @@ describe("Where requests go: Everything else", () => {
     );
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("heading", { name: "Everything else — movies" })).toBeTruthy();
-    expect(within(dialog).getByText("Movies no rule matches go here.")).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/^Where movies go when no rule matches them\./),
+    ).toBeInTheDocument();
     await choose(dialog, "4K copies", "Don't make a 4K copy");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await within(dialog).findByRole("button", { name: "Reload latest version" });

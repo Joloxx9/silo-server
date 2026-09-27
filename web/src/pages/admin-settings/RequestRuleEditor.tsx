@@ -43,7 +43,6 @@ import {
   type RoutingNames,
 } from "./requestRoutingModel";
 import type { RequestRouterInstallation } from "./requestServerModel";
-import { SETTINGS_CONTROL_WIDTH, SettingFieldRow } from "./SettingField";
 
 /** Everything a media type's routing editors read. */
 export interface RoutingScope {
@@ -212,26 +211,27 @@ export function RequestRuleEditor({
 
       <EditorErrors message={formError} fieldErrors={fieldErrors} />
 
-      <div className="settings-field-list">
-        <SettingFieldRow
-          label="Name"
-          htmlFor={nameId}
-          description="Shown in the list. Leave blank to describe it automatically."
-          status={<FieldError>{fieldErrors.name}</FieldError>}
-        >
-          <Input
-            id={nameId}
-            value={name}
-            maxLength={100}
-            onChange={(event) => {
-              touched();
-              setName(event.target.value);
-            }}
-            placeholder={autoName}
-            aria-invalid={Boolean(fieldErrors.name)}
-            className={SETTINGS_CONTROL_WIDTH}
-          />
-        </SettingFieldRow>
+      <div className="space-y-1.5">
+        <label htmlFor={nameId} className="block text-sm font-semibold">
+          Name
+        </label>
+        <Input
+          id={nameId}
+          value={name}
+          maxLength={100}
+          onChange={(event) => {
+            touched();
+            setName(event.target.value);
+          }}
+          placeholder={autoName}
+          aria-invalid={Boolean(fieldErrors.name)}
+          aria-describedby={`${nameId}-hint`}
+          className="sm:w-1/2"
+        />
+        <p id={`${nameId}-hint`} className="text-muted-foreground text-xs">
+          Shown in the list. Leave it blank to describe the rule automatically.
+        </p>
+        <FieldError>{fieldErrors.name}</FieldError>
       </div>
 
       <RuleConditionsEditor
@@ -249,7 +249,7 @@ export function RequestRuleEditor({
         <h3 id={whereId} className="text-sm font-semibold">
           Where they go
         </h3>
-        <div className="settings-field-list">
+        <div className="space-y-3">
           <RouteDestinationEditor
             tier="hd"
             sectionId={`${source?.id ?? `new-${mediaType}`}.hd`}
