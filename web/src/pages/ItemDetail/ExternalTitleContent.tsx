@@ -25,6 +25,7 @@ import HeroCrewLine from "./components/HeroCrewLine";
 import MetadataBadges from "./components/MetadataBadges";
 import RequestActionBar from "./components/RequestActionBar";
 import ScoreRow from "./components/ScoreRow";
+import { SeasonRail } from "./SeasonCarousel";
 
 interface ExternalTitleContentProps {
   item: RequestMediaDetail;
@@ -98,38 +99,38 @@ export default function ExternalTitleContent({ item, libraryHref }: ExternalTitl
 /** A series' seasons with what the library has and what is requested, like the library's season row. */
 function TitleSeasons({ seasons }: { seasons: RequestMediaSeason[] }) {
   return (
-    <DetailSection title="Seasons">
-      <ul role="list" className="-mt-1 flex list-none gap-4 overflow-x-auto pt-1 pb-5">
-        {seasons.map((season) => {
-          const name = `Season ${season.season_number}`;
-          const poster = tmdbImageURL(season.poster_path);
-          return (
-            <li key={season.season_number} className="w-[160px] shrink-0 sm:w-[170px]">
-              <div className="media-card-image relative aspect-[2/3] overflow-hidden rounded-xl">
-                {poster ? (
-                  <img
-                    src={poster}
-                    alt={name}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                ) : (
-                  <div className="text-muted-foreground bg-surface flex h-full items-center justify-center p-4 text-center text-sm font-medium">
-                    {name}
-                  </div>
-                )}
-              </div>
-              <p className="mt-2 truncate text-sm font-medium">{season.name || name}</p>
-              <p className="text-muted-foreground truncate text-xs">
-                {formatRequestSeasonMeta(season)}
-              </p>
-              <SeasonStatus season={season} className="mt-0.5 block" />
-            </li>
-          );
-        })}
-      </ul>
-    </DetailSection>
+    <SeasonRail count={seasons.length}>
+      {seasons.map((season) => {
+        const name = `Season ${season.season_number}`;
+        const poster = tmdbImageURL(season.poster_path);
+        return (
+          <li key={season.season_number} className="embla__slide w-[160px] shrink-0 sm:w-[170px]">
+            <div className="media-card-image relative aspect-[2/3] overflow-hidden rounded-xl">
+              {poster ? (
+                <img
+                  src={poster}
+                  alt={name}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="text-muted-foreground bg-surface flex h-full items-center justify-center p-4 text-center text-sm font-medium">
+                  {name}
+                </div>
+              )}
+            </div>
+            <p className="truncate px-0.5 pt-2.5 text-[13px] font-semibold">
+              {season.name || name}
+            </p>
+            <p className="text-muted-foreground truncate px-0.5 text-xs">
+              {formatRequestSeasonMeta(season)}
+            </p>
+            <SeasonStatus season={season} className="mt-0.5 block px-0.5" />
+          </li>
+        );
+      })}
+    </SeasonRail>
   );
 }
 
