@@ -292,7 +292,7 @@ function serve({
     if (custom) return custom(options);
     switch (operation) {
       case "GET /api/v2/admin/requests/capabilities":
-        return reply(options, { available: true, guarded_configuration: true });
+        return reply(options, { available: true, guarded_configuration: true, routing: true });
       case "GET /api/v2/admin/request-settings":
         return reply(options, settings);
       case "GET /api/v2/admin/request-integrations":
@@ -548,6 +548,20 @@ describe("Requests settings: servers", () => {
 });
 
 describe("Requests settings: routing", () => {
+  it("leaves routing out when the server does not offer it", async () => {
+    serve({
+      handlers: {
+        "GET /api/v2/admin/requests/capabilities": (options) =>
+          reply(options, { available: true, guarded_configuration: true, routing: false }),
+      },
+    });
+    mount();
+    expect(await screen.findByRole("group", { name: "Servers" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Movie routing" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Series routing" })).toBeNull();
+    expect(calls("GET /api/v2/admin/request-routes")).toHaveLength(0);
+  });
+
   it("saves a never-saved default destination with the revision-zero validator it read", async () => {
     serve({
       handlers: {
