@@ -61,9 +61,11 @@ function generalChanges(draft: GeneralDraft, base: GeneralDraft): number {
     .length;
 }
 
-function positiveInt(value: string): number | null {
-  const n = Number(value.trim());
-  return Number.isInteger(n) && n >= 1 ? n : null;
+function wholeNumber(value: string, min: number): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const n = Number(trimmed);
+  return Number.isInteger(n) && n >= min ? n : null;
 }
 
 const MEDIA_TYPES: RequestRouteMediaType[] = ["movie", "series"];
@@ -137,8 +139,9 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
   const [fallbackErrors, setFallbackErrors] = useState<Record<string, Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
 
-  const maxRequests = general.draft ? positiveInt(general.draft.max_requests) : null;
-  const windowDays = general.draft ? positiveInt(general.draft.window_days) : null;
+  // A limit of 0 lets only accounts with their own limit request.
+  const maxRequests = general.draft ? wholeNumber(general.draft.max_requests, 0) : null;
+  const windowDays = general.draft ? wholeNumber(general.draft.window_days, 1) : null;
   const baseGeneral = general.base ? generalDraft(general.base) : undefined;
   const maxInvalid =
     maxRequests === null && general.draft?.max_requests !== baseGeneral?.max_requests;
@@ -329,14 +332,14 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
                   label="Request limit"
                   type="number"
                   unit="requests"
-                  description="How many titles one account can request in the window below."
+                  description="How many titles one account can request in the window below. At 0, only accounts with their own limit can request."
                   value={draft.max_requests}
                   onChange={(value) => editGeneral({ max_requests: value })}
                   dirty={draft.max_requests !== baseGeneral.max_requests}
                   status={
                     maxInvalid ? (
                       <SettingFieldStatus tone="warn">
-                        Allow at least 1. To stop requests, turn off Allow requests.
+                        Use a whole number, 0 or more.
                       </SettingFieldStatus>
                     ) : undefined
                   }
