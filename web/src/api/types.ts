@@ -1931,6 +1931,12 @@ export interface RequestSeasonProgress {
 export interface RequestDiscoverySection extends RequestMediaPage {
   key: string;
   title: string;
+  /**
+   * The page to ask for next when a rating-restricted viewer's page read
+   * several TMDB pages (page + 1 would repeat them). Absent when page + 1
+   * applies, or when a restricted viewer has reached the end.
+   */
+  next_page?: number;
 }
 
 export interface RequestDiscoveryResponse {

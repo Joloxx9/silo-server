@@ -116,10 +116,13 @@ export default function Layout({ children }: LayoutProps) {
     })();
   const isRecommendationsRoute = location.pathname === "/recommendations";
   const isCalendarRoute = location.pathname === "/calendar";
-  // The Requests hub and its studio/network/genre browse pages lay out their
-  // own gutter so text rows line up with MediaCarousel's edge padding.
+  // The Requests hub, its Discover row pages, and its studio/network/genre
+  // browse pages lay out their own gutter so text rows line up with
+  // MediaCarousel's edge padding.
   const isRequestsRoute =
-    /^\/requests\/?$/.test(location.pathname) || location.pathname.startsWith("/requests/browse/");
+    /^\/requests\/?$/.test(location.pathname) ||
+    location.pathname.startsWith("/requests/browse/") ||
+    location.pathname.startsWith("/requests/discover/");
   // A title outside the library gets the item page's treatment. The old
   // /requests/movie/… and /requests/series/… links redirect there, so they
   // keep it too rather than expanding the sidebar for one frame.

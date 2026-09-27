@@ -7,6 +7,7 @@ import type {
   RequestMediaSeason,
   RequestSeasonProgress,
   RequestMediaType,
+  RequestSearchMediaType,
   RequestUserState,
 } from "@/api/types";
 import { formatDate } from "@/lib/datetime";
@@ -161,6 +162,53 @@ export function requestDetailHref(mediaType: RequestMediaType, tmdbID: number): 
 /** The media type a title URL names, or undefined for any other segment. */
 export function parseRequestMediaType(value: string | undefined): RequestMediaType | undefined {
   return value === "movie" || value === "series" ? value : undefined;
+}
+
+/**
+ * The app's search page, scoped to what can be requested: movies and series,
+ * or just one of them. Its "Request to add" section lists the TMDB matches.
+ */
+export function requestSearchHref(query: string, mediaType?: string | null): string {
+  const params = new URLSearchParams({
+    source: "query",
+    q: query.trim(),
+    type: parseRequestMediaType(mediaType ?? undefined) ?? "video",
+  });
+  return `/catalog?${params.toString()}`;
+}
+
+/**
+ * The TMDB search type for a catalog search scope, or null when the scope
+ * holds nothing TMDB can supply (audiobooks, ebooks, manga).
+ */
+export function requestSearchTypeForScope(
+  scope: string | undefined,
+): RequestSearchMediaType | null {
+  switch (scope) {
+    case undefined:
+    case "video":
+      return "all";
+    case "movie":
+      return "movie";
+    case "series":
+    case "episode":
+      return "series";
+    default:
+      return null;
+  }
+}
+
+/** TMDB serves at most 500 pages of any list, whatever total it reports. */
+export const TMDB_MAX_PAGE = 500;
+
+/** The number of pages a TMDB list can actually be read to. */
+export function tmdbPageCount(totalPages: number | undefined): number {
+  return Math.min(Math.max(totalPages ?? 0, 0), TMDB_MAX_PAGE);
+}
+
+/** The page listing every title of a Discover row, such as Trending Movies. */
+export function requestDiscoverSectionHref(sectionKey: string): string {
+  return `/requests/discover/${encodeURIComponent(sectionKey)}`;
 }
 
 /** Request suggestions the ⌘K dialog lists below the library results. */

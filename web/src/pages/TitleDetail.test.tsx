@@ -519,9 +519,12 @@ describe("TitleDetail", () => {
       expect(screen.getByRole("heading", { name: "Cast" })).toBeInTheDocument();
       expect(screen.getByText("Keanu Reeves")).toBeInTheDocument();
       const moreLikeThis = screen.getByRole("region", { name: "More Like This" });
-      expect(
-        within(moreLikeThis).getByRole("link", { name: /The Matrix Reloaded/ }),
-      ).toHaveAttribute("href", "/title/movie/604");
+      // Like a library card, the artwork and the caption title both link to the title.
+      const links = within(moreLikeThis).getAllByRole("link", { name: /The Matrix Reloaded/ });
+      expect(links.length).toBeGreaterThan(0);
+      for (const link of links) {
+        expect(link).toHaveAttribute("href", "/title/movie/604");
+      }
     });
   });
 });

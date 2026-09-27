@@ -96,6 +96,7 @@ const PlaybackSettings = lazy(() => import("@/pages/settings/PlaybackSettings"))
 const NotificationsSettings = lazy(() => import("@/pages/settings/NotificationsSettings"));
 const Requests = lazy(() => import("@/pages/Requests"));
 const RequestBrowse = lazy(() => import("@/pages/RequestBrowse"));
+const RequestDiscoverSection = lazy(() => import("@/pages/RequestDiscoverSection"));
 const TitleDetail = lazy(() => import("@/pages/TitleDetail"));
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
 const AdminActivity = lazy(() => import("@/pages/AdminActivity"));
@@ -657,6 +658,14 @@ function AppRoutes() {
                             element={
                               <RequireRequestsEnabled>
                                 <TitleDetail />
+                              </RequireRequestsEnabled>
+                            }
+                          />
+                          <Route
+                            path="/requests/discover/:section"
+                            element={
+                              <RequireRequestsEnabled>
+                                <RequestDiscoverSection />
                               </RequireRequestsEnabled>
                             }
                           />

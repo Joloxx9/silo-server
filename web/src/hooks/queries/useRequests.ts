@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { V2ProblemError } from "@/api/v2/request";
 import {
@@ -46,7 +46,9 @@ import type {
   DiscoverBrowseKind,
   LoadRequestIntegrationOptionsRequest,
   RequestIntegration,
+  RequestDiscoverySection,
   RequestListParams,
+  RequestMediaPage,
   RequestSearchMediaType,
   RequestMediaType,
   RequestUserLimit,
@@ -99,11 +101,16 @@ export function useRequestFeatureStatus(
 }
 
 export function useRequestDiscoverySection(section: string, page = 1) {
-  return useQuery({
+  return useQuery<RequestDiscoverySection>({
     queryKey: requestKeys.discoverySection(section, page),
     queryFn: () => getDiscoverSectionV2(section, page),
     enabled: section.trim().length > 0,
     staleTime: REQUESTS_STALE_TIME,
+    // Paging keeps the current grid on screen; another row starts empty.
+    placeholderData: (
+      previous: RequestDiscoverySection | undefined,
+      previousQuery?: Query<RequestDiscoverySection>,
+    ) => (previousQuery?.queryKey[2] === section ? previous : undefined),
   });
 }
 
@@ -183,6 +190,11 @@ export interface UseRequestSearchOptions {
   gcTime?: number;
   /** Retry policy; interactive search surfaces should not replay expensive failures. */
   retry?: boolean | number;
+  /**
+   * Keeps showing the previous page's results while another page of the same
+   * search loads, so a paged grid does not collapse between pages.
+   */
+  keepPreviousPage?: boolean;
 }
 
 export function useRequestSearch(
@@ -201,15 +213,29 @@ export function useRequestSearch(
   const enabledOverride = options.enabled ?? true;
   const requireProfile = options.requireProfile ?? false;
 
-  return useQuery({
-    queryKey: requestKeys.search(mediaType, normalizedQuery, page, viewerKey),
+  const queryKey = requestKeys.search(mediaType, normalizedQuery, page, viewerKey);
+  return useQuery<RequestMediaPage>({
+    queryKey,
     queryFn: ({ signal }) => searchRequestMediaV2(mediaType, normalizedQuery, page, signal),
     enabled:
       enabledOverride && normalizedQuery.length > 1 && (!requireProfile || Boolean(profile?.id)),
     staleTime: options.staleTime ?? REQUESTS_STALE_TIME,
     ...(options.gcTime !== undefined ? { gcTime: options.gcTime } : {}),
     ...(options.retry !== undefined ? { retry: options.retry } : {}),
+    // Only another page of the same search: a new query or type must not show
+    // the old one's titles.
+    placeholderData: options.keepPreviousPage
+      ? (previous: RequestMediaPage | undefined, previousQuery?: Query<RequestMediaPage>) =>
+          previousQuery && sameSearchOtherPage(previousQuery.queryKey, queryKey)
+            ? previous
+            : undefined
+      : undefined,
   });
+}
+
+function sameSearchOtherPage(previous: readonly unknown[], next: readonly unknown[]): boolean {
+  // requestKeys.search: ["requests", "search", viewerKey, mediaType, query, page]
+  return previous.slice(0, 5).every((part, index) => part === next[index]);
 }
 
 export function useCreateMediaRequest() {

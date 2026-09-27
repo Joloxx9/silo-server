@@ -142,6 +142,11 @@ export const requestKeys = {
     ["requests", "search", viewerKey, mediaType, query, page] as const,
   detail: (mediaType: string, tmdbID: number) => ["requests", "detail", mediaType, tmdbID] as const,
   mine: (params: Record<string, unknown>) => ["requests", "mine", params] as const,
+  // Prefixes for refreshing every page or params variant at once.
+  discoverBrowseAll: () => ["requests", "discover", "browse"] as const,
+  detailAll: () => ["requests", "detail"] as const,
+  mineAll: () => ["requests", "mine"] as const,
+  searchAll: () => ["requests", "search"] as const,
 };
 
 export const libraryCollectionKeys = {
