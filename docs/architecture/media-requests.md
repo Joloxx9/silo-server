@@ -267,6 +267,8 @@ editor offers them.
 
 The quota counts the requests an account made in the window, except those
 declined or failed: those give their slot back. A cancelled request keeps
-counting, or requesting and cancelling could repeat without limit. The store
+counting, or requesting and cancelling could repeat without limit, unless it
+still carries a submission error: an admin closing a failed request from the
+queue does not take back the slot its failure returned. The store
 checks the quota under the requester's advisory lock, so concurrent creates
 cannot both take the last slot.

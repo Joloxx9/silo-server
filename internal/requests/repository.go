@@ -166,9 +166,12 @@ func (r *Repository) upsertUserLimit(ctx context.Context, exec requestExecutor, 
 }
 
 // quotaOutcomes are the outcomes whose requests count against the quota. A
-// decline or a failure gives the slot back; a cancellation does not, or
-// a request-and-withdraw loop could repeat without limit.
-const quotaOutcomes = `outcome IN ('active', 'cancelled')`
+// decline or a failure gives the slot back; a withdrawal does not, or a
+// request-and-withdraw loop could repeat without limit. A request closed
+// after it failed (or while it could not be sent) still carries its
+// submission error and keeps the refund its failure gave it: an admin
+// cleaning up the failed view must not use up the requester's quota.
+const quotaOutcomes = `(outcome = 'active' OR (outcome = 'cancelled' AND last_error = ''))`
 
 // CountUserRequestsSince counts the requests an account made since a time
 // that count against its quota.
