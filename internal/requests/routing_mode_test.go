@@ -78,6 +78,32 @@ func TestStandardLayout(t *testing.T) {
 	if _, blocker := standardLayout([]Integration{radarr, seerr, sonarr}); !strings.Contains(blocker, "Movies can go to more than one server") {
 		t.Fatalf("Radarr + Seerr: blocker = %q", blocker)
 	}
+	// Seerr for movies with a Radarr marked 4K: with no rule Seerr would be
+	// handed every tier, so Standard cannot use both.
+	if layout, blocker := standardLayout([]Integration{seerr, radarr4K}); layout != nil ||
+		!strings.Contains(blocker, "Movies go to seerr and their 4K copies to radarr-4k, which are different request services") ||
+		!strings.Contains(blocker, "Switch to Advanced routing") {
+		t.Fatalf("Seerr + 4K Radarr: layout = %+v blocker = %q", layout, blocker)
+	}
+	seerr4K := routerInstOn("seerr-4k", 2)
+	seerr4K.Name, seerr4K.SupportedMediaTypes = "seerr-4k", []string{"movie"}
+	seerr4K.PluginConfig = map[string]any{"is_default_4k": true}
+	if _, blocker := standardLayout([]Integration{seerr, seerr4K}); !strings.Contains(blocker, "different request services") {
+		t.Fatalf("two Seerr installations: blocker = %q", blocker)
+	}
+	// The same Seerr's 4K connection is one service, and Radarrs from
+	// different plugins are routed tier by tier.
+	sameSeerr4K := seerr4K
+	sameSeerr4K.InstallationID, sameSeerr4K.CapabilityID = seerr.InstallationID, seerr.CapabilityID
+	if _, blocker := standardLayout([]Integration{seerr, sameSeerr4K}); blocker != "" {
+		t.Fatalf("one Seerr with a 4K connection: blocker = %q", blocker)
+	}
+	otherRadarr4K := radarr4K
+	otherInstall := 2
+	otherRadarr4K.InstallationID = &otherInstall
+	if _, blocker := standardLayout([]Integration{radarr, otherRadarr4K}); blocker != "" {
+		t.Fatalf("Radarrs from two plugins: blocker = %q", blocker)
+	}
 	// A media type served by another plugin alone keeps that plugin's routing.
 	layout, _ = standardLayout([]Integration{seerr})
 	if got := standardRoutes([]Integration{seerr}, layout, MediaTypeMovie); got != nil {
@@ -492,6 +518,60 @@ func TestAdvancedSeedUsesOnlyServersThatStillFitDatabase(t *testing.T) {
 			if got := fallbacks(t, pool)["movie"]; got != [2]string{wantHD, "radarr-4k"} {
 				t.Fatalf("fallback=%v: Everything else = %v, want 4K still going to radarr-4k", withFallback, got)
 			}
+		}
+	})
+
+	t.Run("Standard with Seerr for movies, add a Radarr marked 4K", func(t *testing.T) {
+		repo, pool := routingModeRepository(t)
+		seerr := routerInst("seerr")
+		seerr.Name, seerr.CapabilityID, seerr.PluginConfig = "Seerr", "seerr", map[string]any{}
+		seerr.SupportedMediaTypes = []string{"movie"}
+		save(t, repo, seerr, true)
+		radarr4K := arrServer("radarr-4k", kindRadarr, map[string]any{"is_4k": true})
+		radarr4K.Name, radarr4K.SupportedMediaTypes = "Radarr 4K", []string{"movie"}
+
+		// Standard cannot send HD to Seerr and 4K to Radarr, so the save
+		// turns Advanced on, and with no rule for movies Seerr's requests
+		// would go to the first server by name: the save is refused.
+		radarr4K.APIKeyRef = ""
+		_, err := repo.SaveIntegrationWithDefaults(ctx, radarr4K, true)
+		var verr *ValidationError
+		if !errors.As(err, &verr) || !strings.Contains(verr.FormError, "Switch to Advanced routing and set Everything else for movies first") {
+			t.Fatalf("add a 4K Radarr beside Seerr under Standard: %v, want a validation error", err)
+		}
+		if got, _ := repo.GetRoutingSettings(ctx); got.Mode != RoutingStandard {
+			t.Fatalf("mode = %q, want Standard kept", got.Mode)
+		}
+		if _, err := repo.GetIntegration(ctx, "radarr-4k"); err == nil {
+			t.Fatal("Radarr 4K was saved")
+		}
+		if got := fallbacks(t, pool); len(got) != 0 {
+			t.Fatalf("Everything else = %v, want none", got)
+		}
+	})
+
+	t.Run("Standard with Radarr for movies, add a Seerr marked 4K", func(t *testing.T) {
+		repo, pool := routingModeRepository(t)
+		svc := NewService(repo, &fakeTMDBClient{}, &fakePresence{})
+		radarr := arrServer("radarr", kindRadarr, nil)
+		radarr.Name, radarr.SupportedMediaTypes = "Radarr", []string{"movie"}
+		save(t, repo, radarr, true)
+		seerr := routerInstOn("seerr", 2)
+		seerr.Name, seerr.CapabilityID, seerr.PluginConfig = "Seerr", "seerr", map[string]any{"is_default_4k": true}
+		seerr.SupportedMediaTypes = []string{"movie"}
+		save(t, repo, seerr, true)
+
+		// Advanced is on, and HD keeps going to Radarr.
+		o, err := svc.GetRoutingOverview(ctx, routeAdmin)
+		if err != nil || o.Mode != RoutingAdvanced || !strings.Contains(o.StandardBlocker, "different request services") {
+			t.Fatalf("overview = %+v %v, want Advanced with Standard unavailable", o, err)
+		}
+		if got := fallbacks(t, pool)["movie"]; got != [2]string{"radarr", ""} {
+			t.Fatalf("Everything else for movies = %v, want Radarr", got)
+		}
+		_, err = svc.UpdateRoutingModeConditional(ctx, routeAdmin, RoutingStandard, -1)
+		if msg := fieldErrors(t, err)["mode"]; !strings.Contains(msg, "Movies go to Radarr and their 4K copies to Seerr") {
+			t.Fatalf("switch to Standard with Radarr and a 4K Seerr: %q", msg)
 		}
 	})
 

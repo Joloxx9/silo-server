@@ -139,7 +139,10 @@ whose server is another plugin (Seerr) keeps that plugin's own routing. Targets
 record the route as "Standard".
 
 Standard needs at most one normal and one 4K enabled server per media type,
-counting other plugins that take it. Switching to Standard is refused
+counting other plugins that take it. When one of them is a plugin that picks
+its own server (Seerr), both must be connections of that one plugin: Standard
+hands such a plugin the whole request, so a 4K Radarr beside it would never be
+used. Switching to Standard is refused
 otherwise, and adding or enabling a server that breaks the rule turns Advanced
 on in the same transaction, with Everything else given the servers Standard was
 using where it has none, so requests keep going where they went. Only Radarr
