@@ -475,17 +475,14 @@ func unusableRouterMessage(fc *fulfillContext, mediaType MediaType) string {
 	return "no usable request backend connection"
 }
 
-// routerConfiguredFor reports whether any enabled router connection is meant to
-// serve the media type, including a misconfigured one (no installation bound,
-// no key). Only when none is does a request fall back to waiting for the
-// library; a misconfigured connection surfaces as a submission failure instead.
 // moreSeasonsRequestable reports whether a series already in the library can
 // be requested for the seasons it is missing. Router plugins take a whole
 // series today (the request descriptor carries no seasons), so sending such a
 // request would add the series again: refused by a download server that has
 // it, every season downloaded by one that does not. Until they can take
 // seasons, only the library fulfills one, so it is offered only when no
-// download server takes series.
+// download server takes series. A download server set up after such a request
+// was made does not receive it either (see submitApprovedRequest).
 func (s *Service) moreSeasonsRequestable(ctx context.Context) (bool, error) {
 	if s.router == nil {
 		return true, nil
@@ -497,6 +494,10 @@ func (s *Service) moreSeasonsRequestable(ctx context.Context) (bool, error) {
 	return !routerConfiguredFor(fc, MediaTypeSeries), nil
 }
 
+// routerConfiguredFor reports whether any enabled router connection is meant to
+// serve the media type, including a misconfigured one (no installation bound,
+// no key). Only when none is does a request fall back to waiting for the
+// library; a misconfigured connection surfaces as a submission failure instead.
 func routerConfiguredFor(fc *fulfillContext, mediaType MediaType) bool {
 	for _, in := range fc.integrations {
 		if in.Enabled && in.CapabilityID != "" && integrationSupportsMediaType(in, mediaType) {
@@ -1893,6 +1894,18 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 		// No router serves this media type: the request stays approved and
 		// the reconcile pass completes it when the title reaches the library.
 		return &req, nil
+	}
+	if req.MediaType == MediaTypeSeries && len(req.Seasons) > 0 {
+		// A router would add the whole series (see moreSeasonsRequestable),
+		// so a season request for a series already in the library waits for
+		// the library, even when the router was set up after it was made.
+		matches, err := s.lookupPresence(ctx, req.MediaType, []PresenceCandidate{requestPresenceCandidate(req)})
+		if err != nil {
+			return nil, err
+		}
+		if matches[req.TMDBID].Available {
+			return &req, nil
+		}
 	}
 	claimed, ok, err := s.store.ClaimSubmission(ctx, req.ID, submitLease)
 	if err != nil {

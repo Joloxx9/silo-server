@@ -385,3 +385,34 @@ func TestPresentRequestsReadSeasonCountsOnce(t *testing.T) {
 		}
 	}
 }
+
+// A season request made for a series in the library while no download server
+// took series is not sent to one set up later: the router would add the whole
+// series. A season request for a series outside the library still goes.
+func TestSeasonRequestForALibrarySeriesSkipsALaterRouter(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{routerInst("sonarr")}
+	for _, req := range []*Request{
+		{ID: "in-library", MediaType: MediaTypeSeries, TMDBID: 95396, Status: StatusApproved, Outcome: OutcomeActive, Seasons: []int{2}},
+		{ID: "absent", MediaType: MediaTypeSeries, TMDBID: 1399, Status: StatusApproved, Outcome: OutcomeActive, Seasons: []int{1}},
+	} {
+		store.candidates = append(store.candidates, req)
+		store.requests[req.ID] = req
+	}
+	router := &fakeRouterProvider{}
+	svc := seasonService(store, severanceInLibrary())
+	svc.SetRouterProvider(router)
+
+	if _, err := svc.ReconcileRequests(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	if router.fulfillCalls != 1 {
+		t.Fatalf("router calls = %d, want one, for the series outside the library", router.fulfillCalls)
+	}
+	if got := store.requests["in-library"]; got.Status != StatusApproved || got.SubmitAttempts != 0 {
+		t.Fatalf("in-library request = %+v, want approved and unsent, waiting for the library", got)
+	}
+	if got := store.requests["absent"]; got.Status == StatusApproved {
+		t.Fatalf("absent request = %+v, want submitted", got)
+	}
+}
