@@ -68,6 +68,22 @@ func TestNotifyFulfilledTellsRequesterAndFollowers(t *testing.T) {
 	}
 }
 
+// Profile ids repeat across accounts, so a follower on another account whose
+// profile id matches the requester's is still a separate recipient.
+func TestNotifyFulfilledKeysRecipientsByAccount(t *testing.T) {
+	backend := &fakeFulfillmentBackend{}
+	notifier := &RequestFulfillmentNotifier{backend: backend}
+	req := fulfilledRequest(requests.Follower{UserID: 2, ProfileID: "default"})
+	req.RequestedByProfileID = "default"
+
+	if err := notifier.NotifyFulfilled(context.Background(), req, "movie-tmdb-949"); err != nil {
+		t.Fatalf("NotifyFulfilled: %v", err)
+	}
+	if len(backend.deliveries) != 2 || backend.deliveries[1].UserID != 2 || !parseRequestFlags(backend.deliveries[1].ReasonFlags).Follower {
+		t.Fatalf("deliveries = %+v, want the requester and the other account's follower", backend.deliveries)
+	}
+}
+
 // A failed recipient makes the caller retry the whole request; the community
 // channel must not be posted until an attempt reaches everyone.
 func TestNotifyFulfilledPostsChannelOnlyAfterEveryRecipient(t *testing.T) {
