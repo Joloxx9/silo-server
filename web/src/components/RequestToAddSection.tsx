@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import type { MouseEvent } from "react";
 import { Link } from "react-router";
 import { Film, RefreshCw, Tv } from "lucide-react";
@@ -45,8 +45,7 @@ export interface RequestSuggestionCombobox {
   onPick: (item: RequestMediaResult) => void;
 }
 
-export type RequestToAddSectionProps = {
-  variant: "dialog" | "grid";
+type RequestToAddSectionCommonProps = {
   query: string;
   /** The TMDB types to search, following the host's search scope. Default: movies and series. */
   mediaType?: RequestSearchMediaType;
@@ -57,24 +56,27 @@ export type RequestToAddSectionProps = {
    * Loading and failed searches must not be presented as confirmed absences.
    */
   libraryResultsKnown?: boolean;
-  /** Dialog variant only. */
-  combobox?: RequestSuggestionCombobox;
 };
 
-export function RequestToAddSection({
-  variant,
-  query,
-  mediaType = "all",
-  libraryHadHits,
-  libraryResultsKnown = true,
-  combobox,
-}: RequestToAddSectionProps) {
+export type RequestToAddSectionProps = RequestToAddSectionCommonProps &
+  (
+    | { variant: "dialog"; combobox?: RequestSuggestionCombobox }
+    | {
+        variant: "grid";
+        /**
+         * The TMDB results page to show. The host keeps it in navigation
+         * (Catalog uses the URL), so Back and a reload return to it, and
+         * starts over at 1 for another query or type.
+         */
+        page: number;
+        onPageChange: (page: number) => void;
+      }
+  );
+
+export function RequestToAddSection(props: RequestToAddSectionProps) {
+  const { variant, query, mediaType = "all", libraryHadHits, libraryResultsKnown = true } = props;
   const { discoveryEnabled } = useCanRequest();
-  // The grid pages through TMDB's results; another query or type starts over
-  // at the first page.
-  const pagingKey = `${mediaType}:${query.trim()}`;
-  const [paging, setPaging] = useState({ key: pagingKey, page: 1 });
-  const page = variant === "grid" && paging.key === pagingKey ? paging.page : 1;
+  const page = props.variant === "grid" ? props.page : 1;
   const search = useRequestSearch(mediaType, query, page, {
     enabled: discoveryEnabled,
     requireProfile: true,
@@ -95,13 +97,13 @@ export function RequestToAddSection({
   // A later page can hold only library titles; it keeps its pager.
   if (visible.length === 0 && page === 1) return null;
 
-  if (variant === "dialog") {
+  if (props.variant === "dialog") {
     return (
       <DialogVariant
         items={visible}
         libraryHadHits={libraryHadHits}
         libraryResultsKnown={libraryResultsKnown}
-        combobox={combobox}
+        combobox={props.combobox}
       />
     );
   }
@@ -114,7 +116,7 @@ export function RequestToAddSection({
       page={page}
       totalPages={tmdbPageCount(search.data?.total_pages)}
       isChangingPage={search.isPlaceholderData}
-      onPageChange={(next) => setPaging({ key: pagingKey, page: next })}
+      onPageChange={props.onPageChange}
       pageError={
         failed ? { onRetry: () => void search.refetch(), isRetrying: search.isFetching } : null
       }

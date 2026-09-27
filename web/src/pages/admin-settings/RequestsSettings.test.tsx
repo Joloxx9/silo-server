@@ -426,6 +426,20 @@ describe("Requests settings: server delete and kind", () => {
 });
 
 describe("Requests settings: servers and routing", () => {
+  it("leaves routing out when the server does not offer it", async () => {
+    serve({
+      handlers: {
+        "GET /api/v2/admin/requests/capabilities": (options) =>
+          reply(options, { available: true, guarded_configuration: true, routing: false }),
+      },
+    });
+    mount();
+    expect(await screen.findByRole("group", { name: "Servers" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Where requests go" })).toBeNull();
+    expect(calls("GET /api/v2/admin/request-routes")).toHaveLength(0);
+    expect(calls("GET /api/v2/admin/request-routing")).toHaveLength(0);
+  });
+
   it("lets the last server of its kind go with the Everything else only it serves", async () => {
     serve({
       servers: [radarr, sonarr],

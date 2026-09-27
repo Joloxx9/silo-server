@@ -95,12 +95,14 @@ export default function RequestsSettings() {
       </div>
     );
   }
-  return <RequestsSettingsContent />;
+  return <RequestsSettingsContent routing={capabilities.data.routing} />;
 }
 
-function RequestsSettingsContent() {
+/** routing: whether the server offers routing rules; without them the page
+ * leaves them out rather than calling the route endpoints. */
+function RequestsSettingsContent({ routing }: { routing: boolean }) {
   const settingsQuery = useRequestSettings();
-  const routesQuery = useRequestRoutes();
+  const routesQuery = useRequestRoutes(routing);
   const serversQuery = useRequestIntegrations();
   const installationsQuery = useAdminPluginInstallations();
   const updateSettings = useUpdateRequestSettings();
@@ -293,19 +295,22 @@ function RequestsSettingsContent() {
           installations={installations}
           installationsLoading={installationsQuery.isLoading}
           routes={routes}
+          routing={routing}
         />
 
-        <RequestRoutingGroup
-          routes={routes}
-          routesLoading={routesQuery.isLoading}
-          routesFetching={routesQuery.isFetching}
-          routesError={routesQuery.isError && !routesQuery.data}
-          serversLoading={serversQuery.isLoading}
-          allServers={servers}
-          installations={installations}
-          requestsEnabled={general.base?.requests_enabled}
-          forceDual={general.base?.force_dual_quality ?? false}
-        />
+        {routing ? (
+          <RequestRoutingGroup
+            routes={routes}
+            routesLoading={routesQuery.isLoading}
+            routesFetching={routesQuery.isFetching}
+            routesError={routesQuery.isError && !routesQuery.data}
+            serversLoading={serversQuery.isLoading}
+            allServers={servers}
+            installations={installations}
+            requestsEnabled={general.base?.requests_enabled}
+            forceDual={general.base?.force_dual_quality ?? false}
+          />
+        ) : null}
 
         <FieldGroup label="Related">
           <SettingFieldRow

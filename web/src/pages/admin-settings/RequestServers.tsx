@@ -159,6 +159,7 @@ export function RequestServersGroup({
   installations,
   installationsLoading,
   routes,
+  routing: routingAvailable,
 }: {
   servers: RequestIntegration[];
   serversLoading: boolean;
@@ -166,11 +167,13 @@ export function RequestServersGroup({
   installations: RequestRouterInstallation[];
   installationsLoading: boolean;
   routes: RequestRoute[];
+  /** Whether the server offers routing; without it the routing mode is not read. */
+  routing: boolean;
 }) {
   // null: closed; "new": adding; otherwise the id of the server being edited.
   const [editing, setEditing] = useState<string | null>(null);
   const [newKey, setNewKey] = useState(0);
-  const routing = useRequestRouting();
+  const routing = useRequestRouting(routingAvailable);
   const noRouterPlugin = !installationsLoading && installations.length === 0;
   const editingServer =
     editing && editing !== "new" ? servers.find((server) => server.id === editing) : undefined;
