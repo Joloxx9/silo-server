@@ -668,7 +668,7 @@ func (r *Repository) ClaimSubmission(ctx context.Context, id string, lease time.
 	return req, true, nil
 }
 
-func (r *Repository) DeferSubmission(ctx context.Context, id string, delay time.Duration, message string) (*Request, error) {
+func (r *Repository) DeferSubmission(ctx context.Context, id string, leaseUntil time.Time, delay time.Duration, message string) (*Request, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin request defer transaction: %w", err)
@@ -685,7 +685,8 @@ func (r *Repository) DeferSubmission(ctx context.Context, id string, delay time.
 		WHERE id = $1
 		  AND status = 'approved'
 		  AND outcome = 'active'
-		RETURNING `+requestColumns(), id, delay.Seconds(), message))
+		  AND submit_lease_until = $4
+		RETURNING `+requestColumns(), id, delay.Seconds(), message, leaseUntil))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, guardMiss(ctx, tx, id)

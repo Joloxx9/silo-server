@@ -1792,11 +1792,17 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 	if claimed.SubmitAttempts >= maxSubmitAttempts {
 		return s.markSubmissionFailed(ctx, claimed.ID, actor, submitErr)
 	}
-	deferred, err := s.store.DeferSubmission(ctx, claimed.ID, submitBackoff(claimed.SubmitAttempts), submitErr.Error())
+	var leaseUntil time.Time
+	if claimed.SubmitLeaseUntil != nil {
+		leaseUntil = *claimed.SubmitLeaseUntil
+	}
+	deferred, err := s.store.DeferSubmission(ctx, claimed.ID, leaseUntil, submitBackoff(claimed.SubmitAttempts), submitErr.Error())
 	if err != nil {
 		if errors.Is(err, ErrInvalidState) {
 			// The attempt created targets before failing, which moved the
-			// request past approved; the per-target state now owns it.
+			// request past approved and the per-target state now owns it; or
+			// this attempt outlived its lease and another claim holds the
+			// request now.
 			return s.store.GetRequest(ctx, claimed.ID)
 		}
 		return nil, fmt.Errorf("submit request: %w; schedule retry: %w", submitErr, err)

@@ -50,7 +50,9 @@ mid-call, the reconcile pass picks the request up after the lease.
 A failed attempt keeps the approval. It records `last_error`, releases the lease,
 schedules the next attempt in `next_submit_at` (5 minutes, doubling to an hour),
 and answers the caller with
-the approved request rather than an error. After `maxSubmitAttempts` the request
+the approved request rather than an error. Only the attempt holding the current
+lease can do this: one that outlived its lease while another server claimed the
+request leaves the newer claim alone. After `maxSubmitAttempts` the request
 is marked `failed` for an admin to retry.
 
 A submission converges the request's targets to the qualities it currently

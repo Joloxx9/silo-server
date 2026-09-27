@@ -1896,14 +1896,15 @@ func (f *fakeStore) ClaimSubmission(_ context.Context, id string, lease time.Dur
 	return &copy, true, nil
 }
 
-func (f *fakeStore) DeferSubmission(_ context.Context, id string, delay time.Duration, message string) (*Request, error) {
+func (f *fakeStore) DeferSubmission(_ context.Context, id string, leaseUntil time.Time, delay time.Duration, message string) (*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	req := f.lookupLocked(id)
 	if req == nil {
 		return nil, ErrNotFound
 	}
-	if req.Status != StatusApproved || req.Outcome != OutcomeActive {
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive ||
+		req.SubmitLeaseUntil == nil || !req.SubmitLeaseUntil.Equal(leaseUntil) {
 		return nil, ErrInvalidState
 	}
 	next := time.Now().Add(delay)

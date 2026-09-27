@@ -43,7 +43,10 @@ type Store interface {
 	ClaimSubmission(ctx context.Context, id string, lease time.Duration) (req *Request, claimed bool, err error)
 	// DeferSubmission records a failed submission attempt on a still-approved
 	// request, releases the claim, and schedules the next attempt after delay.
-	DeferSubmission(ctx context.Context, id string, delay time.Duration, message string) (*Request, error)
+	// leaseUntil is the claim's SubmitLeaseUntil: a caller whose lease expired
+	// and was claimed again gets ErrInvalidState and leaves the newer claim
+	// alone.
+	DeferSubmission(ctx context.Context, id string, leaseUntil time.Time, delay time.Duration, message string) (*Request, error)
 	// MarkReconciled stamps last_reconciled_at so the reconcile pass rotates
 	// through every candidate.
 	MarkReconciled(ctx context.Context, id string) error
