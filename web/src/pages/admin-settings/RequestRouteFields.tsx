@@ -1,9 +1,8 @@
-import { useId, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
+import { Check, ChevronRight, X } from "lucide-react";
 
 import type { PluginAdminFormField, RequestIntegration } from "@/api/types";
 import { coerceFieldValue, parseFieldTypes } from "@/components/admin/plugins/schemaFormUtils";
-import { AdvancedSection } from "@/components/settings/AdvancedSection";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -12,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useRequestIntegrationOptions } from "@/hooks/queries/useRequests";
+import { useRequestIntegrationOptions } from "@/hooks/queries/admin/requests";
 import { cn } from "@/lib/utils";
 
 import {
@@ -27,7 +26,6 @@ import {
   serverInstallation,
   type RequestRouterInstallation,
 } from "./requestServerModel";
-import { SETTINGS_CONTROL_WIDTH, SettingFieldRow } from "./SettingField";
 
 /** Select values for the choices that are not a server. */
 const DEST_PASS = "__pass__";
@@ -71,11 +69,9 @@ function ChipToggleList({
       {options.map((option) => {
         const on = selected.includes(option.value);
         return (
-          <Button
+          <button
             key={option.value}
             type="button"
-            size="xs"
-            variant={on ? "default" : "outline"}
             aria-pressed={on}
             onClick={() =>
               onChange(
@@ -84,11 +80,56 @@ function ChipToggleList({
                   : [...selected, option.value],
               )
             }
+            className={cn(
+              "focus-visible:ring-ring inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none",
+              on
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-muted-foreground/25 bg-background text-muted-foreground hover:text-foreground",
+            )}
           >
+            {on ? <Check className="size-3" aria-hidden="true" /> : null}
             {option.label}
-          </Button>
+          </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A field in a destination panel: its label above the control, an optional
+ * hint and error under it. Dialogs are too narrow for the settings page's
+ * side-by-side rows.
+ */
+function StackedField({
+  label,
+  htmlFor,
+  labelId,
+  hint,
+  error,
+  className,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  labelId?: string;
+  hint?: ReactNode;
+  error?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("min-w-0 space-y-1.5", className)}>
+      <label
+        id={labelId}
+        htmlFor={htmlFor}
+        className="text-muted-foreground block text-xs font-medium"
+      >
+        {label}
+      </label>
+      {children}
+      {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
+      <FieldError>{error}</FieldError>
     </div>
   );
 }
@@ -178,7 +219,7 @@ function overrideValue(value: unknown): string {
  * One server setting a route may replace. Unset means the server's own
  * setting applies, and the first choice says what that is.
  */
-function OverrideFieldRow({
+function OverrideField({
   field,
   label,
   server,
@@ -203,29 +244,24 @@ function OverrideFieldRow({
   if (field.control === "MULTI_SELECT") {
     const selected = Array.isArray(value) ? value.map((entry) => String(entry)) : [];
     return (
-      <SettingFieldRow
+      <StackedField
         label={label}
-        description={
-          selected.length === 0
-            ? `None chosen — the server's ${label.toLowerCase()} apply.`
+        className="sm:col-span-2"
+        hint={
+          selected.length === 0 && options.length > 0
+            ? `None picked, so ${server.name}'s own ${label.toLowerCase()} apply.`
             : undefined
         }
-        status={<FieldError>{error}</FieldError>}
+        error={error}
       >
         {optionsLoading && options.length === 0 ? (
-          <span className="text-muted-foreground text-xs">Loading…</span>
+          <p className="text-muted-foreground text-xs">Loading…</p>
         ) : options.length === 0 ? (
-          <span className="text-muted-foreground text-xs">Nothing to choose on this server.</span>
+          <p className="text-muted-foreground text-xs">Nothing to choose on this server.</p>
         ) : (
-          <ChipToggleList
-            label={label}
-            options={options}
-            selected={selected}
-            onChange={onChange}
-            className="sm:max-w-[var(--settings-control-w)] sm:justify-end"
-          />
+          <ChipToggleList label={label} options={options} selected={selected} onChange={onChange} />
         )}
-      </SettingFieldRow>
+      </StackedField>
     );
   }
 
@@ -248,22 +284,25 @@ function OverrideFieldRow({
       : (choices.find((choice) => choice.value === overrideValue(serverValue))?.label ??
         overrideValue(serverValue));
 
+  // Folder paths (with their free space) are long; they get a whole row.
+  const wide = field.key.includes("folder");
   return (
-    <SettingFieldRow label={label} htmlFor={controlId} status={<FieldError>{error}</FieldError>}>
+    <StackedField
+      label={label}
+      htmlFor={controlId}
+      error={error}
+      className={wide ? "sm:col-span-2" : undefined}
+    >
       <Select
         value={current || SERVER_SETTING}
         onValueChange={(next) => onChange(next === SERVER_SETTING ? undefined : next)}
       >
-        <SelectTrigger
-          id={controlId}
-          className={cn(SETTINGS_CONTROL_WIDTH, "min-w-0")}
-          aria-invalid={Boolean(error)}
-        >
+        <SelectTrigger id={controlId} className="w-full min-w-0" aria-invalid={Boolean(error)}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={SERVER_SETTING}>
-            {serverLabel ? `Server's setting (${serverLabel})` : "Server's setting"}
+            {serverLabel ? `Server default (${serverLabel})` : "Server default"}
           </SelectItem>
           {choices.map((choice) => (
             <SelectItem key={choice.value} value={choice.value}>
@@ -272,7 +311,7 @@ function OverrideFieldRow({
           ))}
         </SelectContent>
       </Select>
-    </SettingFieldRow>
+    </StackedField>
   );
 }
 
@@ -318,7 +357,7 @@ function DestinationOverrides({
   }
 
   const row = (field: PluginAdminFormField, label: string) => (
-    <OverrideFieldRow
+    <OverrideField
       key={field.key}
       field={field}
       label={label}
@@ -330,27 +369,81 @@ function DestinationOverrides({
       error={errors[`${errorPrefix}.overrides.${field.key}`]}
     />
   );
-  const moreSet = more.some((field) => overrides[field.key] !== undefined);
+  const moreSet = more.filter((field) => overrides[field.key] !== undefined).length;
   const moreErrors = more.some((field) => errors[`${errorPrefix}.overrides.${field.key}`]);
 
   return (
-    <div className="border-border/60 ml-1 border-l pl-4">
+    <>
       {options.isError ? (
-        <p className="settings-field-note py-3 text-xs text-amber-600 dark:text-amber-400">
+        <p className="text-xs text-amber-600 dark:text-amber-400">
           Couldn&apos;t read folders and profiles from {server.name}:{" "}
           {options.error instanceof Error ? options.error.message : "unknown error"}
         </p>
       ) : null}
-      {inline.map((field) => row(field, overrideLabel(field.key)))}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {inline.map((field) => row(field, overrideLabel(field.key)))}
+      </div>
       {more.length > 0 ? (
-        <AdvancedSection
+        <MoreSettings
           id={`requests.route-more.${sectionId}`}
-          title="More settings"
-          count={more.length}
-          forceOpen={moreSet || moreErrors}
+          changed={moreSet}
+          forceOpen={moreErrors}
         >
-          {more.map((field) => row(field, field.label || overrideLabel(field.key)))}
-        </AdvancedSection>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {more.map((field) => row(field, field.label || overrideLabel(field.key)))}
+          </div>
+        </MoreSettings>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The server settings a destination rarely changes, folded away until asked
+ * for, or while one is set or has an error.
+ */
+function MoreSettings({
+  id,
+  changed,
+  forceOpen,
+  children,
+}: {
+  id: string;
+  changed: number;
+  forceOpen: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(changed > 0);
+  // Settings that arrive set (a conflict reload, a preset) open the panel, so
+  // their values are not saved unseen.
+  const [prevChanged, setPrevChanged] = useState(changed);
+  if (changed !== prevChanged) {
+    setPrevChanged(changed);
+    if (prevChanged === 0 && changed > 0) setOpen(true);
+  }
+  const shown = open || forceOpen;
+  const panelId = useId();
+  return (
+    <div className="border-border/60 border-t pt-3">
+      <button
+        type="button"
+        aria-expanded={shown}
+        aria-controls={panelId}
+        data-section={id}
+        onClick={() => setOpen(!shown)}
+        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs font-medium"
+      >
+        <ChevronRight
+          className={cn("size-3.5 transition-transform", shown && "rotate-90")}
+          aria-hidden="true"
+        />
+        More settings
+        {changed > 0 ? <span className="text-foreground/80">· {changed} changed</span> : null}
+      </button>
+      {shown ? (
+        <div id={panelId} className="pt-3">
+          {children}
+        </div>
       ) : null}
     </div>
   );
@@ -425,23 +518,31 @@ export function RouteDestinationEditor({
     else onChange({ dest: { integration_id: next, overrides: {} }, skip: false });
   }
 
+  const headingId = useId();
+  const captionId = useId();
+  const sendToId = useId();
   return (
-    <>
-      <SettingFieldRow
-        label={label}
-        htmlFor={controlId}
-        description={caption}
-        status={<FieldError>{error}</FieldError>}
-      >
-        {server ? (
-          <span className="text-muted-foreground shrink-0 text-xs" aria-hidden="true">
-            Send to
-          </span>
+    <section
+      aria-labelledby={headingId}
+      className="border-border/70 bg-foreground/[0.02] space-y-3 rounded-xl border p-4"
+    >
+      <div className="space-y-0.5">
+        <h4 id={headingId} className="text-sm font-medium">
+          {label}
+        </h4>
+        {caption ? (
+          <p id={captionId} className="text-muted-foreground text-xs">
+            {caption}
+          </p>
         ) : null}
+      </div>
+      <StackedField label="Send to" htmlFor={controlId} labelId={sendToId} error={error}>
         <Select value={selected} onValueChange={select}>
           <SelectTrigger
             id={controlId}
-            className={cn(SETTINGS_CONTROL_WIDTH, "min-w-0")}
+            aria-labelledby={`${headingId} ${sendToId}`}
+            aria-describedby={caption ? captionId : undefined}
+            className="w-full min-w-0 sm:w-1/2"
             aria-invalid={Boolean(error)}
           >
             <SelectValue placeholder="Choose a server" />
@@ -458,7 +559,7 @@ export function RouteDestinationEditor({
             {passLabel ? <SelectItem value={DEST_PASS}>{passLabel}</SelectItem> : null}
           </SelectContent>
         </Select>
-      </SettingFieldRow>
+      </StackedField>
       {server ? (
         <DestinationOverrides
           key={server.id}
@@ -471,11 +572,7 @@ export function RouteDestinationEditor({
           errorPrefix={tier}
         />
       ) : null}
-      {server && note ? (
-        <p className="text-muted-foreground border-border/60 ml-1 border-l py-2 pl-4 text-xs">
-          {note}
-        </p>
-      ) : null}
-    </>
+      {server && note ? <p className="text-muted-foreground text-xs">{note}</p> : null}
+    </section>
   );
 }

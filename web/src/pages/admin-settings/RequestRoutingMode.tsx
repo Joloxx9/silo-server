@@ -127,6 +127,12 @@ export function StandardRoutingSummary({
           );
         })}
       </ul>
+      {routing.standard.some((d) => d.media_type === "series" && isArr(d.hd_integration_id)) ? (
+        <p className="text-muted-foreground text-xs">
+          Anime series go to Sonarr with the Anime series type, so episodes are numbered the way
+          anime releases are.
+        </p>
+      ) : null}
       {missing4K ? (
         <p className="text-muted-foreground text-xs">
           To send 4K copies to their own server, add it and turn on &ldquo;4K server&rdquo;. Adding

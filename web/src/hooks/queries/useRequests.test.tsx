@@ -32,15 +32,17 @@ vi.mock("@/api/v2/request", () => ({
 }));
 
 import {
-  useAdminCancelMediaRequest,
   useCancelMediaRequest,
   useCreateMediaRequest,
   useRequestFeatureStatus,
-  useRequestGroupLimit,
   useRequestSearch,
   useToggleRequestFollow,
-  useUpdateRequestGroupLimit,
 } from "./useRequests";
+import {
+  useAdminCancelMediaRequest,
+  useRequestGroupLimit,
+  useUpdateRequestGroupLimit,
+} from "./admin/requests";
 
 function render(node: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

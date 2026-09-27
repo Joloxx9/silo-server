@@ -5,12 +5,8 @@ import type { RequestRoute, RequestRouteMediaType } from "@/api/v2/adminRequests
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdminUsers } from "@/hooks/queries/admin/users";
-import {
-  useDiscoverNetworks,
-  useDiscoverStudios,
-  useRequestRouting,
-  useUpdateRequestRouting,
-} from "@/hooks/queries/useRequests";
+import { useDiscoverNetworks, useDiscoverStudios } from "@/hooks/queries/useRequests";
+import { useRequestRouting, useUpdateRequestRouting } from "@/hooks/queries/admin/requests";
 
 import { FieldGroup } from "./FieldGroup";
 import { RequestRoutePreview } from "./RequestRoutePreview";

@@ -121,6 +121,7 @@ describe("Standard and Advanced routing", () => {
     expect(movies).toHaveTextContent("Movies → Radarr4K copies → Radarr 4K");
     expect(series).toHaveTextContent("Series → SonarrNo 4K copies");
     expect(group).toHaveTextContent("1 rule is paused. Switch to Advanced to use it again.");
+    expect(group).toHaveTextContent("Anime series go to Sonarr with the Anime series type");
     // Series has no 4K server, so the page says how to add one.
     expect(group).toHaveTextContent("turn on “4K server”");
     expect(within(group).queryByRole("tab")).toBeNull();

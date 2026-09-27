@@ -28,7 +28,7 @@ import {
   useReorderRequestRoutes,
   useRequestIntegrationOptions,
   useUpdateRequestRoute,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 import { useSortableList } from "@/hooks/useSortableList";
 import { cn } from "@/lib/utils";
 
@@ -103,7 +103,7 @@ function RowWarnings({
                 type="button"
                 size="xs"
                 variant="outline"
-                className="h-6 border-amber-500/40 text-amber-600 dark:text-amber-300"
+                className="ml-auto h-6 border-amber-500/40 text-amber-600 dark:text-amber-300"
                 disabled={busy}
                 onClick={() => onFix(warning.fix!)}
               >
@@ -170,103 +170,109 @@ function RuleRow({
       }}
       data-highlighted={highlighted || undefined}
       className={cn(
-        "flex items-start gap-2 rounded-lg px-1 py-3 transition-colors duration-700",
+        "rounded-lg px-1 py-3 transition-colors duration-700",
         highlighted && "bg-[var(--settings-accent-soft)]",
       )}
     >
-      <button
-        type="button"
-        aria-label={`Drag ${rule.name}`}
-        className="text-muted-foreground hover:bg-accent mt-0.5 shrink-0 cursor-grab touch-none rounded-md p-1 disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={busy}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4" aria-hidden="true" />
-      </button>
-      <span
-        className="text-muted-foreground mt-1 w-5 shrink-0 text-right text-xs tabular-nums"
-        aria-hidden="true"
-      >
-        {index + 1}
-      </span>
-      <div className="min-w-0 flex-1">
+      <div className="flex items-start gap-2">
         <button
           type="button"
-          onClick={onEdit}
-          className="focus-visible:ring-ring group block w-full rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
+          aria-label={`Drag ${rule.name}`}
+          className="text-muted-foreground hover:bg-accent mt-0.5 shrink-0 cursor-grab touch-none rounded-md p-1 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={busy}
+          {...attributes}
+          {...listeners}
         >
-          <span
-            className={cn(
-              "flex flex-wrap items-center gap-2 text-sm font-medium group-hover:underline",
-              !rule.enabled && "text-muted-foreground",
-            )}
-          >
-            {rule.name}
-            {!rule.enabled ? (
-              <Badge variant="secondary" className="text-[10px]">
-                Off
-              </Badge>
-            ) : null}
-          </span>
-          <span
-            className={cn(
-              "text-muted-foreground block text-xs leading-relaxed",
-              !rule.enabled && "opacity-70",
-            )}
-          >
-            <span className="text-foreground/80 block">
-              {ruleSentence(rule.conditions, scope.mediaType, scope.names)}
-            </span>
-            <span className="block">
-              {rule.hd.integration_id ? (
-                <>
-                  → <DestinationText dest={rule.hd} scope={scope} />
-                </>
-              ) : (
-                `HD → ${passThroughLabel("hd", below, fallback, scope.allServers)}`
-              )}
-            </span>
-            {fourK ? <span className="block">{fourK}</span> : null}
-          </span>
+          <GripVertical className="size-4" aria-hidden="true" />
         </button>
+        <span
+          className="text-muted-foreground mt-1 w-5 shrink-0 text-right text-xs tabular-nums"
+          aria-hidden="true"
+        >
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="focus-visible:ring-ring group block w-full rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <span
+              className={cn(
+                "flex flex-wrap items-center gap-2 text-sm font-medium group-hover:underline",
+                !rule.enabled && "text-muted-foreground",
+              )}
+            >
+              {rule.name}
+              {!rule.enabled ? (
+                <Badge variant="secondary" className="text-[10px]">
+                  Off
+                </Badge>
+              ) : null}
+            </span>
+            <span
+              className={cn(
+                "text-muted-foreground block text-xs leading-relaxed",
+                !rule.enabled && "opacity-70",
+              )}
+            >
+              <span className="text-foreground/80 block">
+                {ruleSentence(rule.conditions, scope.mediaType, scope.names)}
+              </span>
+              <span className="block">
+                {rule.hd.integration_id ? (
+                  <>
+                    → <DestinationText dest={rule.hd} scope={scope} />
+                  </>
+                ) : (
+                  `HD → ${passThroughLabel("hd", below, fallback, scope.allServers)}`
+                )}
+              </span>
+              {fourK ? <span className="block">{fourK}</span> : null}
+            </span>
+          </button>
+        </div>
+        <Switch
+          className="mt-0.5 shrink-0"
+          checked={rule.enabled}
+          onCheckedChange={onToggle}
+          disabled={busy}
+          aria-label={`${rule.name} enabled`}
+        />
+        {/* Not modal: Edit and Delete open a dialog, and a modal menu closing
+          under it can leave the page unclickable. */}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              className="-mt-1 shrink-0"
+              aria-label={`More for ${rule.name}`}
+            >
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onEdit}>Edit</DropdownMenuItem>
+            <DropdownMenuItem disabled={busy || index === 0} onSelect={() => onMove(-1)}>
+              Move up
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={busy || index === count - 1} onSelect={() => onMove(1)}>
+              Move down
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" disabled={busy} onSelect={onDelete}>
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      {/* Under the rule's text, but across to the row's right edge, so a fix
+          button lines up with the switches above it. */}
+      <div className="pl-15">
         <RowWarnings warnings={warnings} onFix={onFix} busy={busy} />
       </div>
-      <Switch
-        className="mt-0.5 shrink-0"
-        checked={rule.enabled}
-        onCheckedChange={onToggle}
-        disabled={busy}
-        aria-label={`${rule.name} enabled`}
-      />
-      {/* Not modal: Edit and Delete open a dialog, and a modal menu closing
-          under it can leave the page unclickable. */}
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            className="-mt-1 shrink-0"
-            aria-label={`More for ${rule.name}`}
-          >
-            <MoreHorizontal />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onEdit}>Edit</DropdownMenuItem>
-          <DropdownMenuItem disabled={busy || index === 0} onSelect={() => onMove(-1)}>
-            Move up
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={busy || index === count - 1} onSelect={() => onMove(1)}>
-            Move down
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" disabled={busy} onSelect={onDelete}>
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
     </li>
   );
 }

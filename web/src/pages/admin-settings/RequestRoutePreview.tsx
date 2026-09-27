@@ -23,7 +23,7 @@ import {
   useAdminRequestRoutePreview,
   useRequestIntegrationOptions,
   useRequestRouteTitles,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 
 import type { RoutingScope } from "./RequestRuleEditor";
 import {
@@ -245,15 +245,15 @@ export function RequestRoutePreview({ scope }: { scope: RoutingScope }) {
             setQuery(event.target.value);
             setPicked(null);
           }}
-          className="sm:max-w-sm"
+          className="sm:flex-1"
         />
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-col gap-1">
+          <div className="flex items-center gap-2 sm:justify-end">
             <label htmlFor={requesterId} className="text-muted-foreground shrink-0 text-xs">
               Requested by
             </label>
             <Select value={requester} onValueChange={setRequester}>
-              <SelectTrigger id={requesterId} size="sm" className="w-40">
+              <SelectTrigger id={requesterId} className="w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

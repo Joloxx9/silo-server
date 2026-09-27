@@ -9,7 +9,7 @@ import {
 import { EditorConflict } from "@/components/admin/EditorConflict";
 import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useUpdateRequestRoute } from "@/hooks/queries/useRequests";
+import { useUpdateRequestRoute } from "@/hooks/queries/admin/requests";
 
 import { RouteDestinationEditor } from "./RequestRouteFields";
 import { EditorErrors, type RoutingScope } from "./RequestRuleEditor";
@@ -100,13 +100,14 @@ export function RequestFallbackEditor({
       <DialogHeader>
         <DialogTitle>Everything else — {plural}</DialogTitle>
         <DialogDescription>
-          {plural === "series" ? "Series" : "Movies"} no rule matches go here.
+          Where {plural} go when no rule matches them. Leave a setting on its server default to use
+          what the server itself is set to.
         </DialogDescription>
       </DialogHeader>
 
       <EditorErrors message={formError} fieldErrors={fieldErrors} />
 
-      <div className="settings-field-list">
+      <div className="space-y-3">
         <RouteDestinationEditor
           tier="hd"
           sectionId={`${route.id}.hd`}

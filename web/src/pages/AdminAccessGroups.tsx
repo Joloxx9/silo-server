@@ -51,7 +51,7 @@ import {
   useRequestGroupLimit,
   useRequestSettings,
   useUpdateRequestGroupLimit,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { PERMISSION_MARKER_EDIT, PERMISSION_METADATA_CURATION } from "@/lib/permissions";
 import {

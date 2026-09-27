@@ -123,8 +123,9 @@ default and anime switches no longer decide anything.
 A request created before facts were captured, or while TMDB was unreachable, has
 them fetched when it is first routed; if TMDB still cannot answer, the
 submission retries rather than route on missing facts, unless no enabled route
-of its media type has a condition (Everything else or Standard alone decides),
-when it goes without them.
+of its media type has a condition (Everything else alone decides), when it
+goes without them. Standard needs only the anime fact, so without TMDB it
+routes on the anime flag stored with the request.
 
 ### Standard and Advanced
 
@@ -133,7 +134,9 @@ Advanced routes with the rules above. Standard pauses the rules (they stay
 stored and apply again under Advanced) and sends each media type to its one
 enabled server that is not marked 4K, and its 4K copies to its one enabled
 server marked 4K (the Sonarr/Radarr plugin's `is_4k` switch), with each
-server's own settings: Everything else's overrides do not apply. With no server
+server's own settings: Everything else's overrides do not apply. Anime series
+(see "Routing facts") go to the same servers with Sonarr's anime series type,
+as Seerr sends them. With no server
 marked 4K there is no 4K copy, even with `force_dual_quality`. A media type
 whose server is another plugin (Seerr) keeps that plugin's own routing. Targets
 record the route as "Standard".

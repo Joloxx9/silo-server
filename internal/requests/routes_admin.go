@@ -312,11 +312,11 @@ func (s *Service) PreviewRoute(ctx context.Context, viewer Viewer, mediaType Med
 		switch {
 		case len(routes) == 0:
 			tier.Reason = "No routes are set up for this media type, so the request plugin picks the server."
-		case !ok && len(routes) == 1 && routes[0].ID == standardRouteID(mediaType):
+		case !ok && isStandardRouting(routes, mediaType):
 			tier.Reason = fmt.Sprintf("No server takes %s %s: the only one is marked 4K.", qualityLabel(q), mediaTypePlural(mediaType))
 		case !ok:
 			tier.Reason = "No rule sends " + qualityLabel(q) + " for this title."
-		case decision.Skip && decision.RouteID == standardRouteID(mediaType):
+		case decision.Skip && isStandardRouting(routes, mediaType):
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
 			tier.Reason = "No server is marked 4K, so there is no 4K copy."
 		case decision.Skip:

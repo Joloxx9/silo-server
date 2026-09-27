@@ -188,7 +188,8 @@ const standardRouteName = "Standard"
 
 // standardRoutes is Standard's routing for a media type as one fallback
 // route: its normal server for HD and its 4K server for 4K, with no
-// overrides. A media type whose server is not a Radarr or Sonarr gets none, so
+// overrides; for series, an anime route ahead of it sets Sonarr's anime
+// series type. A media type whose server is not a Radarr or Sonarr gets none, so
 // that plugin keeps routing it itself.
 func standardRoutes(integrations []Integration, layout []StandardDestination, mediaType MediaType) []Route {
 	for _, dest := range layout {
@@ -202,14 +203,36 @@ func standardRoutes(integrations []Integration, layout []StandardDestination, me
 				}
 			}
 		}
-		return []Route{{
+		routes := []Route{{
 			ID: standardRouteID(mediaType), MediaType: mediaType, Position: 1000, Name: standardRouteName,
 			Enabled: true, IsFallback: true,
 			HD:  RouteDestination{IntegrationID: dest.HDIntegrationID},
 			UHD: RouteDestination{IntegrationID: dest.UHDIntegrationID},
 		}}
+		if mediaType == MediaTypeSeries {
+			// Anime goes to the same servers with Sonarr's anime series type,
+			// which numbers episodes the way anime releases do; Seerr does
+			// the same. Other settings stay the server's own.
+			anime := func(id string) RouteDestination {
+				if id == "" {
+					return RouteDestination{}
+				}
+				return RouteDestination{IntegrationID: id, Overrides: map[string]any{configSeriesType: seriesTypeAnime}}
+			}
+			routes = append([]Route{{
+				ID: standardRouteID(mediaType) + "-anime", MediaType: mediaType, Position: 0, Name: standardRouteName,
+				Enabled: true, Conditions: RouteConditions{Anime: new(true)},
+				HD: anime(dest.HDIntegrationID), UHD: anime(dest.UHDIntegrationID),
+			}}, routes...)
+		}
+		return routes
 	}
 	return nil
+}
+
+// isStandardRouting reports whether routes are Standard's for the media type.
+func isStandardRouting(routes []Route, mediaType MediaType) bool {
+	return len(routes) > 0 && routes[len(routes)-1].ID == standardRouteID(mediaType)
 }
 
 func (s *Service) routingModeStore() (RoutingModeStore, error) {

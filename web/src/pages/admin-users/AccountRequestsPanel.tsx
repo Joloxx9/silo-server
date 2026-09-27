@@ -14,7 +14,7 @@ import {
   useRequestSettings,
   useRequestUserLimit,
   useUpdateRequestUserLimit,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 import {
   clearLegacyRequestBlock,
   describeInheritedValue,

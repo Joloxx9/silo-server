@@ -2239,7 +2239,7 @@ func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, f
 // unroutedMessage says why a tier went nowhere. Under Standard it can only be
 // HD, when the media type's one server is marked 4K.
 func unroutedMessage(routes []Route, mediaType MediaType, q Quality) string {
-	if len(routes) == 1 && routes[0].ID == standardRouteID(mediaType) {
+	if isStandardRouting(routes, mediaType) {
 		return fmt.Sprintf("no server takes %s %s: the only one is marked 4K", qualityLabel(q), mediaTypePlural(mediaType))
 	}
 	return "no routing rule sends " + qualityLabel(q) + " for this title"
@@ -2312,8 +2312,14 @@ func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request, routes [
 	}
 	detail := s.requestDetail(ctx, req.MediaType, req.TMDBID)
 	if detail == nil {
+		if isStandardRouting(routes, req.MediaType) {
+			// Standard's only condition is anime, which the request's stored
+			// anime flag already answers, so it is sent without the facts.
+			req.RoutingFacts.Anime = req.IsAnime
+			return nil
+		}
 		if !routesUseConditions(routes, req.MediaType) {
-			// Only Everything else (or Standard) decides: the facts would
+			// Only Everything else decides: the facts would
 			// not change where the request goes, so it is sent without them.
 			return nil
 		}

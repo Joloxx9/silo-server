@@ -15,7 +15,7 @@ import { useAdminPluginInstallations } from "@/hooks/queries/admin/plugins";
 import { usePolicyCapability } from "@/hooks/queries/admin/policy";
 import { useAdminSessions } from "@/hooks/queries/admin/stats";
 import { useBuildInfo } from "@/hooks/queries/admin/system";
-import { useAdminRequestCounts } from "@/hooks/queries/useRequests";
+import { useAdminRequestCounts } from "@/hooks/queries/admin/requests";
 import { cn } from "@/lib/utils";
 
 interface SidebarItem extends AdminNavItem {

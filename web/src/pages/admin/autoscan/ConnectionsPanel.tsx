@@ -53,7 +53,7 @@ import {
   useTestAutoscanConnection,
   useUpdateAutoscanConnection,
 } from "@/hooks/queries/useAutoscan";
-import { useRequestIntegrations } from "@/hooks/queries/useRequests";
+import { useRequestIntegrations } from "@/hooks/queries/admin/requests";
 
 // ---------------------------------------------------------------------------
 // Dialog mode types

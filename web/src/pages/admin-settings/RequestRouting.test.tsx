@@ -413,8 +413,10 @@ describe("Where requests go: Everything else", () => {
     );
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("heading", { name: "Everything else — movies" })).toBeTruthy();
-    expect(within(dialog).getByText("Movies no rule matches go here.")).toBeInTheDocument();
-    await choose(dialog, "4K copies", "Don't make a 4K copy");
+    expect(
+      within(dialog).getByText(/^Where movies go when no rule matches them\./),
+    ).toBeInTheDocument();
+    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await within(dialog).findByRole("button", { name: "Reload latest version" });
     expect(calls("PUT /api/v2/admin/request-routes/{id}")[0]).toMatchObject({
@@ -426,13 +428,59 @@ describe("Where requests go: Everything else", () => {
     await waitFor(() =>
       expect(within(dialog).queryByRole("button", { name: "Reload latest version" })).toBeNull(),
     );
-    await choose(dialog, "4K copies", "Don't make a 4K copy");
+    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls("PUT /api/v2/admin/request-routes/{id}")).toHaveLength(2));
     expect(calls("PUT /api/v2/admin/request-routes/{id}")[1]).toMatchObject({
       headers: { "If-Match": '"reloaded"' },
       body: { uhd: {} },
     });
+  });
+
+  it("opens More settings when a reload brings one of them in", async () => {
+    let reads = 0;
+    const reloaded = {
+      ...fallback("series", "sonarr-1"),
+      hd: { integration_id: "sonarr-1", overrides: { series_type: "anime" } },
+    };
+    serve({
+      routes: [fallback("movie", "radarr-1"), fallback("series", "sonarr-1")],
+      handlers: {
+        "GET /api/v2/admin/request-routes/{id}": (options) => {
+          if (options.path?.id !== "fallback-series") {
+            return reply(options, fallback("movie", "radarr-1"), '"m"');
+          }
+          reads += 1;
+          return reads === 1
+            ? reply(options, fallback("series", "sonarr-1"), '"initial"')
+            : reply(options, reloaded, '"reloaded"');
+        },
+        "PUT /api/v2/admin/request-routes/{id}": () => Promise.reject(conflict()),
+      },
+    });
+    mount();
+    const series = await section("Series");
+    fireEvent.click(
+      within(await within(series).findByRole("group", { name: "Everything else" })).getByRole(
+        "button",
+      ),
+    );
+    const dialog = await screen.findByRole("dialog");
+    const more = await within(dialog).findByRole("button", { name: /^More settings/ });
+    expect(more).toHaveAttribute("aria-expanded", "false");
+    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Reload latest version" }));
+
+    await waitFor(() =>
+      expect(within(dialog).getByRole("button", { name: /^More settings/ })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      ),
+    );
+    expect(within(dialog).getByRole("button", { name: /^More settings/ })).toHaveTextContent(
+      "1 changed",
+    );
   });
 });
 
@@ -459,7 +507,7 @@ describe("Where requests go: adding rules", () => {
     ).toBeTruthy();
     expect(within(dialog).getByText(/Matches: series that are anime/)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Add rule" })).toBeDisabled();
-    await choose(dialog, "HD copies", "Sonarr Anime");
+    await choose(dialog, "HD copies Send to", "Sonarr Anime");
     expect(
       within(dialog).getByText("Series type: Anime (set by the Anime preset)"),
     ).toBeInTheDocument();
@@ -490,7 +538,7 @@ describe("Where requests go: adding rules", () => {
     });
     mount();
     const dialog = await pick("Movies", "Anime");
-    await choose(dialog, "HD copies", "Radarr Anime");
+    await choose(dialog, "HD copies Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toEqual({
@@ -517,8 +565,8 @@ describe("Where requests go: adding rules", () => {
     expect(
       within(dialog).getByRole("heading", { name: "Where should foreign-language movies go?" }),
     ).toBeTruthy();
-    await choose(dialog, "HD copies", "Radarr Anime");
-    await choose(dialog, "4K copies", "Don't make a 4K copy");
+    await choose(dialog, "HD copies Send to", "Radarr Anime");
+    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toEqual({
@@ -543,7 +591,11 @@ describe("Where requests go: adding rules", () => {
     });
     mount();
     const dialog = await pick(tab, "Kids & family");
-    await choose(dialog, "HD copies", mediaType === "movie" ? "Radarr Anime" : "Sonarr Anime");
+    await choose(
+      dialog,
+      "HD copies Send to",
+      mediaType === "movie" ? "Radarr Anime" : "Sonarr Anime",
+    );
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toEqual({
@@ -582,7 +634,7 @@ describe("Where requests go: adding rules", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Change" }));
     await choose(dialog, "Anime", "isn't anime");
-    await choose(dialog, "HD copies", "Radarr Anime");
+    await choose(dialog, "HD copies Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toMatchObject({
@@ -608,7 +660,7 @@ describe("Where requests go: adding rules", () => {
       "placeholder",
       "Not Horror or Thriller",
     );
-    await choose(dialog, "HD copies", "Radarr Anime");
+    await choose(dialog, "HD copies Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toEqual({
@@ -647,14 +699,14 @@ describe("Where requests go: the rule editor", () => {
         .getAllByRole("listitem", { name: /condition$/ })
         .map((item) => item.getAttribute("aria-label")),
     ).toEqual(["Anime condition", "Original language condition", "Release year condition"]);
-    expect(within(dialog).getByRole("combobox", { name: "4K copies" })).toHaveTextContent(
+    expect(within(dialog).getByRole("combobox", { name: "4K copies Send to" })).toHaveTextContent(
       "Same as Everything else (no copy)",
     );
     expect(within(dialog).getByText("Only people who can play 4K get a 4K copy.")).toBeTruthy();
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Remove the release year condition" }),
     );
-    await choose(dialog, "4K copies", "Don't make a 4K copy");
+    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save rule" }));
 
     await waitFor(() => expect(calls("PUT /api/v2/admin/request-routes/{id}")).toHaveLength(1));
@@ -1091,7 +1143,7 @@ describe("Where requests go: names, second lines and refused conditions", () => 
       "true",
     );
     await user().keyboard("{Escape}");
-    await choose(dialog, "HD copies", "Radarr Anime");
+    await choose(dialog, "HD copies Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toMatchObject({
@@ -1122,7 +1174,7 @@ describe("Where requests go: names, second lines and refused conditions", () => 
       within(await screen.findByRole("dialog")).getByRole("button", { name: /^Kids & family/ }),
     );
     const dialog = await screen.findByRole("dialog");
-    await choose(dialog, "HD copies", "Radarr Anime");
+    await choose(dialog, "HD copies Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     expect(
       await within(dialog).findByText("Choose a rating such as G, PG, PG-13 or TV-Y7."),

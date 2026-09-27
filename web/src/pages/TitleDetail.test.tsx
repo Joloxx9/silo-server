@@ -167,6 +167,28 @@ function primaryButton(name: string | RegExp) {
 
 describe("TitleDetail", () => {
   beforeEach(() => {
+    // The seasons rail is an Embla carousel, which reads media queries and
+    // observes its slides; jsdom has none of these.
+    class NoopObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    }
+    vi.stubGlobal("IntersectionObserver", NoopObserver);
+    vi.stubGlobal("ResizeObserver", NoopObserver);
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }));
     mocks.detail = detailQuery(baseDetail);
     mocks.library = libraryQuery();
     mocks.mine = [ownPending];
@@ -231,7 +253,7 @@ describe("TitleDetail", () => {
       });
 
       // The page lists the seasons with what the library has.
-      const seasons = screen.getByRole("heading", { name: "Seasons" }).parentElement!;
+      const seasons = screen.getByRole("heading", { name: "Seasons" }).closest("section")!;
       expect(within(seasons).getByText("In library")).toBeInTheDocument();
       expect(within(seasons).getByText("Partly in library")).toBeInTheDocument();
       expect(within(seasons).getByText("Not aired yet")).toBeInTheDocument();

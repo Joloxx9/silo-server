@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdminUsers } from "@/hooks/queries/admin/users";
 import {
+  type BulkRequestProgress,
   useAdminCancelMediaRequest,
   useAdminRequestCounts,
   useAdminRequestQueue,
@@ -20,8 +21,7 @@ import {
   useDeclineMediaRequest,
   useRefreshRequestQueue,
   useRetryMediaRequest,
-  type BulkRequestProgress,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatRelativeTime } from "@/lib/date";
 import { formatDateTime } from "@/lib/datetime";
