@@ -344,6 +344,40 @@ describe("Requests settings: servers", () => {
     expect(body.plugin_config).toMatchObject({ service_kind: "sonarr", is_4k: true });
   });
 
+  it("renames a server it named when a later address answers as the other service", async () => {
+    serve({
+      servers: [radarr],
+      handlers: {
+        "POST /api/v2/admin/request-integrations/{id}/options": (options) => {
+          const url = (options.body as { base_url: string }).base_url;
+          const kind = url.includes("7878")
+            ? { value: "radarr", label: "Radarr 5.2.0" }
+            : { value: "sonarr", label: "Sonarr 4.0.14" };
+          return reply(options, { options: { ...serverOptions, service_kind: [kind] } });
+        },
+      },
+    });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Add server" }));
+    const dialog = await screen.findByRole("dialog");
+    const name = within(dialog).getByLabelText("Name") as HTMLInputElement;
+    const url = within(dialog).getByLabelText("URL");
+    fireEvent.change(within(dialog).getByLabelText("API key"), { target: { value: "key" } });
+    fireEvent.change(url, { target: { value: "http://10.0.0.5:8989" } });
+    expect(await within(dialog).findByText("Detected Sonarr 4.0.14.")).toBeInTheDocument();
+    expect(name.value).toBe("Sonarr");
+
+    fireEvent.change(url, { target: { value: "http://10.0.0.5:7878" } });
+    expect(await within(dialog).findByText("Detected Radarr 5.2.0.")).toBeInTheDocument();
+    expect(name.value).toBe("Radarr");
+
+    // A name the admin typed stays.
+    fireEvent.change(name, { target: { value: "Movies" } });
+    fireEvent.change(url, { target: { value: "http://10.0.0.6:8989" } });
+    expect(await within(dialog).findByText("Detected Sonarr 4.0.14.")).toBeInTheDocument();
+    expect(name.value).toBe("Movies");
+  });
+
   it("only warns when routing pins a type the detected service does not match", async () => {
     serve({
       handlers: {

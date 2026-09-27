@@ -511,6 +511,13 @@ func (h *RequestsHandler) HandleLoadIntegrationOptions(w http.ResponseWriter, r 
 	}
 	options, err := h.service.LoadIntegrationOptions(r.Context(), viewer, integration)
 	if err != nil {
+		// v1 is frozen: the probe's field-level answers are a v2 feature, so
+		// this route keeps answering a failed probe with its original 500.
+		var verr *mediarequests.ValidationError
+		if errors.As(err, &verr) {
+			writeError(w, http.StatusInternalServerError, "internal_error", "Request operation failed")
+			return
+		}
 		writeRequestServiceError(w, err)
 		return
 	}

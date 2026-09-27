@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,6 +21,7 @@ type fakeRequestService struct {
 	listNetworksFn func() ([]mediarequests.DiscoverBrandCard, error)
 	listGenresFn   func() ([]mediarequests.DiscoverBrandCard, error)
 	browseFn       func(kind, slug string, mediaType mediarequests.MediaType, sort string, page int) (*mediarequests.DiscoverBrowseResponse, error)
+	loadOptionsErr error
 }
 
 func (f *fakeRequestService) ListStudios(context.Context, mediarequests.Viewer) ([]mediarequests.DiscoverBrandCard, error) {
@@ -152,7 +154,28 @@ func (f *fakeRequestService) DeleteIntegration(context.Context, mediarequests.Vi
 }
 
 func (f *fakeRequestService) LoadIntegrationOptions(context.Context, mediarequests.Viewer, mediarequests.Integration) (map[string][]mediarequests.RouterOption, error) {
-	return nil, nil
+	return nil, f.loadOptionsErr
+}
+
+// The v1 options route keeps its original answer to a failed probe: the
+// field errors the service now returns are for v2 only.
+func TestHandleLoadIntegrationOptionsKeepsV1FailureShape(t *testing.T) {
+	for _, err := range []error{
+		&mediarequests.ValidationError{FieldErrors: map[string]string{"api_key_ref": "The server rejected this API key."}},
+		&mediarequests.IntegrationUnreachableError{Detail: "Nothing answered at that address. Check the host and port."},
+	} {
+		h := NewRequestsHandler(&fakeRequestService{loadOptionsErr: err})
+		rec := httptest.NewRecorder()
+		req := authedRequest("POST", "/api/v1/admin/request-integrations/new/options")
+		req.Body = io.NopCloser(strings.NewReader(`{"base_url":"10.0.0.5:8989"}`))
+		h.HandleLoadIntegrationOptions(rec, req)
+		if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "internal_error") {
+			t.Fatalf("%T: status = %d body = %s, want the v1 500", err, rec.Code, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "API key") || strings.Contains(rec.Body.String(), "Nothing answered") {
+			t.Fatalf("%T: v1 body carries the v2 detail: %s", err, rec.Body.String())
+		}
+	}
 }
 
 func authedRequest(method, target string) *http.Request {

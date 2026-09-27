@@ -417,11 +417,13 @@ function useServerOptions(
     }
   }
 
-  // A changed connection makes the last probe's complaint stale, including
-  // while the next probe waits out the debounce.
+  // A changed connection makes the last probe stale: an answer still in
+  // flight is dropped, and its complaint is cleared while the next probe
+  // waits out the debounce.
   useEffect(() => {
+    genRef.current += 1;
     setProblem(null);
-    setStatus((current) => (current === "error" ? "idle" : current));
+    setStatus("idle");
   }, [sig]);
 
   useEffect(() => {
@@ -577,17 +579,22 @@ export function RequestServerEditor({
       : undefined;
   const is4KRef = useRef(is4K);
   is4KRef.current = is4K;
+  // The name detection last filled in: a later detection may replace it, but
+  // never a name the admin typed.
+  const autoNameRef = useRef("");
   useEffect(() => {
     if (!detectsKind || typeLock !== undefined) return;
     if (serverKind({ plugin_config: configRef.current }) !== detectedKind) {
       setPluginConfig({ ...configRef.current, [SERVICE_KIND_KEY]: detectedKind });
     }
-    const name = serviceKindLabel(detectedKind);
-    if (name) {
-      setForm((current) =>
-        current.name.trim() ? current : { ...current, name: is4KRef.current ? `${name} 4K` : name },
-      );
-    }
+    const label = serviceKindLabel(detectedKind);
+    if (!label) return;
+    const name = is4KRef.current ? `${label} 4K` : label;
+    setForm((current) => {
+      if (current.name.trim() && current.name !== autoNameRef.current) return current;
+      autoNameRef.current = name;
+      return { ...current, name };
+    });
   }, [detectsKind, detectedKind, typeLock]);
   const schemaErrors = useMemo(
     () =>
