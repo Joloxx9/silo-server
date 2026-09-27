@@ -52,6 +52,13 @@ type Store interface {
 	// the same way as DeferSubmission, so an attempt that outlived its lease
 	// cannot fail a newer claim's attempt.
 	FailSubmission(ctx context.Context, id string, leaseUntil time.Time, actor Viewer, message string) (*Request, error)
+	// RecordSubmission stores the targets a claimed submission created,
+	// releases the claim, and re-derives the request's status from its
+	// targets, in one transaction. It is fenced on leaseUntil the same way as
+	// DeferSubmission: an attempt that outlived its lease while the request
+	// was withdrawn, completed or claimed again gets ErrInvalidState and
+	// writes nothing.
+	RecordSubmission(ctx context.Context, id string, leaseUntil time.Time, targets []Target, actor Viewer) (*Request, error)
 	// MarkReconciled stamps last_reconciled_at so the reconcile pass rotates
 	// through every candidate.
 	MarkReconciled(ctx context.Context, id string) error

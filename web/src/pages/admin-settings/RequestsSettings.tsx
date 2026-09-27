@@ -100,12 +100,14 @@ export default function RequestsSettings() {
       </div>
     );
   }
-  return <RequestsSettingsContent />;
+  return <RequestsSettingsContent routing={capabilities.data.routing} />;
 }
 
-function RequestsSettingsContent() {
+/** routing: whether the server offers routing rules; without them the page
+ * leaves them out rather than calling the route endpoints. */
+function RequestsSettingsContent({ routing }: { routing: boolean }) {
   const settingsQuery = useRequestSettings();
-  const routesQuery = useRequestRoutes();
+  const routesQuery = useRequestRoutes(routing);
   const serversQuery = useRequestIntegrations();
   const installationsQuery = useAdminPluginInstallations();
   const updateSettings = useUpdateRequestSettings();
@@ -379,7 +381,7 @@ function RequestsSettingsContent() {
           routes={routes}
         />
 
-        {MEDIA_TYPES.map((mediaType) => (
+        {(routing ? MEDIA_TYPES : []).map((mediaType) => (
           <RequestRoutingGroup
             key={mediaType}
             mediaType={mediaType}
