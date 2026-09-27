@@ -232,6 +232,82 @@ func TestSubmissionClaimDatabase(t *testing.T) {
 	}
 }
 
+func TestRecordSubmissionIsFencedOnLeaseDatabase(t *testing.T) {
+	repo, pool := lifecycleTestRepository(t)
+	ctx := t.Context()
+	insertLifecycleRequest(t, repo, "req-record", 1, 212, StatusApproved)
+	insertLifecycleRequest(t, repo, "req-withdrawn", 1, 213, StatusApproved)
+	targets := []Target{
+		{Quality: Quality1080p, Status: StatusQueued, ExternalID: "42", ExternalStatus: "added"},
+		{Quality: Quality2160p, Status: StatusFailed, LastError: "no 4K server"},
+	}
+	targetCount := func(id string) int {
+		t.Helper()
+		var n int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM media_request_targets WHERE request_id = $1`, id).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	expire := func(id string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `UPDATE media_requests SET submit_lease_until = now() - interval '1 second' WHERE id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A router call that outlived its lease while the request was withdrawn
+	// records nothing and leaves the request withdrawn.
+	withdrawn, claimed, err := repo.ClaimSubmission(ctx, "req-withdrawn", time.Minute)
+	if err != nil || !claimed {
+		t.Fatalf("claim: claimed = %v, err = %v", claimed, err)
+	}
+	expire("req-withdrawn")
+	if _, err := repo.SetOutcome(ctx, "req-withdrawn", guardWithdrawable, OutcomeCancelled, Viewer{}, "changed my mind"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.RecordSubmission(ctx, "req-withdrawn", *withdrawn.SubmitLeaseUntil, targets, Viewer{}); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("record on a withdrawn request: err = %v, want ErrInvalidState", err)
+	}
+	if current, err := repo.GetRequest(ctx, "req-withdrawn"); err != nil || current.Outcome != OutcomeCancelled || targetCount("req-withdrawn") != 0 {
+		t.Fatalf("after a stale record: request = %+v, err = %v; want it withdrawn with no targets", current, err)
+	}
+
+	// Nor may it record over a newer claim.
+	stale, claimed, err := repo.ClaimSubmission(ctx, "req-record", time.Minute)
+	if err != nil || !claimed {
+		t.Fatalf("claim: claimed = %v, err = %v", claimed, err)
+	}
+	expire("req-record")
+	current, claimed, err := repo.ClaimSubmission(ctx, "req-record", time.Minute)
+	if err != nil || !claimed {
+		t.Fatalf("claim after the lease expired: claimed = %v, err = %v", claimed, err)
+	}
+	if _, err := repo.RecordSubmission(ctx, "req-record", *stale.SubmitLeaseUntil, targets, Viewer{}); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("record with an expired lease: err = %v, want ErrInvalidState", err)
+	}
+	if targetCount("req-record") != 0 {
+		t.Fatal("a stale record wrote targets")
+	}
+
+	// The current claim records its targets and releases the lease.
+	recorded, err := repo.RecordSubmission(ctx, "req-record", *current.SubmitLeaseUntil, targets, Viewer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recorded.Status != StatusQueued || recorded.Outcome != OutcomeActive || recorded.SubmitLeaseUntil != nil {
+		t.Fatalf("recorded = %+v, want queued/active with the claim released", recorded)
+	}
+	stored, err := repo.ListTargets(ctx, "req-record")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored) != 2 || stored[0].ExternalID != "42" || stored[0].Status != StatusQueued ||
+		stored[1].Status != StatusFailed || stored[1].LastError != "no 4K server" {
+		t.Fatalf("targets = %+v, want the queued 1080p and failed 2160p targets", stored)
+	}
+}
+
 func TestReplaceFailedIsScopedToRequesterDatabase(t *testing.T) {
 	repo, pool := lifecycleTestRepository(t)
 	ctx := t.Context()
@@ -444,6 +520,67 @@ func TestSubmitLastAttemptWithExpiredLeaseLeavesNewerClaim(t *testing.T) {
 	}
 	if req.Outcome != OutcomeActive || req.Status != StatusApproved || req.LastError != "" {
 		t.Fatalf("request = %+v, want the newer claim's request left approved/active", req)
+	}
+}
+
+// lapsingRouter succeeds, but while the call is in flight its claim lapses and
+// meanwhile changes the request as another actor would.
+type lapsingRouter struct {
+	*fakeRouterProvider
+	store     *fakeStore
+	meanwhile func(req *Request)
+}
+
+func (r lapsingRouter) Fulfill(ctx context.Context, installationID int, capabilityID string, req Request, qualities []Quality, conns []ResolvedRouterConnection) ([]RouterTarget, string, error) {
+	r.store.mu.Lock()
+	r.meanwhile(r.store.requests[req.ID])
+	r.store.mu.Unlock()
+	return r.fakeRouterProvider.Fulfill(ctx, installationID, capabilityID, req, qualities, conns)
+}
+
+func TestSubmitSuccessWithExpiredLeaseIsDropped(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		meanwhile func(req *Request)
+		want      func(req *Request) bool
+	}{
+		{
+			name: "withdrawn",
+			meanwhile: func(req *Request) {
+				req.SubmitLeaseUntil = nil
+				req.Outcome = OutcomeCancelled
+			},
+			want: func(req *Request) bool { return req.Outcome == OutcomeCancelled },
+		},
+		{
+			name: "claimed again",
+			meanwhile: func(req *Request) {
+				newer := time.Now().Add(time.Hour)
+				req.SubmitLeaseUntil = &newer
+			},
+			want: func(req *Request) bool {
+				return req.Status == StatusApproved && req.Outcome == OutcomeActive && req.SubmitLeaseUntil != nil
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newFakeStore()
+			store.integrations = []Integration{routerInst("router-1")}
+			store.requests["r1"] = &Request{ID: "r1", MediaType: MediaTypeMovie, TMDBID: 550, Status: StatusApproved, Outcome: OutcomeActive}
+			svc := newTestService(store)
+			svc.SetRouterProvider(lapsingRouter{&fakeRouterProvider{}, store, tc.meanwhile})
+
+			req, err := svc.submitApprovedRequest(context.Background(), *store.requests["r1"], Viewer{}, nil)
+			if err != nil {
+				t.Fatalf("submit: %v", err)
+			}
+			if !tc.want(req) {
+				t.Fatalf("request = %+v, want the state the other actor left", req)
+			}
+			if targets := store.targets["r1"]; len(targets) != 0 {
+				t.Fatalf("targets = %+v, want none recorded by the stale attempt", targets)
+			}
+		})
 	}
 }
 

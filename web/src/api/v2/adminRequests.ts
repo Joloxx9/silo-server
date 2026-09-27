@@ -153,10 +153,18 @@ export type RequestGroupLimit = Omit<Schemas["AdminRequestGroupLimit"], "group_i
 };
 export type RequestGroupLimitBody = Schemas["AdminRequestGroupLimitBody"];
 
-export async function getAdminRequestGroupLimitV2(groupId: number): Promise<RequestGroupLimit> {
+/**
+ * The validator names the profile that read it, so the limit is read and
+ * saved under one captured authority.
+ */
+export async function getAdminRequestGroupLimitV2(
+  groupId: number,
+  profileContext?: ProfileRequestContextSnapshot,
+): Promise<RequestGroupLimit> {
   let etag = "";
   const body = await v2("GET /api/v2/admin/request-groups/{group_id}/limit", {
     path: { group_id: String(groupId) },
+    profileContext,
     onResponse: (r) => {
       etag = r.headers.get("ETag") ?? "";
     },
@@ -166,12 +174,14 @@ export async function getAdminRequestGroupLimitV2(groupId: number): Promise<Requ
 export async function putAdminRequestGroupLimitV2(
   limit: Pick<RequestGroupLimit, "group_id" | "etag">,
   body: RequestGroupLimitBody,
+  profileContext?: ProfileRequestContextSnapshot,
 ): Promise<RequestGroupLimit> {
   let etag = "";
   const saved = await v2("PUT /api/v2/admin/request-groups/{group_id}/limit", {
     path: { group_id: String(limit.group_id) },
     headers: { "If-Match": requireETag(limit.etag) },
     body,
+    profileContext,
     onResponse: (r) => {
       etag = r.headers.get("ETag") ?? "";
     },

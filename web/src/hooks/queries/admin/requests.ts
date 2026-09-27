@@ -7,6 +7,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { useState } from "react";
 import { toast } from "sonner";
 import { V2ProblemError } from "@/api/v2/request";
+import { captureProfileRequestContext } from "@/api/client";
+import { adminAuthorityScope, type AdminAuthority } from "@/api/v2/adminAuthority";
 import {
   getAdminRequestSettingsV2,
   putAdminRequestSettingsV2,
@@ -44,7 +46,6 @@ import {
   type RequestRoutingMode,
 } from "@/api/v2/adminRequests";
 import { v2 } from "@/api/v2/request";
-import {} from "@/hooks/useCurrentProfile";
 import type {
   LoadRequestIntegrationOptionsRequest,
   MediaRequest,
@@ -224,8 +225,10 @@ export function useAdminCancelMediaRequest() {
       cancelAdminRequestV2(id, reason),
     onSuccess: () => {
       toast.success("Request cancelled");
-      invalidateRequestSurfaces(queryClient);
     },
+    // A refused action still refreshes the queue: another admin may have
+    // acted first, and the row should show what happened.
+    onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to cancel request");
     },
@@ -499,11 +502,12 @@ export function useRequestIntegrationOptions(integrationId: string | undefined) 
   });
 }
 
-export function useRequestRouting() {
+export function useRequestRouting(enabled = true) {
   return useQuery({
     queryKey: adminKeys.requestRouting(),
     queryFn: getAdminRequestRoutingV2,
     staleTime: REQUESTS_STALE_TIME,
+    enabled,
   });
 }
 
@@ -529,11 +533,12 @@ export function useUpdateRequestRouting() {
   });
 }
 
-export function useRequestRoutes() {
+export function useRequestRoutes(enabled = true) {
   return useQuery({
     queryKey: adminKeys.requestRoutes(),
     queryFn: listAdminRequestRoutesV2,
     staleTime: REQUESTS_STALE_TIME,
+    enabled,
   });
 }
 
@@ -713,11 +718,16 @@ export function useUpdateRequestUserLimit() {
   });
 }
 
-/** An access group's request approval and limit. */
-export function useRequestGroupLimit(groupId?: number | null) {
+/**
+ * An access group's request approval and limit. An editor passes the
+ * authority it read the group under, so the limit it saves carries a
+ * validator from the same profile.
+ */
+export function useRequestGroupLimit(groupId?: number | null, authority?: AdminAuthority) {
+  const context = authority ?? captureProfileRequestContext();
   return useQuery({
-    queryKey: adminKeys.requestGroupLimit(groupId ?? 0),
-    queryFn: () => getAdminRequestGroupLimitV2(groupId!),
+    queryKey: adminKeys.requestGroupLimit(groupId ?? 0, adminAuthorityScope(context)),
+    queryFn: () => getAdminRequestGroupLimitV2(groupId!, context ?? undefined),
     enabled: Boolean(groupId && groupId > 0),
     staleTime: REQUESTS_STALE_TIME,
     retry: false,
@@ -735,16 +745,24 @@ export function useUpdateRequestGroupLimit() {
     mutationFn: ({
       limit,
       body,
+      profileContext,
     }: {
       limit: Pick<RequestGroupLimit, "group_id" | "etag">;
       body: RequestGroupLimitBody;
-    }) => putAdminRequestGroupLimitV2(limit, body),
-    onSuccess: (saved) => {
-      queryClient.setQueryData(adminKeys.requestGroupLimit(saved.group_id), saved);
+      /** The authority the limit was read under; the active one when omitted. */
+      profileContext?: AdminAuthority;
+    }) => putAdminRequestGroupLimitV2(limit, body, profileContext),
+    onSuccess: (saved, { profileContext }) => {
+      queryClient.setQueryData(
+        adminKeys.requestGroupLimit(saved.group_id, adminAuthorityScope(profileContext)),
+        saved,
+      );
       invalidateRequestSurfaces(queryClient);
     },
-    onError: (_err, { limit }) => {
-      queryClient.invalidateQueries({ queryKey: adminKeys.requestGroupLimit(limit.group_id) });
+    onError: (_err, { limit, profileContext }) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.requestGroupLimit(limit.group_id, adminAuthorityScope(profileContext)),
+      });
     },
   });
 }

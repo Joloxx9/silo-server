@@ -17,14 +17,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// list builds a published list with n series and one film split in parts.
+// realEntries are verbatim entries from Kometa's published anime_ids.json,
+// keyed by AniDB ID: a series by TVDB ID only, one with an IMDb ID too, one
+// whose IMDb IDs name the parts of a multi-part film, and one mapped to
+// neither.
+const realEntries = `{
+	"1": {"tvdb_id": 72025, "tvdb_season": 1, "tvdb_epoffset": 0, "mal_id": 290, "anilist_id": 290},
+	"11": {"tvdb_id": 70900, "tvdb_season": 0, "tvdb_epoffset": 2, "imdb_id": "tt7941838", "mal_id": 821, "anilist_id": 821},
+	"4772": {"tvdb_id": 75411, "tvdb_season": 0, "tvdb_epoffset": 1, "imdb_id": "tt0936323,tt0936320", "mal_id": 1719, "anilist_id": 1719},
+	"159": {"tvdb_epoffset": 0}
+}`
+
+// realIDs is how many distinct IDs realEntries holds.
+const realIDs = 6
+
+// list builds a published list: the real entries plus n made-up series.
 func list(n int) []byte {
 	raw := map[string]map[string]any{}
-	for i := 1; i <= n; i++ {
-		raw[fmt.Sprint(i)] = map[string]any{"tvdb_id": 1000 + i, "mal_id": i}
+	if err := json.Unmarshal([]byte(realEntries), &raw); err != nil {
+		panic(err)
 	}
-	raw["film"] = map[string]any{"imdb_id": "tt0000001, tt0000002"}
-	raw["unmapped"] = map[string]any{"mal_id": 9}
+	for i := 1; i <= n; i++ {
+		raw[fmt.Sprint("filler-", i)] = map[string]any{"tvdb_id": 1000 + i, "mal_id": i}
+	}
 	raw["null"] = map[string]any{"tvdb_id": nil}
 	body, _ := json.Marshal(raw)
 	return body
@@ -39,8 +54,16 @@ func TestParse(t *testing.T) {
 	for _, id := range ids {
 		got[id] = true
 	}
-	if len(ids) != minEntries+2 || !got[listedID{"tvdb", "1001"}] || !got[listedID{"imdb", "tt0000002"}] {
-		t.Fatalf("parsed %d IDs, want every series by TVDB ID and each part of the film by IMDb ID", len(ids))
+	if len(ids) != minEntries+realIDs {
+		t.Fatalf("parsed %d IDs, want %d", len(ids), minEntries+realIDs)
+	}
+	for _, want := range []listedID{
+		{"tvdb", "72025"}, {"tvdb", "70900"}, {"tvdb", "75411"}, {"tvdb", "1001"},
+		{"imdb", "tt7941838"}, {"imdb", "tt0936323"}, {"imdb", "tt0936320"},
+	} {
+		if !got[want] {
+			t.Errorf("missing %v: want every series by TVDB ID and each part of a film by IMDb ID", want)
+		}
 	}
 	if _, err := parse(list(10)); err == nil || !strings.Contains(err.Error(), "only") {
 		t.Fatalf("a short list: %v, want it refused", err)
@@ -113,7 +136,7 @@ func TestRefreshDatabase(t *testing.T) {
 	store := NewStore(pool)
 
 	got, err := refresher.Refresh(ctx)
-	if err != nil || got.Entries != minEntries+2 {
+	if err != nil || got.Entries != minEntries+realIDs {
 		t.Fatalf("first refresh = %+v, %v", got, err)
 	}
 	for _, tc := range []struct {
@@ -124,8 +147,8 @@ func TestRefreshDatabase(t *testing.T) {
 	}{
 		{false, 1001, "", true},
 		{true, 1001, "", false}, // a movie's TVDB ID is another numbering
-		{true, 0, "tt0000002", true},
-		{false, 0, "tt0000002", true},
+		{true, 0, "tt0936320", true},
+		{false, 0, "tt0936320", true},
 		{false, 42, "tt9999999", false},
 		{false, 0, "", false},
 	} {
@@ -152,7 +175,7 @@ func TestRefreshDatabase(t *testing.T) {
 		var count int
 		_ = pool.QueryRow(ctx, `SELECT last_status, last_error FROM anime_ids_refresh`).Scan(&status, &message)
 		_ = pool.QueryRow(ctx, `SELECT count(*) FROM anime_ids`).Scan(&count)
-		if status != "error" || message == "" || count != minEntries+2 {
+		if status != "error" || message == "" || count != minEntries+realIDs {
 			t.Fatalf("%s: status %q %q, %d IDs; want the error recorded and the list kept", mode, status, message, count)
 		}
 	}
@@ -162,7 +185,7 @@ func TestRefreshDatabase(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE anime_ids_refresh SET etag = '"v1"'; DELETE FROM anime_ids`); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := refresher.Refresh(ctx); err != nil || got.Unchanged || got.Entries != minEntries+2 {
+	if got, err := refresher.Refresh(ctx); err != nil || got.Unchanged || got.Entries != minEntries+realIDs {
 		t.Fatalf("refresh of an emptied list = %+v, %v; want it downloaded", got, err)
 	}
 

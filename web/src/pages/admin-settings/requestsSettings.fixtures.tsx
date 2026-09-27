@@ -185,7 +185,7 @@ export function serve({
     if (custom) return custom(options);
     switch (operation) {
       case "GET /api/v2/admin/requests/capabilities":
-        return reply(options, { available: true, guarded_configuration: true });
+        return reply(options, { available: true, guarded_configuration: true, routing: true });
       case "GET /api/v2/admin/request-settings":
         return reply(options, requestSettings);
       case "GET /api/v2/admin/request-integrations":

@@ -3,6 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { setAccessToken, setProfileId } from "@/api/client";
+import { adminAuthorityScope, captureAdminAuthority } from "@/api/v2/adminAuthority";
+import { installPolicyStorageMocks } from "@/pages/admin-policy/policyTestUtils";
 import { adminKeys, requestKeys } from "./keys";
 
 const mocks = vi.hoisted(() => ({
@@ -35,6 +38,11 @@ import {
   useRequestSearch,
   useToggleRequestFollow,
 } from "./useRequests";
+import {
+  useAdminCancelMediaRequest,
+  useRequestGroupLimit,
+  useUpdateRequestGroupLimit,
+} from "./admin/requests";
 
 function render(node: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -257,6 +265,110 @@ describe("useCancelMediaRequest", () => {
     expect(cancelInvalidations.mock.calls).toEqual(createInvalidations.mock.calls);
     expect(cancelInvalidations).toHaveBeenCalledWith({ queryKey: requestKeys.all });
     expect(cancelInvalidations).toHaveBeenCalledWith({ queryKey: adminKeys.requestsRoot() });
+  });
+});
+
+describe("useAdminCancelMediaRequest", () => {
+  beforeEach(() => {
+    mocks.api.mockReset();
+  });
+
+  it("refreshes the queue when the cancellation is refused", async () => {
+    // Another admin acted first; the obsolete row must not keep its action.
+    mocks.api.mockRejectedValue(new Error("This request has changed."));
+    const client = new QueryClient();
+    const invalidations = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useAdminCancelMediaRequest(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await expect(result.current.mutateAsync({ id: "req-1" })).rejects.toThrow();
+
+    expect(invalidations).toHaveBeenCalledWith({ queryKey: adminKeys.requestsRoot() });
+    expect(invalidations).toHaveBeenCalledWith({ queryKey: requestKeys.all });
+  });
+});
+
+describe("access group request limits", () => {
+  const wireLimit = {
+    group_id: "7",
+    limit_mode: "inherit",
+    max_requests: null,
+    window_days: null,
+    approval_mode: "inherit",
+  };
+
+  function CallGroupLimitHook() {
+    useRequestGroupLimit(7);
+    return null;
+  }
+
+  function lastQueryOptions() {
+    return mocks.useQuery.mock.calls.at(-1)![0] as {
+      queryKey: readonly unknown[];
+      queryFn: () => Promise<unknown>;
+    };
+  }
+
+  beforeEach(() => {
+    mocks.useQuery.mockReset();
+    mocks.api.mockReset();
+    mocks.api.mockImplementation(
+      async (_route: string, options: { onResponse?: (r: Response) => void }) => {
+        options.onResponse?.(new Response(null, { headers: { ETag: '"limit-1"' } }));
+        return wireLimit;
+      },
+    );
+    installPolicyStorageMocks();
+    setAccessToken("account");
+    setProfileId("owner");
+  });
+
+  it("keys the limit by profile, since its validator names the profile that read it", async () => {
+    render(<CallGroupLimitHook />);
+    const owner = lastQueryOptions();
+    setProfileId("kid");
+    render(<CallGroupLimitHook />);
+    const kid = lastQueryOptions();
+
+    expect(kid.queryKey).not.toEqual(owner.queryKey);
+    await owner.queryFn();
+    expect(mocks.api).toHaveBeenLastCalledWith(
+      "GET /api/v2/admin/request-groups/{group_id}/limit",
+      expect.objectContaining({ profileContext: expect.objectContaining({ profileId: "owner" }) }),
+    );
+  });
+
+  it("saves under the authority the limit was read with", async () => {
+    const owner = captureAdminAuthority();
+    setProfileId("kid");
+    const client = new QueryClient();
+    const { result } = renderHook(() => useUpdateRequestGroupLimit(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await result.current.mutateAsync({
+      limit: { group_id: 7, etag: '"limit-0"' },
+      body: {
+        limit_mode: "inherit",
+        approval_mode: "inherit",
+        max_requests: null,
+        window_days: null,
+      },
+      profileContext: owner,
+    });
+
+    expect(mocks.api).toHaveBeenCalledWith(
+      "PUT /api/v2/admin/request-groups/{group_id}/limit",
+      expect.objectContaining({ profileContext: owner }),
+    );
+    expect(
+      client.getQueryData(adminKeys.requestGroupLimit(7, adminAuthorityScope(owner))),
+    ).toMatchObject({ group_id: 7, etag: '"limit-1"' });
   });
 });
 

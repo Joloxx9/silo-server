@@ -2195,6 +2195,14 @@ func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, f
 		if len(got) == 0 && msg != "" {
 			failures[q] = msg
 		}
+		for i := range got {
+			// The plugin was handed only this server, so a target it returns
+			// without a connection is on it; recording that keeps the target
+			// checked through the plugin that owns the server.
+			if got[i].ConnectionID == "" {
+				got[i].ConnectionID = conn.ID
+			}
+		}
 		targets = append(targets, got...)
 	}
 	return s.recordTargets(ctx, req, actor, plan, targets, connKind, decisions, failures)
@@ -2375,10 +2383,10 @@ const msgNoTargetForQuality = "fulfillment backend returned no target for this q
 // when routing chose the servers, stamps each target with its route.
 func (s *Service) recordTargets(ctx context.Context, req Request, actor Viewer, plan submissionPlan, targets []RouterTarget,
 	connKind map[string]string, decisions map[Quality]RouteDecision, failures map[Quality]string) (*Request, error) {
-	latest := &req
 	validQuality := map[Quality]bool{Quality1080p: true, Quality2160p: true}
 	validStatus := map[Status]bool{StatusQueued: true, StatusDownloading: true, StatusCompleted: true, StatusFailed: true}
 	returned := map[Quality]bool{}
+	var record []Target
 	for _, rt := range targets {
 		if !validQuality[rt.Quality] {
 			slog.WarnContext(ctx, "requests: plugin returned unknown quality; skipping", "component", "requests", "request_id", req.ID, "quality", string(rt.Quality))
@@ -2395,25 +2403,16 @@ func (s *Service) recordTargets(ctx context.Context, req Request, actor Viewer, 
 		}
 		returned[rt.Quality] = true
 		decision := decisions[rt.Quality]
-		created, err := s.store.CreateTarget(ctx, Target{
-			RequestID: req.ID, IntegrationID: rt.ConnectionID, IntegrationKind: connKind[rt.ConnectionID],
-			Quality: rt.Quality, IsAnime: req.IsAnime, Status: StatusQueued,
-			RouteID: decision.RouteID, RouteName: decision.RouteName,
-		})
-		if err != nil {
-			return nil, err
-		}
 		status := rt.Status
 		if status == "" || !validStatus[status] {
 			status = StatusQueued // coerce unknown/empty status to the DB-valid default
 		}
-		updated, err := s.store.UpdateTargetStatus(ctx, created.ID, status, rt.ExternalID, rt.ExternalStatus, rt.Message, actor)
-		if err != nil {
-			return nil, err
-		}
-		if updated != nil {
-			latest = updated
-		}
+		record = append(record, Target{
+			IntegrationID: rt.ConnectionID, IntegrationKind: connKind[rt.ConnectionID],
+			Quality: rt.Quality, IsAnime: req.IsAnime, Status: status,
+			ExternalID: rt.ExternalID, ExternalStatus: rt.ExternalStatus, LastError: rt.Message,
+			RouteID: decision.RouteID, RouteName: decision.RouteName,
+		})
 	}
 	for _, q := range plan.want {
 		if returned[q] {
@@ -2424,22 +2423,22 @@ func (s *Service) recordTargets(ctx context.Context, req Request, actor Viewer, 
 			msg = msgNoTargetForQuality
 		}
 		decision := decisions[q]
-		created, err := s.store.CreateTarget(ctx, Target{
-			RequestID: req.ID, IntegrationID: decision.IntegrationID, Quality: q, IsAnime: req.IsAnime,
+		record = append(record, Target{
+			IntegrationID: decision.IntegrationID, Quality: q, IsAnime: req.IsAnime,
 			Status: StatusFailed, LastError: msg, RouteID: decision.RouteID, RouteName: decision.RouteName,
 		})
-		if err != nil {
-			return nil, err
-		}
-		updated, err := s.store.UpdateTargetStatus(ctx, created.ID, StatusFailed, "", "", msg, actor)
-		if err != nil {
-			return nil, err
-		}
-		if updated != nil {
-			latest = updated
-		}
 	}
-	return latest, nil
+	recorded, err := s.store.RecordSubmission(ctx, req.ID, claimLease(req), record, actor)
+	if errors.Is(err, ErrInvalidState) {
+		// The router call outlived this claim's lease, and meanwhile the
+		// request was withdrawn, completed from the library, or claimed
+		// again. That state stands; the downstream service may still hold
+		// what this call added.
+		slog.WarnContext(ctx, "requests: submission outlived its claim; result dropped", "component", "requests",
+			"request_id", req.ID, "targets", len(record))
+		return s.store.GetRequest(ctx, req.ID)
+	}
+	return recorded, err
 }
 
 // connectionKindByID maps each connection id to its plugin-declared service kind
@@ -2732,8 +2731,11 @@ func (s *Service) reconcileRequest(ctx context.Context, req Request, fc *fulfill
 // are grouped by the installation and capability that own their server, so a
 // target sent through one plugin is never checked through another (routing
 // can send a request's tiers through different plugins, and an admin can
-// rebind a server). A target whose server is gone, disabled or unusable is
-// skipped; the library presence check retires it if the media arrives.
+// rebind a server). A target the plugin returned without a connection is
+// checked through the plugin that routes the media type without rules, with
+// all its connections, as before routing. A target whose server is gone,
+// disabled or unusable is skipped; the library presence check retires it if
+// the media arrives.
 func (s *Service) checkTargetStatuses(ctx context.Context, req Request, targets []Target, fc *fulfillContext) ([]RouterTargetStatus, error) {
 	type owner struct {
 		installationID int
@@ -2746,26 +2748,45 @@ func (s *Service) checkTargetStatuses(ctx context.Context, req Request, targets 
 	}
 	groups := map[owner]*group{}
 	var order []owner
-	for _, t := range targets {
-		if t.Status != StatusQueued && t.Status != StatusDownloading {
-			continue
-		}
-		in := integrationByID(fc, t.IntegrationID)
-		if in == nil || !in.Enabled || in.InstallationID == nil || in.CapabilityID == "" || strings.TrimSpace(in.APIKeyRef) == "" {
-			continue
-		}
-		key := owner{*in.InstallationID, in.CapabilityID}
+	groupFor := func(key owner) *group {
 		g := groups[key]
 		if g == nil {
 			g = &group{seen: map[string]bool{}}
 			groups[key] = g
 			order = append(order, key)
 		}
-		g.refs = append(g.refs, RouterTargetRef{Quality: t.Quality, ConnectionID: t.IntegrationID, ExternalID: t.ExternalID})
-		if !g.seen[in.ID] {
-			g.seen[in.ID] = true
-			g.conns = append(g.conns, ResolvedRouterConnection{ID: in.ID, BaseURL: in.BaseURL, APIKey: strings.TrimSpace(in.APIKeyRef), Config: in.PluginConfig})
+		return g
+	}
+	addConn := func(g *group, conn ResolvedRouterConnection) {
+		if !g.seen[conn.ID] {
+			g.seen[conn.ID] = true
+			g.conns = append(g.conns, conn)
 		}
+	}
+	for _, t := range targets {
+		if t.Status != StatusQueued && t.Status != StatusDownloading {
+			continue
+		}
+		ref := RouterTargetRef{Quality: t.Quality, ConnectionID: t.IntegrationID, ExternalID: t.ExternalID}
+		if t.IntegrationID == "" {
+			conns, installationID, capabilityID, err := s.resolveRouterConnections(ctx, fc, req.MediaType)
+			if err != nil || len(conns) == 0 {
+				continue
+			}
+			g := groupFor(owner{installationID, capabilityID})
+			g.refs = append(g.refs, ref)
+			for _, conn := range conns {
+				addConn(g, conn)
+			}
+			continue
+		}
+		in := integrationByID(fc, t.IntegrationID)
+		if in == nil || !in.Enabled || in.InstallationID == nil || in.CapabilityID == "" || strings.TrimSpace(in.APIKeyRef) == "" {
+			continue
+		}
+		g := groupFor(owner{*in.InstallationID, in.CapabilityID})
+		g.refs = append(g.refs, ref)
+		addConn(g, ResolvedRouterConnection{ID: in.ID, BaseURL: in.BaseURL, APIKey: strings.TrimSpace(in.APIKeyRef), Config: in.PluginConfig})
 	}
 	// One plugin being down must not hide the statuses another reported, so
 	// every group is asked and the errors are returned alongside them.
