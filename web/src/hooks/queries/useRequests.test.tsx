@@ -351,7 +351,12 @@ describe("access group request limits", () => {
 
     await result.current.mutateAsync({
       limit: { group_id: 7, etag: '"limit-0"' },
-      body: { limit_mode: "inherit", approval_mode: "inherit" },
+      body: {
+        limit_mode: "inherit",
+        approval_mode: "inherit",
+        max_requests: null,
+        window_days: null,
+      },
       profileContext: owner,
     });
 
