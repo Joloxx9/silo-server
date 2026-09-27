@@ -45,7 +45,9 @@ func TestSeasonCountsComplete(t *testing.T) {
 	}{
 		{SeasonCounts{Aired: 9, Have: 9}, true},
 		{SeasonCounts{Aired: 9, Have: 8}, false},
-		{SeasonCounts{Aired: 0, Have: 2}, true}, // no air dates yet: any episode counts
+		{SeasonCounts{Aired: 0, Have: 2}, true},              // no air dates yet: any episode counts
+		{SeasonCounts{Upcoming: 8, Have: 1}, false},          // dated, not aired: an early episode is not the season
+		{SeasonCounts{Aired: 2, Upcoming: 6, Have: 2}, true}, // airing: every aired episode is in
 		{SeasonCounts{}, false},
 	} {
 		if got := tc.c.Complete(); got != tc.want {
@@ -322,5 +324,18 @@ func TestLibrarySeriesCanRequestAnUpcomingSeason(t *testing.T) {
 	}
 	if detail.Request.Requestable || detail.Request.Reason != "already_available" {
 		t.Fatalf("request state = %+v, want already_available: every season is in the library", detail.Request)
+	}
+}
+
+// An episode of an upcoming season that reached the library ahead of its air
+// date does not make the season complete: it can still be requested.
+func TestAnEarlyEpisodeDoesNotCompleteAnUpcomingSeason(t *testing.T) {
+	presence := severanceInLibrary()
+	presence.seasons[fakePresenceContentID(MediaTypeSeries, 95396)][3] = SeasonCounts{Upcoming: 8, Have: 1}
+	svc := seasonService(newFakeStore(), presence)
+
+	req, err := svc.CreateRequest(context.Background(), testViewer(1), CreateRequestInput{MediaType: MediaTypeSeries, TMDBID: 95396, Title: "Severance", Seasons: []int{3}})
+	if err != nil || !slices.Equal(req.Seasons, []int{3}) {
+		t.Fatalf("request for season 3 = %+v, %v", req, err)
 	}
 }
