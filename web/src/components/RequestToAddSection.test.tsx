@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -26,6 +27,7 @@ vi.mock("@/hooks/useDebounce", () => ({
 }));
 
 import { RequestToAddSection } from "./RequestToAddSection";
+import type { RequestToAddSectionProps } from "./RequestToAddSection";
 import type { RequestMediaResult } from "@/api/types";
 
 function render(child: ReactNode) {
@@ -35,6 +37,14 @@ function render(child: ReactNode) {
       <MemoryRouter>{child}</MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+type GridProps = Extract<RequestToAddSectionProps, { variant: "grid" }>;
+
+/** Holds the grid's page the way Catalog does, minus the URL. */
+function PagedGrid(props: Omit<GridProps, "variant" | "page" | "onPageChange">) {
+  const [page, setPage] = useState(1);
+  return <RequestToAddSection variant="grid" {...props} page={page} onPageChange={setPage} />;
 }
 
 const missingResult = (overrides: Partial<RequestMediaResult> = {}): RequestMediaResult => ({
@@ -443,7 +453,7 @@ describe("RequestToAddSection (grid variant)", () => {
     });
     rtlRender(
       <MemoryRouter>
-        <RequestToAddSection variant="grid" query="dune" libraryHadHits />
+        <PagedGrid query="dune" libraryHadHits />
       </MemoryRouter>,
     );
 
@@ -470,18 +480,11 @@ describe("RequestToAddSection (grid variant)", () => {
       isLoading: false,
       isError: false,
     });
-    const known = render(
-      <RequestToAddSection variant="grid" query="dune" libraryHadHits={false} />,
-    );
+    const known = render(<PagedGrid query="dune" libraryHadHits={false} />);
     expect(known).toContain("Nothing in your library matches");
 
     const unknown = render(
-      <RequestToAddSection
-        variant="grid"
-        query="dune"
-        libraryHadHits={false}
-        libraryResultsKnown={false}
-      />,
+      <PagedGrid query="dune" libraryHadHits={false} libraryResultsKnown={false} />,
     );
     expect(unknown).toContain("Request to add");
     expect(unknown).not.toContain("Nothing in your library matches");
@@ -496,7 +499,7 @@ describe("RequestToAddSection (grid variant)", () => {
       isLoading: false,
       isError: false,
     });
-    const markup = render(<RequestToAddSection variant="grid" query="dune" libraryHadHits />);
+    const markup = render(<PagedGrid query="dune" libraryHadHits />);
     expect(markup).toContain("Result 0");
     expect(markup).toContain("Result 19");
     expect(markup).not.toContain("Result 20");
@@ -504,17 +507,17 @@ describe("RequestToAddSection (grid variant)", () => {
 
   it("searches the TMDB type the host's scope asks for and keeps a page on screen while paging", () => {
     pages(1);
-    render(<RequestToAddSection variant="grid" query="dune" mediaType="series" libraryHadHits />);
+    render(<PagedGrid query="dune" mediaType="series" libraryHadHits />);
 
     expect(lastSearchCall().slice(0, 3)).toEqual(["series", "dune", 1]);
     expect(lastSearchCall()[3]).toMatchObject({ enabled: true, keepPreviousPage: true });
   });
 
-  it("pages through TMDB's results and starts over for a new query", () => {
+  it("pages through TMDB's results", () => {
     pages(3);
-    const view = rtlRender(
+    rtlRender(
       <MemoryRouter>
-        <RequestToAddSection variant="grid" query="bear" libraryHadHits />
+        <PagedGrid query="bear" libraryHadHits />
       </MemoryRouter>,
     );
 
@@ -529,13 +532,29 @@ describe("RequestToAddSection (grid variant)", () => {
 
     fireEvent.click(within(pager).getByRole("button", { name: "Next" }));
     expect(within(pager).getByRole("button", { name: "Next" })).toBeDisabled();
+  });
 
-    view.rerender(
+  it("opens at the page its host restored and reports page changes to the host", () => {
+    pages(3);
+    const onPageChange = vi.fn();
+    rtlRender(
       <MemoryRouter>
-        <RequestToAddSection variant="grid" query="dune" libraryHadHits />
+        <RequestToAddSection
+          variant="grid"
+          query="bear"
+          libraryHadHits
+          page={2}
+          onPageChange={onPageChange}
+        />
       </MemoryRouter>,
     );
-    expect(lastSearchCall().slice(0, 3)).toEqual(["all", "dune", 1]);
+
+    expect(lastSearchCall().slice(0, 3)).toEqual(["all", "bear", 2]);
+    const pager = screen.getByRole("navigation", { name: "Request to add pages" });
+    expect(pager).toHaveTextContent("Page 2 of 3");
+
+    fireEvent.click(within(pager).getByRole("button", { name: "Next" }));
+    expect(onPageChange).toHaveBeenLastCalledWith(3);
   });
 
   it("keeps the pager on a later page that holds only library titles", () => {
@@ -554,7 +573,7 @@ describe("RequestToAddSection (grid variant)", () => {
     }));
     rtlRender(
       <MemoryRouter>
-        <RequestToAddSection variant="grid" query="dune" libraryHadHits />
+        <PagedGrid query="dune" libraryHadHits />
       </MemoryRouter>,
     );
 
@@ -590,7 +609,7 @@ describe("RequestToAddSection (grid variant)", () => {
     );
     rtlRender(
       <MemoryRouter>
-        <RequestToAddSection variant="grid" query="dune" libraryHadHits />
+        <PagedGrid query="dune" libraryHadHits />
       </MemoryRouter>,
     );
 
@@ -615,14 +634,14 @@ describe("RequestToAddSection (grid variant)", () => {
   it("still hides the section when the first page fails", () => {
     mocks.useRequestSearch.mockReturnValue({ data: undefined, isLoading: false, isError: true });
 
-    expect(render(<RequestToAddSection variant="grid" query="dune" libraryHadHits />)).toBe("");
+    expect(render(<PagedGrid query="dune" libraryHadHits />)).toBe("");
   });
 
   it("stops at TMDB's 500-page cap whatever total it reports", () => {
     pages(900);
     rtlRender(
       <MemoryRouter>
-        <RequestToAddSection variant="grid" query="dune" libraryHadHits />
+        <PagedGrid query="dune" libraryHadHits />
       </MemoryRouter>,
     );
 
@@ -635,7 +654,7 @@ describe("RequestToAddSection (grid variant)", () => {
     pages(1);
     rtlRender(
       <MemoryRouter>
-        <RequestToAddSection variant="grid" query="dune" libraryHadHits />
+        <PagedGrid query="dune" libraryHadHits />
       </MemoryRouter>,
     );
 
