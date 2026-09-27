@@ -94,8 +94,11 @@ export function RequestToAddSection(props: RequestToAddSectionProps) {
 
   const limit = variant === "dialog" ? REQUEST_DIALOG_SUGGESTION_LIMIT : GRID_LIMIT;
   const visible = requestSuggestions(search.data?.results, limit);
-  // A later page can hold only library titles; it keeps its pager.
-  if (visible.length === 0 && page === 1) return null;
+  const totalPages = tmdbPageCount(search.data?.total_pages);
+  // Any page can hold only library titles. The grid keeps such a page while
+  // TMDB has others, so its pager can reach them; the dialog has no pager.
+  const hasOtherPages = variant === "grid" && totalPages > 1;
+  if (visible.length === 0 && page === 1 && !hasOtherPages) return null;
 
   if (props.variant === "dialog") {
     return (
@@ -114,7 +117,7 @@ export function RequestToAddSection(props: RequestToAddSectionProps) {
       libraryHadHits={libraryHadHits}
       libraryResultsKnown={libraryResultsKnown}
       page={page}
-      totalPages={tmdbPageCount(search.data?.total_pages)}
+      totalPages={totalPages}
       isChangingPage={search.isPlaceholderData}
       onPageChange={props.onPageChange}
       pageError={
