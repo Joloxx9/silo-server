@@ -376,19 +376,68 @@ func TestAdvancedSeedUsesOnlyServersThatStillFitDatabase(t *testing.T) {
 		}
 	}
 
-	t.Run("a media type Seerr routed stays with Seerr", func(t *testing.T) {
+	t.Run("Standard with Seerr for movies, add Radarr", func(t *testing.T) {
 		repo, pool := routingModeRepository(t)
 		seerr := routerInst("seerr")
-		seerr.Name, seerr.CapabilityID, seerr.PluginConfig = "seerr", "seerr", map[string]any{}
+		seerr.Name, seerr.CapabilityID, seerr.PluginConfig = "Seerr", "seerr", map[string]any{}
+		seerr.SupportedMediaTypes = []string{"movie"}
 		save(t, repo, seerr, true)
-		save(t, repo, arrServer("radarr", kindRadarr, nil), true)
-		if got, _ := repo.GetRoutingSettings(ctx); got.Mode != RoutingAdvanced {
-			t.Fatalf("mode = %q, want advanced with Seerr and Radarr both taking movies", got.Mode)
+		radarr := arrServer("radarr", kindRadarr, nil)
+		radarr.Name, radarr.SupportedMediaTypes = "Radarr", []string{"movie"}
+
+		// With no rule for movies, the first server by name (Radarr) would
+		// take the requests Seerr was getting: the save is refused.
+		radarr.APIKeyRef = ""
+		_, err := repo.SaveIntegrationWithDefaults(ctx, radarr, true)
+		var verr *ValidationError
+		if !errors.As(err, &verr) || !strings.Contains(verr.FormError, "Switch to Advanced routing and set Everything else for movies first") {
+			t.Fatalf("add Radarr beside Seerr under Standard: %v, want a validation error", err)
 		}
-		for mediaType, dest := range fallbacks(t, pool) {
-			if dest[0] == "seerr" || dest[1] == "seerr" {
-				t.Fatalf("Everything else for %s = %v, want Seerr left to route itself", mediaType, dest)
-			}
+		if got, _ := repo.GetRoutingSettings(ctx); got.Mode != RoutingStandard {
+			t.Fatalf("mode = %q, want Standard kept", got.Mode)
+		}
+		if _, err := repo.GetIntegration(ctx, "radarr"); err == nil {
+			t.Fatal("Radarr was saved")
+		}
+		if got := fallbacks(t, pool); len(got) != 0 {
+			t.Fatalf("Everything else = %v, want none", got)
+		}
+
+		// Following the message: Advanced, then Everything else to Seerr.
+		// Radarr can be added, and movies keep going to Seerr.
+		if _, err := repo.UpdateRoutingModeConditional(ctx, RoutingAdvanced, -1); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO request_routes (id, media_type, position, name, is_fallback, hd_integration_id)
+			VALUES ($1, 'movie', 1000, 'Everything else', true, 'seerr')`, FallbackRouteID(MediaTypeMovie)); err != nil {
+			t.Fatal(err)
+		}
+		save(t, repo, radarr, true)
+		if got := fallbacks(t, pool)["movie"]; got != [2]string{"seerr", ""} {
+			t.Fatalf("Everything else for movies = %v, want Seerr", got)
+		}
+	})
+
+	t.Run("Seerr keeps its media type when a save turns Advanced on for the other", func(t *testing.T) {
+		repo, pool := routingModeRepository(t)
+		seerr := routerInst("seerr")
+		seerr.Name, seerr.CapabilityID, seerr.PluginConfig = "Seerr", "seerr", map[string]any{}
+		seerr.SupportedMediaTypes = []string{"movie"}
+		save(t, repo, seerr, true)
+		for _, id := range []string{"sonarr-a", "sonarr-b"} {
+			sonarr := arrServer(id, kindSonarr, nil)
+			sonarr.SupportedMediaTypes = []string{"series"}
+			save(t, repo, sonarr, true)
+		}
+		if got, _ := repo.GetRoutingSettings(ctx); got.Mode != RoutingAdvanced {
+			t.Fatalf("mode = %q, want advanced with two Sonarrs", got.Mode)
+		}
+		got := fallbacks(t, pool)
+		if _, ok := got["movie"]; ok {
+			t.Fatalf("Everything else = %v, want movies left to Seerr", got)
+		}
+		if got["series"] != [2]string{"sonarr-a", ""} {
+			t.Fatalf("Everything else for series = %v, want the Sonarr Standard used", got["series"])
 		}
 	})
 

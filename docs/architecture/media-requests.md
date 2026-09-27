@@ -144,8 +144,11 @@ otherwise, and adding or enabling a server that breaks the rule turns Advanced
 on in the same transaction, with Everything else given the servers Standard was
 using where it has none, so requests keep going where they went. Only Radarr
 and Sonarr servers that still take the media type after the save are carried
-over; a media type another plugin routed stays with it. Switching to Advanced
-by hand does the same. Nothing switches back to Standard on its own. Every
+over; a media type another plugin routed stays with it. When that media type
+has no rule and another plugin installation would now also take it, the save
+is refused: with no rule, the first connection by name would get its requests.
+The admin switches to Advanced and sets Everything else first. Switching to
+Advanced by hand carries servers over the same way. Nothing switches back to Standard on its own. Every
 server write and mode switch takes one advisory lock first, so a server added
 while Standard is being turned on cannot leave Standard on with two servers of
 a kind; Standard read with two servers anyway routes with the rules. Under
