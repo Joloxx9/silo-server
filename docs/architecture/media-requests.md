@@ -71,7 +71,9 @@ access as requesting: requests enabled, the account allowed to request and not
 blocked by its request limit, and the title within the profile's rating
 ceiling. It is refused for a title with no open request (request it instead)
 and for one already in the library; the insert itself checks for the open
-request, so a follow cannot land just after the request completed.
+request and holds a share lock on its row until the follow commits, so a
+follow cannot land just after the request was declined, cancelled or
+completed, and miss that transition's follow cleanup.
 
 A follow belongs to the title and the profile (`media_request_follows`, keyed
 by account and profile id, since profile ids repeat across accounts), not to
