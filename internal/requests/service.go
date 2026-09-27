@@ -2328,8 +2328,9 @@ func (s *Service) completeWaitingFromLibrary(ctx context.Context, limit int, res
 }
 
 // presentRequests reports which requests are fulfilled by the library, with
-// one presence lookup per media type: the title is in, or, for a season
-// request, every requested season is complete.
+// one presence lookup per media type and one season lookup for every season
+// request: the title is in, or, for a season request, every requested season
+// is complete.
 func (s *Service) presentRequests(ctx context.Context, reqs []*Request) (map[string]bool, error) {
 	byType := map[MediaType][]*Request{}
 	for _, req := range reqs {
@@ -2338,6 +2339,8 @@ func (s *Service) presentRequests(ctx context.Context, reqs []*Request) (map[str
 		}
 	}
 	out := make(map[string]bool, len(reqs))
+	// Season requests whose series is in the library, by series content ID.
+	seasonRequests := map[string][]*Request{}
 	for mediaType, group := range byType {
 		candidates := make([]PresenceCandidate, 0, len(group))
 		for _, req := range group {
@@ -2348,11 +2351,29 @@ func (s *Service) presentRequests(ctx context.Context, reqs []*Request) (map[str
 			return nil, err
 		}
 		for _, req := range group {
-			fulfilled, _, err := s.requestFulfilled(ctx, *req, matches[req.TMDBID])
-			if err != nil {
-				return nil, err
+			match := matches[req.TMDBID]
+			if req.MediaType != MediaTypeSeries || len(req.Seasons) == 0 {
+				out[req.ID] = match.Available
+				continue
 			}
-			out[req.ID] = fulfilled
+			out[req.ID] = false
+			if match.Available && match.ContentID != "" {
+				seasonRequests[match.ContentID] = append(seasonRequests[match.ContentID], req)
+			}
+		}
+	}
+	resolver, ok := s.presence.(SeasonPresenceResolver)
+	if !ok || len(seasonRequests) == 0 {
+		return out, nil
+	}
+	bySeries, err := resolver.SeasonAvailability(ctx, slices.Collect(maps.Keys(seasonRequests)))
+	if err != nil {
+		return nil, err
+	}
+	for series, group := range seasonRequests {
+		for _, req := range group {
+			progress := seasonProgress(req.Seasons, bySeries[series])
+			out[req.ID] = seasonsDelivered(progress, req.Status == StatusCompleted)
 		}
 	}
 	return out, nil
