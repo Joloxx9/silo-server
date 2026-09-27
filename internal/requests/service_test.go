@@ -1603,6 +1603,7 @@ type fakeStore struct {
 	notified      []string
 	reconciled    []string
 	follows       map[string]Follower // key: media_type/tmdb_id/user_id/profile_id
+	clearErr      error               // returned by ClearTitleFollowers when set
 
 	listIntegrationsCalls int
 	getSettingsCalls      int
@@ -2121,6 +2122,9 @@ func (f *fakeStore) ListTitleFollowers(_ context.Context, mediaType MediaType, t
 func (f *fakeStore) ClearTitleFollowers(_ context.Context, mediaType MediaType, tmdbID int, followers []Follower) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.clearErr != nil {
+		return f.clearErr
+	}
 	for _, follower := range followers {
 		delete(f.follows, followKey(mediaType, tmdbID, follower.UserID, follower.ProfileID))
 	}

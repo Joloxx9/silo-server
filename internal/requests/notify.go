@@ -121,16 +121,19 @@ func (s *Service) notifyFulfilledPending(ctx context.Context) {
 				"request_id", req.ID, "err", err)
 			continue
 		}
-		if err := s.store.MarkFulfilledNotified(ctx, req.ID); err != nil {
-			slog.WarnContext(ctx, "request fulfill-notify: mark failed", "component", "requests",
+		// The followers have been told. Only the listed rows are cleared:
+		// FollowTitle needs an open request, so none can have been added
+		// since this request completed. They are cleared before the request
+		// is stamped, so a failed clear leaves it unstamped and the next run
+		// retries it (the deliveries dedupe) instead of leaving follows
+		// behind for a later request of the title.
+		if err := s.store.ClearTitleFollowers(ctx, req.MediaType, req.TMDBID, followers); err != nil {
+			slog.WarnContext(ctx, "request fulfill-notify: clear followers failed", "component", "requests",
 				"request_id", req.ID, "err", err)
 			continue
 		}
-		// The followers have been told. Only the listed rows are cleared:
-		// FollowTitle needs an open request, so none can have been added
-		// since this request completed.
-		if err := s.store.ClearTitleFollowers(ctx, req.MediaType, req.TMDBID, followers); err != nil {
-			slog.WarnContext(ctx, "request fulfill-notify: clear followers failed", "component", "requests",
+		if err := s.store.MarkFulfilledNotified(ctx, req.ID); err != nil {
+			slog.WarnContext(ctx, "request fulfill-notify: mark failed", "component", "requests",
 				"request_id", req.ID, "err", err)
 		}
 	}

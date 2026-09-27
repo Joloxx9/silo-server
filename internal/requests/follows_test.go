@@ -226,6 +226,32 @@ func TestNotifyFulfilledKeepsFollowersWhenDispatchFails(t *testing.T) {
 	}
 }
 
+// A failed clear must leave the request unstamped, or its follows would
+// outlive it and fire for a later request of the title.
+func TestNotifyFulfilledRetriesWhenClearingFollowersFails(t *testing.T) {
+	store := newFakeStore()
+	store.requests["req1"] = completedRequestFixture("req1", 42)
+	store.unnotified = []string{"req1"}
+	store.seedFollow(MediaTypeMovie, 42, Viewer{UserID: 3, ProfileID: "follower-profile"})
+	store.clearErr = errors.New("clear failed")
+	svc := NewService(store, &fakeTMDBClient{}, presentMovie(42))
+	svc.SetFulfillmentNotifier(&fakeNotifier{})
+
+	svc.notifyFulfilledPending(context.Background())
+	if len(store.unnotified) != 1 {
+		t.Fatalf("unnotified after a failed clear = %v, want the request kept for a retry", store.unnotified)
+	}
+
+	store.clearErr = nil
+	svc.notifyFulfilledPending(context.Background())
+	if len(store.unnotified) != 0 {
+		t.Fatalf("unnotified after the retry = %v, want none", store.unnotified)
+	}
+	if followers, _ := store.ListTitleFollowers(context.Background(), MediaTypeMovie, 42); len(followers) != 0 {
+		t.Fatalf("followers after the retry = %+v, want cleared", followers)
+	}
+}
+
 func TestFollowsDatabase(t *testing.T) {
 	repo, pool := lifecycleTestRepository(t)
 	ctx := t.Context()
