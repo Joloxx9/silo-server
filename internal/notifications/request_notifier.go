@@ -28,6 +28,9 @@ const (
 	DeliveryTypeRequestDeclined = "request.declined"
 )
 
+// followedTitleAvailable heads a request.fulfilled copy sent to a follower.
+const followedTitleAvailable = "A title you followed is now available"
+
 // RequestFlags is the decoded reason_flags shape for request.* deliveries.
 // Fulfilled rows carry only the identifiers (the catalog join renders their
 // display fields); approved/declined rows have no catalog item yet, so the
@@ -41,6 +44,10 @@ type RequestFlags struct {
 	PosterPath string `json:"poster_path,omitempty"`
 	// Reason is the admin's decline message, when one was given.
 	Reason string `json:"reason,omitempty"`
+	// Follower marks a request.fulfilled copy sent to a profile that followed
+	// the title rather than requested it, so the copy does not say "your
+	// request".
+	Follower bool `json:"follower,omitempty"`
 }
 
 // parseRequestFlags decodes a request.* delivery's reason_flags; other types
@@ -61,63 +68,109 @@ func isRequestLifecycleType(deliveryType string) bool {
 }
 
 // RequestFulfillmentNotifier adapts the notification system to
-// requests.FulfillmentNotifier: it gates on the profile's master toggle and
-// dispatches one durable request.fulfilled delivery across all channels.
+// requests.FulfillmentNotifier: it gates on each profile's master toggle and
+// dispatches one durable request.fulfilled delivery per recipient across all
+// channels.
 type RequestFulfillmentNotifier struct {
-	system *System
+	backend fulfillmentBackend
+}
+
+// fulfillmentBackend is the slice of System the fulfillment adapter uses; the
+// unexported methods keep *System its only production implementation.
+type fulfillmentBackend interface {
+	PostServerChannelRequestEvent(ctx context.Context, event string, info RequestEventInfo)
+	notificationsEnabled(ctx context.Context, profileID string) (bool, error)
+	dispatchFulfilled(ctx context.Context, delivery Delivery) error
+}
+
+func (s *System) notificationsEnabled(ctx context.Context, profileID string) (bool, error) {
+	prefs, err := s.Preferences.Get(ctx, profileID)
+	if err != nil {
+		return false, err
+	}
+	return prefs.Enabled, nil
+}
+
+func (s *System) dispatchFulfilled(ctx context.Context, delivery Delivery) error {
+	_, err := s.DispatchOperational(ctx, delivery, OperationalDispatch{
+		WebhookFilter: func(hook Webhook) bool { return hook.NotifyRequests },
+	})
+	return err
 }
 
 // NewRequestFulfillmentNotifier creates the adapter.
 func NewRequestFulfillmentNotifier(system *System) *RequestFulfillmentNotifier {
-	return &RequestFulfillmentNotifier{system: system}
+	if system == nil {
+		return &RequestFulfillmentNotifier{}
+	}
+	return &RequestFulfillmentNotifier{backend: system}
 }
 
 // NotifyFulfilled implements requests.FulfillmentNotifier. contentID is the
 // matched catalog item: deliveryRowSelect joins media_items on series_id, so
 // that one field renders the title, poster, and deep link for movies and
-// series alike. Returning nil without dispatching (master toggle off, missing
-// attribution) still counts as handled — the caller stamps the request either
-// way.
+// series alike. It tells the requester, then every follower, and returns the
+// first dispatch error so the caller retries the whole request later; a
+// recipient already told is deduped by the (profile, request) unique index.
+// Skipping a recipient (master toggle off, missing attribution) still counts
+// as handled.
 func (n *RequestFulfillmentNotifier) NotifyFulfilled(ctx context.Context, req requests.Request, contentID string) error {
-	if n == nil || n.system == nil {
+	if n == nil || n.backend == nil {
 		return nil
 	}
-	// Server-channel broadcast first: it is community-facing and must not be
-	// gated by the requester's personal preferences or attribution. Detached
-	// and best-effort — a failure here must never block the
-	// fulfilled_notified_at stamp, or the per-profile path would re-fire.
-	n.system.PostServerChannelRequestEvent(ctx, ServerChannelEventRequestFulfilled, requestEventInfoFor(req))
-
-	if req.RequestedByProfileID == "" || req.RequestedByUserID <= 0 {
-		return nil // legacy rows without attribution have no recipient
+	base := RequestFlags{RequestID: req.ID, TMDBID: req.TMDBID, MediaType: string(req.MediaType)}
+	// Legacy rows without attribution have no requester recipient.
+	// Profile ids repeat across accounts, so recipients are keyed by both.
+	told := map[requests.Follower]bool{}
+	if req.RequestedByProfileID != "" && req.RequestedByUserID > 0 {
+		requester := requests.Follower{UserID: req.RequestedByUserID, ProfileID: req.RequestedByProfileID}
+		told[requester] = true
+		if err := n.notifyFulfilledProfile(ctx, requester, contentID, base); err != nil {
+			return err
+		}
 	}
-	prefs, err := n.system.Preferences.Get(ctx, req.RequestedByProfileID)
+	follower := base
+	follower.Follower = true
+	for _, recipient := range req.Followers {
+		if told[recipient] {
+			continue
+		}
+		told[recipient] = true
+		if err := n.notifyFulfilledProfile(ctx, recipient, contentID, follower); err != nil {
+			return err
+		}
+	}
+	// The server-channel post goes last, and only once every recipient was
+	// dispatched: a failure above makes the caller retry the request, and
+	// posting first would repeat the community announcement on every retry.
+	// It is not gated by anyone's personal preferences, and it is detached
+	// and best-effort.
+	n.backend.PostServerChannelRequestEvent(ctx, ServerChannelEventRequestFulfilled, requestEventInfoFor(req))
+	return nil
+}
+
+// notifyFulfilledProfile posts one request.fulfilled delivery to a profile
+// whose notifications are on.
+func (n *RequestFulfillmentNotifier) notifyFulfilledProfile(ctx context.Context, recipient requests.Follower, contentID string, flags RequestFlags) error {
+	enabled, err := n.backend.notificationsEnabled(ctx, recipient.ProfileID)
 	if err != nil {
 		return err
 	}
-	if !prefs.Enabled {
+	if !enabled {
 		return nil
 	}
-	flags, err := json.Marshal(RequestFlags{
-		RequestID: req.ID,
-		TMDBID:    req.TMDBID,
-		MediaType: string(req.MediaType),
-	})
+	raw, err := json.Marshal(flags)
 	if err != nil {
 		return fmt.Errorf("marshal request fulfilled flags: %w", err)
 	}
-	delivery := Delivery{
+	return n.backend.dispatchFulfilled(ctx, Delivery{
 		ID:          ulid.Make().String(),
-		UserID:      req.RequestedByUserID,
-		ProfileID:   req.RequestedByProfileID,
+		UserID:      recipient.UserID,
+		ProfileID:   recipient.ProfileID,
 		SeriesID:    &contentID,
 		Type:        DeliveryTypeRequestFulfilled,
-		ReasonFlags: flags,
-	}
-	_, err = n.system.DispatchOperational(ctx, delivery, OperationalDispatch{
-		WebhookFilter: func(hook Webhook) bool { return hook.NotifyRequests },
+		ReasonFlags: raw,
 	})
-	return err
 }
 
 // requestLifecycleDispatchTimeout bounds one detached lifecycle dispatch.
@@ -226,7 +279,7 @@ func (s *System) dispatchRequestLifecycle(ctx context.Context, req requests.Requ
 		MediaType:  string(req.MediaType),
 		Title:      req.Title,
 		PosterPath: req.PosterPath,
-		Reason:     req.DeclineReason,
+		Reason:     req.OutcomeReason,
 	}
 	if req.Year != nil {
 		flags.Year = *req.Year

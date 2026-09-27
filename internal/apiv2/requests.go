@@ -23,9 +23,13 @@ import (
 // acting viewer.
 type RequestMediaState struct {
 	Status      string `json:"status,omitempty" doc:"Status of the active request, when one exists" example:"pending"`
+	State       string `json:"state,omitempty" doc:"User-facing state of the active request, when one exists: pending, approved or processing" example:"pending"`
 	Requestable bool   `json:"requestable" doc:"Whether the viewer may request this media now" example:"true"`
 	Reason      string `json:"reason,omitempty" doc:"Why the media is not requestable" example:"already_requested"`
 	RequestID   ID     `json:"request_id,omitempty" doc:"The active request, when one exists" example:"1834729"`
+	Following   bool   `json:"following" doc:"Whether the viewer will be notified when the media becomes available: they requested it or follow it" example:"false"`
+	// RequestedByViewer tells a client whether to offer a follow toggle.
+	RequestedByViewer bool `json:"requested_by_viewer" doc:"Whether the viewing profile made the active request, so there is nothing to follow" example:"false"`
 }
 
 // RequestMediaResult is one discovery or search card.
@@ -176,7 +180,9 @@ type MediaRequest struct {
 	PosterPath           string          `json:"poster_path,omitempty" doc:"TMDB image path"`
 	BackdropPath         string          `json:"backdrop_path,omitempty" doc:"TMDB image path"`
 	Status               string          `json:"status" doc:"pending, approved, queued, downloading, completed" example:"pending"`
-	Outcome              string          `json:"outcome" doc:"active, declined, cancelled, failed" example:"active"` //nolint:misspell // the store's spelling
+	Outcome              string          `json:"outcome" doc:"active, declined, cancelled, failed" example:"active"`                                                                                   //nolint:misspell // the store's spelling
+	State                string          `json:"state" doc:"The one state to show a user: pending, approved, processing, available (in the library), declined, cancelled or failed" example:"pending"` //nolint:misspell // the store's spelling
+	OutcomeReason        string          `json:"outcome_reason,omitempty" doc:"Why the request was declined or withdrawn, when a reason was given"`
 	RequestedByUserID    ID              `json:"requested_by_user_id,omitempty" example:"1"`
 	RequestedByProfileID ID              `json:"requested_by_profile_id,omitempty" example:"p-owner"`
 	IntegrationKind      string          `json:"integration_kind,omitempty" example:"radarr"`
@@ -321,6 +327,8 @@ const (
 	opBrowseDiscoverGenre   = "browseDiscoverGenre"
 	opBrowseDiscoverNetwork = "browseDiscoverNetwork"
 	opBrowseDiscoverStudio  = "browseDiscoverStudio"
+	opFollowRequestMedia    = "followRequestMedia"
+	opUnfollowRequestMedia  = "unfollowRequestMedia"
 )
 
 const requestsTag = "requests"
@@ -331,6 +339,7 @@ var requestOperationIDs = []string{
 	opCreateRequest, opListMyRequests, opGetRequest, opSearchRequestMedia, opGetRequestMediaDetail,
 	opListDiscoverSections, opGetDiscoverSection, opListDiscoverGenres, opListDiscoverNetworks, opListDiscoverStudios,
 	opBrowseDiscoverGenre, opBrowseDiscoverNetwork, opBrowseDiscoverStudio,
+	opFollowRequestMedia, opUnfollowRequestMedia,
 }
 
 func registerRequests(reg *Registry) {
@@ -410,6 +419,20 @@ func registerRequests(reg *Registry) {
 				return svc.BrowseStudio(ctx, viewer, in.Slug, in.Sort, in.Page)
 			})
 		})
+
+	// Following is keyed by title: the viewer follows a title someone else
+	// already requested, without learning whose request it is.
+	follow := humaOp(http.MethodPut, Prefix+"/requests/follows/{media_type}/{tmdb_id}", opFollowRequestMedia, requestsTag,
+		"Get notified when a title that already has an active request becomes available.")
+	// 409 when the title has no active request (request it instead) or is
+	// already in the library.
+	follow.Errors = []int{http.StatusNotFound, http.StatusConflict}
+	Register(reg, Operation{Operation: follow, Class: ClassProfileScoped, DemoRestricted: true, ServiceBacked: true, RetrySafety: RetrySafetyNaturalIdempotent}, reg.followRequestMedia)
+
+	unfollow := humaOp(http.MethodDelete, Prefix+"/requests/follows/{media_type}/{tmdb_id}", opUnfollowRequestMedia, requestsTag,
+		"Stop following a title.")
+	unfollow.DefaultStatus = http.StatusNoContent
+	Register(reg, Operation{Operation: unfollow, Class: ClassProfileScoped, DemoRestricted: true, ServiceBacked: true, RetrySafety: RetrySafetyNaturalIdempotent}, reg.unfollowRequestMedia)
 
 	get := humaOp(http.MethodGet, Prefix+"/requests/{id}", opGetRequest, requestsTag,
 		"Get one of the account's media requests.")
@@ -551,6 +574,34 @@ func (reg *Registry) getRequestMediaDetail(ctx context.Context, in *RequestMedia
 	return &RequestMediaDetailOutput{Body: requestMediaDetailOf(detail)}, nil
 }
 
+// RequestMediaStateOutput is the followRequestMedia response.
+type RequestMediaStateOutput struct {
+	Body RequestMediaState
+}
+
+func (reg *Registry) followRequestMedia(ctx context.Context, in *RequestMediaDetailInput) (*RequestMediaStateOutput, error) {
+	svc, viewer, p := reg.requestViewer(ctx)
+	if p != nil {
+		return nil, p
+	}
+	state, err := svc.Follow(ctx, viewer, mediarequests.MediaType(in.MediaType), in.TMDBID)
+	if err != nil {
+		return nil, requestProblem(err)
+	}
+	return &RequestMediaStateOutput{Body: requestMediaStateOf(state)}, nil
+}
+
+func (reg *Registry) unfollowRequestMedia(ctx context.Context, in *RequestMediaDetailInput) (*struct{}, error) {
+	svc, viewer, p := reg.requestViewer(ctx)
+	if p != nil {
+		return nil, p
+	}
+	if err := svc.Unfollow(ctx, viewer, mediarequests.MediaType(in.MediaType), in.TMDBID); err != nil {
+		return nil, requestProblem(err)
+	}
+	return nil, nil
+}
+
 // listDiscoverSections is v1 GET /requests/discover.
 func (reg *Registry) listDiscoverSections(ctx context.Context, _ *struct{}) (*DiscoverSectionCollectionOutput, error) {
 	svc, viewer, p := reg.requestViewer(ctx)
@@ -688,6 +739,8 @@ func requestProblem(err error) *Problem {
 		return NewProblem(TypeConflict, "The media is already available in the library.")
 	case errors.Is(err, mediarequests.ErrAlreadyRequested):
 		return NewProblem(TypeConflict, "The media already has an active request.")
+	case errors.Is(err, mediarequests.ErrNotRequested):
+		return NewProblem(TypeConflict, "The media has no active request to follow; request it instead.")
 	case errors.Is(err, mediarequests.ErrForbidden):
 		return NewProblem(TypePermissionDenied, "Request access denied.")
 	case errors.Is(err, mediarequests.ErrNotFound):
@@ -715,6 +768,8 @@ func mediaRequestOf(r *mediarequests.Request) MediaRequest {
 		BackdropPath:     r.BackdropPath,
 		Status:           string(r.Status),
 		Outcome:          string(r.Outcome),
+		State:            string(r.State()),
+		OutcomeReason:    r.OutcomeReason,
 		IntegrationKind:  r.IntegrationKind,
 		IsAnime:          r.IsAnime,
 		Targets:          make([]RequestTarget, 0, len(r.Targets)),
@@ -743,7 +798,7 @@ func mediaRequestOf(r *mediarequests.Request) MediaRequest {
 }
 
 func requestMediaStateOf(s mediarequests.RequestState) RequestMediaState {
-	return RequestMediaState{Status: string(s.Status), Requestable: s.Requestable, Reason: s.Reason, RequestID: ID(s.RequestID)}
+	return RequestMediaState{Status: string(s.Status), Requestable: s.Requestable, Reason: s.Reason, RequestID: ID(s.RequestID), Following: s.Following, RequestedByViewer: s.RequestedByViewer, State: string(s.State)}
 }
 
 func requestMediaResultsOf(results []mediarequests.MediaResult) []RequestMediaResult {

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { fireEvent, render as rtlRender, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -148,7 +149,8 @@ describe("RequestToAddSection (dialog variant)", () => {
     const markup = render(
       <RequestToAddSection variant="dialog" query="dune" libraryHadHits={false} />,
     );
-    expect(markup).toContain("Not in your library, but you can request");
+    expect(markup).toContain("Not in your library");
+    expect(markup).not.toContain("but you can request");
     expect(markup).not.toContain("Request to Add");
   });
 
@@ -280,9 +282,106 @@ describe("RequestToAddSection (dialog variant)", () => {
     const markup = render(<RequestToAddSection variant="dialog" query="dune" libraryHadHits />);
 
     expect(markup).toContain("Already Pending Movie");
-    expect(markup).toContain("Pending");
-    expect(markup).toContain('title="Pending"');
+    expect(markup).toContain('data-request-state="pending"');
+    expect(markup).toContain(">Pending<");
     expect(markup).not.toContain('title="Blocked"');
+  });
+
+  it("shows no action pill on a requestable row, since the row itself opens the title", () => {
+    mocks.useRequestSearch.mockReturnValue({
+      data: { page: 1, total_pages: 1, total_results: 1, results: [missingResult()] },
+      isLoading: false,
+      isError: false,
+    });
+
+    const markup = render(<RequestToAddSection variant="dialog" query="dune" libraryHadHits />);
+
+    expect(markup).toContain("Dune: Prophecy");
+    expect(markup).not.toContain(">Request<");
+    expect(markup).not.toContain("data-request-state");
+  });
+});
+
+describe("RequestToAddSection (dialog variant in a host combobox)", () => {
+  beforeEach(() => {
+    mocks.useCanRequest.mockReset();
+    mocks.useRequestSearch.mockReset();
+    mocks.useCanRequest.mockReturnValue({
+      discoveryEnabled: true,
+      isResolving: false,
+      submitDisabledReason: null,
+    });
+    mocks.useRequestSearch.mockReturnValue({
+      data: {
+        page: 1,
+        total_pages: 1,
+        total_results: 2,
+        results: [
+          missingResult({ tmdb_id: 1, title: "First" }),
+          missingResult({ tmdb_id: 2, title: "Second" }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+  });
+
+  function renderInHost(onPick = vi.fn(), selectedIndex = -1) {
+    rtlRender(
+      <MemoryRouter>
+        <RequestToAddSection
+          variant="dialog"
+          query="dune"
+          libraryHadHits
+          combobox={{
+            listboxId: "host-requests",
+            optionId: (index) => `host-option-${index + 3}`,
+            selectedIndex,
+            onPick,
+          }}
+        />
+      </MemoryRouter>,
+    );
+    return onPick;
+  }
+
+  it("exposes the rows as options under the host's ids and highlight", () => {
+    renderInHost(vi.fn(), 1);
+
+    expect(screen.getByRole("listbox", { name: "Request suggestions" })).toHaveAttribute(
+      "id",
+      "host-requests",
+    );
+    const options = screen.getAllByRole("option");
+    expect(options.map((option) => option.id)).toEqual(["host-option-3", "host-option-4"]);
+    expect(screen.getByRole("option", { selected: true })).toHaveTextContent("Second");
+  });
+
+  it("hands a plain click to the host instead of following the link", () => {
+    const onPick = renderInHost();
+
+    fireEvent.click(screen.getByRole("option", { name: /First/ }));
+
+    expect(onPick).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ tmdb_id: 1 }));
+  });
+
+  it("leaves modified clicks to the link so they can open a new tab", () => {
+    const onPick = renderInHost();
+    // jsdom cannot open the link; drop the default action after React has seen the click.
+    let followedLink = false;
+    document.addEventListener(
+      "click",
+      (event) => {
+        followedLink = !event.defaultPrevented;
+        event.preventDefault();
+      },
+      { once: true },
+    );
+
+    fireEvent.click(screen.getByRole("option", { name: /First/ }), { metaKey: true });
+
+    expect(onPick).not.toHaveBeenCalled();
+    expect(followedLink).toBe(true);
   });
 });
 

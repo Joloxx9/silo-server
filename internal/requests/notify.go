@@ -11,6 +11,8 @@ import (
 // the same request (delivery creation is idempotent); returning nil means the
 // request counts as handled and will not be retried.
 type FulfillmentNotifier interface {
+	// NotifyFulfilled tells the requester, and every profile in
+	// req.Followers, that the title is available.
 	NotifyFulfilled(ctx context.Context, req Request, contentID string) error
 }
 
@@ -107,8 +109,26 @@ func (s *Service) notifyFulfilledPending(ctx context.Context) {
 		if !match.Available {
 			continue // not in the catalog yet; retry next run
 		}
+		followers, err := s.store.ListTitleFollowers(ctx, req.MediaType, req.TMDBID)
+		if err != nil {
+			slog.WarnContext(ctx, "request fulfill-notify: list followers failed", "component", "requests",
+				"request_id", req.ID, "err", err)
+			continue
+		}
+		req.Followers = followers
 		if err := s.notifier.NotifyFulfilled(ctx, *req, match.ContentID); err != nil {
 			slog.WarnContext(ctx, "request fulfill-notify: dispatch failed", "component", "requests",
+				"request_id", req.ID, "err", err)
+			continue
+		}
+		// The followers have been told. Only the listed rows are cleared:
+		// FollowTitle needs an open request, so none can have been added
+		// since this request completed. They are cleared before the request
+		// is stamped, so a failed clear leaves it unstamped and the next run
+		// retries it (the deliveries dedupe) instead of leaving follows
+		// behind for a later request of the title.
+		if err := s.store.ClearTitleFollowers(ctx, req.MediaType, req.TMDBID, followers); err != nil {
+			slog.WarnContext(ctx, "request fulfill-notify: clear followers failed", "component", "requests",
 				"request_id", req.ID, "err", err)
 			continue
 		}

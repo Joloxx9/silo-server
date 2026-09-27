@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import RequestPosterCard from "./RequestPosterCard";
-import type { RequestMediaResult } from "@/api/types";
+import type { MediaRequest, RequestMediaResult } from "@/api/types";
 
 const requestable: RequestMediaResult = {
   media_type: "movie",
@@ -77,5 +77,114 @@ describe("RequestPosterCard (discover variant)", () => {
 
     expect(movieMarkup).toContain(">Movie<");
     expect(seriesMarkup).toContain(">Series<");
+  });
+
+  it("marks a title already in the library as Available", () => {
+    render(
+      <MemoryRouter>
+        <RequestPosterCard
+          variant="discover"
+          item={{
+            ...requestable,
+            availability: "available",
+            request: { requestable: false, reason: "already_available" },
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Available").closest("[data-request-state]")).toHaveAttribute(
+      "data-request-state",
+      "available",
+    );
+  });
+
+  it("names the reason when a title without a request cannot be requested", () => {
+    render(
+      <MemoryRouter>
+        <RequestPosterCard
+          variant="discover"
+          item={{ ...requestable, request: { requestable: false, reason: "quota_exceeded" } }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Request limit reached")).toBeInTheDocument();
+  });
+});
+
+describe("RequestPosterCard (mine variant)", () => {
+  const request: MediaRequest = {
+    id: "req-1",
+    provider: "silo",
+    media_type: "movie",
+    tmdb_id: 603,
+    title: "The Matrix",
+    status: "queued",
+    outcome: "active",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+
+  it.each<[Partial<MediaRequest>, string]>([
+    [{ status: "pending" }, "Pending"],
+    [{ status: "queued" }, "Processing"],
+    [{ status: "downloading" }, "Processing"],
+    [{ status: "completed" }, "Available"],
+    [{ status: "pending", outcome: "cancelled" }, "Cancelled"],
+    [{ status: "approved", outcome: "failed" }, "Failed"],
+    // The server's derived state wins: a downloaded title not yet scanned in
+    // is still processing.
+    [{ status: "completed", state: "processing" }, "Processing"],
+  ])("labels %o as %s", (overrides, label) => {
+    render(
+      <MemoryRouter>
+        <RequestPosterCard variant="mine" request={{ ...request, ...overrides }} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  it("shows why a request was declined", () => {
+    render(
+      <MemoryRouter>
+        <RequestPosterCard
+          variant="mine"
+          request={{
+            ...request,
+            status: "pending",
+            outcome: "declined",
+            outcome_reason: "Not this month",
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Declined")).toBeInTheDocument();
+    expect(screen.getByText("Not this month")).toBeInTheDocument();
+  });
+
+  it("shows Cancel request only when the page passes onCancel", () => {
+    const onCancel = vi.fn();
+    const { rerender } = render(
+      <MemoryRouter>
+        <RequestPosterCard variant="mine" request={{ ...request, status: "pending" }} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("button", { name: /Cancel request/ })).not.toBeInTheDocument();
+
+    rerender(
+      <MemoryRouter>
+        <RequestPosterCard
+          variant="mine"
+          request={{ ...request, status: "pending" }}
+          onCancel={onCancel}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel request for The Matrix" }));
+
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 });

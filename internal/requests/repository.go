@@ -208,23 +208,6 @@ func (r *Repository) ListActiveByTMDB(ctx context.Context, mediaType MediaType, 
 	return out, nil
 }
 
-func (r *Repository) DeleteFailedByTMDB(ctx context.Context, mediaType MediaType, tmdbID int) (int, error) {
-	if tmdbID <= 0 {
-		return 0, nil
-	}
-	tag, err := r.pool.Exec(ctx, `
-		DELETE FROM media_requests
-		WHERE media_type = $1
-		  AND provider = 'tmdb'
-		  AND tmdb_id = $2
-		  AND outcome = 'failed'
-	`, mediaType, tmdbID)
-	if err != nil {
-		return 0, fmt.Errorf("delete failed requests by tmdb: %w", err)
-	}
-	return int(tag.RowsAffected()), nil
-}
-
 // quotaLockNamespace partitions advisory locks so request-quota locks do not
 // collide with advisory locks held elsewhere in the database. The value is
 // arbitrary; what matters is that it is stable.
@@ -242,6 +225,23 @@ func (r *Repository) CreateRequest(ctx context.Context, input CreateRequestRecor
 			quotaLockNamespace, input.Quota.UserID); err != nil {
 			return nil, fmt.Errorf("acquire request quota lock: %w", err)
 		}
+	}
+	if input.ReplaceFailed {
+		// Only the requester's own rows: other accounts' failed requests for
+		// the title are their history, and deleting them would also refund
+		// their quota.
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM media_requests
+			WHERE requested_by_user_id = $1
+			  AND media_type = $2
+			  AND provider = 'tmdb'
+			  AND tmdb_id = $3
+			  AND outcome = 'failed'
+		`, input.Requester.UserID, input.Input.MediaType, input.Input.TMDBID); err != nil {
+			return nil, fmt.Errorf("replace failed requests: %w", err)
+		}
+	}
+	if input.Quota != nil {
 		var count int
 		if err := tx.QueryRow(ctx, `
 			SELECT COUNT(*)
@@ -362,7 +362,7 @@ func (r *Repository) ListReconciliationCandidates(ctx context.Context, limit int
 	rows, err := r.pool.Query(ctx, requestSelectSQL()+`
 		WHERE outcome = 'active'
 		  AND status IN ('approved', 'queued', 'downloading')
-		ORDER BY updated_at ASC
+		ORDER BY last_reconciled_at ASC NULLS FIRST, id
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -380,6 +380,42 @@ func (r *Repository) ListReconciliationCandidates(ctx context.Context, limit int
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate request reconciliation candidates: %w", err)
+	}
+	return out, nil
+}
+
+// ListLibraryWaitCandidates returns the requests that only the library can
+// complete: pending ones, and ones that failed in the last 30 days without
+// delivering anything. Older failures are left alone so an upgrade does not
+// suddenly complete, and notify, a backlog of stale requests.
+func (r *Repository) ListLibraryWaitCandidates(ctx context.Context, limit int) ([]*Request, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	rows, err := r.pool.Query(ctx, requestSelectSQL()+`
+		WHERE (outcome = 'active' AND status = 'pending')
+		   OR (outcome = 'failed'
+		       AND updated_at > now() - interval '30 days'
+		       AND NOT EXISTS (
+		         SELECT 1 FROM media_request_targets t
+		         WHERE t.request_id = media_requests.id AND t.status = 'completed'))
+		ORDER BY last_reconciled_at ASC NULLS FIRST, id
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list requests waiting for the library: %w", err)
+	}
+	defer rows.Close()
+	var out []*Request
+	for rows.Next() {
+		req, err := scanRequest(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, req)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate requests waiting for the library: %w", err)
 	}
 	return out, nil
 }
@@ -461,24 +497,64 @@ func (r *Repository) listRequests(ctx context.Context, sqlText string, args []an
 	return out, nil
 }
 
-func (r *Repository) SetStatus(ctx context.Context, id string, status Status, actor Viewer) (*Request, error) {
+// guardCondition restricts an UPDATE to rows a StateGuard accepts. $2 and $3
+// carry the guard's statuses and outcomes (an empty array accepts any value),
+// and $4 its UnsentOnly flag.
+const guardCondition = `(cardinality($2::text[]) = 0 OR status = ANY($2::text[]))
+		  AND (cardinality($3::text[]) = 0 OR outcome = ANY($3::text[]))
+		  AND (NOT $4::boolean OR status <> 'approved' OR (
+		    (submit_lease_until IS NULL OR submit_lease_until <= now())
+		    AND NOT EXISTS (SELECT 1 FROM media_request_targets t WHERE t.request_id = media_requests.id)))`
+
+func guardArgs(g StateGuard) ([]string, []string, bool) {
+	statuses := make([]string, 0, len(g.Statuses))
+	for _, s := range g.Statuses {
+		statuses = append(statuses, string(s))
+	}
+	outcomes := make([]string, 0, len(g.Outcomes))
+	for _, o := range g.Outcomes {
+		outcomes = append(outcomes, string(o))
+	}
+	return statuses, outcomes, g.UnsentOnly
+}
+
+// guardMiss explains a guarded UPDATE that matched no row: the request is
+// gone, or it has moved past the states the guard accepts.
+func guardMiss(ctx context.Context, exec requestExecutor, id string) error {
+	var exists bool
+	if err := exec.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM media_requests WHERE id = $1)`, id).Scan(&exists); err != nil {
+		return fmt.Errorf("check request existence: %w", err)
+	}
+	if !exists {
+		return ErrNotFound
+	}
+	return ErrInvalidState
+}
+
+func (r *Repository) SetStatus(ctx context.Context, id string, from StateGuard, status Status, actor Viewer) (*Request, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin request status transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
+	statuses, outcomes, unsent := guardArgs(from)
+	// A fresh approval starts a fresh submission budget.
 	req, err := scanRequest(tx.QueryRow(ctx, `
 		UPDATE media_requests
-		SET status = $2,
+		SET status = $5,
 		    updated_at = now(),
-		    approved_at = CASE WHEN $2 = 'approved' AND approved_at IS NULL THEN now() ELSE approved_at END,
-		    completed_at = CASE WHEN $2 = 'completed' AND completed_at IS NULL THEN now() ELSE completed_at END
+		    approved_at = CASE WHEN $5 = 'approved' AND approved_at IS NULL THEN now() ELSE approved_at END,
+		    completed_at = CASE WHEN $5 = 'completed' AND completed_at IS NULL THEN now() ELSE completed_at END,
+		    submit_attempts = CASE WHEN $5 = 'approved' THEN 0 ELSE submit_attempts END,
+		    submit_lease_until = CASE WHEN $5 = 'approved' THEN NULL ELSE submit_lease_until END,
+		    next_submit_at = CASE WHEN $5 = 'approved' THEN NULL ELSE next_submit_at END
 		WHERE id = $1
-		RETURNING `+requestColumns(), id, status))
+		  AND `+guardCondition+`
+		RETURNING `+requestColumns(), id, statuses, outcomes, unsent, status))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+			return nil, guardMiss(ctx, tx, id)
 		}
 		return nil, fmt.Errorf("set request status: %w", err)
 	}
@@ -491,35 +567,257 @@ func (r *Repository) SetStatus(ctx context.Context, id string, status Status, ac
 	return req, nil
 }
 
-func (r *Repository) SetOutcome(ctx context.Context, id string, outcome Outcome, actor Viewer, message string) (*Request, error) {
+func (r *Repository) SetOutcome(ctx context.Context, id string, from StateGuard, outcome Outcome, actor Viewer, message string) (*Request, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin request outcome transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
+	statuses, outcomes, unsent := guardArgs(from)
 	req, err := scanRequest(tx.QueryRow(ctx, `
 		UPDATE media_requests
-		SET outcome = $2,
+		SET outcome = $5,
 		    last_error = CASE
-		      WHEN $2 = 'failed' THEN $3
-		      WHEN $2 = 'active' THEN ''
+		      WHEN $5 = 'failed' THEN $6
+		      WHEN $5 = 'active' THEN ''
 		      ELSE last_error
+		    END,
+		    outcome_reason = CASE
+		      WHEN $5 IN ('declined', 'cancelled') THEN $6
+		      WHEN $5 = 'active' THEN ''
+		      ELSE outcome_reason
 		    END,
 		    updated_at = now()
 		WHERE id = $1
-		RETURNING `+requestColumns(), id, outcome, strings.TrimSpace(message)))
+		  AND `+guardCondition+`
+		RETURNING `+requestColumns(), id, statuses, outcomes, unsent, outcome, strings.TrimSpace(message)))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+			return nil, guardMiss(ctx, tx, id)
 		}
 		return nil, fmt.Errorf("set request outcome: %w", err)
+	}
+	// A declined or withdrawn title is no longer on its way, so its follows
+	// go in the same transaction. Once this commits, another request for the
+	// title can open and gather followers, and a cleanup run after the commit
+	// would remove theirs.
+	if outcome == OutcomeDeclined || outcome == OutcomeCancelled {
+		if err := forgetTitleFollows(ctx, tx, req); err != nil {
+			return nil, err
+		}
 	}
 	if err := r.recordEvent(ctx, tx, id, "outcome_"+string(outcome), actor, message); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit request outcome transaction: %w", err)
+	}
+	return req, nil
+}
+
+func (r *Repository) ReopenFailed(ctx context.Context, id string, actor Viewer) (*Request, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin request reopen transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	req, err := scanRequest(tx.QueryRow(ctx, `
+		UPDATE media_requests
+		SET outcome = 'active',
+		    status = 'approved',
+		    last_error = '',
+		    submit_attempts = 0,
+		    submit_lease_until = NULL,
+		    next_submit_at = NULL,
+		    approved_at = COALESCE(approved_at, now()),
+		    updated_at = now()
+		WHERE id = $1
+		  AND outcome = 'failed'
+		RETURNING `+requestColumns(), id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, guardMiss(ctx, tx, id)
+		}
+		// Another account requested the title after this one failed, and only
+		// one active request per title may exist.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrAlreadyRequested
+		}
+		return nil, fmt.Errorf("reopen failed request: %w", err)
+	}
+	if err := r.recordEvent(ctx, tx, id, "retried", actor, ""); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit request reopen transaction: %w", err)
+	}
+	return req, nil
+}
+
+func (r *Repository) ClaimSubmission(ctx context.Context, id string, lease time.Duration) (*Request, bool, error) {
+	req, err := scanRequest(r.pool.QueryRow(ctx, `
+		UPDATE media_requests
+		SET submit_attempts = submit_attempts + 1,
+		    submit_lease_until = now() + make_interval(secs => $2)
+		WHERE id = $1
+		  AND status = 'approved'
+		  AND outcome = 'active'
+		  AND (submit_lease_until IS NULL OR submit_lease_until <= now())
+		  AND (next_submit_at IS NULL OR next_submit_at <= now())
+		RETURNING `+requestColumns(), id, lease.Seconds()))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("claim request submission: %w", err)
+	}
+	return req, true, nil
+}
+
+func (r *Repository) DeferSubmission(ctx context.Context, id string, leaseUntil time.Time, delay time.Duration, message string) (*Request, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin request defer transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	message = strings.TrimSpace(message)
+	req, err := scanRequest(tx.QueryRow(ctx, `
+		UPDATE media_requests
+		SET next_submit_at = now() + make_interval(secs => $2),
+		    submit_lease_until = NULL,
+		    last_error = $3,
+		    updated_at = now()
+		WHERE id = $1
+		  AND status = 'approved'
+		  AND outcome = 'active'
+		  AND submit_lease_until = $4
+		RETURNING `+requestColumns(), id, delay.Seconds(), message, leaseUntil))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, guardMiss(ctx, tx, id)
+		}
+		return nil, fmt.Errorf("defer request submission: %w", err)
+	}
+	if err := r.recordEvent(ctx, tx, id, "submit_deferred", Viewer{}, message); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit request defer transaction: %w", err)
+	}
+	return req, nil
+}
+
+func (r *Repository) FailSubmission(ctx context.Context, id string, leaseUntil time.Time, actor Viewer, message string) (*Request, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin request fail transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	message = strings.TrimSpace(message)
+	req, err := scanRequest(tx.QueryRow(ctx, `
+		UPDATE media_requests
+		SET outcome = 'failed',
+		    last_error = $2,
+		    submit_lease_until = NULL,
+		    updated_at = now()
+		WHERE id = $1
+		  AND status = 'approved'
+		  AND outcome = 'active'
+		  AND submit_lease_until = $3
+		RETURNING `+requestColumns(), id, message, leaseUntil))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, guardMiss(ctx, tx, id)
+		}
+		return nil, fmt.Errorf("fail request submission: %w", err)
+	}
+	if err := r.recordEvent(ctx, tx, id, "outcome_"+string(OutcomeFailed), actor, message); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit request fail transaction: %w", err)
+	}
+	return req, nil
+}
+
+func (r *Repository) MarkAvailable(ctx context.Context, id string, actor Viewer) (*Request, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin request available transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	req, err := scanRequest(tx.QueryRow(ctx, `
+		UPDATE media_requests
+		SET status = 'completed',
+		    outcome = 'active',
+		    last_error = '',
+		    completed_at = COALESCE(completed_at, now()),
+		    updated_at = now()
+		WHERE id = $1
+		  AND (
+		    (outcome = 'active'
+		      AND status IN ('pending', 'approved', 'queued', 'downloading')
+		      AND (status <> 'approved' OR submit_lease_until IS NULL OR submit_lease_until <= now()))
+		    -- A failed request is complete only when the title came from
+		    -- elsewhere. One that failed after delivering some quality keeps
+		    -- its failure visible for an admin to retry.
+		    OR (outcome = 'failed' AND NOT EXISTS (
+		      SELECT 1 FROM media_request_targets t
+		      WHERE t.request_id = media_requests.id AND t.status = 'completed'))
+		  )
+		RETURNING `+requestColumns(), id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, guardMiss(ctx, tx, id)
+		}
+		return nil, fmt.Errorf("mark request available: %w", err)
+	}
+	if err := r.recordEvent(ctx, tx, id, "available_in_library", actor, ""); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit request available transaction: %w", err)
+	}
+	return req, nil
+}
+
+func (r *Repository) MarkReconciled(ctx context.Context, id string) error {
+	if _, err := r.pool.Exec(ctx, `UPDATE media_requests SET last_reconciled_at = now() WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("mark request reconciled: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) RecomputeStatus(ctx context.Context, id string, actor Viewer) (*Request, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin request recompute transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var status Status
+	var outcome Outcome
+	if err := tx.QueryRow(ctx, `SELECT status, outcome FROM media_requests WHERE id = $1 FOR UPDATE`, id).Scan(&status, &outcome); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("lock request for recompute: %w", err)
+	}
+	if status != StatusApproved || outcome != OutcomeActive {
+		return nil, ErrInvalidState
+	}
+	req, err := r.recomputeAggregate(ctx, tx, id, actor)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit request recompute transaction: %w", err)
 	}
 	return req, nil
 }
@@ -777,7 +1075,8 @@ func requestColumns() string {
 	return `id, provider, media_type, tmdb_id, tvdb_id, imdb_id, title, year,
 	        overview, poster_path, backdrop_path, status, outcome,
 	        requested_by_user_id, requested_by_profile_id, is_anime,
-	        last_error, created_at, updated_at, approved_at, completed_at`
+	        last_error, created_at, updated_at, approved_at, completed_at,
+	        submit_attempts, submit_lease_until, next_submit_at, outcome_reason`
 }
 
 type requestScanner interface {
@@ -787,7 +1086,7 @@ type requestScanner interface {
 func scanRequest(row requestScanner) (*Request, error) {
 	var req Request
 	var tvdbID, year sql.NullInt64
-	var approvedAt, completedAt sql.NullTime
+	var approvedAt, completedAt, submitLeaseUntil, nextSubmitAt sql.NullTime
 	if err := row.Scan(
 		&req.ID,
 		&req.Provider,
@@ -810,6 +1109,10 @@ func scanRequest(row requestScanner) (*Request, error) {
 		&req.UpdatedAt,
 		&approvedAt,
 		&completedAt,
+		&req.SubmitAttempts,
+		&submitLeaseUntil,
+		&nextSubmitAt,
+		&req.OutcomeReason,
 	); err != nil {
 		return nil, err
 	}
@@ -826,6 +1129,12 @@ func scanRequest(row requestScanner) (*Request, error) {
 	}
 	if completedAt.Valid {
 		req.CompletedAt = &completedAt.Time
+	}
+	if submitLeaseUntil.Valid {
+		req.SubmitLeaseUntil = &submitLeaseUntil.Time
+	}
+	if nextSubmitAt.Valid {
+		req.NextSubmitAt = &nextSubmitAt.Time
 	}
 	return &req, nil
 }

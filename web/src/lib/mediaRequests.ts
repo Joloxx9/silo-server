@@ -5,6 +5,7 @@ import type {
   MediaRequestStatus,
   RequestMediaResult,
   RequestMediaType,
+  RequestUserState,
 } from "@/api/types";
 import { formatDate } from "@/lib/datetime";
 
@@ -85,6 +86,79 @@ export function requestOutcomeBadgeVariant(outcome?: MediaRequestOutcome): Badge
     default:
       return "outline";
   }
+}
+
+/**
+ * The request states the user-facing request pages show. Admin views keep the
+ * raw status and outcome. The server derives this state (v2 `state`), and its
+ * value wins; the fallback for older servers collapses status and outcome the
+ * same way: queued and downloading read as Processing, completed as
+ * Available, and a closed outcome wins over the status it closed at.
+ */
+export type RequestDisplayState = RequestUserState;
+
+export function requestDisplayState(
+  status?: MediaRequestStatus,
+  outcome?: MediaRequestOutcome,
+  state?: RequestUserState,
+): RequestDisplayState | undefined {
+  if (state) return state;
+  if (outcome === "declined" || outcome === "cancelled" || outcome === "failed") return outcome;
+  switch (status) {
+    case "pending":
+    case "approved":
+      return status;
+    case "queued":
+    case "downloading":
+      return "processing";
+    case "completed":
+      return "available";
+    default:
+      return undefined;
+  }
+}
+
+export function formatRequestDisplayState(state: RequestDisplayState): string {
+  switch (state) {
+    case "pending":
+    case "approved":
+      return formatRequestStatus(state);
+    case "processing":
+      return "Processing";
+    case "available":
+      return "Available";
+    default:
+      return formatRequestOutcome(state);
+  }
+}
+
+/**
+ * Mirrors the server's rule for owner cancellation: a request can be withdrawn
+ * until something has been sent for it, so while it is pending, or approved
+ * with no target yet. (The server also refuses the moment a send is in flight.)
+ * Callers must already know the viewer owns the request.
+ */
+export function canCancelOwnRequest(
+  request: Pick<MediaRequest, "status" | "outcome" | "targets">,
+): boolean {
+  if (request.outcome !== "active") return false;
+  if (request.status === "pending") return true;
+  return request.status === "approved" && (request.targets?.length ?? 0) === 0;
+}
+
+export function requestDetailHref(mediaType: RequestMediaType, tmdbID: number): string {
+  return `/requests/${mediaType}/${tmdbID}`;
+}
+
+/** Request suggestions the ⌘K dialog lists below the library results. */
+export const REQUEST_DIALOG_SUGGESTION_LIMIT = 4;
+
+/** Search results worth suggesting as requests: titles not already in the library. */
+export function requestSuggestions(
+  results: RequestMediaResult[] | undefined,
+  limit: number,
+): RequestMediaResult[] {
+  return (results ?? []).filter((item) => item.availability !== "available").slice(0, limit);
 }
 
 export function formatRequestReason(reason?: string): string {

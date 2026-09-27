@@ -229,6 +229,55 @@ describe("request administration conflict handling", () => {
     expect(screen.queryByText("Connection name is rejected")).toBeNull();
     expect(name.getAttribute("aria-invalid")).toBe("false");
   });
+  it("offers Decline only for requests nothing has been sent for", async () => {
+    const request = (id: string, title: string, status: string, targets: unknown[] = []) => ({
+      id,
+      provider: "tmdb",
+      media_type: "movie",
+      tmdb_id: Number(id.replace(/\D/g, "")),
+      title,
+      status,
+      outcome: "active",
+      requested_by_user_id: "1",
+      is_anime: false,
+      targets,
+      created_at: "2026-09-01T00:00:00Z",
+      updated_at: "2026-09-01T00:00:00Z",
+    });
+    vi.mocked(v2).mockImplementation((operation, options) => {
+      if (operation === "GET /api/v2/admin/requests/capabilities")
+        return reply(options, { available: true, guarded_configuration: true });
+      if (operation === "GET /api/v2/admin/requests")
+        return reply(options, {
+          items: [
+            request("r1", "Waiting Title", "pending"),
+            request("r2", "Approved Title", "approved"),
+            request("r3", "Sent Title", "queued", [
+              {
+                id: "1",
+                request_id: "r3",
+                quality: "1080p",
+                is_anime: false,
+                status: "queued",
+                created_at: "2026-09-01T00:00:00Z",
+                updated_at: "2026-09-01T00:00:00Z",
+              },
+            ]),
+          ],
+          page: { has_more: false },
+        });
+      throw new Error(operation);
+    });
+    mount("queue");
+    const declineFor = async (title: string) => {
+      const row = (await screen.findByText(title)).closest("tr") as HTMLElement;
+      return within(row).getByRole("button", { name: "Decline" }) as HTMLButtonElement;
+    };
+    expect((await declineFor("Waiting Title")).disabled).toBe(false);
+    expect((await declineFor("Approved Title")).disabled).toBe(false);
+    expect((await declineFor("Sent Title")).disabled).toBe(true);
+  });
+
   it("keeps user override edits and validator until explicit reload after a stale response", async () => {
     let reads = 0;
     vi.mocked(v2).mockImplementation((operation, options) => {

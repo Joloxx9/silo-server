@@ -1812,6 +1812,15 @@ export type RequestSearchMediaType = RequestMediaType | "all";
 export type MediaRequestStatus = "pending" | "approved" | "queued" | "downloading" | "completed";
 export type MediaRequestOutcome = "active" | "declined" | "cancelled" | "failed";
 export type RequestAvailability = "missing" | "available";
+/** The one request state the server derives for users (v2 `state`). */
+export type RequestUserState =
+  | "pending"
+  | "approved"
+  | "processing"
+  | "available"
+  | "declined"
+  | "cancelled"
+  | "failed";
 export type RequestLimitMode = "inherit" | "custom" | "unlimited" | "blocked";
 export type RequestApprovalMode = "inherit" | "manual" | "auto" | "blocked";
 
@@ -1820,6 +1829,12 @@ export interface RequestState {
   requestable: boolean;
   reason?: string;
   request_id?: string;
+  /** The viewer is notified when the title becomes available: they requested or follow it. */
+  following?: boolean;
+  /** The viewing profile made the active request, so there is nothing to follow. */
+  requested_by_viewer?: boolean;
+  /** User-facing state of the active request. */
+  state?: RequestUserState;
 }
 
 export interface RequestMediaResult {
@@ -1974,6 +1989,10 @@ export interface MediaRequest {
   backdrop_path?: string;
   status: MediaRequestStatus;
   outcome: MediaRequestOutcome;
+  /** The one state to show users; derived by the server from status, outcome and library presence. */
+  state?: RequestUserState;
+  /** Why the request was declined or cancelled, when a reason was given. */
+  outcome_reason?: string;
   requested_by_user_id?: number;
   requested_by_profile_id?: string;
   is_anime?: boolean;
@@ -2811,6 +2830,8 @@ export interface NotificationReasonFlags {
   title?: string;
   year?: number;
   reason?: string;
+  /** request.fulfilled sent to a profile that followed the title, not requested it. */
+  follower?: boolean;
 }
 
 export interface AppNotification {

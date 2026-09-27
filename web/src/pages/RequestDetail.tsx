@@ -1,28 +1,42 @@
+import { useState } from "react";
 import { useParams } from "react-router";
-import { Check, Clock, Library, Loader2, Plus, Star } from "lucide-react";
+import { Bell, BellOff, Library, Loader2, Plus, Star } from "lucide-react";
 import CastCarousel from "@/components/CastCarousel";
+import { CancelRequestDialog } from "@/components/CancelRequestDialog";
 import MediaCarousel from "@/components/MediaCarousel";
 import PageBack from "@/components/PageBack";
 import RequestPosterCard from "@/components/RequestPosterCard";
+import { RequestReasonBadge, RequestStatusBadge } from "@/components/RequestStatusBadge";
 import DetailHero from "@/pages/ItemDetail/DetailHero";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
   CastMember,
+  MediaRequest,
   RequestMediaCastMember,
   RequestMediaDetail,
   RequestMediaResult,
 } from "@/api/types";
-import { useCreateMediaRequest, useRequestMediaDetail } from "@/hooks/queries/useRequests";
-import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { cn } from "@/lib/utils";
 import {
-  formatRequestReason,
-  formatRequestStatus,
+  useCancelMediaRequest,
+  useCreateMediaRequest,
+  useToggleRequestFollow,
+  useMyMediaRequests,
+  useRequestMediaDetail,
+} from "@/hooks/queries/useRequests";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { formatRuntimeMinutes } from "@/lib/mediaFormat";
+import {
+  canCancelOwnRequest,
+  requestDisplayState,
   requestInputFromMediaResult,
   tmdbImageURL,
 } from "@/lib/mediaRequests";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
+
+// A status label in the hero's action row. Kept badge-sized so it does not
+// read as one of the buttons beside it.
+const HERO_BADGE_CLASS = "h-8 px-3 text-sm font-semibold";
 
 export default function RequestDetail() {
   const params = useParams<{ mediaType: string; tmdbId: string }>();
@@ -127,7 +141,7 @@ function MetaPills({ item }: { item: RequestMediaDetail }) {
   const pills: string[] = [];
   if (item.year) pills.push(String(item.year));
   if (item.content_rating) pills.push(item.content_rating);
-  if (item.media_type === "movie" && item.runtime) pills.push(formatDuration(item.runtime));
+  if (item.media_type === "movie" && item.runtime) pills.push(formatRuntimeMinutes(item.runtime));
   if (item.media_type === "series" && item.number_of_seasons)
     pills.push(`${item.number_of_seasons} Season${item.number_of_seasons === 1 ? "" : "s"}`);
   if (item.media_type === "series" && item.status) pills.push(item.status);
@@ -202,10 +216,22 @@ function RequestActions({
   onRequest: () => void;
 }) {
   const requestable = item.request.requestable;
-  const statusLabel = item.request.status ? formatRequestStatus(item.request.status) : null;
-  const reasonLabel =
-    !requestable && !item.request.status ? formatRequestReason(item.request.reason) : null;
+  const state = item.request.status
+    ? requestDisplayState(item.request.status, undefined, item.request.state)
+    : undefined;
   const availableInLibrary = item.availability === "available" && !item.request.status;
+  const ownRequest = useOwnCancellableRequest(item);
+  const cancelRequest = useCancelMediaRequest();
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const toggleFollow = useToggleRequestFollow();
+  // Someone else's open request: the viewer can ask to hear when it lands
+  // instead of requesting the title again.
+  const canFollow =
+    state !== undefined &&
+    state !== "available" &&
+    item.request.reason === "already_requested" &&
+    !item.request.requested_by_viewer;
+  const following = item.request.following === true;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -229,11 +255,7 @@ function RequestActions({
         </Button>
       ) : availableInLibrary ? (
         <>
-          <StatusBlock
-            tone="emerald"
-            icon={<Check className="h-4 w-4 stroke-[2.5]" />}
-            label="Already in your library"
-          />
+          <RequestStatusBadge state="available" className={HERO_BADGE_CLASS} />
           {item.library_content_id ? (
             <Button
               asChild
@@ -247,18 +269,49 @@ function RequestActions({
             </Button>
           ) : null}
         </>
-      ) : statusLabel ? (
-        <StatusBlock
-          tone={statusToneForStatus(item.request.status!)}
-          icon={<Clock className="h-4 w-4" />}
-          label={statusLabel}
-        />
+      ) : state ? (
+        <>
+          <RequestStatusBadge state={state} className={HERO_BADGE_CLASS} />
+          {ownRequest ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setConfirmCancel(true)}
+                disabled={cancelRequest.isPending}
+                className="border-border/60 h-11 rounded-full px-5 text-sm font-semibold"
+              >
+                Cancel request
+              </Button>
+              <CancelRequestDialog
+                title={item.title}
+                open={confirmCancel}
+                onOpenChange={setConfirmCancel}
+                onConfirm={() => cancelRequest.mutate(ownRequest.id)}
+                isPending={cancelRequest.isPending}
+              />
+            </>
+          ) : null}
+          {canFollow ? (
+            <Button
+              variant="outline"
+              onClick={() =>
+                toggleFollow.mutate({
+                  mediaType: item.media_type,
+                  tmdbID: item.tmdb_id,
+                  follow: !following,
+                })
+              }
+              disabled={toggleFollow.isPending}
+              aria-pressed={following}
+              className="border-border/60 h-11 rounded-full px-5 text-sm font-semibold"
+            >
+              {following ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+              {following ? "Stop notifying me" : "Notify me when available"}
+            </Button>
+          ) : null}
+        </>
       ) : (
-        <StatusBlock
-          tone="zinc"
-          icon={<Clock className="h-4 w-4" />}
-          label={reasonLabel ?? "Unavailable"}
-        />
+        <RequestReasonBadge reason={item.request.reason} className={HERO_BADGE_CLASS} />
       )}
 
       {item.imdb_id ? (
@@ -283,48 +336,23 @@ function RequestActions({
   );
 }
 
-const STATUS_TONES: Record<"amber" | "sky" | "emerald" | "zinc", string> = {
-  amber: "bg-amber-500/15 text-amber-100 ring-amber-400/40",
-  sky: "bg-sky-500/15 text-sky-100 ring-sky-400/40",
-  emerald: "bg-emerald-500/15 text-emerald-100 ring-emerald-400/40",
-  zinc: "bg-zinc-700/60 text-zinc-200 ring-zinc-500/40",
-};
-
-function StatusBlock({
-  tone,
-  icon,
-  label,
-}: {
-  tone: "amber" | "sky" | "emerald" | "zinc";
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <span
-      className={cn(
-        "inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold ring-1",
-        STATUS_TONES[tone],
-      )}
-    >
-      {icon}
-      {label}
-    </span>
+/**
+ * The viewer's own request for this title, while they can still cancel it. The
+ * detail payload says a title has a request but not whose it is, so look for
+ * it among the account's own active requests.
+ */
+function useOwnCancellableRequest(item: RequestMediaDetail): MediaRequest | undefined {
+  const mayCancel = item.request.status === "pending" || item.request.status === "approved";
+  const mine = useMyMediaRequests({ outcome: "active" }, { enabled: mayCancel });
+  if (!mayCancel) return undefined;
+  const requestID = item.request.request_id;
+  return mine.data?.find(
+    (request) =>
+      (requestID
+        ? request.id === requestID
+        : request.media_type === item.media_type && request.tmdb_id === item.tmdb_id) &&
+      canCancelOwnRequest(request),
   );
-}
-
-function statusToneForStatus(status: string): "amber" | "sky" | "emerald" | "zinc" {
-  switch (status) {
-    case "pending":
-      return "amber";
-    case "approved":
-    case "completed":
-      return "emerald";
-    case "queued":
-    case "downloading":
-      return "sky";
-    default:
-      return "zinc";
-  }
 }
 
 function RecommendationsRow({
@@ -361,14 +389,6 @@ function pickStudioLabel(item: RequestMediaDetail): string | undefined {
     return item.production_companies[0];
   }
   return undefined;
-}
-
-function formatDuration(minutes: number): string {
-  if (minutes <= 0) return "";
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h <= 0) return `${m}m`;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
 function formatVoteCount(count: number): string {

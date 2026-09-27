@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -195,7 +196,9 @@ func TestCreateRequestActiveDuplicateBlocks(t *testing.T) {
 	}
 }
 
-func TestCreateRequestAutoApprovalRequiresConfiguredIntegration(t *testing.T) {
+// Auto-approval does not wait for a router: on a server without Sonarr/Radarr
+// the approved request waits for the title to reach the library (AC3, AC4).
+func TestCreateRequestAutoApprovesWithoutRouter(t *testing.T) {
 	store := newFakeStore()
 	store.settings.RequestsEnabled = true
 	store.settings.GlobalAutoApprovalEnabled = true
@@ -209,19 +212,15 @@ func TestCreateRequestAutoApprovalRequiresConfiguredIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRequest returned error: %v", err)
 	}
-	if req.Status != StatusPending {
-		t.Fatalf("status = %q, want pending", req.Status)
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive || req.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting for the library", req)
 	}
 }
 
-// TestCreateRequestAutoApprovalEmptyKeyTreatedAsUnconfigured guards that a router
-// connection that is enabled + bound but has no api key (empty after the repo's
-// decrypt) reads as "not configured": auto-approval is declined and the request
-// stays pending, rather than being auto-approved and then failing submission when
-// resolveRouterConnections skips the keyless connection. This pins the empty-key
-// check in integrationConfigured against the skip in resolveRouterConnections so
-// the two can't drift at the public CreateRequest surface.
-func TestCreateRequestAutoApprovalEmptyKeyTreatedAsUnconfigured(t *testing.T) {
+// A keyless connection is a setup problem: the auto-approved request keeps its
+// approval and records why it could not be sent, instead of failing, so it goes
+// through once an admin adds the key.
+func TestCreateRequestAutoApprovalDefersOnKeylessConnection(t *testing.T) {
 	store := newFakeStore()
 	store.settings.RequestsEnabled = true
 	store.settings.GlobalAutoApprovalEnabled = true
@@ -238,8 +237,9 @@ func TestCreateRequestAutoApprovalEmptyKeyTreatedAsUnconfigured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRequest returned error: %v", err)
 	}
-	if req.Status != StatusPending {
-		t.Fatalf("status = %q, want pending (empty-key connection is unconfigured)", req.Status)
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive ||
+		req.LastError != msgRouterNoKey {
+		t.Fatalf("request = %+v, want approved with the missing-key reason recorded", req)
 	}
 	if router.fulfillCalls != 0 {
 		t.Fatalf("fulfill calls = %d, want 0 (must not submit to a keyless connection)", router.fulfillCalls)
@@ -276,8 +276,8 @@ func TestCreateRequestAutoApprovalRespectsSupportedMediaTypes(t *testing.T) {
 	store := newFakeStore()
 	store.settings.RequestsEnabled = true
 	store.settings.GlobalAutoApprovalEnabled = true
-	// A router connection that only serves series must NOT auto-approve a movie
-	// request; the gate falls back to manual approval (pending).
+	// A router connection that only serves series is never handed a movie
+	// request; the auto-approved movie waits for the library instead.
 	seriesOnly := routerInst("router-series")
 	seriesOnly.SupportedMediaTypes = []string{string(MediaTypeSeries)}
 	store.integrations = []Integration{seriesOnly}
@@ -292,8 +292,8 @@ func TestCreateRequestAutoApprovalRespectsSupportedMediaTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRequest returned error: %v", err)
 	}
-	if req.Status != StatusPending {
-		t.Fatalf("status = %q, want pending (no router connection supports movie)", req.Status)
+	if req.Status != StatusApproved || req.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting (no router connection supports movie)", req)
 	}
 }
 
@@ -480,18 +480,29 @@ func TestCreateRequestClearsPriorFailedRequest(t *testing.T) {
 	store := newFakeStore()
 	store.settings.RequestsEnabled = true
 	store.requests["req-prior-failed"] = &Request{
-		ID:        "req-prior-failed",
-		MediaType: MediaTypeMovie,
-		TMDBID:    550,
-		Outcome:   OutcomeFailed,
-		Status:    StatusApproved,
-		LastError: "arr: decode response: json: cannot unmarshal object into Go value of type []radarr.movieResource",
+		ID:                "req-prior-failed",
+		MediaType:         MediaTypeMovie,
+		TMDBID:            550,
+		Outcome:           OutcomeFailed,
+		Status:            StatusApproved,
+		RequestedByUserID: 1,
+		LastError:         "arr: decode response: json: cannot unmarshal object into Go value of type []radarr.movieResource",
 	}
 	store.requests["req-other-media-failed"] = &Request{
-		ID:        "req-other-media-failed",
-		MediaType: MediaTypeMovie,
-		TMDBID:    999,
-		Outcome:   OutcomeFailed,
+		ID:                "req-other-media-failed",
+		MediaType:         MediaTypeMovie,
+		TMDBID:            999,
+		Outcome:           OutcomeFailed,
+		RequestedByUserID: 1,
+	}
+	// Another account's failed request for the same title is their history
+	// and their quota; a re-request must leave it alone.
+	store.requests["req-other-user-failed"] = &Request{
+		ID:                "req-other-user-failed",
+		MediaType:         MediaTypeMovie,
+		TMDBID:            550,
+		Outcome:           OutcomeFailed,
+		RequestedByUserID: 2,
 	}
 	service := newTestService(store)
 
@@ -508,6 +519,9 @@ func TestCreateRequestClearsPriorFailedRequest(t *testing.T) {
 	}
 	if _, ok := store.requests["req-other-media-failed"]; !ok {
 		t.Fatal("failed request for different media should not be cleared")
+	}
+	if _, ok := store.requests["req-other-user-failed"]; !ok {
+		t.Fatal("another user's failed request for the same media must not be cleared")
 	}
 }
 
@@ -1400,11 +1414,12 @@ func TestCancelAdminCanCancelAnyPending(t *testing.T) {
 }
 
 func TestCancelRejectsRequestsAlreadyInFulfillment(t *testing.T) {
+	inFlight := time.Now().Add(time.Minute)
 	cases := []struct {
 		name string
 		req  Request
 	}{
-		{"approved", Request{Status: StatusApproved, Outcome: OutcomeActive}},
+		{"approved and being submitted", Request{Status: StatusApproved, Outcome: OutcomeActive, SubmitLeaseUntil: &inFlight}},
 		{"queued", Request{Status: StatusQueued, Outcome: OutcomeActive, IntegrationKind: "radarr", ExternalID: "42"}},
 		{"downloading", Request{Status: StatusDownloading, Outcome: OutcomeActive, IntegrationKind: "radarr", ExternalID: "42"}},
 		{"completed", Request{Status: StatusCompleted, Outcome: OutcomeActive}},
@@ -1427,18 +1442,65 @@ func TestCancelRejectsRequestsAlreadyInFulfillment(t *testing.T) {
 
 func TestDeclineRejectsApprovedRequests(t *testing.T) {
 	store := newFakeStore()
+	inFlight := time.Now().Add(time.Minute)
 	store.requests["req-approved"] = &Request{
-		ID:        "req-approved",
-		MediaType: MediaTypeMovie,
-		TMDBID:    550,
-		Status:    StatusApproved,
-		Outcome:   OutcomeActive,
+		ID:               "req-approved",
+		MediaType:        MediaTypeMovie,
+		TMDBID:           550,
+		Status:           StatusApproved,
+		Outcome:          OutcomeActive,
+		SubmitLeaseUntil: &inFlight,
 	}
 	service := newTestService(store)
 
 	_, err := service.Decline(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "req-approved", "changed mind")
 	if !errors.Is(err, ErrInvalidState) {
-		t.Fatalf("err = %v, want ErrInvalidState (approved is owned by the reconciler)", err)
+		t.Fatalf("err = %v, want ErrInvalidState (a submission is in flight)", err)
+	}
+}
+
+// An approved request nothing was sent for (no router, or backing off after a
+// failed attempt) can still be declined by an admin or withdrawn by its owner;
+// otherwise it could never be closed.
+func TestWithdrawApprovedRequestNothingWasSentFor(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		withdraw func(*Service) (*Request, error)
+		want     Outcome
+	}{
+		{"decline", func(s *Service) (*Request, error) {
+			return s.Decline(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "req-x", "not this month")
+		}, OutcomeDeclined},
+		{"cancel", func(s *Service) (*Request, error) {
+			return s.Cancel(context.Background(), Viewer{UserID: 7, ProfileID: "profile-1"}, "req-x", "")
+		}, OutcomeCancelled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newFakeStore()
+			backoff := time.Now().Add(time.Hour)
+			store.requests["req-x"] = &Request{
+				ID: "req-x", MediaType: MediaTypeMovie, TMDBID: 550, Status: StatusApproved, Outcome: OutcomeActive,
+				RequestedByUserID: 7, NextSubmitAt: &backoff, LastError: "radarr unreachable",
+			}
+			got, err := tc.withdraw(newTestService(store))
+			if err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if got.Outcome != tc.want {
+				t.Fatalf("outcome = %q, want %q", got.Outcome, tc.want)
+			}
+		})
+	}
+}
+
+func TestDeclineRejectsApprovedRequestWithTarget(t *testing.T) {
+	store := newFakeStore()
+	store.requests["req-x"] = &Request{ID: "req-x", MediaType: MediaTypeMovie, TMDBID: 550, Status: StatusApproved, Outcome: OutcomeActive}
+	store.targets = map[string][]Target{"req-x": {{ID: 1, RequestID: "req-x", Quality: Quality1080p, Status: StatusQueued}}}
+
+	_, err := newTestService(store).Decline(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "req-x", "")
+	if !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("err = %v, want ErrInvalidState (a target exists)", err)
 	}
 }
 
@@ -1531,6 +1593,7 @@ type fakeStore struct {
 	created       []CreateRequestRecord
 	integrations  []Integration
 	candidates    []*Request
+	waiting       []*Request
 	mine          []*Request
 	statusUpdates []Status
 	requests      map[string]*Request
@@ -1538,6 +1601,9 @@ type fakeStore struct {
 	targetSeq     int64
 	unnotified    []string
 	notified      []string
+	reconciled    []string
+	follows       map[string]Follower // key: media_type/tmdb_id/user_id/profile_id
+	clearErr      error               // returned by ClearTitleFollowers when set
 
 	listIntegrationsCalls int
 	getSettingsCalls      int
@@ -1597,17 +1663,20 @@ func (f *fakeStore) UpsertUserLimit(_ context.Context, limit UserLimit) (*UserLi
 func (f *fakeStore) CountUserRequestsSince(_ context.Context, userID int, since time.Time) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	return f.usedLocked(userID, since), nil
+}
+
+// usedLocked counts the user's stored requests created since the window start,
+// on top of the count baseline, the way the repository counts rows. A deleted
+// row stops counting. Callers hold f.mu.
+func (f *fakeStore) usedLocked(userID int, since time.Time) int {
 	used := f.count
-	for _, prior := range f.created {
-		if prior.Requester.UserID != userID {
-			continue
+	for _, req := range f.requests {
+		if req.RequestedByUserID == userID && !req.CreatedAt.Before(since) {
+			used++
 		}
-		if prior.Now.Before(since) {
-			continue
-		}
-		used++
 	}
-	return used, nil
+	return used
 }
 
 func (f *fakeStore) ListActiveByTMDB(_ context.Context, mediaType MediaType, ids []int) (map[int]*Request, error) {
@@ -1622,36 +1691,19 @@ func (f *fakeStore) ListActiveByTMDB(_ context.Context, mediaType MediaType, ids
 	return out, nil
 }
 
-func (f *fakeStore) DeleteFailedByTMDB(_ context.Context, mediaType MediaType, tmdbID int) (int, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	deleted := 0
-	for id, req := range f.requests {
-		if req.MediaType == mediaType && req.TMDBID == tmdbID && req.Outcome == OutcomeFailed {
-			delete(f.requests, id)
-			deleted++
-		}
-	}
-	return deleted, nil
-}
-
 func (f *fakeStore) CreateRequest(_ context.Context, input CreateRequestRecord) (*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if input.Quota != nil {
-		used := f.count
-		for _, prior := range f.created {
-			if prior.Requester.UserID != input.Quota.UserID {
-				continue
+	if input.ReplaceFailed {
+		for id, req := range f.requests {
+			if req.RequestedByUserID == input.Requester.UserID && req.MediaType == input.Input.MediaType &&
+				req.TMDBID == input.Input.TMDBID && req.Outcome == OutcomeFailed {
+				delete(f.requests, id)
 			}
-			if prior.Now.Before(input.Quota.WindowStart) {
-				continue
-			}
-			used++
 		}
-		if used >= input.Quota.MaxRequests {
-			return nil, ErrQuotaExceeded
-		}
+	}
+	if input.Quota != nil && f.usedLocked(input.Quota.UserID, input.Quota.WindowStart) >= input.Quota.MaxRequests {
+		return nil, ErrQuotaExceeded
 	}
 	f.created = append(f.created, input)
 	req := &Request{
@@ -1692,6 +1744,12 @@ func (f *fakeStore) ListReconciliationCandidates(context.Context, int) ([]*Reque
 	return f.candidates, nil
 }
 
+func (f *fakeStore) ListLibraryWaitCandidates(context.Context, int) ([]*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.waiting, nil
+}
+
 func (f *fakeStore) ListFulfilledUnnotified(context.Context, int) ([]*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -1729,30 +1787,203 @@ func (f *fakeStore) ListAdmin(context.Context, ListFilter) ([]*Request, error) {
 	return nil, nil
 }
 
-func (f *fakeStore) SetStatus(_ context.Context, id string, status Status, _ Viewer) (*Request, error) {
+// guardAccepts mirrors the repository's guarded UPDATE. Callers hold f.mu.
+func (f *fakeStore) guardAccepts(g StateGuard, req *Request) bool {
+	statusOK := len(g.Statuses) == 0 || slices.Contains(g.Statuses, req.Status)
+	outcomeOK := len(g.Outcomes) == 0 || slices.Contains(g.Outcomes, req.Outcome)
+	if !statusOK || !outcomeOK {
+		return false
+	}
+	if g.UnsentOnly && req.Status == StatusApproved {
+		leased := req.SubmitLeaseUntil != nil && req.SubmitLeaseUntil.After(time.Now())
+		return !leased && len(f.targets[req.ID]) == 0
+	}
+	return true
+}
+
+// lookupLocked finds a request by id, falling back to the reconcile and
+// library-wait candidates so tests that only seed those still resolve.
+// Callers hold f.mu.
+func (f *fakeStore) lookupLocked(id string) *Request {
+	if req := f.requests[id]; req != nil {
+		return req
+	}
+	for _, c := range append(append([]*Request(nil), f.candidates...), f.waiting...) {
+		if c != nil && c.ID == id {
+			copy := *c
+			f.requests[id] = &copy
+			return &copy
+		}
+	}
+	return nil
+}
+
+func (f *fakeStore) SetStatus(_ context.Context, id string, from StateGuard, status Status, _ Viewer) (*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.statusUpdates = append(f.statusUpdates, status)
-	req := f.requests[id]
+	req := f.lookupLocked(id)
 	if req == nil {
 		req = &Request{ID: id, Outcome: OutcomeActive}
 		f.requests[id] = req
+	} else if !f.guardAccepts(from, req) {
+		return nil, ErrInvalidState
 	}
+	f.statusUpdates = append(f.statusUpdates, status)
 	req.Status = status
+	if status == StatusApproved {
+		req.SubmitAttempts = 0
+		req.SubmitLeaseUntil = nil
+		req.NextSubmitAt = nil
+	}
 	copy := *req
 	return &copy, nil
 }
 
-func (f *fakeStore) SetOutcome(_ context.Context, id string, outcome Outcome, _ Viewer, message string) (*Request, error) {
+func (f *fakeStore) SetOutcome(_ context.Context, id string, from StateGuard, outcome Outcome, _ Viewer, message string) (*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	req := f.requests[id]
+	req := f.lookupLocked(id)
 	if req == nil {
 		req = &Request{ID: id}
 		f.requests[id] = req
+	} else if !f.guardAccepts(from, req) {
+		return nil, ErrInvalidState
 	}
 	req.Outcome = outcome
 	req.LastError = message
+	if outcome == OutcomeDeclined || outcome == OutcomeCancelled {
+		req.OutcomeReason = message
+		prefix := fmt.Sprintf("%s/%d/", req.MediaType, req.TMDBID)
+		for key := range f.follows {
+			if strings.HasPrefix(key, prefix) {
+				delete(f.follows, key)
+			}
+		}
+	}
+	copy := *req
+	return &copy, nil
+}
+
+func (f *fakeStore) ReopenFailed(_ context.Context, id string, _ Viewer) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return nil, ErrNotFound
+	}
+	if req.Outcome != OutcomeFailed {
+		return nil, ErrInvalidState
+	}
+	req.Outcome = OutcomeActive
+	req.Status = StatusApproved
+	req.LastError = ""
+	req.SubmitAttempts = 0
+	req.SubmitLeaseUntil = nil
+	req.NextSubmitAt = nil
+	copy := *req
+	return &copy, nil
+}
+
+func (f *fakeStore) ClaimSubmission(_ context.Context, id string, lease time.Duration) (*Request, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil || req.Status != StatusApproved || req.Outcome != OutcomeActive {
+		return nil, false, nil
+	}
+	now := time.Now()
+	if (req.SubmitLeaseUntil != nil && req.SubmitLeaseUntil.After(now)) || (req.NextSubmitAt != nil && req.NextSubmitAt.After(now)) {
+		return nil, false, nil
+	}
+	req.SubmitAttempts++
+	until := now.Add(lease)
+	req.SubmitLeaseUntil = &until
+	copy := *req
+	return &copy, true, nil
+}
+
+func (f *fakeStore) DeferSubmission(_ context.Context, id string, leaseUntil time.Time, delay time.Duration, message string) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return nil, ErrNotFound
+	}
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive ||
+		req.SubmitLeaseUntil == nil || !req.SubmitLeaseUntil.Equal(leaseUntil) {
+		return nil, ErrInvalidState
+	}
+	next := time.Now().Add(delay)
+	req.NextSubmitAt = &next
+	req.SubmitLeaseUntil = nil
+	req.LastError = message
+	copy := *req
+	return &copy, nil
+}
+
+func (f *fakeStore) FailSubmission(_ context.Context, id string, leaseUntil time.Time, _ Viewer, message string) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return nil, ErrNotFound
+	}
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive ||
+		req.SubmitLeaseUntil == nil || !req.SubmitLeaseUntil.Equal(leaseUntil) {
+		return nil, ErrInvalidState
+	}
+	req.Outcome = OutcomeFailed
+	req.SubmitLeaseUntil = nil
+	req.LastError = message
+	copy := *req
+	return &copy, nil
+}
+
+func (f *fakeStore) MarkAvailable(_ context.Context, id string, _ Viewer) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return nil, ErrNotFound
+	}
+	open := req.Status == StatusPending || req.Status == StatusApproved || req.Status == StatusQueued || req.Status == StatusDownloading
+	claimed := req.Status == StatusApproved && req.SubmitLeaseUntil != nil && req.SubmitLeaseUntil.After(time.Now())
+	partlyDelivered := false
+	for _, t := range f.targets[id] {
+		if t.Status == StatusCompleted {
+			partlyDelivered = true
+		}
+	}
+	failedElsewhere := req.Outcome == OutcomeFailed && !partlyDelivered
+	if !failedElsewhere && (req.Outcome != OutcomeActive || !open || claimed) {
+		return nil, ErrInvalidState
+	}
+	f.statusUpdates = append(f.statusUpdates, StatusCompleted)
+	req.Status = StatusCompleted
+	req.Outcome = OutcomeActive
+	req.LastError = ""
+	copy := *req
+	return &copy, nil
+}
+
+func (f *fakeStore) MarkReconciled(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reconciled = append(f.reconciled, id)
+	return nil
+}
+
+func (f *fakeStore) RecomputeStatus(_ context.Context, id string, _ Viewer) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return nil, ErrNotFound
+	}
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive {
+		return nil, ErrInvalidState
+	}
+	req.Status, req.Outcome = aggregateStatus(f.targets[id])
 	copy := *req
 	return &copy, nil
 }
@@ -1834,6 +2065,85 @@ func (f *fakeStore) DeleteIntegration(_ context.Context, id string) error {
 	return ErrNotFound
 }
 
+func followKey(mediaType MediaType, tmdbID int, userID int, profileID string) string {
+	return fmt.Sprintf("%s/%d/%d/%s", mediaType, tmdbID, userID, profileID)
+}
+
+func (f *fakeStore) FollowTitle(_ context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if req := f.active[mediaType][tmdbID]; req == nil || req.Outcome != OutcomeActive || req.Status == StatusCompleted {
+		return ErrNotRequested
+	}
+	f.seedFollowLocked(mediaType, tmdbID, viewer)
+	return nil
+}
+
+// seedFollow records a follow directly, as one added before the request
+// completed. Tests use it for titles whose request is already closed.
+func (f *fakeStore) seedFollow(mediaType MediaType, tmdbID int, viewer Viewer) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.seedFollowLocked(mediaType, tmdbID, viewer)
+}
+
+func (f *fakeStore) seedFollowLocked(mediaType MediaType, tmdbID int, viewer Viewer) {
+	if f.follows == nil {
+		f.follows = map[string]Follower{}
+	}
+	f.follows[followKey(mediaType, tmdbID, viewer.UserID, viewer.ProfileID)] = Follower{UserID: viewer.UserID, ProfileID: viewer.ProfileID}
+}
+
+func (f *fakeStore) UnfollowTitle(_ context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.follows, followKey(mediaType, tmdbID, viewer.UserID, viewer.ProfileID))
+	return nil
+}
+
+func (f *fakeStore) FollowedTitles(_ context.Context, mediaType MediaType, tmdbIDs []int, viewer Viewer) (map[int]bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[int]bool{}
+	for _, id := range tmdbIDs {
+		if _, ok := f.follows[followKey(mediaType, id, viewer.UserID, viewer.ProfileID)]; ok {
+			out[id] = true
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) ListTitleFollowers(_ context.Context, mediaType MediaType, tmdbID int) ([]Follower, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	prefix := fmt.Sprintf("%s/%d/", mediaType, tmdbID)
+	var out []Follower
+	for key, follower := range f.follows {
+		if strings.HasPrefix(key, prefix) {
+			out = append(out, follower)
+		}
+	}
+	slices.SortFunc(out, func(a, b Follower) int {
+		if c := strings.Compare(a.ProfileID, b.ProfileID); c != 0 {
+			return c
+		}
+		return a.UserID - b.UserID
+	})
+	return out, nil
+}
+
+func (f *fakeStore) ClearTitleFollowers(_ context.Context, mediaType MediaType, tmdbID int, followers []Follower) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.clearErr != nil {
+		return f.clearErr
+	}
+	for _, follower := range followers {
+		delete(f.follows, followKey(mediaType, tmdbID, follower.UserID, follower.ProfileID))
+	}
+	return nil
+}
+
 func (f *fakeStore) ListTargets(_ context.Context, requestID string) ([]Target, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -1869,6 +2179,44 @@ func (f *fakeStore) DeleteTarget(_ context.Context, id int64) error {
 func (f *fakeStore) UpdateTargetStatus(_ context.Context, targetID int64, status Status, externalID, externalStatus, lastErr string, _ Viewer) (*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	return f.updateTargetLocked(targetID, status, externalID, externalStatus, lastErr)
+}
+
+// RecordSubmission mirrors the repository's lease fence, then records each
+// target the way a create followed by a status update would.
+func (f *fakeStore) RecordSubmission(_ context.Context, id string, leaseUntil time.Time, targets []Target, _ Viewer) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return nil, ErrNotFound
+	}
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive ||
+		req.SubmitLeaseUntil == nil || !req.SubmitLeaseUntil.Equal(leaseUntil) {
+		return nil, ErrInvalidState
+	}
+	req.SubmitLeaseUntil = nil
+	if f.targets == nil {
+		f.targets = map[string][]Target{}
+	}
+	latest := req
+	for _, t := range targets {
+		f.targetSeq++
+		t.ID = f.targetSeq
+		t.RequestID = id
+		f.targets[id] = append(f.targets[id], t)
+		updated, err := f.updateTargetLocked(t.ID, t.Status, t.ExternalID, t.ExternalStatus, t.LastError)
+		if err != nil {
+			return nil, err
+		}
+		latest = updated
+	}
+	copy := *latest
+	return &copy, nil
+}
+
+// updateTargetLocked is UpdateTargetStatus for callers holding f.mu.
+func (f *fakeStore) updateTargetLocked(targetID int64, status Status, externalID, externalStatus, lastErr string) (*Request, error) {
 	var requestID string
 	for rid, ts := range f.targets {
 		for i := range ts {
@@ -2216,6 +2564,13 @@ func (f *certTMDBClient) GetCertification(_ context.Context, _ string, id int) (
 
 type fixedCeiling struct{ q string }
 
+// failingCeiling is an entitlement resolver whose lookup always errors.
+type failingCeiling struct{}
+
+func (failingCeiling) MaxPlaybackQuality(context.Context, int, string) (string, error) {
+	return "", errors.New("entitlement lookup failed")
+}
+
 func (f fixedCeiling) MaxPlaybackQuality(context.Context, int, string) (string, error) {
 	return f.q, nil
 }
@@ -2409,7 +2764,7 @@ func TestAllowedQualities(t *testing.T) {
 	t.Run("hd ceiling stays 1080p only", func(t *testing.T) {
 		svcHD := newTestService(newFakeStore())
 		svcHD.SetEntitlementResolver(fixedCeiling{q: "1080p"})
-		got := svcHD.allowedQualities(context.Background(), Request{}, Settings{})
+		got, _ := svcHD.allowedQualities(context.Background(), Request{}, Settings{})
 		if len(got) != 1 || got[0] != Quality1080p {
 			t.Fatalf("qualities = %v, want [1080p]", got)
 		}
@@ -2421,14 +2776,14 @@ func TestAllowedQualities(t *testing.T) {
 		// alongside 1080p — it must not be read as "below 4K".
 		svcAny := newTestService(newFakeStore())
 		svcAny.SetEntitlementResolver(fixedCeiling{q: ""})
-		got := svcAny.allowedQualities(context.Background(), Request{}, Settings{})
+		got, _ := svcAny.allowedQualities(context.Background(), Request{}, Settings{})
 		if len(got) != 2 || got[1] != Quality2160p {
 			t.Fatalf("qualities = %v, want [1080p 2160p]", got)
 		}
 	})
 
 	t.Run("force dual adds 2160p", func(t *testing.T) {
-		got := svc.allowedQualities(context.Background(), Request{}, Settings{ForceDualQuality: true})
+		got, _ := svc.allowedQualities(context.Background(), Request{}, Settings{ForceDualQuality: true})
 		if len(got) != 2 || got[1] != Quality2160p {
 			t.Fatalf("qualities = %v, want [1080p 2160p]", got)
 		}
@@ -2437,7 +2792,7 @@ func TestAllowedQualities(t *testing.T) {
 	t.Run("4k ceiling adds 2160p", func(t *testing.T) {
 		svc4k := newTestService(newFakeStore())
 		svc4k.SetEntitlementResolver(fixedCeiling{q: "2160p"})
-		got := svc4k.allowedQualities(context.Background(), Request{}, Settings{})
+		got, _ := svc4k.allowedQualities(context.Background(), Request{}, Settings{})
 		if len(got) != 2 || got[1] != Quality2160p {
 			t.Fatalf("qualities = %v, want [1080p 2160p]", got)
 		}
@@ -2524,7 +2879,7 @@ func TestSubmitApprovedUsesConfiguredOptional4KDefault(t *testing.T) {
 	}
 }
 
-func TestSubmitApprovedNoRouterFails(t *testing.T) {
+func TestSubmitApprovedNoRouterWaitsForLibrary(t *testing.T) {
 	store := newFakeStore()
 	store.integrations = []Integration{routerInst("router-1")}
 	svc := newTestService(store) // no router provider set
@@ -2535,12 +2890,12 @@ func TestSubmitApprovedNoRouterFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed {
-		t.Fatalf("outcome = %q, want failed (no router configured)", got.Outcome)
+	if got.Status != StatusApproved || got.Outcome != OutcomeActive || got.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting (no router configured)", got)
 	}
 }
 
-func TestSubmitApprovedNoConnectionsFails(t *testing.T) {
+func TestSubmitApprovedNoConnectionsWaitsForLibrary(t *testing.T) {
 	store := newFakeStore() // no integrations
 	svc := newTestService(store)
 	svc.SetRouterProvider(&fakeRouterProvider{})
@@ -2551,8 +2906,8 @@ func TestSubmitApprovedNoConnectionsFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed {
-		t.Fatalf("outcome = %q, want failed (no enabled router connections)", got.Outcome)
+	if got.Status != StatusApproved || got.Outcome != OutcomeActive || got.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting (no enabled router connections)", got)
 	}
 }
 
@@ -2638,9 +2993,13 @@ func TestSubmitApprovedRecordsDroppedQualityAsFailed(t *testing.T) {
 	// re-attempts only that quality. Provide a normal provider for the re-run.
 	retryRouter := &fakeRouterProvider{}
 	svc.SetRouterProvider(retryRouter)
+	// Put the stored row back where ReopenFailed leaves it, so the re-run can
+	// claim the submission.
+	store.requests["r1"].Status = StatusApproved
+	store.requests["r1"].Outcome = OutcomeActive
+	store.requests["r1"].SubmitLeaseUntil = nil
+	store.requests["r1"].NextSubmitAt = nil
 	cur := *store.requests["r1"]
-	cur.Status = StatusApproved
-	cur.Outcome = OutcomeActive
 	if _, err := svc.submitApprovedRequest(context.Background(), cur, Viewer{UserID: 7, IsAdmin: true}, nil); err != nil {
 		t.Fatalf("retry submit: %v", err)
 	}
@@ -2747,8 +3106,9 @@ func TestSubmitApprovedSkipsMismatchedMediaType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed || got.LastError != "no fulfillment backend configured" {
-		t.Fatalf("request = %+v, want failed with no-backend message", got)
+	// No connection serves movies, so the request waits for the library.
+	if got.Status != StatusApproved || got.Outcome != OutcomeActive || got.LastError != "" {
+		t.Fatalf("request = %+v, want approved and waiting for the library", got)
 	}
 	if router.fulfillCalls != 0 {
 		t.Fatalf("fulfill calls = %d, want 0 (series connection filtered out for a movie)", router.fulfillCalls)
@@ -2801,8 +3161,8 @@ func TestSubmitApprovedSkipsConnectionWithEmptyKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed {
-		t.Fatalf("outcome = %q, want failed (no usable connection)", got.Outcome)
+	if got.Outcome != OutcomeActive || got.LastError != msgRouterNoKey {
+		t.Fatalf("request = %+v, want the missing-key reason recorded and a retry scheduled", got)
 	}
 	if router.fulfillCalls != 0 {
 		t.Fatalf("fulfill calls = %d, want 0 (empty-key connection skipped)", router.fulfillCalls)
@@ -2924,7 +3284,7 @@ func TestSubmitApprovedSkipsTargetForHealthyQuality(t *testing.T) {
 	}
 }
 
-func TestSubmitApprovedUnboundInstallationFailsWithGuidance(t *testing.T) {
+func TestSubmitApprovedUnboundInstallationDefersWithGuidance(t *testing.T) {
 	store := newFakeStore()
 	// A router connection that exists but is not bound to a plugin installation
 	// (the migration leaves installation_id NULL for pre-existing rows).
@@ -2940,9 +3300,9 @@ func TestSubmitApprovedUnboundInstallationFailsWithGuidance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if got.Outcome != OutcomeFailed ||
-		got.LastError != "request backend connection is not bound to a plugin installation; re-save it in admin" {
-		t.Fatalf("request = %+v, want failed with unbound-installation guidance", got)
+	if got.Status != StatusApproved || got.Outcome != OutcomeActive ||
+		got.LastError != msgRouterUnbound {
+		t.Fatalf("request = %+v, want approved with unbound-installation guidance and a retry scheduled", got)
 	}
 }
 
@@ -2972,5 +3332,18 @@ func TestSubmitApprovedPopulatesRequesterIdentity(t *testing.T) {
 	}
 	if router.gotRequesterEmail != "u@example.com" || router.gotRequesterUsername != "bob" {
 		t.Fatalf("descriptor identity = %q/%q, want u@example.com/bob", router.gotRequesterEmail, router.gotRequesterUsername)
+	}
+}
+
+func TestDeclineKeepsReasonOnRequest(t *testing.T) {
+	store := newFakeStore()
+	store.requests["req-1"] = &Request{ID: "req-1", MediaType: MediaTypeMovie, TMDBID: 550, Status: StatusPending, Outcome: OutcomeActive}
+
+	got, err := newTestService(store).Decline(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "req-1", "Not this month")
+	if err != nil {
+		t.Fatalf("Decline: %v", err)
+	}
+	if got.OutcomeReason != "Not this month" || got.State() != StateDeclined {
+		t.Fatalf("request = %+v, want declined with the reason kept", got)
 	}
 }

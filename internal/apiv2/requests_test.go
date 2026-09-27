@@ -188,6 +188,17 @@ func (f *fakeRequests) BrowseGenre(_ context.Context, viewer mediarequests.Viewe
 	return f.browse(viewer, "genre", slug, mediaType, sort, page)
 }
 
+func (f *fakeRequests) Follow(_ context.Context, viewer mediarequests.Viewer, mediaType mediarequests.MediaType, tmdbID int) (mediarequests.RequestState, error) {
+	if err := f.record(viewer, "follow", mediaType, tmdbID); err != nil {
+		return mediarequests.RequestState{}, err
+	}
+	return mediarequests.RequestState{Status: mediarequests.StatusPending, Reason: "already_requested", Following: true}, nil
+}
+
+func (f *fakeRequests) Unfollow(_ context.Context, viewer mediarequests.Viewer, mediaType mediarequests.MediaType, tmdbID int) error {
+	return f.record(viewer, "unfollow", mediaType, tmdbID)
+}
+
 func requestDeps(svc *fakeRequests) Dependencies {
 	deps := pilotDeps(nil, nil)
 	if svc != nil {
@@ -511,4 +522,30 @@ func TestRequestsDenied(t *testing.T) {
 		requireProblem(t, do(t, hx, op.method, op.path, op.body, requestOwner), TypeCapabilityDisabled)
 		requireProblem(t, do(t, hu, op.method, op.path, op.body, requestOwner), TypeDependencyUnavailable)
 	}
+}
+
+func TestFollowRequestMedia(t *testing.T) {
+	svc := fixtureRequests()
+	h := newTestHandler(t, requestDeps(svc))
+
+	rec := do(t, h, http.MethodPut, "/api/v2/requests/follows/movie/949", "", requestOwner)
+	var got RequestMediaState
+	decodeBody(t, rec.Body, &got)
+	if rec.Code != http.StatusOK || !got.Following || got.Status != "pending" {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	if svc.lastCall != "follow" || svc.lastArgs[0] != mediarequests.MediaTypeMovie || svc.lastArgs[1] != 949 || svc.lastViewer.ProfileID != "p-owner" {
+		t.Fatalf("call = %s %v viewer = %+v", svc.lastCall, svc.lastArgs, svc.lastViewer)
+	}
+
+	rec = do(t, h, http.MethodDelete, "/api/v2/requests/follows/series/1399", "", requestOwner)
+	if rec.Code != http.StatusNoContent || svc.lastCall != "unfollow" || svc.lastArgs[0] != mediarequests.MediaTypeSeries {
+		t.Fatalf("%d %s call = %s %v", rec.Code, rec.Body.String(), svc.lastCall, svc.lastArgs)
+	}
+
+	requireProblem(t, do(t, h, http.MethodPut, "/api/v2/requests/follows/tv/949", "", requestOwner), TypeValidationFailed)
+	svc.err = mediarequests.ErrNotRequested
+	requireProblem(t, do(t, h, http.MethodPut, "/api/v2/requests/follows/movie/949", "", requestOwner), TypeConflict)
+	svc.err = mediarequests.ErrAlreadyAvailable
+	requireProblem(t, do(t, h, http.MethodPut, "/api/v2/requests/follows/movie/949", "", requestOwner), TypeConflict)
 }

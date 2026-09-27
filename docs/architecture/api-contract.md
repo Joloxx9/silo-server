@@ -1813,6 +1813,13 @@ prevents concurrent active requests for the same media, but terminal requests no
 longer hold that uniqueness key. Safe automatic retries require a durable client
 request identity across terminal states. The web mutation disables retries.
 
+A profile can follow a title another profile already requested, to be notified
+when it becomes available, with `PUT` and `DELETE
+/api/v2/requests/follows/{media_type}/{tmdb_id}`. Both are naturally idempotent.
+Request state gains `following` and `requested_by_viewer`, and
+`GET /api/v2/requests/status` advertises `follow_supported`. The frozen v1
+surface has no follow operation and does not carry these fields.
+
 Native Apple and Android request migrations accompany this contract change;
 integrate those client changes before retiring their v1 routes. Jellyfin compatibility does not expose this request
 management surface and keeps its existing behavior.

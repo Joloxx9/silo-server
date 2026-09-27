@@ -4,13 +4,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   useQuery: vi.fn(),
   useCanRequest: vi.fn(),
   useRequestSearch: vi.fn(),
+  // Most tests only check the props GlobalSearch passes; the wiring tests for
+  // request rows need the real section.
+  renderRealRequestSection: false,
 }));
 
 vi.mock("@tanstack/react-query", async () => {
@@ -38,23 +41,20 @@ vi.mock("@/hooks/queries/useRequests", () => ({
   useRequestSearch: (...args: unknown[]) => mocks.useRequestSearch(...args),
 }));
 
-vi.mock("@/components/RequestToAddSection", () => ({
-  RequestToAddSection: ({
-    variant,
-    query,
-    libraryHadHits,
-    libraryResultsKnown,
-  }: {
-    variant: string;
-    query: string;
-    libraryHadHits: boolean;
-    libraryResultsKnown?: boolean;
-  }) => (
-    <div data-testid="request-section">
-      {`variant="${variant}" query="${query}" libraryHadHits="${String(libraryHadHits)}" libraryResultsKnown="${String(libraryResultsKnown)}"`}
-    </div>
-  ),
-}));
+vi.mock("@/components/RequestToAddSection", async () => {
+  const actual =
+    await vi.importActual<typeof import("./RequestToAddSection")>("./RequestToAddSection");
+  return {
+    RequestToAddSection: (props: import("./RequestToAddSection").RequestToAddSectionProps) =>
+      mocks.renderRealRequestSection ? (
+        <actual.RequestToAddSection {...props} />
+      ) : (
+        <div data-testid="request-section">
+          {`variant="${props.variant}" query="${props.query}" libraryHadHits="${String(props.libraryHadHits)}" libraryResultsKnown="${String(props.libraryResultsKnown)}"`}
+        </div>
+      ),
+  };
+});
 
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children, open }: { children: ReactNode; open: boolean }) =>
@@ -393,6 +393,112 @@ describe("GlobalSearch", () => {
     // item page the surrounding row points at.
     expect(mocks.navigate).not.toHaveBeenCalled();
     expect(screen.queryByTestId("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("GlobalSearch request rows", () => {
+  const discoveryOn = { discoveryEnabled: true, isResolving: false, submitDisabledReason: null };
+
+  beforeEach(() => {
+    mocks.navigate.mockReset();
+    mocks.useQuery.mockReset();
+    mocks.useCanRequest.mockReset();
+    mocks.useRequestSearch.mockReset();
+    mocks.renderRealRequestSection = true;
+    mocks.useCanRequest.mockReturnValue(discoveryOn);
+    mocks.useQuery.mockReturnValue({
+      data: { total: 1, has_more: false, items: [browseFixture] },
+      isFetching: false,
+      isError: false,
+    });
+    mocks.useRequestSearch.mockReturnValue({
+      data: {
+        page: 1,
+        total_pages: 1,
+        total_results: 2,
+        results: [
+          {
+            media_type: "series",
+            tmdb_id: 7,
+            title: "Requested Show",
+            availability: "missing",
+            request: { requestable: false, status: "queued" },
+          },
+          {
+            media_type: "movie",
+            tmdb_id: 8,
+            title: "Already Here",
+            availability: "available",
+            request: { requestable: false },
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+  });
+  afterEach(() => {
+    mocks.renderRealRequestSection = false;
+  });
+
+  function renderOpenSearch() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <GlobalSearch defaultOpen initialQuery="Show" />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const input = screen.getByRole("combobox", { name: "Search" });
+    input.focus();
+    return input;
+  }
+
+  it("mentions requests in the placeholder when discovery is on", () => {
+    const input = renderOpenSearch();
+
+    expect(input).toHaveAttribute("placeholder", "Search library or find titles to request...");
+  });
+
+  it("closes the dialog and opens the request page when a request row is clicked", async () => {
+    renderOpenSearch();
+
+    await userEvent.click(screen.getByRole("option", { name: /Requested Show/ }));
+
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/requests/series/7");
+    expect(screen.queryByTestId("dialog")).not.toBeInTheDocument();
+  });
+
+  it("walks from library rows into request rows with the arrow keys and opens one with Enter", () => {
+    const input = renderOpenSearch();
+
+    expect(input).toHaveAttribute(
+      "aria-controls",
+      "global-search-library-results global-search-request-results",
+    );
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+
+    expect(input).toHaveAttribute("aria-activedescendant", "search-result-1");
+    expect(screen.getByRole("option", { selected: true })).toHaveTextContent("Requested Show");
+
+    // Past the last request row wraps back to the first library row.
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(input).toHaveAttribute("aria-activedescendant", "search-result-0");
+
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/requests/series/7");
+    expect(screen.queryByTestId("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows the shared status badge on a requested row", () => {
+    renderOpenSearch();
+
+    const row = screen.getByRole("option", { name: /Requested Show/ });
+    expect(row.querySelector('[data-request-state="processing"]')).toHaveTextContent("Processing");
   });
 });
 

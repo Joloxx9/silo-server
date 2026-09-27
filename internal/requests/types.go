@@ -148,10 +148,9 @@ type Request struct {
 	RequestedByProfileID string    `json:"requested_by_profile_id,omitempty"`
 	RequesterEmail       string    `json:"-"`
 	RequesterUsername    string    `json:"-"`
-	// DeclineReason is the admin's decline message, populated transiently for
-	// the lifecycle notifier (the durable copy lives in the request event
-	// record, not on this row).
-	DeclineReason    string     `json:"-"`
+	// OutcomeReason is why the request was declined or withdrawn, when a
+	// reason was given. v2 only; the frozen v1 shape does not carry it.
+	OutcomeReason    string     `json:"-"`
 	IntegrationKind  string     `json:"integration_kind,omitempty"`
 	IsAnime          bool       `json:"is_anime"`
 	Targets          []Target   `json:"targets,omitempty"`
@@ -163,6 +162,89 @@ type Request struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 	ApprovedAt       *time.Time `json:"approved_at,omitempty"`
 	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+	// SubmitAttempts counts router submissions claimed for the current
+	// approval. SubmitLeaseUntil is set while a claimed submission is in
+	// flight; NextSubmitAt is the backoff after a failed attempt.
+	SubmitAttempts   int        `json:"-"`
+	SubmitLeaseUntil *time.Time `json:"-"`
+	NextSubmitAt     *time.Time `json:"-"`
+	// Followers are the profiles, other than the requester's, that asked to be
+	// told when the title is available; loaded for the fulfilled notification.
+	Followers []Follower `json:"-"`
+}
+
+// StateGuard names the states a transition may start from. The store applies
+// the write only while the row is still in one of them and otherwise answers
+// ErrInvalidState, so two actors racing on one request (two admins, or an
+// admin and the reconciler) cannot both apply a transition. An empty list
+// accepts any value.
+type StateGuard struct {
+	Statuses []Status
+	Outcomes []Outcome
+	// UnsentOnly admits an approved request only while nothing has gone
+	// downstream for it: it has no target and no submission in flight.
+	UnsentOnly bool
+}
+
+// guardPending matches a request that is still waiting for an admin.
+var guardPending = StateGuard{Statuses: []Status{StatusPending}, Outcomes: []Outcome{OutcomeActive}}
+
+// guardWithdrawable matches a request nobody has sent anywhere yet: pending,
+// or approved but waiting for the library (no router), or backing off after a
+// failed attempt. Decline and cancel accept these; once a submission is in
+// flight or a target exists, the request stays in the pipeline.
+var guardWithdrawable = StateGuard{
+	Statuses:   []Status{StatusPending, StatusApproved},
+	Outcomes:   []Outcome{OutcomeActive},
+	UnsentOnly: true,
+}
+
+// State is the one lifecycle state a user sees for a request, derived from
+// its status, outcome and library presence. Status and outcome stay on the
+// wire for admin detail and older clients.
+type State string
+
+const (
+	StatePending    State = "pending"
+	StateApproved   State = "approved"
+	StateProcessing State = "processing"
+	StateAvailable  State = "available"
+	StateDeclined   State = "declined"
+	StateCancelled  State = "cancelled" //nolint:misspell // matches the outcome spelling
+	StateFailed     State = "failed"
+)
+
+// State derives the request's user-facing state. A completed request is
+// available once its title is in the library (LibraryContentID attached);
+// until the scan finds it, it is still processing.
+func (r *Request) State() State {
+	switch r.Outcome {
+	case OutcomeDeclined:
+		return StateDeclined
+	case OutcomeCancelled:
+		return StateCancelled
+	case OutcomeFailed:
+		return StateFailed
+	}
+	switch r.Status {
+	case StatusPending:
+		return StatePending
+	case StatusApproved:
+		return StateApproved
+	case StatusCompleted:
+		if r.LibraryContentID != "" {
+			return StateAvailable
+		}
+		return StateProcessing
+	default:
+		return StateProcessing
+	}
+}
+
+// requestedBy reports whether the viewer's profile made the request. A profile
+// id is unique only within its account, so the account must match too.
+func (r *Request) requestedBy(viewer Viewer) bool {
+	return r.RequestedByUserID == viewer.UserID && r.RequestedByProfileID == viewer.ProfileID
 }
 
 type RequestEvent struct {
@@ -180,6 +262,14 @@ type RequestState struct {
 	Requestable bool   `json:"requestable"`
 	Reason      string `json:"reason,omitempty"`
 	RequestID   string `json:"request_id,omitempty"`
+	// Following reports that the viewer will be notified when the title
+	// becomes available: they requested it or follow it. RequestedByViewer
+	// reports that the viewing profile made the active request, so there is
+	// nothing to follow. v2 only; the frozen v1 shape carries neither.
+	Following         bool `json:"-"`
+	RequestedByViewer bool `json:"-"`
+	// State is the active request's user-facing state (v2 only).
+	State State `json:"-"`
 }
 
 type MediaResult struct {
@@ -312,5 +402,7 @@ type ReconcileResult struct {
 	Completed   int `json:"completed"`
 	Failed      int `json:"failed"`
 	Skipped     int `json:"skipped"`
-	Errors      int `json:"errors"`
+	// Deferred counts submissions that failed and were rescheduled.
+	Deferred int `json:"deferred"`
+	Errors   int `json:"errors"`
 }

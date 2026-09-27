@@ -116,6 +116,11 @@ export default function Layout({ children }: LayoutProps) {
     })();
   const isRecommendationsRoute = location.pathname === "/recommendations";
   const isCalendarRoute = location.pathname === "/calendar";
+  // The Requests hub and its studio/network/genre browse pages lay out their
+  // own gutter so text rows line up with MediaCarousel's edge padding.
+  const isRequestsRoute =
+    /^\/requests\/?$/.test(location.pathname) || location.pathname.startsWith("/requests/browse/");
+  // Only /requests/movie/… and /requests/series/… are title details.
   const isRequestDetailRoute = /^\/requests\/(movie|series)\//.test(location.pathname);
   // A watch-party room owns its own full-height layout; the hub does not.
   const isWatchPartyRoomRoute = /^\/rooms\/(?!join$)[^/]+$/.test(location.pathname);
@@ -124,6 +129,7 @@ export default function Layout({ children }: LayoutProps) {
     isWatchPartyRoomRoute ||
     isLibraryRoute ||
     isItemRoute ||
+    isRequestsRoute ||
     isRequestDetailRoute ||
     isSearchLandingRoute ||
     isRecommendationsRoute ||
@@ -132,7 +138,7 @@ export default function Layout({ children }: LayoutProps) {
   // Cold item routes commit a lightweight shell while the sidebar collapses.
   // A detail already cached before navigation skips that gate and renders on
   // the destination's first frame.
-  const isDetailImmersion = isItemRoute || isPersonRoute;
+  const isDetailImmersion = isItemRoute || isPersonRoute || isRequestDetailRoute;
   const targetDetailImmersion = isDetailImmersion;
   const visualDetailImmersion = useImmediateSidebarCollapse(targetDetailImmersion);
   const {
