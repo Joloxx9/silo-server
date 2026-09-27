@@ -2211,6 +2211,44 @@ func (f *fakeStore) DeleteTarget(_ context.Context, id int64) error {
 func (f *fakeStore) UpdateTargetStatus(_ context.Context, targetID int64, status Status, externalID, externalStatus, lastErr string, _ Viewer) (*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	return f.updateTargetLocked(targetID, status, externalID, externalStatus, lastErr)
+}
+
+// RecordSubmission mirrors the repository's lease fence, then records each
+// target the way a create followed by a status update would.
+func (f *fakeStore) RecordSubmission(_ context.Context, id string, leaseUntil time.Time, targets []Target, _ Viewer) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return nil, ErrNotFound
+	}
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive ||
+		req.SubmitLeaseUntil == nil || !req.SubmitLeaseUntil.Equal(leaseUntil) {
+		return nil, ErrInvalidState
+	}
+	req.SubmitLeaseUntil = nil
+	if f.targets == nil {
+		f.targets = map[string][]Target{}
+	}
+	latest := req
+	for _, t := range targets {
+		f.targetSeq++
+		t.ID = f.targetSeq
+		t.RequestID = id
+		f.targets[id] = append(f.targets[id], t)
+		updated, err := f.updateTargetLocked(t.ID, t.Status, t.ExternalID, t.ExternalStatus, t.LastError)
+		if err != nil {
+			return nil, err
+		}
+		latest = updated
+	}
+	copy := *latest
+	return &copy, nil
+}
+
+// updateTargetLocked is UpdateTargetStatus for callers holding f.mu.
+func (f *fakeStore) updateTargetLocked(targetID int64, status Status, externalID, externalStatus, lastErr string) (*Request, error) {
 	var requestID string
 	for rid, ts := range f.targets {
 		for i := range ts {
