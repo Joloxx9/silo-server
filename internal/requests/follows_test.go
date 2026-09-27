@@ -258,9 +258,6 @@ func TestFollowsDatabase(t *testing.T) {
 	ctx := t.Context()
 	// The schema copy has no user_profiles foreign key; the migration's key is
 	// exercised by the migrated database, not here.
-	if _, err := pool.Exec(ctx, `CREATE TABLE media_request_follows (LIKE public.media_request_follows INCLUDING ALL)`); err != nil {
-		t.Fatal(err)
-	}
 	if err := repo.FollowTitle(ctx, MediaTypeMovie, 949, Viewer{UserID: 1, ProfileID: "profile-a"}); !errors.Is(err, ErrNotRequested) {
 		t.Fatalf("follow with no open request: err = %v, want ErrNotRequested", err)
 	}
@@ -342,11 +339,59 @@ func TestFollowsDatabase(t *testing.T) {
 		t.Fatalf("clearing one account's follow removed %+v, want the other account's kept", followers)
 	}
 
-	if err := repo.ForgetTitleFollows(ctx, MediaTypeSeries, 949); err != nil {
+	if _, err := repo.SetOutcome(ctx, "series-949", guardWithdrawable, OutcomeCancelled, Viewer{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if followers, _ := repo.ListTitleFollowers(ctx, MediaTypeSeries, 949); len(followers) != 0 {
-		t.Fatalf("series followers after forgetting = %+v, want none", followers)
+		t.Fatalf("series followers after the withdrawal = %+v, want none", followers)
+	}
+	if followers, _ := repo.ListTitleFollowers(ctx, MediaTypeMovie, 949); len(followers) != 1 {
+		t.Fatalf("movie followers after the series withdrawal = %+v, want the one left", followers)
+	}
+}
+
+// Declining or withdrawing a request clears its title's follows in the same
+// transaction. A cleanup after the commit could run once a replacement
+// request had gathered followers of its own, and remove theirs.
+func TestClosingRequestForgetsFollowsDatabase(t *testing.T) {
+	repo, pool := lifecycleTestRepository(t)
+	ctx := t.Context()
+	follower := Viewer{UserID: 1, ProfileID: "profile-a"}
+	for _, tc := range []struct {
+		id      string
+		tmdbID  int
+		outcome Outcome
+	}{
+		{"declined", 971, OutcomeDeclined},
+		{"withdrawn", 972, OutcomeCancelled},
+	} {
+		insertLifecycleRequest(t, repo, tc.id, 5, tc.tmdbID, StatusPending)
+		if err := repo.FollowTitle(ctx, MediaTypeMovie, tc.tmdbID, follower); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.SetOutcome(ctx, tc.id, guardWithdrawable, tc.outcome, Viewer{}, ""); err != nil {
+			t.Fatal(err)
+		}
+		if followers, err := repo.ListTitleFollowers(ctx, MediaTypeMovie, tc.tmdbID); err != nil || len(followers) != 0 {
+			t.Fatalf("followers once %s committed = %+v, err = %v; want none", tc.id, followers, err)
+		}
+	}
+
+	// A failed request can sit beside a newer open request for the same
+	// title. Closing the failed one leaves the open request's follows alone.
+	insertLifecycleRequest(t, repo, "failed", 5, 973, StatusApproved)
+	if _, err := pool.Exec(ctx, `UPDATE media_requests SET outcome = 'failed' WHERE id = 'failed'`); err != nil {
+		t.Fatal(err)
+	}
+	insertLifecycleRequest(t, repo, "open", 6, 973, StatusPending)
+	if err := repo.FollowTitle(ctx, MediaTypeMovie, 973, follower); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.SetOutcome(ctx, "failed", StateGuard{Outcomes: []Outcome{OutcomeFailed}}, OutcomeCancelled, Viewer{}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if followers, err := repo.ListTitleFollowers(ctx, MediaTypeMovie, 973); err != nil || len(followers) != 1 {
+		t.Fatalf("followers of the open request after closing the failed one = %+v, err = %v; want one", followers, err)
 	}
 }
 
@@ -356,9 +401,6 @@ func TestFollowsDatabase(t *testing.T) {
 func TestFollowWaitsForConcurrentWithdrawalDatabase(t *testing.T) {
 	repo, pool := lifecycleTestRepository(t)
 	ctx := t.Context()
-	if _, err := pool.Exec(ctx, `CREATE TABLE media_request_follows (LIKE public.media_request_follows INCLUDING ALL)`); err != nil {
-		t.Fatal(err)
-	}
 	insertLifecycleRequest(t, repo, "req-race", 5, 959, StatusPending)
 
 	tx, err := pool.Begin(ctx)

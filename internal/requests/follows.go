@@ -3,7 +3,6 @@ package requests
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 )
 
@@ -99,19 +98,6 @@ func (s *Service) Unfollow(ctx context.Context, viewer Viewer, mediaType MediaTy
 	return s.store.UnfollowTitle(ctx, mediaType, tmdbID, viewer)
 }
 
-// forgetFollowsAfterWithdrawal clears a withdrawn request's title follows.
-// Best effort: a leftover follow only fires if the title is requested again
-// and arrives.
-func (s *Service) forgetFollowsAfterWithdrawal(ctx context.Context, req *Request) {
-	if req == nil {
-		return
-	}
-	if err := s.store.ForgetTitleFollows(ctx, req.MediaType, req.TMDBID); err != nil {
-		slog.WarnContext(ctx, "requests: clearing follows after withdrawal failed", "component", "requests",
-			"request_id", req.ID, "err", err)
-	}
-}
-
 // followedTitles reports which of the titles with an active request the viewer
 // is waiting on, either as the requesting profile or as a follower.
 func (s *Service) followedTitles(ctx context.Context, viewer Viewer, mediaType MediaType, active map[int]*Request) (map[int]bool, error) {
@@ -176,11 +162,18 @@ func (r *Repository) FollowTitle(ctx context.Context, mediaType MediaType, tmdbI
 	return nil
 }
 
-// ForgetTitleFollows removes every follow on the title.
-func (r *Repository) ForgetTitleFollows(ctx context.Context, mediaType MediaType, tmdbID int) error {
-	if _, err := r.pool.Exec(ctx, `
-		DELETE FROM media_request_follows WHERE media_type = $1 AND tmdb_id = $2
-	`, mediaType, tmdbID); err != nil {
+// forgetTitleFollows removes the follows on the title of a request that was
+// just declined or withdrawn, unless the title has another open request whose
+// followers are still waiting for it.
+func forgetTitleFollows(ctx context.Context, exec requestExecutor, closed *Request) error {
+	if _, err := exec.Exec(ctx, `
+		DELETE FROM media_request_follows
+		WHERE media_type = $1 AND tmdb_id = $2
+		  AND NOT EXISTS (
+		    SELECT 1 FROM media_requests
+		    WHERE media_type = $1 AND provider = 'tmdb' AND tmdb_id = $2
+		      AND outcome = 'active' AND status <> 'completed' AND id <> $3)
+	`, closed.MediaType, closed.TMDBID, closed.ID); err != nil {
 		return fmt.Errorf("forget title follows: %w", err)
 	}
 	return nil
