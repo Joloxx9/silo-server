@@ -339,3 +339,20 @@ func TestAnEarlyEpisodeDoesNotCompleteAnUpcomingSeason(t *testing.T) {
 		t.Fatalf("request for season 3 = %+v, %v", req, err)
 	}
 }
+
+// The detail page reads an active season request's state from the series'
+// season counts, as the request lists do.
+func TestSeriesDetailShowsSeasonRequestProgress(t *testing.T) {
+	store := newFakeStore()
+	store.active[MediaTypeSeries] = map[int]*Request{95396: {ID: "r1", MediaType: MediaTypeSeries, TMDBID: 95396,
+		Status: StatusQueued, Outcome: OutcomeActive, RequestedByUserID: 1, Seasons: []int{2}}}
+	svc := seasonService(store, severanceInLibrary())
+
+	detail, err := svc.GetDetail(context.Background(), testViewer(1), MediaTypeSeries, 95396)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Request.State != StatePartiallyAvailable {
+		t.Fatalf("state = %q, want partially_available: 4 of season 2's 10 episodes are in", detail.Request.State)
+	}
+}

@@ -709,6 +709,14 @@ func (s *Service) GetDetail(ctx context.Context, viewer Viewer, mediaType MediaT
 			return nil, err
 		}
 		seasons = requestSeasons(raw, counts, primaryRequests[raw.ID])
+		if active := primaryRequests[raw.ID]; active != nil && len(active.Seasons) > 0 && counts != nil {
+			// Attach the season progress the request lists attach, so the
+			// state can read partially available or available.
+			withProgress := *active
+			withProgress.LibraryContentID = primaryMatch.ContentID
+			withProgress.SeasonProgress = seasonProgress(active.Seasons, counts)
+			primaryRequests[raw.ID] = &withProgress
+		}
 		if available && seriesHasOpenSeason(raw, counts) {
 			more, err := s.moreSeasonsRequestable(ctx)
 			if err != nil {
