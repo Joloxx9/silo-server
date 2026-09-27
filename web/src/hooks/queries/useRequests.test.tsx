@@ -29,6 +29,7 @@ vi.mock("@/api/v2/request", () => ({
 }));
 
 import {
+  useAdminCancelMediaRequest,
   useCancelMediaRequest,
   useCreateMediaRequest,
   useRequestFeatureStatus,
@@ -257,6 +258,29 @@ describe("useCancelMediaRequest", () => {
     expect(cancelInvalidations.mock.calls).toEqual(createInvalidations.mock.calls);
     expect(cancelInvalidations).toHaveBeenCalledWith({ queryKey: requestKeys.all });
     expect(cancelInvalidations).toHaveBeenCalledWith({ queryKey: adminKeys.requestsRoot() });
+  });
+});
+
+describe("useAdminCancelMediaRequest", () => {
+  beforeEach(() => {
+    mocks.api.mockReset();
+  });
+
+  it("refreshes the queue when the cancellation is refused", async () => {
+    // Another admin acted first; the obsolete row must not keep its action.
+    mocks.api.mockRejectedValue(new Error("This request has changed."));
+    const client = new QueryClient();
+    const invalidations = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useAdminCancelMediaRequest(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await expect(result.current.mutateAsync({ id: "req-1" })).rejects.toThrow();
+
+    expect(invalidations).toHaveBeenCalledWith({ queryKey: adminKeys.requestsRoot() });
+    expect(invalidations).toHaveBeenCalledWith({ queryKey: requestKeys.all });
   });
 });
 

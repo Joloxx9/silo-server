@@ -491,8 +491,10 @@ export function useAdminCancelMediaRequest() {
       cancelAdminRequestV2(id, reason),
     onSuccess: () => {
       toast.success("Request cancelled");
-      invalidateRequestSurfaces(queryClient);
     },
+    // A refused action still refreshes the queue: another admin may have
+    // acted first, and the row should show what happened.
+    onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to cancel request");
     },
