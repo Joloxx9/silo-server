@@ -344,18 +344,7 @@ func TestReconcileKeepsStatusesWhenOnePluginFails(t *testing.T) {
 // Sonarr/Radarr servers configured the old way and checks it produces the
 // routes that reproduce the plugin's own routing.
 func TestRouteSeedingMigrationDatabase(t *testing.T) {
-	matches, err := filepath.Glob("../../migrations/sql/*_request_routes.sql")
-	if err != nil || len(matches) != 1 {
-		t.Fatalf("find migration: %v %v", matches, err)
-	}
-	raw, err := os.ReadFile(matches[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	up := string(raw)
-	up = up[strings.Index(up, "-- +goose Up"):strings.Index(up, "-- +goose Down")]
-	up = strings.NewReplacer("-- +goose StatementBegin", "", "-- +goose StatementEnd", "").Replace(up)
-
+	up := migrationUp(t, "request_routes")
 	repo, pool := lifecycleTestRepository(t)
 	ctx := t.Context()
 	// The schema copy took the migrated columns; start from before them.
@@ -384,6 +373,11 @@ func TestRouteSeedingMigrationDatabase(t *testing.T) {
 	seed("seerr", "Seerr", true, 2, "k", `{"requester_mode":"admin"}`)
 	if _, err := pool.Exec(ctx, up); err != nil {
 		t.Fatalf("run migration: %v", err)
+	}
+	// The owner repair keeps these routes: every seeded server belongs to the
+	// plugin that owns the first usable connection of its media type.
+	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes_keep_legacy_owner")); err != nil {
+		t.Fatalf("run owner repair: %v", err)
 	}
 
 	routes, err := repo.ListRoutes(ctx)
@@ -420,6 +414,89 @@ func TestRouteSeedingMigrationDatabase(t *testing.T) {
 	if o := seriesAnime.UHD.Overrides; seriesAnime.UHD.IntegrationID != "sonarr-uhd" || o["root_folder"] != "/anime-4k" ||
 		!slices.Equal(anyInts(o["tags"]), []int{9}) || o["series_type"] != "anime" {
 		t.Fatalf("series anime 4K = %+v", seriesAnime.UHD)
+	}
+}
+
+// migrationUp returns the Up section of the migration named name, runnable as
+// one statement batch.
+func migrationUp(t *testing.T, name string) string {
+	t.Helper()
+	matches, err := filepath.Glob("../../migrations/sql/*_" + name + ".sql")
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("find migration %s: %v %v", name, matches, err)
+	}
+	raw, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	up := string(raw)
+	up = up[strings.Index(up, "-- +goose Up"):strings.Index(up, "-- +goose Down")]
+	return strings.NewReplacer("-- +goose StatementBegin", "", "-- +goose StatementEnd", "").Replace(up)
+}
+
+// TestRouteSeedingKeepsTheLegacyOwnerDatabase covers an install whose first
+// usable movie connection by name is Seerr: before routing, Seerr took every
+// movie request, so the seeded movie routes (which send to Radarr) are removed
+// and movies stay with Seerr. Series stay routed to Sonarr, and a seeded route
+// an admin has saved since is kept.
+func TestRouteSeedingKeepsTheLegacyOwnerDatabase(t *testing.T) {
+	repo, pool := lifecycleTestRepository(t)
+	ctx := t.Context()
+	if _, err := pool.Exec(ctx, `ALTER TABLE media_request_targets DROP COLUMN IF EXISTS route_id, DROP COLUMN IF EXISTS route_name`); err != nil {
+		t.Fatal(err)
+	}
+	seed := func(id, name string, installation int, capability, mediaTypes, config string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `INSERT INTO request_integrations (id, name, enabled, capability_id, installation_id, api_key_ref, supported_media_types, plugin_config)
+			VALUES ($1, $2, true, $3, $4, 'k', $5::text[], $6::jsonb)`, id, name, capability, installation, mediaTypes, config); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seed("seerr", "Jellyseerr", 2, "seerr", "{movie}", `{}`)
+	seed("radarr", "Radarr", 1, "arr", "{movie}", `{"service_kind":"radarr","is_default":true,"anime_enabled":true,"anime_root_folder":"/anime"}`)
+	seed("sonarr", "Sonarr", 1, "arr", "{series}", `{"service_kind":"sonarr","is_default":true,"anime_enabled":true}`)
+	seed("sonarr-4k", "Sonarr 4K", 1, "arr", "{series}", `{"service_kind":"sonarr","is_default_4k":true,"is_4k":true}`)
+	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes")); err != nil {
+		t.Fatalf("run migration: %v", err)
+	}
+	var seeded int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM request_routes`).Scan(&seeded); err != nil || seeded != 4 {
+		t.Fatalf("seeded %d routes (%v), want a fallback and an Anime route per media type", seeded, err)
+	}
+	// An admin saved the series Anime route after the seeding.
+	if _, err := pool.Exec(ctx, `UPDATE request_routes SET updated_at = updated_at + interval '1 minute' WHERE id = 'anime-series'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes_keep_legacy_owner")); err != nil {
+		t.Fatalf("run owner repair: %v", err)
+	}
+	routes, err := repo.ListRoutes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, route := range routes {
+		ids = append(ids, route.ID)
+	}
+	slices.Sort(ids)
+	if want := []string{"anime-series", "fallback-series"}; !slices.Equal(ids, want) {
+		t.Fatalf("routes = %v, want %v: movies go back to Seerr, series keep their routes", ids, want)
+	}
+
+	// An admin-saved route stays even when its server is outside the owner.
+	if _, err := pool.Exec(ctx, `UPDATE request_integrations SET name = 'A Seerr', supported_media_types = '{}' WHERE id = 'seerr'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes_keep_legacy_owner")); err != nil {
+		t.Fatalf("rerun owner repair: %v", err)
+	}
+	routes, err = repo.ListRoutes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Seerr now also owns series: the untouched series fallback goes.
+	if len(routes) != 1 || routes[0].ID != "anime-series" {
+		t.Fatalf("routes = %+v, want only the saved anime-series route", routes)
 	}
 }
 
