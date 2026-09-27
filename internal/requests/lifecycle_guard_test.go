@@ -179,6 +179,13 @@ func TestSubmissionClaimDatabase(t *testing.T) {
 	if current, err := repo.GetRequest(ctx, "req-claim"); err != nil || current.SubmitLeaseUntil == nil || current.NextSubmitAt != nil {
 		t.Fatalf("after a stale defer: request = %+v, err = %v; want the newer claim untouched", current, err)
 	}
+	// Nor may it fail the newer attempt after running out of attempts.
+	if _, err := repo.FailSubmission(ctx, "req-claim", stale, Viewer{}, "stale"); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("fail with an expired lease: err = %v, want ErrInvalidState", err)
+	}
+	if current, err := repo.GetRequest(ctx, "req-claim"); err != nil || current.Outcome != OutcomeActive || current.SubmitLeaseUntil == nil || current.LastError != "" {
+		t.Fatalf("after a stale fail: request = %+v, err = %v; want the newer claim untouched", current, err)
+	}
 	lease.Store(reclaimed.SubmitLeaseUntil)
 
 	deferred, err := repo.DeferSubmission(ctx, "req-claim", *lease.Load(), time.Hour, "radarr unreachable")
@@ -211,8 +218,17 @@ func TestSubmissionClaimDatabase(t *testing.T) {
 	if _, err := repo.ReopenFailed(ctx, "req-claim", Viewer{}); !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("second reopen: err = %v, want ErrInvalidState", err)
 	}
-	if _, claimed, err := repo.ClaimSubmission(ctx, "req-claim", time.Minute); err != nil || !claimed {
+	final, claimed, err := repo.ClaimSubmission(ctx, "req-claim", time.Minute)
+	if err != nil || !claimed {
 		t.Fatalf("claim after reopen: claimed = %v, err = %v; want claimed", claimed, err)
+	}
+	// The current claim fails its request and releases the lease.
+	failed, err := repo.FailSubmission(ctx, "req-claim", *final.SubmitLeaseUntil, Viewer{}, "radarr rejected it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.Outcome != OutcomeFailed || failed.LastError != "radarr rejected it" || failed.SubmitLeaseUntil != nil {
+		t.Fatalf("failed = %+v, want failed with the error and the claim released", failed)
 	}
 }
 
@@ -394,6 +410,40 @@ func TestSubmitApprovedMarksFailedAfterLastAttempt(t *testing.T) {
 	}
 	if req.Outcome != OutcomeFailed || req.LastError != "radarr: connection refused" {
 		t.Fatalf("request = %+v, want failed with the last error", req)
+	}
+}
+
+// reclaimingRouter fails every submission and, while the call is in flight,
+// lets the claim lapse and another server claim the request again.
+type reclaimingRouter struct {
+	*fakeRouterProvider
+	store *fakeStore
+}
+
+func (r reclaimingRouter) Fulfill(ctx context.Context, installationID int, capabilityID string, req Request, qualities []Quality, conns []ResolvedRouterConnection) ([]RouterTarget, string, error) {
+	r.store.mu.Lock()
+	newer := time.Now().Add(time.Hour)
+	r.store.requests[req.ID].SubmitLeaseUntil = &newer
+	r.store.mu.Unlock()
+	return r.fakeRouterProvider.Fulfill(ctx, installationID, capabilityID, req, qualities, conns)
+}
+
+func TestSubmitLastAttemptWithExpiredLeaseLeavesNewerClaim(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{routerInst("router-1")}
+	store.requests["r1"] = &Request{
+		ID: "r1", MediaType: MediaTypeMovie, TMDBID: 550, Status: StatusApproved, Outcome: OutcomeActive,
+		SubmitAttempts: maxSubmitAttempts - 1,
+	}
+	svc := newTestService(store)
+	svc.SetRouterProvider(reclaimingRouter{&fakeRouterProvider{fulfillErr: errors.New("radarr: connection refused")}, store})
+
+	req, err := svc.submitApprovedRequest(context.Background(), *store.requests["r1"], Viewer{}, nil)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if req.Outcome != OutcomeActive || req.Status != StatusApproved || req.LastError != "" {
+		t.Fatalf("request = %+v, want the newer claim's request left approved/active", req)
 	}
 }
 

@@ -140,6 +140,13 @@ func (s *Service) followedTitles(ctx context.Context, viewer Viewer, mediaType M
 // FollowTitle inserts the follow only while the title has an open request, in
 // the same statement, so a follow cannot land just after the request
 // completed and never be told. It answers ErrNotRequested when there is none.
+//
+// FOR SHARE holds the open request until the follow commits. Every transition
+// that closes a request (decline, cancel, completion) updates its row, and
+// that row lock conflicts with FOR SHARE, so the close cannot commit, and its
+// follow cleanup cannot run, between the read and the insert. A follow that
+// waited on a close re-checks the updated row, finds it closed, and inserts
+// nothing.
 func (r *Repository) FollowTitle(ctx context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error {
 	var open bool
 	if err := r.pool.QueryRow(ctx, `
@@ -148,6 +155,7 @@ func (r *Repository) FollowTitle(ctx context.Context, mediaType MediaType, tmdbI
 			WHERE media_type = $1 AND provider = 'tmdb' AND tmdb_id = $2
 			  AND outcome = 'active' AND status <> 'completed'
 			LIMIT 1
+			FOR SHARE
 		), inserted AS (
 			INSERT INTO media_request_follows (media_type, tmdb_id, user_id, profile_id)
 			SELECT $1, $2, $3, $4 FROM open_request
