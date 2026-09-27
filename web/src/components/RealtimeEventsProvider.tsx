@@ -84,6 +84,22 @@ const CATALOG_ITEM_CHANGED_EVENTS = new Set([
   "library.item_added",
   "metadata.updated",
 ]);
+
+// Everything that shows a title's request state: the request list, title
+// pages, Discover, and request search results. The feature status and brand
+// lists don't depend on it.
+const REQUEST_STATE_QUERIES: QueryFilters[] = [
+  { queryKey: requestKeys.mineAll() },
+  { queryKey: requestKeys.detailAll() },
+  { queryKey: requestKeys.discovery() },
+  { queryKey: requestKeys.discoverBrowseAll() },
+  { queryKey: requestKeys.searchAll() },
+];
+
+function isRequestNotification(notification: Pick<AppNotification, "type">) {
+  return notification.type?.startsWith("request.") ?? false;
+}
+
 function buildEventsUrl(location: Pick<Location, "protocol" | "host">) {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${location.host}/api/v2/events/ws`;
@@ -568,7 +584,13 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
         break;
       case "notifications":
         if (Array.isArray(message.data)) {
-          applyNotificationsSnapshot(queryClient, message.data as AppNotification[]);
+          const rows = message.data as AppNotification[];
+          applyNotificationsSnapshot(queryClient, rows);
+          // A reconnect sends request changes made while the socket was down
+          // as unread rows here, not as notification.created events.
+          if (rows.some(isRequestNotification)) {
+            refreshQueries(...REQUEST_STATE_QUERIES);
+          }
         }
         break;
       default:
@@ -583,18 +605,10 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
   ) {
     if (message.event === "notification.created") {
       const notification = message.data as AppNotification;
-      // A request changed state (approved, declined, arrived). The account's
-      // request list and the request badges on title pages and Discover read
-      // it, whichever of its profiles the notice was for. The scheduler
+      // A request changed state (approved, declined, arrived). The scheduler
       // batches a burst (a scan fulfilling many requests) into one refetch.
-      // The feature status, brand lists, and search don't depend on it.
-      if (notification.type?.startsWith("request.")) {
-        refreshQueries(
-          { queryKey: requestKeys.mineAll() },
-          { queryKey: requestKeys.detailAll() },
-          { queryKey: requestKeys.discovery() },
-          { queryKey: requestKeys.discoverBrowseAll() },
-        );
+      if (isRequestNotification(notification)) {
+        refreshQueries(...REQUEST_STATE_QUERIES);
       }
       if (
         notification.profile_id &&

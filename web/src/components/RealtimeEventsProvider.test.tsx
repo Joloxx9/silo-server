@@ -854,12 +854,9 @@ describe("RealtimeEventsProvider", () => {
       requestKeys.discovery(),
       requestKeys.discoverySection("trending_movies", 2),
       requestKeys.discoverBrowse("genre", "drama", "movie", "popularity", 1),
-    ];
-    const untouched = [
-      requestKeys.status(),
-      requestKeys.discoverStudios(),
       requestKeys.search("all", "dune", 1, "profile-1"),
     ];
+    const untouched = [requestKeys.status(), requestKeys.discoverStudios()];
     for (const key of [...refreshed, ...untouched]) queryClient.setQueryData(key, {});
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     const invalidations = (key: readonly unknown[]) =>
@@ -914,5 +911,51 @@ describe("RealtimeEventsProvider", () => {
     }
     for (const key of untouched) expect(invalidations(key)).toBe(0);
     expect(invalidations(requestKeys.all)).toBe(0);
+  });
+
+  it("refetches request state when a reconnect snapshot holds request notifications", async () => {
+    const queryClient = new QueryClient();
+    const mine = requestKeys.mine({ status: "all", outcome: "all", limit: 100, offset: 0 });
+    const search = requestKeys.search("all", "dune", 1, "profile-1");
+    for (const key of [mine, search]) queryClient.setQueryData(key, {});
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const invalidations = (key: readonly unknown[]) =>
+      invalidate.mock.calls.filter(
+        ([filters]) => JSON.stringify(filters?.queryKey) === JSON.stringify(key),
+      ).length;
+    mockState.profile = { id: "profile-1", has_pin: false };
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RealtimeEventsProvider>
+          <div />
+        </RealtimeEventsProvider>
+      </QueryClientProvider>,
+    );
+
+    await act(async () => {});
+    const snapshot = (types: string[]) =>
+      FakeWebSocket.instances[0]?.emitMessage({
+        type: "snapshot",
+        channel: "notifications",
+        data: types.map((type, index) => ({
+          id: `${type}-${index}`,
+          type,
+          profile_id: "profile-1",
+          created_at: "",
+        })),
+      });
+
+    await act(async () => {
+      snapshot(["episode.available"]);
+    });
+    expect(invalidations(mine)).toBe(0);
+    expect(invalidations(search)).toBe(0);
+
+    await act(async () => {
+      snapshot(["episode.available", "request.approved"]);
+    });
+    expect(invalidations(mine)).toBe(1);
+    expect(invalidations(search)).toBe(1);
   });
 });
