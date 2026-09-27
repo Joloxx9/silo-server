@@ -64,6 +64,7 @@ type RequesterIdentityResolver interface {
 type Service struct {
 	store             Store
 	tmdb              TMDBClient
+	animeIndex        AnimeIndex
 	presence          PresenceResolver
 	router            RequestRouterProvider
 	entitlements      EntitlementResolver
@@ -867,7 +868,7 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 			normalized.Year = &year
 		}
 	}
-	facts := routingFactsFrom(detail, s.now())
+	facts := s.routingFacts(ctx, detail)
 	if normalized.MediaType == MediaTypeSeries && !normalized.WholeSeries {
 		// A series partly in the library can still be requested for the
 		// seasons it is missing.
@@ -2197,11 +2198,36 @@ func qualityLabel(q Quality) string {
 // asks TMDB again.
 const unratedRecheck = 24 * time.Hour
 
+// TMDBCertificationsClient reads every country's certifications, for the
+// routing rating's fallback to a title's own country.
+type TMDBCertificationsClient interface {
+	GetCertifications(ctx context.Context, mediaType string, id int) (map[string][]string, error)
+}
+
+// routingRatingOf reads a captured request's rating again: its US rating, or
+// its own country's when it has none. A client without the per-country read
+// answers with the US rating alone.
+func (s *Service) routingRatingOf(ctx context.Context, req Request) (string, error) {
+	if certs, ok := s.tmdb.(TMDBCertificationsClient); ok {
+		all, err := certs.GetCertifications(ctx, string(req.MediaType), req.TMDBID)
+		if err != nil {
+			return "", err
+		}
+		us := tmdb.USCertificationFrom(string(req.MediaType), all)
+		return routingRating(us, all, req.RoutingFacts.OriginCountries), nil
+	}
+	one, ok := s.tmdb.(TMDBCertificationClient)
+	if !ok {
+		return "", errors.New("no certification client")
+	}
+	return one.GetCertification(ctx, string(req.MediaType), req.TMDBID)
+}
+
 // ensureRoutingFacts fetches the routing facts of a request created before
 // they were captured, or while TMDB was unreachable, and stores them. Routing
 // without them could send a title to the wrong server, so a TMDB failure is a
 // submission error and the submission retries. A request captured before its
-// US rating was is given one, only when an enabled route checks ratings.
+// rating was is given one, only when an enabled route checks ratings.
 func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request, routes []Route) error {
 	if req.RoutingFacts.Captured() {
 		// A title TMDB had not rated yet (unreleased) is asked again a day
@@ -2211,13 +2237,9 @@ func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request, routes [
 		if known || !routesCheckRating(routes, req.MediaType) {
 			return nil
 		}
-		certs, ok := s.tmdb.(TMDBCertificationClient)
-		if !ok {
-			return errors.New("could not read the title's US rating from TMDB to route it")
-		}
-		rating, err := certs.GetCertification(ctx, string(req.MediaType), req.TMDBID)
+		rating, err := s.routingRatingOf(ctx, *req)
 		if err != nil {
-			return fmt.Errorf("could not read the title's US rating from TMDB to route it: %w", err)
+			return fmt.Errorf("could not read the title's rating from TMDB to route it: %w", err)
 		}
 		facts := req.RoutingFacts
 		now := s.now()
@@ -2238,7 +2260,7 @@ func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request, routes [
 		}
 		return errors.New("could not read the title's details from TMDB to route it")
 	}
-	updated, err := s.store.SetRoutingFacts(ctx, req.ID, routingFactsFrom(detail, s.now()))
+	updated, err := s.store.SetRoutingFacts(ctx, req.ID, s.routingFacts(ctx, detail))
 	if err != nil {
 		return err
 	}

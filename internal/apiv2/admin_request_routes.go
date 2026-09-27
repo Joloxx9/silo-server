@@ -78,7 +78,7 @@ type AdminRequestRoutingUpdateInput struct {
 // list matches when the title has any of its values, and an exclude list when
 // it has none of them. Its fields mirror the service's, in the same order.
 type AdminRequestRouteConditions struct {
-	Anime             *bool    `json:"anime,omitempty" doc:"Match titles TMDB tags as anime (true) or not (false)"`
+	Anime             *bool    `json:"anime,omitempty" doc:"Match anime (true) or not (false): Japanese animation, and titles TMDB tags anime or an AniDB-based list names"`
 	GenreIDs          []int    `json:"genre_ids,omitempty" doc:"TMDB genre IDs"`
 	KeywordIDs        []int    `json:"keyword_ids,omitempty" doc:"TMDB keyword IDs"`
 	OriginalLanguages []string `json:"original_languages,omitempty" doc:"ISO 639-1 codes of the original language" example:"[\"ja\"]"`
@@ -96,7 +96,7 @@ type AdminRequestRouteConditions struct {
 	ExcludeNetworkIDs        []int    `json:"exclude_network_ids,omitempty" doc:"Match series on none of these TMDB networks"`
 	ExcludeCompanyIDs        []int    `json:"exclude_company_ids,omitempty" doc:"Match movies from none of these TMDB companies"`
 	ExcludeRequesterUserIDs  []int    `json:"exclude_requester_user_ids,omitempty" doc:"Match requests from none of these accounts"`
-	MaxContentRating         string   `json:"max_content_rating,omitempty" doc:"Match titles whose US rating is at most this one; a title with no US rating does not match" example:"PG"`
+	MaxContentRating         string   `json:"max_content_rating,omitempty" doc:"Match titles whose rating is at most this one, by minimum age: the US rating, or the title's own country's when it has none; a title with neither does not match" example:"PG"`
 }
 
 // AdminRequestRouteDestination is where a route sends one quality tier.
@@ -183,8 +183,8 @@ type AdminRequestRouteFacts struct {
 	Year             int      `json:"year,omitempty"`
 	NetworkIDs       []int    `json:"network_ids"`
 	CompanyIDs       []int    `json:"company_ids"`
-	Anime            bool     `json:"anime"`
-	ContentRating    string   `json:"content_rating,omitempty" doc:"The title's US rating; absent when TMDB has none" example:"TV-14"`
+	Anime            bool     `json:"anime" doc:"Japanese animation, or a title TMDB tags anime or an AniDB-based list names"`
+	ContentRating    string   `json:"content_rating,omitempty" doc:"The title's US rating, or its own country's prefixed with the country code (JP:PG12) when it has none; absent when TMDB has neither" example:"TV-14"`
 }
 
 // AdminRequestRoutePreviewRule is what one route did in a preview.

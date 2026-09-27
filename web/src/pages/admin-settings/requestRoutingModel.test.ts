@@ -442,8 +442,20 @@ describe("how it was decided", () => {
       "English · United States · 2019 · Rated TV-Y7 · Animation",
     );
     expect(factsSentence({ ...facts, anime: true }, "movie")).toBe(
-      "anime · English · United States · 2019 · No US rating · Animation",
+      "anime · English · United States · 2019 · No rating · Animation",
     );
+    // A title's own country's rating, when it has no US one.
+    expect(factsSentence({ ...facts, content_rating: "JP:PG12" }, "movie")).toBe(
+      "English · United States · 2019 · Rated PG12 (JP) · Animation",
+    );
+    expect(
+      traceLine(
+        step({ route_name: "Kids", unmet_conditions: ["max_content_rating"] }),
+        1,
+        { max_content_rating: "PG" },
+        { ...ctx, facts: { ...facts, content_rating: "JP:PG12" } },
+      ),
+    ).toBe("1. Kids — doesn't match: rated PG12 (JP) (wants PG or lower)");
   });
 
   it("explains each rule in plain sentences", () => {
@@ -461,7 +473,7 @@ describe("how it was decided", () => {
         ctx,
       ),
     ).toBe(
-      "3. Kids & family — doesn't match: genre is Animation (wants Family or Kids); no US rating (wants PG or lower)",
+      "3. Kids & family — doesn't match: genre is Animation (wants Family or Kids); no rating (wants PG or lower)",
     );
     expect(traceLine(step({ route_name: "Old anime", enabled: false }), 2, {}, ctx)).toBe(
       "Off: Old anime",

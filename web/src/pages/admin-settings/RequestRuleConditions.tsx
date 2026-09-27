@@ -334,7 +334,7 @@ function ConditionLine({
         </Select>
       </>
     );
-    hint = "Titles with no US rating don't match.";
+    hint = "Titles without a US rating use their own country's; titles with neither don't match.";
   } else if (row.kind === "year") {
     body = <YearValues row={row} onChange={onChange} invalid={Boolean(error)} />;
   } else {

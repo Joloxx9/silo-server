@@ -82,9 +82,10 @@ type RouteConditions struct {
 	ExcludeNetworkIDs        []int    `json:"exclude_network_ids,omitempty"`
 	ExcludeCompanyIDs        []int    `json:"exclude_company_ids,omitempty"`
 	ExcludeRequesterUserIDs  []int    `json:"exclude_requester_user_ids,omitempty"`
-	// MaxContentRating matches titles whose US rating is at most this one
-	// ("PG" takes G and PG). A title with no US rating does not match, as a
-	// parental ceiling treats it.
+	// MaxContentRating matches titles whose rating is at most this one ("PG"
+	// takes G and PG), by minimum age: the US rating, or the title's own
+	// country's when it has no US one. A title with neither does not match,
+	// as a parental ceiling treats it.
 	MaxContentRating string `json:"max_content_rating,omitempty"`
 }
 
@@ -170,7 +171,7 @@ func routesUseConditions(routes []Route, mediaType MediaType) bool {
 	return false
 }
 
-// ratingWithin reports whether a title's US rating is at most max, by each
+// ratingWithin reports whether a title's rating is at most max, by each
 // rating's own minimum age (not the parental-control tiers, which would let
 // "TV-Y7 or lower" take TV-PG). An unknown or unrated title is not.
 func ratingWithin(rating *string, max string) bool {

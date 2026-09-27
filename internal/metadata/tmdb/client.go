@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -890,6 +891,7 @@ func normalizeMovieDetail(resp *movieDetailResponse) *MediaDetail {
 		Homepage:         resp.Homepage,
 		ContentRating:    pickMovieCertification(resp.ReleaseDates),
 		USCertification:  pickUSMovieCertification(resp.ReleaseDates),
+		Certifications:   movieCertifications(resp.ReleaseDates),
 		OriginalLanguage: resp.OriginalLanguage,
 		KeywordIDs:       keywordIDs(resp.Keywords.Keywords, resp.Keywords.Results),
 		GenreIDs:         idsFromGenres(resp.Genres),
@@ -956,6 +958,7 @@ func normalizeTVDetail(resp *tvDetailResponse) *MediaDetail {
 		NumberOfEpisodes: resp.NumberOfEpisodes,
 		ContentRating:    pickTVRating(resp.ContentRatings),
 		USCertification:  pickUSTVRating(resp.ContentRatings),
+		Certifications:   tvCertifications(resp.ContentRatings),
 		OriginalLanguage: resp.OriginalLanguage,
 		KeywordIDs:       keywordIDs(resp.Keywords.Keywords, resp.Keywords.Results),
 		GenreIDs:         idsFromGenres(resp.Genres),
@@ -1213,17 +1216,57 @@ func cloneExternalIDs(ids *ExternalIDs) *ExternalIDs {
 // ladder treats as fail-closed. mediaType accepts Silo-facing
 // "movie"/"series" plus TMDB-facing "tv".
 func (c *Client) GetCertification(ctx context.Context, mediaType string, id int) (string, error) {
-	var path string
+	path, err := certificationPath(mediaType, id)
+	if err != nil {
+		return "", err
+	}
+	return c.cachedCertification(ctx, "certification:"+path, func(fetchCtx context.Context) (string, error) {
+		return c.fetchCertification(fetchCtx, mediaType, path)
+	})
+}
+
+// GetCertifications returns every country's certifications for a title,
+// keyed by ISO 3166-1 code, from the same small sub-resource and cache as
+// GetCertification. Request routing reads a title's own country's rating
+// from it when the title has no US one; the parental-control path keeps to
+// GetCertification.
+func (c *Client) GetCertifications(ctx context.Context, mediaType string, id int) (map[string][]string, error) {
+	path, err := certificationPath(mediaType, id)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := c.cachedCertification(ctx, "certifications:"+path, func(fetchCtx context.Context) (string, error) {
+		certs, err := c.fetchCertifications(fetchCtx, mediaType, path)
+		if err != nil {
+			return "", err
+		}
+		encoded, err := json.Marshal(certs)
+		return string(encoded), err
+	})
+	if err != nil {
+		return nil, err
+	}
+	var certs map[string][]string
+	if err := json.Unmarshal([]byte(raw), &certs); err != nil {
+		return nil, fmt.Errorf("tmdb: invalid cached certifications: %w", err)
+	}
+	return certs, nil
+}
+
+func certificationPath(mediaType string, id int) (string, error) {
 	switch mediaType {
 	case "movie":
-		path = fmt.Sprintf("/movie/%d/release_dates", id)
+		return fmt.Sprintf("/movie/%d/release_dates", id), nil
 	case "series", "tv":
-		path = fmt.Sprintf("/tv/%d/content_ratings", id)
+		return fmt.Sprintf("/tv/%d/content_ratings", id), nil
 	default:
 		return "", fmt.Errorf("tmdb: invalid media type: %q", mediaType)
 	}
+}
 
-	cacheKey := "certification:" + path
+// cachedCertification fetches one certification value once across concurrent
+// callers and caches it.
+func (c *Client) cachedCertification(ctx context.Context, cacheKey string, fetch func(context.Context) (string, error)) (string, error) {
 	if c.certificationCache != nil {
 		if cached, ok := c.certificationCache.Get(cacheKey); ok {
 			return cached, nil
@@ -1242,7 +1285,7 @@ func (c *Client) GetCertification(ctx context.Context, mediaType string, id int)
 		}
 		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), certificationFetchTimeout)
 		defer cancel()
-		cert, err := c.fetchCertification(fetchCtx, mediaType, path)
+		cert, err := fetch(fetchCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -1267,6 +1310,75 @@ func (c *Client) GetCertification(ctx context.Context, mediaType string, id int)
 		}
 		return cert, nil
 	}
+}
+
+func (c *Client) fetchCertifications(ctx context.Context, mediaType, path string) (map[string][]string, error) {
+	if mediaType == "movie" {
+		var resp releaseDatesResponse
+		if err := c.doGet(ctx, path, &resp); err != nil {
+			return nil, err
+		}
+		return movieCertifications(&resp), nil
+	}
+	var resp contentRatingsResponse
+	if err := c.doGet(ctx, path, &resp); err != nil {
+		return nil, err
+	}
+	return tvCertifications(&resp), nil
+}
+
+// USCertificationFrom picks the US rating out of GetCertifications' answer
+// the way GetCertification does: the strictest recognized movie
+// certification, a series' first rating.
+func USCertificationFrom(mediaType string, certs map[string][]string) string {
+	us := certs["US"]
+	if mediaType != "movie" {
+		if len(us) > 0 {
+			return us[0]
+		}
+		return ""
+	}
+	var picked string
+	pickedRank := -1
+	for _, cert := range us {
+		if rank := usCertificationRank[strings.ToUpper(cert)]; rank > pickedRank || picked == "" {
+			picked, pickedRank = cert, rank
+		}
+	}
+	return picked
+}
+
+// movieCertifications lists each country's non-empty certifications, in
+// TMDB's order, without repeats.
+func movieCertifications(rd *releaseDatesResponse) map[string][]string {
+	out := map[string][]string{}
+	if rd == nil {
+		return out
+	}
+	for _, country := range rd.Results {
+		code := strings.ToUpper(strings.TrimSpace(country.ISO3166))
+		for _, entry := range country.ReleaseDates {
+			if cert := strings.TrimSpace(entry.Certification); code != "" && cert != "" && !slices.Contains(out[code], cert) {
+				out[code] = append(out[code], cert)
+			}
+		}
+	}
+	return out
+}
+
+// tvCertifications lists each country's non-empty rating.
+func tvCertifications(cr *contentRatingsResponse) map[string][]string {
+	out := map[string][]string{}
+	if cr == nil {
+		return out
+	}
+	for _, entry := range cr.Results {
+		code := strings.ToUpper(strings.TrimSpace(entry.ISO3166))
+		if rating := strings.TrimSpace(entry.Rating); code != "" && rating != "" && !slices.Contains(out[code], rating) {
+			out[code] = append(out[code], rating)
+		}
+	}
+	return out
 }
 
 func (c *Client) fetchCertification(ctx context.Context, mediaType, path string) (string, error) {

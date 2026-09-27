@@ -1003,7 +1003,7 @@ describe("Where requests go: try a title", () => {
     });
     expect(calls("GET /api/v2/requests/search")).toHaveLength(0);
     expect(
-      within(series).getByText("English · United States · 2019 · No US rating · Animation"),
+      within(series).getByText("English · United States · 2019 · No rating · Animation"),
     ).toBeInTheDocument();
     const result = within(series).getByText("Bluey (2018)").parentElement!;
     expect(
@@ -1015,7 +1015,7 @@ describe("Where requests go: try a title", () => {
       .map((item) => item.textContent)
       .slice(2);
     expect(steps).toEqual([
-      "1. Kids & family — doesn't match: genre is Animation (wants Family or Kids); no US rating (wants PG or lower)",
+      "1. Kids & family — doesn't match: genre is Animation (wants Family or Kids); no rating (wants PG or lower)",
       "2. For kid — matches · decides HD",
       "Off: Old anime",
       "Everything else — decides 4K: no copy",

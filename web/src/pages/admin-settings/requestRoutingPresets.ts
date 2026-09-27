@@ -51,8 +51,8 @@ export function rulePreset(
         name: "Anime",
         description:
           mediaType === "series"
-            ? "Titles TMDB tags as anime. For Sonarr, also sets the series type to Anime."
-            : "Titles TMDB tags as anime.",
+            ? "Japanese animation, and titles TMDB or AniDB list as anime. For Sonarr, also sets the series type to Anime."
+            : "Japanese animation, and titles TMDB or AniDB list as anime.",
         conditions: { anime: true },
         noun: `anime ${plural}`,
         matches: `${plural} that are anime`,

@@ -192,7 +192,10 @@ type MediaDetail struct {
 	ContentRating string
 	// USCertification is the US rating alone (the one GetCertification
 	// reports); ContentRating falls back to other countries for display.
-	USCertification     string
+	USCertification string
+	// Certifications holds every country's certifications, keyed by ISO
+	// 3166-1 code, for readers that fall back to a title's own country.
+	Certifications      map[string][]string
 	ProductionCompanies []string
 	OriginalLanguage    string
 	KeywordIDs          []int

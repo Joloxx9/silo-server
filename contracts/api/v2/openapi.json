@@ -11819,7 +11819,7 @@
         "additionalProperties": false,
         "properties": {
           "anime": {
-            "description": "Match titles TMDB tags as anime (true) or not (false)",
+            "description": "Match anime (true) or not (false): Japanese animation, and titles TMDB tags anime or an AniDB-based list names",
             "type": "boolean"
           },
           "company_ids": {
@@ -11906,7 +11906,7 @@
             "type": "array"
           },
           "max_content_rating": {
-            "description": "Match titles whose US rating is at most this one; a title with no US rating does not match",
+            "description": "Match titles whose rating is at most this one, by minimum age: the US rating, or the title's own country's when it has none; a title with neither does not match",
             "examples": [
               "PG"
             ],
@@ -11990,6 +11990,7 @@
         "additionalProperties": false,
         "properties": {
           "anime": {
+            "description": "Japanese animation, or a title TMDB tags anime or an AniDB-based list names",
             "type": "boolean"
           },
           "company_ids": {
@@ -12000,7 +12001,7 @@
             "type": "array"
           },
           "content_rating": {
-            "description": "The title's US rating; absent when TMDB has none",
+            "description": "The title's US rating, or its own country's prefixed with the country code (JP:PG12) when it has none; absent when TMDB has neither",
             "examples": [
               "TV-14"
             ],

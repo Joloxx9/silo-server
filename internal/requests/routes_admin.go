@@ -301,7 +301,7 @@ func (s *Service) PreviewRoute(ctx context.Context, viewer Viewer, mediaType Med
 	if err != nil {
 		return nil, err
 	}
-	req := Request{MediaType: mediaType, TMDBID: tmdbID, RequestedByUserID: requesterUserID, RoutingFacts: routingFactsFrom(detail, s.now())}
+	req := Request{MediaType: mediaType, TMDBID: tmdbID, RequestedByUserID: requesterUserID, RoutingFacts: s.routingFacts(ctx, detail)}
 	routes := fc.routesFor(mediaType)
 	qualities := []Quality{Quality1080p, Quality2160p}
 	decisions, traces := traceRoutes(routes, req, qualities)

@@ -14737,7 +14737,7 @@ export interface components {
       uhd: components["schemas"]["AdminRequestRouteDestination"];
     };
     AdminRequestRouteConditions: {
-      /** @description Match titles TMDB tags as anime (true) or not (false) */
+      /** @description Match anime (true) or not (false): Japanese animation, and titles TMDB tags anime or an AniDB-based list names */
       anime?: boolean;
       /** @description TMDB production company IDs (movies) */
       company_ids?: number[];
@@ -14765,7 +14765,7 @@ export interface components {
       /** @description TMDB keyword IDs */
       keyword_ids?: number[];
       /**
-       * @description Match titles whose US rating is at most this one; a title with no US rating does not match
+       * @description Match titles whose rating is at most this one, by minimum age: the US rating, or the title's own country's when it has none; a title with neither does not match
        * @example PG
        */
       max_content_rating?: string;
@@ -14809,10 +14809,11 @@ export interface components {
       };
     };
     AdminRequestRouteFacts: {
+      /** @description Japanese animation, or a title TMDB tags anime or an AniDB-based list names */
       anime: boolean;
       company_ids: number[];
       /**
-       * @description The title's US rating; absent when TMDB has none
+       * @description The title's US rating, or its own country's prefixed with the country code (JP:PG12) when it has none; absent when TMDB has neither
        * @example TV-14
        */
       content_rating?: string;

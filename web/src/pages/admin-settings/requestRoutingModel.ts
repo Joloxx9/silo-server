@@ -673,6 +673,15 @@ export const ROUTING_RATINGS: readonly string[] = [
 /* Try a title: facts and the trace                                          */
 /* ------------------------------------------------------------------------ */
 
+/**
+ * A routing rating in words: "PG-13", or "PG12 (JP)" for a title's own
+ * country's rating, which the server prefixes with the country code.
+ */
+export function ratingLabel(rating: string): string {
+  const match = /^([A-Za-z]{2,3}):(.+)$/.exec(rating);
+  return match ? `${match[2]} (${match[1]!.toUpperCase()})` : rating;
+}
+
 /** "anime · Japanese · Japan · 2001 · Rated PG · Animation, Fantasy". */
 export function factsSentence(facts: RequestRouteFacts, mediaType: RequestRouteMediaType): string {
   return [
@@ -682,7 +691,7 @@ export function factsSentence(facts: RequestRouteFacts, mediaType: RequestRouteM
       ? facts.origin_countries.map(routingCountryName).join(", ")
       : null,
     facts.year ? String(facts.year) : null,
-    facts.content_rating ? `Rated ${facts.content_rating}` : "No US rating",
+    facts.content_rating ? `Rated ${ratingLabel(facts.content_rating)}` : "No rating",
     facts.genre_ids.length > 0 ? genreNames(facts.genre_ids, mediaType).join(", ") : null,
   ]
     .filter(Boolean)
@@ -703,7 +712,7 @@ function has(values: readonly string[], none: string, label: string) {
 
 /**
  * Why a title fails one condition of a rule, from the preview's facts:
- * "genre is Animation (wants Family or Kids)", "no US rating (wants PG or lower)".
+ * "genre is Animation (wants Family or Kids)", "no rating (wants PG or lower)".
  * Year bounds are reported once, as `year_from`, for both keys.
  */
 function traceMissSentence(
@@ -737,7 +746,7 @@ function traceMissSentence(
     case "year_to":
       return `${facts.year ? `year is ${facts.year}` : "no year"} (wants ${yearRangeLabel(c.year_from, c.year_to)})`;
     case "max_content_rating":
-      return `${facts.content_rating ? `rated ${facts.content_rating}` : "no US rating"} (wants ${c.max_content_rating} or lower)`;
+      return `${facts.content_rating ? `rated ${ratingLabel(facts.content_rating)}` : "no rating"} (wants ${c.max_content_rating} or lower)`;
     case "network_ids":
     case "exclude_network_ids": {
       const on = has(brandNames(facts.network_ids, "network", names), "no network", "network is");

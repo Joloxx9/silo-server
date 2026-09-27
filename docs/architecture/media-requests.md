@@ -24,10 +24,33 @@ Creating a request reads the title's TMDB detail once, after the cheap refusals
 (a movie already in the library, a title already requested). The server's copy of the title and
 year replaces the client's, and a snapshot of what routing can match on is
 stored with the request as `routing_facts`: TMDB genre, keyword, network and
-company IDs, original language, origin countries, year, and whether TMDB tags it
-anime. IDs rather than names, because names follow the configured TMDB
-language. When TMDB cannot answer, the request is still created from the
-client's copy, and the facts stay uncaptured until routing fetches them.
+company IDs, original language, origin countries, year, rating, and whether
+it is anime. IDs rather than names, because names follow the configured TMDB
+language.
+
+Anime means Japanese animation (`internal/requests/anime.go`). TMDB's anime
+keyword alone misses about one anime series in eight and one film in three, so
+a title also counts when TMDB files it as Animation in Japanese or from Japan,
+or when an AniDB-based list names it (a series also needs to be in Japanese or
+from Japan, since the list names some Western series and a series' anime flag
+can set Sonarr's series type). The list is Kometa's Anime-IDs, matched
+on the TVDB series ID (series) or IMDb ID TMDB reports; the "Refresh Anime
+List" task (`internal/animeids`) downloads it daily into `anime_ids`, one
+server at a time under a lease, keeping the stored copy when a download fails
+or looks truncated. The request path only reads the table, and a failed
+lookup counts as not listed. AniDB also lists Chinese and Korean animation,
+which counts only when TMDB itself tags it anime; an admin routes it with a
+genre and language rule instead.
+
+The rating is the US one when the title has one. A title never rated in the
+US falls back to its own country's (the first origin country TMDB rated it
+in, strictest where it rated it more than once), stored with the country as a
+prefix ("JP:PG12") so `access.Normalize` reads its age on that country's
+scale; so does a title rated only "NR" in the US. The parental-control path
+keeps to the US rating.
+
+When TMDB cannot answer, the request is still created from the client's copy,
+and the facts stay uncaptured until routing fetches them.
 
 ## Routing
 
@@ -37,15 +60,15 @@ media type and hold conditions and a destination per tier: a server plus
 overrides for its plugin config (root folder, quality profile, tags, series type,
 minimum availability, ...). Conditions match on the request's routing facts and
 requester: anime, genre, keyword, original language, origin country, year range,
-network, studio, requesting account, and US content rating ("at most PG"). Every
+network, studio, requesting account, and content rating ("at most PG"). Every
 set condition must hold; a list matches any of its values, and each list has an
 exclude form that matches when the title has none of them ("original language
-is not English"). A title with no US rating never matches a rating condition,
-as a parental ceiling treats it. Ratings compare by their own minimum ages
-("TV-Y7 or lower" does not take TV-PG), and a title TMDB had not rated yet is
-asked about again a day later. The rating is captured with the other facts
-from the detail TMDB already returns; a request captured before the rating was
-gets it at submission, only when a route checks ratings.
+is not English"). A title with no rating (US or its own country's) never
+matches a rating condition, as a parental ceiling treats it. Ratings compare by
+their own minimum ages ("TV-Y7 or lower" does not take TV-PG), and a title TMDB
+had not rated yet is asked about again a day later. The rating is captured with
+the other facts from the detail TMDB already returns; a request captured before
+the rating was gets it at submission, only when a route checks ratings.
 
 Each tier is decided on its own: the first enabled route, in position order,
 whose conditions match and that has a destination for the tier wins, and the

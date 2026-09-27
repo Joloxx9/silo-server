@@ -198,3 +198,38 @@ func TestHDCopyDropsTheServers4KFlag(t *testing.T) {
 		}
 	}
 }
+
+type certsTMDB struct {
+	certTMDB
+	all map[string][]string
+}
+
+func (c *certsTMDB) GetCertifications(context.Context, string, int) (map[string][]string, error) {
+	return c.all, c.err
+}
+
+// A title never rated in the US is routed on its own country's rating.
+func TestLazyRatingFallsBackToTheTitlesOwnCountry(t *testing.T) {
+	store := routingStore(capturedFacts(RoutingFacts{OriginCountries: []string{"JP"}}))
+	store.routes = append(store.routes, Route{ID: "kids", MediaType: MediaTypeMovie, Name: "Kids", Enabled: true,
+		Conditions: RouteConditions{MaxContentRating: "PG-13"}, HD: RouteDestination{IntegrationID: "radarr-anime"}})
+	certs := &certsTMDB{all: map[string][]string{"JP": {"G", "PG12"}, "FR": {"12"}}}
+	svc := NewService(store, certs, &fakePresence{})
+	req := *store.requests["r1"]
+	if err := svc.ensureRoutingFacts(context.Background(), &req, store.routes); err != nil {
+		t.Fatal(err)
+	}
+	if got := req.RoutingFacts.ContentRating; got == nil || *got != "JP:PG12" {
+		t.Fatalf("rating = %v, want JP:PG12", got)
+	}
+	if !store.routes[len(store.routes)-1].Conditions.Matches(req) {
+		t.Fatal("a Japanese PG12 title should match an at-most-PG-13 rule")
+	}
+	// With a US rating, the strictest US one is used, as GetCertification
+	// picks it.
+	certs.all["US"] = []string{"NR", "PG", "R"}
+	req.RoutingFacts.ContentRating = nil
+	if err := svc.ensureRoutingFacts(context.Background(), &req, store.routes); err != nil || *req.RoutingFacts.ContentRating != "R" {
+		t.Fatalf("rating = %v, err %v; want the US R", req.RoutingFacts.ContentRating, err)
+	}
+}
