@@ -205,6 +205,9 @@ func routedConnection(fc *fulfillContext, d RouteDecision, mediaType MediaType, 
 		return ResolvedRouterConnection{}, 0, "", fmt.Errorf("%s (route %q)", msgRouterUnbound, d.RouteName)
 	case strings.TrimSpace(in.APIKeyRef) == "":
 		return ResolvedRouterConnection{}, 0, "", fmt.Errorf("%s (route %q)", msgRouterNoKey, d.RouteName)
+	case !integrationSupportsMediaType(*in, mediaType):
+		// The server's media types can change after a route points at it.
+		return ResolvedRouterConnection{}, 0, "", fmt.Errorf("route %q sends %s to %q, which does not take them", d.RouteName, mediaTypePlural(mediaType), in.Name)
 	}
 	// A server can be switched to the other kind after a route points at it.
 	if kind, _ := in.PluginConfig[configServiceKind].(string); kind != "" {

@@ -54,8 +54,9 @@ existing plugin follows the route without knowing about routing. Each target
 records the route that sent it. A server a route sends to cannot be deleted
 until the route stops using it, so deleting a server never silently reroutes
 titles, and it cannot be switched to the type the route's media type cannot use
-(Sonarr for movies, Radarr for series). A chosen server that is disabled, not
-set up (no installation, no key) or of the wrong type anyway is an admin-fixable
+(Sonarr for movies, Radarr for series) or stop taking that media type. A chosen
+server that is disabled, not set up (no installation, no key), of the wrong type
+or not taking the media type anyway is an admin-fixable
 problem: when nothing has been
 sent yet, the submission retries with backoff; a later tier that fails that way
 becomes a failed target. Status checks go through the plugin installation that
