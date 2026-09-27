@@ -191,7 +191,7 @@ and answers the caller with
 the approved request rather than an error. Only the attempt holding the current
 lease can do this: one that outlived its lease while another server claimed the
 request leaves the newer claim alone. After `maxSubmitAttempts` the request
-is marked `failed` for an admin to retry.
+is marked `failed` for an admin to retry, under the same lease check.
 
 A submission converges the request's targets to the qualities it currently
 wants. A failed target for a quality it no longer wants is deleted, but only
@@ -252,8 +252,10 @@ instead of requesting it again (`PUT`/`DELETE
 access as requesting: requests enabled, the account allowed to request and not
 blocked by its request limit, and the title within the profile's rating
 ceiling. It is refused for a title with no open request (request it instead);
-the insert itself checks for the open request, so a follow cannot land just
-after the request completed.
+the insert itself checks for the open request and holds a share lock on its
+row until the follow commits, so a follow cannot land just after the request
+was declined, cancelled or completed, and miss that transition's follow
+cleanup.
 
 A follow belongs to the title and the profile (`media_request_follows`, keyed
 by account and profile id, since profile ids repeat across accounts), not to
