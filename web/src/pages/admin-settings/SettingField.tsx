@@ -29,6 +29,13 @@ interface SelectOption {
  */
 export const SETTINGS_CONTROL_WIDTH = "w-full sm:w-[var(--settings-control-w)]";
 
+/**
+ * Look of a button inside a settings row, with `variant="outline"`: the dark
+ * field and border the row's inputs and selects use, so it reads as a control
+ * on the card rather than blending into it.
+ */
+export const SETTINGS_BUTTON = "bg-background border-muted-foreground/25 hover:bg-accent";
+
 /** Width of a number control inside a settings row. See {@link SETTINGS_CONTROL_WIDTH}. */
 export const SETTINGS_NUMBER_WIDTH = "w-full sm:w-[var(--settings-control-w-num)]";
 

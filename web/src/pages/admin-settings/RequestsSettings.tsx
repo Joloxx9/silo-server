@@ -23,7 +23,7 @@ import { RequestRoutingGroup } from "./RequestRouting";
 import { RequestServersGroup } from "./RequestServers";
 import { requestRouterInstallations } from "./requestServerModel";
 import { SaveBar } from "./SaveBar";
-import { SettingField, SettingFieldRow, SettingFieldStatus } from "./SettingField";
+import { SETTINGS_BUTTON, SettingField, SettingFieldRow, SettingFieldStatus } from "./SettingField";
 import { useStagedDraft } from "./useStagedDraft";
 
 interface GeneralDraft {
@@ -312,10 +312,10 @@ function RequestsSettingsContent() {
             label="Group and account limits"
             description="Give an access group or one account its own approval and limit. An account's own setting wins, then its group's, then the defaults above."
           >
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className={SETTINGS_BUTTON}>
               <Link to="/admin/access-groups">Access groups</Link>
             </Button>
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className={SETTINGS_BUTTON}>
               <Link to="/admin/users">Users</Link>
             </Button>
           </SettingFieldRow>
@@ -323,7 +323,7 @@ function RequestsSettingsContent() {
             label="Request notifications"
             description="Announce submitted, approved, declined, and fulfilled requests on Discord or a webhook."
           >
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className={SETTINGS_BUTTON}>
               <Link to="/admin/settings/notifications">Notifications</Link>
             </Button>
           </SettingFieldRow>
@@ -331,7 +331,7 @@ function RequestsSettingsContent() {
             label="Autoscan"
             description="Autoscan can reuse these servers to import downloads as soon as they finish."
           >
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className={SETTINGS_BUTTON}>
               <Link to="/admin/libraries?tab=autoscan">Autoscan</Link>
             </Button>
           </SettingFieldRow>
