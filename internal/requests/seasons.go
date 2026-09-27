@@ -15,16 +15,20 @@ import (
 // complete when every aired episode of it has a file in an enabled library
 // (the library's own provider metadata dates the episodes, so no external
 // service is involved); a season whose episodes have no air dates yet counts
-// as complete once any of its episodes is present.
+// as complete once any of its episodes is present. A season dated to air
+// later is not complete before its first episode airs, even if one arrived
+// early.
 //
 // Once the download server reports a request done, the rule relaxes to the
 // old one per season (see seasonDelivered): an episode the server could not
 // find would otherwise hold the request, and its notification, open for good.
 
-// SeasonCounts is one season's episodes: aired, and present in a library.
+// SeasonCounts is one season's episodes: aired, dated to air later, and
+// present in a library.
 type SeasonCounts struct {
-	Aired int
-	Have  int
+	Aired    int
+	Upcoming int
+	Have     int
 }
 
 // Complete reports whether the season is fully in the library.
@@ -32,7 +36,7 @@ func (c SeasonCounts) Complete() bool {
 	if c.Aired > 0 {
 		return c.Have >= c.Aired
 	}
-	return c.Have > 0
+	return c.Upcoming == 0 && c.Have > 0
 }
 
 // SeasonPresenceResolver reports per-season episode counts for series in the

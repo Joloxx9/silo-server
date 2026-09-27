@@ -418,3 +418,56 @@ func TestSingleServerFallbackMigrationDatabase(t *testing.T) {
 		t.Fatalf("seeded %d routes, movie to %q; want only movies to the one usable Radarr (two Sonarrs pick nothing)", n, hd)
 	}
 }
+
+// The preview flags every server problem a routed submission would fail on,
+// so an unusable route never reads as working.
+func TestPreviewRouteFlagsUnusableServers(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		unusable func(*Integration)
+		want     string
+	}{
+		{"not bound", func(in *Integration) { in.InstallationID = nil }, "not bound to a plugin installation"},
+		{"no key", func(in *Integration) { in.APIKeyRef = "" }, "has no API key"},
+		{"does not take movies", func(in *Integration) { in.SupportedMediaTypes = []string{"series"} }, "does not take movies"},
+		{"gone", func(in *Integration) { in.ID = "deleted" }, "no longer exists"},
+	} {
+		store := routingStore(RoutingFacts{})
+		tc.unusable(&store.integrations[0]) // radarr-hd, the fallback's HD server
+		svc := newTestServiceWithTMDB(store, &fakeTMDBClient{detail: &tmdb.MediaDetail{ID: 129}})
+		preview, err := svc.PreviewRoute(context.Background(), routeAdmin, MediaTypeMovie, 129, 7)
+		if err != nil {
+			t.Fatalf("%s: preview: %v", tc.name, err)
+		}
+		if hd := preview.Tiers[0]; !strings.Contains(hd.Reason, tc.want) || !strings.HasSuffix(hd.Reason, "would fail.") {
+			t.Errorf("%s: HD tier = %+v, want a failure note containing %q", tc.name, hd, tc.want)
+		}
+		if uhd := preview.Tiers[1]; uhd.Reason != "" {
+			t.Errorf("%s: 4K tier = %+v, want no failure note for the working 4K server", tc.name, uhd)
+		}
+	}
+}
+
+// A route cannot send a media type to a server that does not take it, and a
+// server a route uses cannot stop taking the route's media type.
+func TestRoutesRespectSupportedMediaTypes(t *testing.T) {
+	store := routingStore(RoutingFacts{})
+	seriesOnly := routerInst("generic-series")
+	seriesOnly.SupportedMediaTypes = []string{"series"}
+	store.integrations = append(store.integrations, seriesOnly)
+	svc := newTestServiceWithTMDB(store, &fakeTMDBClient{})
+
+	route := Route{MediaType: MediaTypeMovie, Name: "Anime", Enabled: true,
+		Conditions: RouteConditions{Anime: boolPtr(true)}, HD: RouteDestination{IntegrationID: "generic-series"}}
+	if fields := fieldErrors(t, svc.validateRoute(context.Background(), &route)); !strings.Contains(fields["hd.integration_id"], "does not take movies") {
+		t.Fatalf("field errors = %v, want hd.integration_id refused", fields)
+	}
+
+	narrowed := store.integrations[2] // radarr-anime, which the movie rule "Anime" sends to
+	narrowed.SupportedMediaTypes = []string{"series"}
+	_, err := svc.UpdateIntegration(context.Background(), routeAdmin, narrowed)
+	var verr *ValidationError
+	if !errors.As(err, &verr) || !strings.Contains(verr.FieldErrors["supported_media_types"], "Anime") {
+		t.Fatalf("narrow: err = %v, want a supported_media_types field error naming the route", err)
+	}
+}

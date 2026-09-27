@@ -466,3 +466,19 @@ func TestDeleteIntegrationRefusesARoutedServerDatabase(t *testing.T) {
 		t.Fatalf("delete an unrouted server: %v", err)
 	}
 }
+
+func TestSubmitRoutedRefusesAServerThatDoesNotTakeTheMediaType(t *testing.T) {
+	store := routingStore(capturedFacts(RoutingFacts{}))
+	store.integrations[0].SupportedMediaTypes = []string{"series"} // radarr-hd, narrowed after the route was saved
+	router := &fakeRouterProvider{}
+	svc := newTestService(store)
+	svc.SetRouterProvider(router)
+
+	req, err := svc.submitApprovedRequest(context.Background(), *store.requests["r1"], Viewer{}, nil)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if router.fulfillCalls != 0 || req.NextSubmitAt == nil || !strings.Contains(req.LastError, "does not take them") {
+		t.Fatalf("request = %+v (fulfill calls %d), want nothing sent and a retry with the mismatch named", req, router.fulfillCalls)
+	}
+}

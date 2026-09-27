@@ -2024,7 +2024,8 @@ go to and, rule by rule, why, plus an admin title search
 (`GET /admin/request-routes/titles`) for trying titles while requests are off. Replacement and deletion require `If-Match` on the rule's revision; a
 fallback that was never saved reads as revision zero and its first replacement
 creates it. The fallback cannot be deleted, and a rule cannot be created until
-its media type's fallback has an HD server.
+its media type's fallback has an HD server. The `routing` field of
+`getAdminRequestCapabilities` reports whether the server offers these operations.
 `GET`/`PUT /admin/request-routing` reads and switches the routing mode
 (`standard` or `advanced`) with `If-Match` on its revision; the read also says
 where Standard sends each media type, or why it cannot be used, and switching
