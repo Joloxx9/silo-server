@@ -439,6 +439,81 @@ describe("request administration", () => {
     expect(within(sheet).getByRole("button", { name: "Approve: Waiting Title" })).toBeEnabled();
   });
 
+  it("shows the refetched request in the open sheet after another admin acted first", async () => {
+    const LATER = "2026-09-02T00:00:00Z";
+    let sent = false;
+    serve({
+      ...queue({}),
+      "GET /api/v2/admin/requests": ({ query }) => {
+        if (query?.view === "in_progress") {
+          return page([
+            sent
+              ? request("r2", "Unsent Title", {
+                  status: "queued",
+                  state: "processing",
+                  targets: [target("t2")],
+                  updated_at: LATER,
+                })
+              : request("r2", "Unsent Title", { status: "approved", state: "approved" }),
+          ]);
+        }
+        return page(
+          query?.view === "needs_approval" && !sent ? [request("r1", "Waiting Title")] : [],
+        );
+      },
+      "GET /api/v2/admin/requests/{id}/events": () => ({ items: [] }),
+      "POST /api/v2/admin/request-routes/preview": () => ({
+        facts: {
+          anime: false,
+          company_ids: [],
+          genre_ids: [],
+          keyword_ids: [],
+          network_ids: [],
+          origin_countries: [],
+        },
+        tiers: [],
+      }),
+      // Another admin sent the one and approved the other a moment ago.
+      "POST /api/v2/admin/requests/{id}/cancel": () => {
+        sent = true;
+        return Promise.reject(new Error("The request changed; reload it."));
+      },
+      "POST /api/v2/admin/requests/{id}/approve": () => {
+        sent = true;
+        return Promise.reject(new Error("The request changed; reload it."));
+      },
+    });
+    mount("/admin/requests?view=in_progress");
+    fireEvent.click(
+      within(await rowOf("Unsent Title")).getByRole("button", { name: "Details: Unsent Title" }),
+    );
+    let sheet = await screen.findByRole("dialog");
+    fireEvent.click(within(sheet).getByRole("button", { name: "Cancel request: Unsent Title" }));
+    const prompt = (await screen.findAllByRole("dialog")).find((d) => d !== sheet)!;
+    fireEvent.click(within(prompt).getByRole("button", { name: "Cancel request" }));
+    // The refused cancel refetched the queue; the sheet shows the sent
+    // request, which can no longer be cancelled.
+    await waitFor(() =>
+      expect(
+        within(sheet).queryByRole("button", { name: "Cancel request: Unsent Title" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(within(sheet).getByRole("table")).toHaveTextContent("Radarr");
+
+    // A request that left the view closes its sheet.
+    fireEvent.click(within(sheet).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    sent = false;
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /^Needs approval/ }));
+    fireEvent.click(
+      within(await rowOf("Waiting Title")).getByRole("button", { name: "Details: Waiting Title" }),
+    );
+    sheet = await screen.findByRole("dialog");
+    fireEvent.click(within(sheet).getByRole("button", { name: "Approve: Waiting Title" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.queryByRole("link", { name: "Waiting Title" })).not.toBeInTheDocument();
+  });
+
   it("loads the next page from the cursor the last one returned", async () => {
     serve({
       ...queue({}),
