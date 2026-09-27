@@ -511,8 +511,9 @@ func migrationUp(t *testing.T, name string) string {
 // TestRouteSeedingKeepsTheLegacyOwnerDatabase covers an install whose first
 // usable movie connection by name is Seerr: before routing, Seerr took every
 // movie request, so the seeded movie routes (which send to Radarr) are removed
-// and movies stay with Seerr. Series stay routed to Sonarr, and a seeded route
-// an admin has saved since is kept.
+// and movies stay with Seerr. The series fallback sends 4K to another plugin's
+// server while the series Anime route stays on the owner's: the media type's
+// seeded routes go together, unless an admin has saved one of its routes.
 func TestRouteSeedingKeepsTheLegacyOwnerDatabase(t *testing.T) {
 	repo, pool := lifecycleTestRepository(t)
 	ctx := t.Context()
@@ -529,7 +530,7 @@ func TestRouteSeedingKeepsTheLegacyOwnerDatabase(t *testing.T) {
 	seed("seerr", "Jellyseerr", 2, "seerr", "{movie}", `{}`)
 	seed("radarr", "Radarr", 1, "arr", "{movie}", `{"service_kind":"radarr","is_default":true,"anime_enabled":true,"anime_root_folder":"/anime"}`)
 	seed("sonarr", "Sonarr", 1, "arr", "{series}", `{"service_kind":"sonarr","is_default":true,"anime_enabled":true}`)
-	seed("sonarr-4k", "Sonarr 4K", 1, "arr", "{series}", `{"service_kind":"sonarr","is_default_4k":true,"is_4k":true}`)
+	seed("sonarr-4k", "Sonarr 4K", 3, "arr", "{series}", `{"service_kind":"sonarr","is_default_4k":true,"is_4k":true}`)
 	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes")); err != nil {
 		t.Fatalf("run migration: %v", err)
 	}
@@ -537,40 +538,43 @@ func TestRouteSeedingKeepsTheLegacyOwnerDatabase(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM request_routes`).Scan(&seeded); err != nil || seeded != 4 {
 		t.Fatalf("seeded %d routes (%v), want a fallback and an Anime route per media type", seeded, err)
 	}
-	// An admin saved the series Anime route after the seeding.
+	routeIDs := func() []string {
+		t.Helper()
+		routes, err := repo.ListRoutes(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := []string{}
+		for _, route := range routes {
+			ids = append(ids, route.ID)
+		}
+		slices.Sort(ids)
+		return ids
+	}
+
+	// An admin saved the series Anime route after the seeding: series routing
+	// is theirs, and the seeded fallback stays so every series has a server.
 	if _, err := pool.Exec(ctx, `UPDATE request_routes SET updated_at = updated_at + interval '1 minute' WHERE id = 'anime-series'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes_keep_legacy_owner")); err != nil {
 		t.Fatalf("run owner repair: %v", err)
 	}
-	routes, err := repo.ListRoutes(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var ids []string
-	for _, route := range routes {
-		ids = append(ids, route.ID)
-	}
-	slices.Sort(ids)
-	if want := []string{"anime-series", "fallback-series"}; !slices.Equal(ids, want) {
+	if ids, want := routeIDs(), []string{"anime-series", "fallback-series"}; !slices.Equal(ids, want) {
 		t.Fatalf("routes = %v, want %v: movies go back to Seerr, series keep their routes", ids, want)
 	}
 
-	// An admin-saved route stays even when its server is outside the owner.
-	if _, err := pool.Exec(ctx, `UPDATE request_integrations SET name = 'A Seerr', supported_media_types = '{}' WHERE id = 'seerr'`); err != nil {
+	// Untouched, the series routes go together: the fallback's 4K server is
+	// another plugin's, and an Anime route left alone would route series with
+	// no fallback.
+	if _, err := pool.Exec(ctx, `UPDATE request_routes SET updated_at = created_at WHERE id = 'anime-series'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes_keep_legacy_owner")); err != nil {
 		t.Fatalf("rerun owner repair: %v", err)
 	}
-	routes, err = repo.ListRoutes(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Seerr now also owns series: the untouched series fallback goes.
-	if len(routes) != 1 || routes[0].ID != "anime-series" {
-		t.Fatalf("routes = %+v, want only the saved anime-series route", routes)
+	if ids := routeIDs(); len(ids) != 0 {
+		t.Fatalf("routes = %v, want none: series go back to the Sonarr plugin", ids)
 	}
 }
 
