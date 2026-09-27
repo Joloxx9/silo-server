@@ -25,6 +25,10 @@ func TestDetectAnime(t *testing.T) {
 		{"a Japanese series on the list TMDB files under no genre", &tmdb.MediaDetail{MediaType: "series", OriginalLanguage: "ja", OriginCountries: []string{"JP"}}, true, true},
 		{"Chinese animation on the anime list", &tmdb.MediaDetail{GenreIDs: []int{animationGenreID}, OriginalLanguage: "zh", OriginCountries: []string{"CN"}}, true, false},
 		{"Korean animation on the anime list", &tmdb.MediaDetail{GenreIDs: []int{animationGenreID}, OriginalLanguage: "ko"}, true, false},
+		{"a Chinese film in English on the anime list", &tmdb.MediaDetail{MediaType: "movie", GenreIDs: []int{animationGenreID}, OriginalLanguage: "en", OriginCountries: []string{"CN", "US"}}, true, false},
+		{"a Korean film in English on the anime list", &tmdb.MediaDetail{MediaType: "movie", GenreIDs: []int{animationGenreID}, OriginalLanguage: "en", OriginCountries: []string{"KR"}}, true, false},
+		{"a Japanese-Chinese series in Chinese on the anime list", &tmdb.MediaDetail{MediaType: "series", OriginalLanguage: "zh", OriginCountries: []string{"CN", "JP"}}, true, true},
+		{"a Japanese-Korean film on the anime list", &tmdb.MediaDetail{MediaType: "movie", OriginalLanguage: "ko", OriginCountries: []string{"JP", "KR"}}, true, true},
 		{"Chinese animation TMDB tags anime", &tmdb.MediaDetail{KeywordIDs: []int{animeKeywordID}, GenreIDs: []int{animationGenreID}, OriginalLanguage: "zh"}, false, true},
 		{"no detail", nil, true, false},
 	} {

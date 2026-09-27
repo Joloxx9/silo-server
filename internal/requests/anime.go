@@ -29,8 +29,8 @@ func (s *Service) SetAnimeIndex(index AnimeIndex) { s.animeIndex = index }
 // eight and one film in three, so a title also counts when TMDB files it as
 // Animation from Japan or in Japanese, or when the AniDB-based list names it.
 // AniDB also catalogs Chinese and Korean animation, which only counts when
-// TMDB itself tags it anime; an admin routes it with a genre and language
-// rule instead.
+// TMDB itself tags it anime or it is a Japanese co-production; an admin
+// routes it with a genre and language rule instead.
 func detectAnime(detail *tmdb.MediaDetail, listed bool) bool {
 	if detail == nil {
 		return false
@@ -45,8 +45,9 @@ func detectAnime(detail *tmdb.MediaDetail, listed bool) bool {
 	if !listed {
 		return false
 	}
-	switch detail.OriginalLanguage {
-	case "zh", "cn", "ko":
+	// A Japanese co-production still counts; Chinese or Korean animation by
+	// language or origin country does not on the list's word alone.
+	if !japanese && chineseOrKorean(detail) {
 		return false
 	}
 	// The list also names Western series AniDB catalogs (The Boondocks). A
@@ -54,6 +55,16 @@ func detectAnime(detail *tmdb.MediaDetail, listed bool) bool {
 	// numbering, so a listed series also needs a Japanese signal; a film is
 	// only routed, so the list alone will do.
 	return detail.MediaType != string(MediaTypeSeries) || japanese
+}
+
+// chineseOrKorean reports whether TMDB files a title in Chinese or Korean or
+// as made in China or Korea.
+func chineseOrKorean(detail *tmdb.MediaDetail) bool {
+	switch detail.OriginalLanguage {
+	case "zh", "cn", "ko":
+		return true
+	}
+	return slices.Contains(detail.OriginCountries, "CN") || slices.Contains(detail.OriginCountries, "KR")
 }
 
 // animeListed asks the anime list about a title. The list only adds to TMDB's
