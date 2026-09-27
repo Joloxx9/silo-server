@@ -238,12 +238,12 @@ keeps an upgrade from completing, and notifying, a backlog of old failures.
 ## Re-requesting a failed title
 
 Creating a request deletes the requester's own failed requests for the same
-title inside the insert transaction, before the quota check, so the re-request
-does not count against itself. The quota is checked only there, under the
-requester's advisory lock. Other accounts' failed requests are left alone: they
-are those users' history and count against their quota. Retrying one of them
-after someone else has requested the title answers `ErrAlreadyRequested`, since
-only one active request per title may exist.
+title inside the insert transaction, so the re-request replaces them. The quota
+is checked only there, under the requester's advisory lock, and no failed
+request counts against it (see [Who can request](#who-can-request)). Other
+accounts' failed requests are left alone as those users' history. Retrying one
+of them after someone else has requested the title answers
+`ErrAlreadyRequested`, since only one active request per title may exist.
 
 ## Admin queue
 
