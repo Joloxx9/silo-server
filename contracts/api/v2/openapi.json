@@ -11223,6 +11223,10 @@
             "description": "Opaque revision of this document",
             "type": "string"
           },
+          "routing": {
+            "description": "Whether request routing is available: the routing rules under /admin/request-routes and the Standard/Advanced routing mode under /admin/request-routing",
+            "type": "boolean"
+          },
           "state": {
             "description": "Support and configuration state, not health",
             "enum": [
@@ -11237,6 +11241,7 @@
         "required": [
           "available",
           "guarded_configuration",
+          "routing",
           "revision",
           "state",
           "allowed"

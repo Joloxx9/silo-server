@@ -87,8 +87,9 @@ existing plugin follows the route without knowing about routing. Each target
 records the route that sent it. A server a route sends to cannot be deleted
 until the route stops using it, so deleting a server never silently reroutes
 titles, and it cannot be switched to the type the route's media type cannot use
-(Sonarr for movies, Radarr for series). A chosen server that is disabled, not
-set up (no installation, no key) or of the wrong type anyway is an admin-fixable
+(Sonarr for movies, Radarr for series) or stop taking that media type. A chosen
+server that is disabled, not set up (no installation, no key), of the wrong type
+or not taking the media type anyway is an admin-fixable
 problem: when nothing has been
 sent yet, the submission retries with backoff; a later tier that fails that way
 becomes a failed target. Status checks go through the plugin installation that
@@ -189,7 +190,9 @@ mid-call, the reconcile pass picks the request up after the lease.
 A failed attempt keeps the approval. It records `last_error`, releases the lease,
 schedules the next attempt in `next_submit_at` (5 minutes, doubling to an hour),
 and answers the caller with
-the approved request rather than an error. After `maxSubmitAttempts` the request
+the approved request rather than an error. Only the attempt holding the current
+lease can do this: one that outlived its lease while another server claimed the
+request leaves the newer claim alone. After `maxSubmitAttempts` the request
 is marked `failed` for an admin to retry.
 
 A submission converges the request's targets to the qualities it currently
@@ -254,7 +257,8 @@ ceiling. It is refused for a title with no open request (request it instead);
 the insert itself checks for the open request, so a follow cannot land just
 after the request completed.
 
-A follow belongs to the title and the profile (`media_request_follows`), not to
+A follow belongs to the title and the profile (`media_request_follows`, keyed
+by account and profile id, since profile ids repeat across accounts), not to
 one request, so it survives the request failing and being retried or requested
 again. Declining or cancelling the request clears the title's follows: the title
 is no longer on its way, and the follower can request it themselves. The
@@ -340,6 +344,8 @@ editor offers them.
 
 The quota counts the requests an account made in the window, except those
 declined or failed: those give their slot back. A cancelled request keeps
-counting, or requesting and cancelling could repeat without limit. The store
+counting, or requesting and cancelling could repeat without limit, unless it
+still carries a submission error: an admin closing a failed request from the
+queue does not take back the slot its failure returned. The store
 checks the quota under the requester's advisory lock, so concurrent creates
 cannot both take the last slot.

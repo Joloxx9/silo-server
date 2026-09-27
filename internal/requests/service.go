@@ -500,17 +500,14 @@ func unusableRouterMessage(fc *fulfillContext, mediaType MediaType) string {
 	return "no usable request backend connection"
 }
 
-// routerConfiguredFor reports whether any enabled router connection is meant to
-// serve the media type, including a misconfigured one (no installation bound,
-// no key). Only when none is does a request fall back to waiting for the
-// library; a misconfigured connection surfaces as a submission failure instead.
 // moreSeasonsRequestable reports whether a series already in the library can
 // be requested for the seasons it is missing. Router plugins take a whole
 // series today (the request descriptor carries no seasons), so sending such a
 // request would add the series again: refused by a download server that has
 // it, every season downloaded by one that does not. Until they can take
 // seasons, only the library fulfills one, so it is offered only when no
-// download server takes series.
+// download server takes series. A download server set up after such a request
+// was made does not receive it either (see submitApprovedRequest).
 func (s *Service) moreSeasonsRequestable(ctx context.Context) (bool, error) {
 	if s.router == nil {
 		return true, nil
@@ -522,6 +519,10 @@ func (s *Service) moreSeasonsRequestable(ctx context.Context) (bool, error) {
 	return !routerConfiguredFor(fc, MediaTypeSeries), nil
 }
 
+// routerConfiguredFor reports whether any enabled router connection is meant to
+// serve the media type, including a misconfigured one (no installation bound,
+// no key). Only when none is does a request fall back to waiting for the
+// library; a misconfigured connection surfaces as a submission failure instead.
 func routerConfiguredFor(fc *fulfillContext, mediaType MediaType) bool {
 	for _, in := range fc.integrations {
 		if in.Enabled && in.CapabilityID != "" && integrationSupportsMediaType(in, mediaType) {
@@ -736,6 +737,14 @@ func (s *Service) GetDetail(ctx context.Context, viewer Viewer, mediaType MediaT
 			return nil, err
 		}
 		seasons = requestSeasons(raw, counts, primaryRequests[raw.ID])
+		if active := primaryRequests[raw.ID]; active != nil && len(active.Seasons) > 0 && counts != nil {
+			// Attach the season progress the request lists attach, so the
+			// state can read partially available or available.
+			withProgress := *active
+			withProgress.LibraryContentID = primaryMatch.ContentID
+			withProgress.SeasonProgress = seasonProgress(active.Seasons, counts)
+			primaryRequests[raw.ID] = &withProgress
+		}
 		if available && seriesHasOpenSeason(raw, counts) {
 			more, err := s.moreSeasonsRequestable(ctx)
 			if err != nil {
@@ -2038,6 +2047,18 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 		// the reconcile pass completes it when the title reaches the library.
 		return &req, nil
 	}
+	if req.MediaType == MediaTypeSeries && len(req.Seasons) > 0 {
+		// A router would add the whole series (see moreSeasonsRequestable),
+		// so a season request for a series already in the library waits for
+		// the library, even when the router was set up after it was made.
+		matches, err := s.lookupPresence(ctx, req.MediaType, []PresenceCandidate{requestPresenceCandidate(req)})
+		if err != nil {
+			return nil, err
+		}
+		if matches[req.TMDBID].Available {
+			return &req, nil
+		}
+	}
 	claimed, ok, err := s.store.ClaimSubmission(ctx, req.ID, submitLease)
 	if err != nil {
 		return nil, err
@@ -2054,11 +2075,17 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 	if claimed.SubmitAttempts >= maxSubmitAttempts {
 		return s.markSubmissionFailed(ctx, claimed.ID, actor, submitErr)
 	}
-	deferred, err := s.store.DeferSubmission(ctx, claimed.ID, submitBackoff(claimed.SubmitAttempts), submitErr.Error())
+	var leaseUntil time.Time
+	if claimed.SubmitLeaseUntil != nil {
+		leaseUntil = *claimed.SubmitLeaseUntil
+	}
+	deferred, err := s.store.DeferSubmission(ctx, claimed.ID, leaseUntil, submitBackoff(claimed.SubmitAttempts), submitErr.Error())
 	if err != nil {
 		if errors.Is(err, ErrInvalidState) {
 			// The attempt created targets before failing, which moved the
-			// request past approved; the per-target state now owns it.
+			// request past approved and the per-target state now owns it; or
+			// this attempt outlived its lease and another claim holds the
+			// request now.
 			return s.store.GetRequest(ctx, claimed.ID)
 		}
 		return nil, fmt.Errorf("submit request: %w; schedule retry: %w", submitErr, err)
@@ -2535,8 +2562,9 @@ func (s *Service) completeWaitingFromLibrary(ctx context.Context, limit int, res
 }
 
 // presentRequests reports which requests are fulfilled by the library, with
-// one presence lookup per media type: the title is in, or, for a season
-// request, every requested season is complete.
+// one presence lookup per media type and one season lookup for every season
+// request: the title is in, or, for a season request, every requested season
+// is complete.
 func (s *Service) presentRequests(ctx context.Context, reqs []*Request) (map[string]bool, error) {
 	byType := map[MediaType][]*Request{}
 	for _, req := range reqs {
@@ -2545,6 +2573,8 @@ func (s *Service) presentRequests(ctx context.Context, reqs []*Request) (map[str
 		}
 	}
 	out := make(map[string]bool, len(reqs))
+	// Season requests whose series is in the library, by series content ID.
+	seasonRequests := map[string][]*Request{}
 	for mediaType, group := range byType {
 		candidates := make([]PresenceCandidate, 0, len(group))
 		for _, req := range group {
@@ -2555,11 +2585,29 @@ func (s *Service) presentRequests(ctx context.Context, reqs []*Request) (map[str
 			return nil, err
 		}
 		for _, req := range group {
-			fulfilled, _, err := s.requestFulfilled(ctx, *req, matches[req.TMDBID])
-			if err != nil {
-				return nil, err
+			match := matches[req.TMDBID]
+			if req.MediaType != MediaTypeSeries || len(req.Seasons) == 0 {
+				out[req.ID] = match.Available
+				continue
 			}
-			out[req.ID] = fulfilled
+			out[req.ID] = false
+			if match.Available && match.ContentID != "" {
+				seasonRequests[match.ContentID] = append(seasonRequests[match.ContentID], req)
+			}
+		}
+	}
+	resolver, ok := s.presence.(SeasonPresenceResolver)
+	if !ok || len(seasonRequests) == 0 {
+		return out, nil
+	}
+	bySeries, err := resolver.SeasonAvailability(ctx, slices.Collect(maps.Keys(seasonRequests)))
+	if err != nil {
+		return nil, err
+	}
+	for series, group := range seasonRequests {
+		for _, req := range group {
+			progress := seasonProgress(req.Seasons, bySeries[series])
+			out[req.ID] = seasonsDelivered(progress, req.Status == StatusCompleted)
 		}
 	}
 	return out, nil
@@ -2839,7 +2887,7 @@ func activeRequestState(viewer Viewer, req *Request) RequestState {
 		state.RequestID = req.ID
 	}
 	state.State = req.State()
-	state.RequestedByViewer = req.RequestedByUserID == viewer.UserID && req.RequestedByProfileID == viewer.ProfileID
+	state.RequestedByViewer = req.requestedBy(viewer)
 	return state
 }
 

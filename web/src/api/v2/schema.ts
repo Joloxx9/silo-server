@@ -14509,6 +14509,8 @@ export interface components {
       guarded_configuration: boolean;
       /** @description Opaque revision of this document */
       revision: string;
+      /** @description Whether request routing is available: the routing rules under /admin/request-routes and the Standard/Advanced routing mode under /admin/request-routing */
+      routing: boolean;
       /**
        * @description Support and configuration state, not health
        * @enum {string}

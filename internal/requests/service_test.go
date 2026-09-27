@@ -1605,7 +1605,8 @@ type fakeStore struct {
 	unnotified    []string
 	notified      []string
 	reconciled    []string
-	follows       map[string]Follower // key: media_type/tmdb_id/profile_id
+	follows       map[string]Follower // key: media_type/tmdb_id/user_id/profile_id
+	clearErr      error               // returned by ClearTitleFollowers when set
 	routes        []Route
 	factsSet      map[string]RoutingFacts
 	groupLimits   map[int64]*GroupLimit
@@ -1953,14 +1954,15 @@ func (f *fakeStore) ClaimSubmission(_ context.Context, id string, lease time.Dur
 	return &copy, true, nil
 }
 
-func (f *fakeStore) DeferSubmission(_ context.Context, id string, delay time.Duration, message string) (*Request, error) {
+func (f *fakeStore) DeferSubmission(_ context.Context, id string, leaseUntil time.Time, delay time.Duration, message string) (*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	req := f.lookupLocked(id)
 	if req == nil {
 		return nil, ErrNotFound
 	}
-	if req.Status != StatusApproved || req.Outcome != OutcomeActive {
+	if req.Status != StatusApproved || req.Outcome != OutcomeActive ||
+		req.SubmitLeaseUntil == nil || !req.SubmitLeaseUntil.Equal(leaseUntil) {
 		return nil, ErrInvalidState
 	}
 	next := time.Now().Add(delay)
@@ -2097,8 +2099,8 @@ func (f *fakeStore) DeleteIntegration(_ context.Context, id string) error {
 	return ErrNotFound
 }
 
-func followKey(mediaType MediaType, tmdbID int, profileID string) string {
-	return fmt.Sprintf("%s/%d/%s", mediaType, tmdbID, profileID)
+func followKey(mediaType MediaType, tmdbID int, userID int, profileID string) string {
+	return fmt.Sprintf("%s/%d/%d/%s", mediaType, tmdbID, userID, profileID)
 }
 
 func (f *fakeStore) FollowTitle(_ context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error {
@@ -2123,7 +2125,7 @@ func (f *fakeStore) seedFollowLocked(mediaType MediaType, tmdbID int, viewer Vie
 	if f.follows == nil {
 		f.follows = map[string]Follower{}
 	}
-	f.follows[followKey(mediaType, tmdbID, viewer.ProfileID)] = Follower{UserID: viewer.UserID, ProfileID: viewer.ProfileID}
+	f.follows[followKey(mediaType, tmdbID, viewer.UserID, viewer.ProfileID)] = Follower{UserID: viewer.UserID, ProfileID: viewer.ProfileID}
 }
 
 func (f *fakeStore) ForgetTitleFollows(_ context.Context, mediaType MediaType, tmdbID int) error {
@@ -2138,19 +2140,19 @@ func (f *fakeStore) ForgetTitleFollows(_ context.Context, mediaType MediaType, t
 	return nil
 }
 
-func (f *fakeStore) UnfollowTitle(_ context.Context, mediaType MediaType, tmdbID int, profileID string) error {
+func (f *fakeStore) UnfollowTitle(_ context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	delete(f.follows, followKey(mediaType, tmdbID, profileID))
+	delete(f.follows, followKey(mediaType, tmdbID, viewer.UserID, viewer.ProfileID))
 	return nil
 }
 
-func (f *fakeStore) FollowedTitles(_ context.Context, mediaType MediaType, tmdbIDs []int, profileID string) (map[int]bool, error) {
+func (f *fakeStore) FollowedTitles(_ context.Context, mediaType MediaType, tmdbIDs []int, viewer Viewer) (map[int]bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := map[int]bool{}
 	for _, id := range tmdbIDs {
-		if _, ok := f.follows[followKey(mediaType, id, profileID)]; ok {
+		if _, ok := f.follows[followKey(mediaType, id, viewer.UserID, viewer.ProfileID)]; ok {
 			out[id] = true
 		}
 	}
@@ -2167,15 +2169,23 @@ func (f *fakeStore) ListTitleFollowers(_ context.Context, mediaType MediaType, t
 			out = append(out, follower)
 		}
 	}
-	slices.SortFunc(out, func(a, b Follower) int { return strings.Compare(a.ProfileID, b.ProfileID) })
+	slices.SortFunc(out, func(a, b Follower) int {
+		if c := strings.Compare(a.ProfileID, b.ProfileID); c != 0 {
+			return c
+		}
+		return a.UserID - b.UserID
+	})
 	return out, nil
 }
 
-func (f *fakeStore) ClearTitleFollowers(_ context.Context, mediaType MediaType, tmdbID int, profileIDs []string) error {
+func (f *fakeStore) ClearTitleFollowers(_ context.Context, mediaType MediaType, tmdbID int, followers []Follower) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for _, profileID := range profileIDs {
-		delete(f.follows, followKey(mediaType, tmdbID, profileID))
+	if f.clearErr != nil {
+		return f.clearErr
+	}
+	for _, follower := range followers {
+		delete(f.follows, followKey(mediaType, tmdbID, follower.UserID, follower.ProfileID))
 	}
 	return nil
 }

@@ -325,18 +325,38 @@ func (s *Service) PreviewRoute(ctx context.Context, viewer Viewer, mediaType Med
 		default:
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
 			tier.IntegrationID, tier.Overrides = decision.IntegrationID, decision.Overrides
-			if in := integrationByID(fc, decision.IntegrationID); in != nil {
+			in := integrationByID(fc, decision.IntegrationID)
+			if in != nil {
 				tier.IntegrationName = in.Name
-				if !in.Enabled {
-					tier.Reason = in.Name + " is disabled, so this tier would fail."
-				} else if kind := serverKindMismatch(*in, mediaType); kind != "" {
-					tier.Reason = fmt.Sprintf("%s is a %s server, so this tier would fail.", in.Name, kind)
-				}
 			}
+			tier.Reason = routedServerProblem(in, mediaType)
 		}
 		preview.Tiers = append(preview.Tiers, tier)
 	}
 	return preview, nil
+}
+
+// routedServerProblem explains why a tier routed to the server would fail
+// when sent, in the cases routedConnection refuses it, and is "" when the
+// server can take it.
+func routedServerProblem(in *Integration, mediaType MediaType) string {
+	const fails = ", so this tier would fail."
+	switch {
+	case in == nil:
+		return "The server this rule sends to no longer exists" + fails
+	case !in.Enabled:
+		return in.Name + " is disabled" + fails
+	case in.InstallationID == nil || in.CapabilityID == "":
+		return in.Name + " is not bound to a plugin installation (re-save it)" + fails
+	case strings.TrimSpace(in.APIKeyRef) == "":
+		return in.Name + " has no API key" + fails
+	case !integrationSupportsMediaType(*in, mediaType):
+		return in.Name + " does not take " + mediaTypePlural(mediaType) + fails
+	}
+	if kind := serverKindMismatch(*in, mediaType); kind != "" {
+		return fmt.Sprintf("%s is a %s server%s", in.Name, kind, fails)
+	}
+	return ""
 }
 
 // serverKindMismatch returns a server's type when it cannot take the media
@@ -351,29 +371,39 @@ func serverKindMismatch(in Integration, mediaType MediaType) string {
 	return kind
 }
 
-// ensureRoutesKeepServerKind refuses to switch a server to a type the routes
-// sending to it cannot use: their requests would fail when sent.
+// ensureRoutesKeepServerKind refuses to switch a server to a type, or to media
+// types, the routes sending to it cannot use: their requests would fail when
+// sent.
 func (s *Service) ensureRoutesKeepServerKind(ctx context.Context, in Integration) error {
 	routes, err := s.store.ListRoutes(ctx)
 	if err != nil {
 		return err
 	}
-	var names []string
+	var wrongKind, unsupported []string
 	for _, r := range routes {
 		if r.HD.IntegrationID != in.ID && r.UHD.IntegrationID != in.ID {
 			continue
 		}
 		if serverKindMismatch(in, r.MediaType) != "" {
-			names = append(names, r.Name)
+			wrongKind = append(wrongKind, r.Name)
+		}
+		if !integrationSupportsMediaType(in, r.MediaType) {
+			unsupported = append(unsupported, r.Name)
 		}
 	}
-	if len(names) == 0 {
+	fields := map[string]string{}
+	if len(wrongKind) > 0 {
+		fields["plugin_config."+configServiceKind] = "Routing sends requests of the other media type to this server (" +
+			strings.Join(wrongKind, ", ") + "); change those routes first."
+	}
+	if len(unsupported) > 0 {
+		fields["supported_media_types"] = "Routing sends a media type this server would no longer take to it (" +
+			strings.Join(unsupported, ", ") + "); change those routes first."
+	}
+	if len(fields) == 0 {
 		return nil
 	}
-	return &ValidationError{FieldErrors: map[string]string{
-		"plugin_config." + configServiceKind: "Routing sends requests of the other media type to this server (" +
-			strings.Join(names, ", ") + "); change those routes first.",
-	}}
+	return &ValidationError{FieldErrors: fields}
 }
 
 // validateRoute normalizes a route and checks it against the configured
@@ -454,6 +484,9 @@ func validateDestination(field string, dest *RouteDestination, mediaType MediaTy
 		if wantKind != "" && kind != wantKind {
 			fields[field+".integration_id"] = fmt.Sprintf("%s is a %s server; %s need %s.", in.Name, kindLabel(kind), mediaTypePlural(mediaType), kindLabel(wantKind))
 		}
+	}
+	if mediaType != "" && fields[field+".integration_id"] == "" && !integrationSupportsMediaType(*in, mediaType) {
+		fields[field+".integration_id"] = fmt.Sprintf("%s does not take %s.", in.Name, mediaTypePlural(mediaType))
 	}
 	for _, key := range routingOwnedConfigKeys {
 		if _, ok := dest.Overrides[key]; ok {

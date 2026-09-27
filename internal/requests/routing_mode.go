@@ -330,24 +330,27 @@ func setRoutingMode(ctx context.Context, tx pgx.Tx, mode RoutingMode) (RoutingSe
 // Everything else: Standard was sending 4K copies there since. Only Radarr and
 // Sonarr servers that still take the media type, as saved now, are used; a
 // media type another plugin (Seerr) routed itself stays with that plugin.
+// Each tier is carried on its own, so a server that no longer fits one tier
+// does not drop the other tier's server.
 func seedAdvancedFromStandard(ctx context.Context, tx pgx.Tx, layout []StandardDestination, integrations []Integration) error {
-	usable := func(id string, mediaType MediaType, fourK bool) bool {
+	usable := func(id string, mediaType MediaType, fourK bool) *string {
 		for _, in := range integrations {
 			if in.ID != id {
 				continue
 			}
 			kind, _ := in.PluginConfig[configServiceKind].(string)
-			return kind != "" && in.Enabled && serverServes(in, mediaType) && is4KServer(in) == fourK
+			if kind != "" && in.Enabled && serverServes(in, mediaType) && is4KServer(in) == fourK {
+				return &id
+			}
+			return nil
 		}
-		return false
+		return nil
 	}
 	for _, dest := range layout {
-		if !usable(dest.HDIntegrationID, dest.MediaType, false) {
+		hd := usable(dest.HDIntegrationID, dest.MediaType, false)
+		uhd := usable(dest.UHDIntegrationID, dest.MediaType, true)
+		if hd == nil && uhd == nil {
 			continue
-		}
-		var uhd *string
-		if usable(dest.UHDIntegrationID, dest.MediaType, true) {
-			uhd = &dest.UHDIntegrationID
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO request_routes (id, media_type, position, name, is_fallback, hd_integration_id, uhd_integration_id)
@@ -357,7 +360,7 @@ func seedAdvancedFromStandard(ctx context.Context, tx pgx.Tx, layout []StandardD
 				uhd_integration_id = coalesce(request_routes.uhd_integration_id, EXCLUDED.uhd_integration_id)
 			WHERE request_routes.hd_integration_id IS NULL
 			   OR (request_routes.uhd_integration_id IS NULL AND EXCLUDED.uhd_integration_id IS NOT NULL AND NOT request_routes.skip_uhd)`,
-			FallbackRouteID(dest.MediaType), dest.MediaType, fallbackRouteName, dest.HDIntegrationID, uhd); err != nil {
+			FallbackRouteID(dest.MediaType), dest.MediaType, fallbackRouteName, hd, uhd); err != nil {
 			return fmt.Errorf("carry standard routing into everything else: %w", err)
 		}
 	}

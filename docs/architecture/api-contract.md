@@ -2028,7 +2028,9 @@ its media type's fallback has an HD server.
 `GET`/`PUT /admin/request-routing` reads and switches the routing mode
 (`standard` or `advanced`) with `If-Match` on its revision; the read also says
 where Standard sends each media type, or why it cannot be used, and switching
-to Standard is refused with a validation problem while it cannot.
+to Standard is refused with a validation problem while it cannot. The `routing`
+field of `getAdminRequestCapabilities` reports whether the server offers both
+the routing rule operations and the routing mode operations.
 
 Settings, account limits and integrations require `If-Match` for replacement and
 integration deletion. A shared PostgreSQL sequence assigns a new revision on every

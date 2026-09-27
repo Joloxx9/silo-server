@@ -174,6 +174,7 @@ type AdminRequestCapabilitiesOutputBody struct {
 	Capability
 	Available            bool `json:"available"`
 	GuardedConfiguration bool `json:"guarded_configuration"`
+	Routing              bool `json:"routing" doc:"Whether request routing is available: the routing rules under /admin/request-routes and the Standard/Advanced routing mode under /admin/request-routing"`
 }
 
 func adminRequestViewer(ctx context.Context) mediarequests.Viewer {
@@ -217,6 +218,7 @@ func registerAdminRequests(reg *Registry) {
 		out := new(AdminRequestCapabilitiesOutput)
 		out.Body.Available = reg.deps.AdminRequests != nil
 		_, out.Body.GuardedConfiguration = reg.deps.AdminRequests.(guardedAdminRequests)
+		_, out.Body.Routing = reg.deps.AdminRequests.(adminRequestRoutes)
 		return out, nil
 	})
 	Register(reg, op(http.MethodGet, "/admin/requests", opListAdminRequests, false), func(ctx context.Context, in *AdminMediaRequestListInput) (*MediaRequestCollectionOutput, error) {

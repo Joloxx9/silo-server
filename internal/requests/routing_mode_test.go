@@ -418,6 +418,34 @@ func TestAdvancedSeedUsesOnlyServersThatStillFitDatabase(t *testing.T) {
 		}
 	})
 
+	t.Run("a server marked 4K keeps the 4K server Standard used", func(t *testing.T) {
+		for _, withFallback := range []bool{true, false} {
+			repo, pool := routingModeRepository(t)
+			save(t, repo, arrServer("radarr-a", kindRadarr, nil), true)
+			save(t, repo, arrServer("radarr-4k", kindRadarr, map[string]any{"is_4k": true}), true)
+			wantHD := "radarr-a"
+			if !withFallback {
+				// Standard from the migration: no Everything else yet.
+				if _, err := pool.Exec(ctx, `DELETE FROM request_routes`); err != nil {
+					t.Fatal(err)
+				}
+				wantHD = ""
+			}
+			marked, err := repo.GetIntegration(ctx, "radarr-a")
+			if err != nil {
+				t.Fatal(err)
+			}
+			marked.PluginConfig["is_4k"] = true
+			save(t, repo, *marked, false)
+			if got, _ := repo.GetRoutingSettings(ctx); got.Mode != RoutingAdvanced {
+				t.Fatalf("fallback=%v: mode = %q, want advanced with two 4K Radarrs", withFallback, got.Mode)
+			}
+			if got := fallbacks(t, pool)["movie"]; got != [2]string{wantHD, "radarr-4k"} {
+				t.Fatalf("fallback=%v: Everything else = %v, want 4K still going to radarr-4k", withFallback, got)
+			}
+		}
+	})
+
 	t.Run("deleting a server under Standard ignores Everything else", func(t *testing.T) {
 		repo, pool := routingModeRepository(t)
 		save(t, repo, arrServer("radarr-a", kindRadarr, nil), true)

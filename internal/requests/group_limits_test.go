@@ -235,6 +235,41 @@ func TestQuotaRefundsDeclinedAndFailedRequestsDatabase(t *testing.T) {
 	}
 }
 
+// Closing a failed request from the admin queue keeps the refund its failure
+// gave: cleaning up the failed view must not use up the requester's quota.
+func TestQuotaKeepsRefundWhenAdminClosesFailedRequestDatabase(t *testing.T) {
+	repo, _ := lifecycleTestRepository(t)
+	ctx := t.Context()
+	admin := Viewer{UserID: 1, ProfileID: "admin", IsAdmin: true}
+	insertLifecycleRequest(t, repo, "closed", 7, 410, StatusApproved)
+	if _, err := repo.SetOutcome(ctx, "closed", StateGuard{Statuses: []Status{StatusApproved}, Outcomes: []Outcome{OutcomeActive}}, OutcomeFailed, Viewer{}, "Radarr rejected the movie"); err != nil {
+		t.Fatal(err)
+	}
+	insertLifecycleRequest(t, repo, "withdrawn", 7, 411, StatusPending)
+	if _, err := repo.SetOutcome(ctx, "withdrawn", guardWithdrawable, OutcomeCancelled, Viewer{UserID: 7, ProfileID: "profile"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	since := time.Now().Add(-time.Hour)
+	before, err := repo.CountUserRequestsSince(ctx, 7, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed, err := repo.SetOutcome(ctx, "closed", guardFailed, OutcomeCancelled, admin, "not retrying")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closed.Outcome != OutcomeCancelled {
+		t.Fatalf("closed outcome = %q, want %q", closed.Outcome, OutcomeCancelled)
+	}
+	after, err := repo.CountUserRequestsSince(ctx, 7, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before != 1 || after != 1 {
+		t.Fatalf("used before/after closing = %d/%d, want 1/1: only the withdrawal counts", before, after)
+	}
+}
+
 func TestGroupSwitchAndLegacyBlockBothBlock(t *testing.T) {
 	store := newFakeStore()
 	svc := newTestService(store)
