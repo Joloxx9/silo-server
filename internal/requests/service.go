@@ -999,7 +999,6 @@ func (s *Service) Decline(ctx context.Context, viewer Viewer, id, reason string)
 		return nil, err
 	}
 	s.notifyLifecycle(ctx, *declined, LifecycleNotifier.RequestDeclined)
-	s.forgetFollowsAfterWithdrawal(ctx, declined)
 	return declined, nil
 }
 
@@ -1028,7 +1027,6 @@ func (s *Service) Cancel(ctx context.Context, viewer Viewer, id, reason string) 
 	if err != nil {
 		return nil, err
 	}
-	s.forgetFollowsAfterWithdrawal(ctx, withdrawn)
 	return withdrawn, nil
 }
 

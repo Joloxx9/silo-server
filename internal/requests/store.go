@@ -30,6 +30,8 @@ type Store interface {
 	ListAdmin(ctx context.Context, filter ListFilter) ([]*Request, error)
 	// SetStatus and SetOutcome apply a transition only while the request is in
 	// a state the guard accepts; otherwise they return ErrInvalidState.
+	// Declining or withdrawing also clears the title's follows in the same
+	// transaction.
 	SetStatus(ctx context.Context, id string, from StateGuard, status Status, actor Viewer) (*Request, error)
 	SetOutcome(ctx context.Context, id string, from StateGuard, outcome Outcome, actor Viewer, message string) (*Request, error)
 	// ReopenFailed moves a failed request back to active + approved with a
@@ -81,9 +83,6 @@ type Store interface {
 	FollowedTitles(ctx context.Context, mediaType MediaType, tmdbIDs []int, viewer Viewer) (map[int]bool, error)
 	ListTitleFollowers(ctx context.Context, mediaType MediaType, tmdbID int) ([]Follower, error)
 	ClearTitleFollowers(ctx context.Context, mediaType MediaType, tmdbID int, followers []Follower) error
-	// ForgetTitleFollows removes every follow on a title whose request was
-	// withdrawn.
-	ForgetTitleFollows(ctx context.Context, mediaType MediaType, tmdbID int) error
 	// ListRoutes returns every routing rule, in no particular order;
 	// decideRoutes orders them.
 	ListRoutes(ctx context.Context) ([]Route, error)
