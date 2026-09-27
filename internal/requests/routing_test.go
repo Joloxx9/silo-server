@@ -313,6 +313,58 @@ func TestReconcileChecksEachTargetThroughItsOwnPlugin(t *testing.T) {
 	}
 }
 
+// A plugin may return a target without its connection. Such a target is
+// still checked: through the plugin that routes the media type without rules,
+// with all its connections, as before routing.
+func TestReconcileChecksATargetWithoutAConnection(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{routerInstOn("seerr-a", 3), routerInstOn("seerr-b", 3), routerInstOn("other", 4)}
+	store.candidates = []*Request{{ID: "r1", MediaType: MediaTypeMovie, TMDBID: 1, Status: StatusQueued, Outcome: OutcomeActive}}
+	store.targets = map[string][]Target{"r1": {
+		{ID: 1, RequestID: "r1", Quality: Quality1080p, Status: StatusQueued, ExternalID: "a"},
+	}}
+	router := &fakeRouterProvider{statuses: []RouterTargetStatus{{Quality: Quality1080p, Status: StatusDownloading}}}
+	svc := newTestService(store)
+	svc.SetRouterProvider(router)
+
+	if _, err := svc.ReconcileRequests(context.Background(), 10); err != nil {
+		t.Fatalf("ReconcileRequests: %v", err)
+	}
+	if len(router.statusLog) != 1 {
+		t.Fatalf("status calls = %+v, want the unattributed target checked", router.statusLog)
+	}
+	call := router.statusLog[0]
+	if call.installationID != 3 || len(call.conns) != 2 || len(call.refs) != 1 || call.refs[0].ExternalID != "a" {
+		t.Fatalf("status call = %+v, want the first plugin with all its connections", call)
+	}
+	if got := store.targets["r1"][0].Status; got != StatusDownloading {
+		t.Fatalf("target = %s, want the plugin's status applied", got)
+	}
+}
+
+// A routed tier goes to one server, so a target returned without a connection
+// is recorded on that server and checked through its plugin.
+func TestSubmitRoutedRecordsTheServerOfATargetWithoutAConnection(t *testing.T) {
+	store := routingStore(capturedFacts(RoutingFacts{Anime: true}))
+	router := &fakeRouterProvider{targetsOverride: []RouterTarget{{Quality: Quality1080p, ExternalID: "x", Status: StatusQueued}}}
+	svc := newTestService(store)
+	svc.SetRouterProvider(router)
+
+	if _, err := svc.submitApprovedRequest(context.Background(), *store.requests["r1"], Viewer{}, nil); err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	targets, _ := store.ListTargets(context.Background(), "r1")
+	var hd *Target
+	for i := range targets {
+		if targets[i].Quality == Quality1080p {
+			hd = &targets[i]
+		}
+	}
+	if hd == nil || hd.IntegrationID != "radarr-anime" || hd.IntegrationKind != "radarr" {
+		t.Fatalf("targets = %+v, want the HD target recorded on the Anime route's server", targets)
+	}
+}
+
 func TestReconcileKeepsStatusesWhenOnePluginFails(t *testing.T) {
 	store := newFakeStore()
 	store.integrations = []Integration{routerInstOn("on-one", 1), routerInstOn("on-two", 2)}
