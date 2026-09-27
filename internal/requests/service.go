@@ -1936,18 +1936,28 @@ func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, f
 			failures[q] = err.Error()
 			continue
 		}
-		if len(got) == 0 && msg != "" {
-			failures[q] = msg
-		}
-		for i := range got {
+		// The call asked for this tier only. A target labeled with the other
+		// tier would sit on this tier's server and could win the other tier's
+		// slot in recordTargets over that tier's real target, so drop it.
+		var tier []RouterTarget
+		for _, t := range got {
+			if t.Quality != q {
+				slog.WarnContext(ctx, "requests: plugin returned a target for another quality; skipping", "component", "requests",
+					"request_id", req.ID, "requested_quality", string(q), "quality", string(t.Quality))
+				continue
+			}
 			// The plugin was handed only this server, so a target it returns
 			// without a connection is on it; recording that keeps the target
 			// checked through the plugin that owns the server.
-			if got[i].ConnectionID == "" {
-				got[i].ConnectionID = conn.ID
+			if t.ConnectionID == "" {
+				t.ConnectionID = conn.ID
 			}
+			tier = append(tier, t)
 		}
-		targets = append(targets, got...)
+		if len(tier) == 0 && msg != "" {
+			failures[q] = msg
+		}
+		targets = append(targets, tier...)
 	}
 	return s.recordTargets(ctx, req, actor, plan, targets, connKind, decisions, failures)
 }

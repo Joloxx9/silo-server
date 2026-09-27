@@ -365,6 +365,58 @@ func TestSubmitRoutedRecordsTheServerOfATargetWithoutAConnection(t *testing.T) {
 	}
 }
 
+// Each routed call asks for one tier. A target the plugin labels with the
+// other tier is dropped, so it cannot take that tier's slot from the target
+// its own call returned, and a tier whose call returned only the other tier's
+// target is recorded as failed.
+func TestSubmitRoutedDropsTargetsForTheOtherTier(t *testing.T) {
+	cases := []struct {
+		name     string
+		returned []RouterTarget
+		want4K   func(*Target) bool
+	}{
+		{
+			name: "each call returns both tiers",
+			returned: []RouterTarget{
+				{Quality: Quality1080p, ExternalID: "hd-target", Status: StatusQueued},
+				{Quality: Quality2160p, ExternalID: "4k-target", Status: StatusQueued},
+			},
+			want4K: func(t *Target) bool { return t.Status == StatusQueued && t.IntegrationID == "radarr-4k" },
+		},
+		{
+			name:     "the 4K call returns only an HD target",
+			returned: []RouterTarget{{Quality: Quality1080p, ExternalID: "hd-target", Status: StatusQueued}},
+			want4K: func(t *Target) bool {
+				return t.Status == StatusFailed && t.IntegrationID == "radarr-4k" && t.LastError == msgNoTargetForQuality
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := routingStore(capturedFacts(RoutingFacts{Anime: true}))
+			router := &fakeRouterProvider{targetsOverride: tc.returned}
+			svc := newTestService(store)
+			svc.SetRouterProvider(router)
+			svc.SetEntitlementResolver(fixedCeiling{q: "2160p"})
+
+			if _, err := svc.submitApprovedRequest(context.Background(), *store.requests["r1"], Viewer{}, nil); err != nil {
+				t.Fatalf("submit: %v", err)
+			}
+			targets, _ := store.ListTargets(context.Background(), "r1")
+			byQuality := map[Quality]*Target{}
+			for i := range targets {
+				byQuality[targets[i].Quality] = &targets[i]
+			}
+			if hd := byQuality[Quality1080p]; hd == nil || hd.IntegrationID != "radarr-anime" || hd.Status != StatusQueued {
+				t.Fatalf("targets = %+v, want the HD target on the Anime route's server", targets)
+			}
+			if uhd := byQuality[Quality2160p]; uhd == nil || !tc.want4K(uhd) {
+				t.Fatalf("4K target = %+v, want it on the 4K route's server as returned by the 4K call", uhd)
+			}
+		})
+	}
+}
+
 // A plugin that omits the connection from a routed target omits it from the
 // target's status too; the target was recorded on its route's server, so the
 // status still applies to it.
