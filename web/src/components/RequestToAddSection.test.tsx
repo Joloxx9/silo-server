@@ -583,6 +583,47 @@ describe("RequestToAddSection (grid variant)", () => {
     expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
   });
 
+  it("keeps the pager when the first page holds only library titles but more pages exist", () => {
+    mocks.useRequestSearch.mockImplementation((_type: string, _query: string, page: number) => ({
+      data: {
+        page,
+        total_pages: 2,
+        total_results: 3,
+        results:
+          page === 1
+            ? [availableResult()]
+            : [missingResult({ tmdb_id: 1, title: "Dune: Prophecy" })],
+      },
+      isLoading: false,
+      isError: false,
+    }));
+    rtlRender(
+      <MemoryRouter>
+        <PagedGrid query="dune" libraryHadHits />
+      </MemoryRouter>,
+    );
+
+    const section = screen.getByRole("region", { name: "Request to add" });
+    expect(
+      within(section).getByText("Every title on this page is already in your library."),
+    ).toBeVisible();
+    const pager = within(section).getByRole("navigation", { name: "Request to add pages" });
+    expect(pager).toHaveTextContent("Page 1 of 2");
+
+    fireEvent.click(within(pager).getByRole("button", { name: "Next" }));
+    expect(screen.getAllByRole("link", { name: "Dune: Prophecy" })[0]).toBeInTheDocument();
+  });
+
+  it("still hides the section when its only page holds only library titles", () => {
+    mocks.useRequestSearch.mockReturnValue({
+      data: { page: 1, total_pages: 1, total_results: 1, results: [availableResult()] },
+      isLoading: false,
+      isError: false,
+    });
+
+    expect(render(<PagedGrid query="dune" libraryHadHits />)).toBe("");
+  });
+
   it("keeps the section when a later page fails, with Retry and a way back", () => {
     const refetch = vi.fn();
     mocks.useRequestSearch.mockImplementation((_type: string, query: string, page: number) =>

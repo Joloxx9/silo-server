@@ -95,7 +95,29 @@ export function RequestQueue() {
     [users.data],
   );
 
-  const [openRequest, setOpenRequest] = useState<MediaRequest | null>(null);
+  const queueFilter = (view: RequestQueueView) => ({
+    view,
+    q,
+    mediaType: mediaType === "all" ? undefined : mediaType,
+    requestedByUserId: userId,
+  });
+
+  // The dialog holds the open request's id, not a copy: it shows the view's
+  // current row, or this page's own action's answer when that is newer (the
+  // request may have left the view). When neither exists, because another
+  // admin moved the request out of the view first, the dialog closes rather
+  // than offer actions that no longer apply.
+  const [opened, setOpened] = useState<{ id: string; acted?: MediaRequest } | null>(null);
+  const openedRows = useAdminRequestQueue(queueFilter(urlView ?? "needs_approval"), {
+    enabled: false,
+  });
+  const openRequest = opened
+    ? newerRequest(
+        openedRows.data?.pages.flatMap((page) => page.items).find((row) => row.id === opened.id),
+        opened.acted,
+      )
+    : null;
+  if (opened !== null && openRequest === null) setOpened(null);
   const [prompt, setPrompt] = useState<ReasonPrompt | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
   const approve = useApproveMediaRequest();
@@ -116,10 +138,11 @@ export function RequestQueue() {
     send()
       .then((updated) => {
         // The dialog follows the request, which may have left this view.
-        setOpenRequest((open) => (open?.id === updated.id ? updated : open));
+        setOpened((open) => (open?.id === updated.id ? { id: open.id, acted: updated } : open));
       })
-      // The mutation already said what went wrong.
-      .catch(() => undefined)
+      // The mutation already said what went wrong. Whatever the dialog knew
+      // is now suspect: it shows the refetched row, or closes.
+      .catch(() => setOpened((open) => (open?.id === request.id ? { id: open.id } : open)))
       .finally(() =>
         setBusy((current) => {
           const next = new Set(current);
@@ -248,17 +271,12 @@ export function RequestQueue() {
               <QueueList
                 view={view.value}
                 emptyText={view.empty}
-                filter={{
-                  view: view.value,
-                  q,
-                  mediaType: mediaType === "all" ? undefined : mediaType,
-                  requestedByUserId: userId,
-                }}
+                filter={queueFilter(view.value)}
                 filtered={filtered}
                 username={username}
                 handlers={handlers}
                 bulk={bulk}
-                onOpen={setOpenRequest}
+                onOpen={(request) => setOpened({ id: request.id })}
                 onFilterUser={filterByUser}
                 onBulkDecline={(requests, onDone) =>
                   setPrompt({ action: "bulk-decline", requests, onDone })
@@ -276,7 +294,7 @@ export function RequestQueue() {
         requesterName={username(openRequest?.requested_by_user_id)}
         handlers={handlers}
         onOpenChange={(open) => {
-          if (!open) setOpenRequest(null);
+          if (!open) setOpened(null);
         }}
       />
       <ReasonDialog
@@ -290,6 +308,12 @@ export function RequestQueue() {
       />
     </div>
   );
+}
+
+/** The later of two copies of one request, or null when there is neither. */
+function newerRequest(a: MediaRequest | undefined, b: MediaRequest | undefined) {
+  if (!a || !b) return a ?? b ?? null;
+  return Date.parse(b.updated_at) > Date.parse(a.updated_at) ? b : a;
 }
 
 function reasonDialogText(prompt: ReasonPrompt | null) {

@@ -945,9 +945,9 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 		// Auto-approval is a real approval transition; channels subscribed to
 		// approvals see it alongside the submission.
 		s.notifyApproval(ctx, *req, ApprovalOriginPolicy)
-		return s.submitAfterCommit(ctx, *req, viewer), nil
+		return s.withLibraryContent(ctx, s.submitAfterCommit(ctx, *req, viewer)), nil
 	}
-	return req, nil
+	return s.withLibraryContent(ctx, req), nil
 }
 
 func (s *Service) ListMine(ctx context.Context, viewer Viewer, filter ListFilter) ([]*Request, error) {
@@ -1113,6 +1113,18 @@ func (s *Service) attachLibraryContent(ctx context.Context, reqs ...*Request) er
 	return nil
 }
 
+// withLibraryContent attaches the library match and season progress to a
+// request a mutation returns, so its state reads as a detail or list read
+// would. The mutation has committed, so a lookup failure is logged and the
+// request returned without them rather than reported as a failed mutation.
+func (s *Service) withLibraryContent(ctx context.Context, req *Request) *Request {
+	if err := s.attachLibraryContent(ctx, req); err != nil {
+		slog.WarnContext(ctx, "requests: attach library content to mutation response failed", "component", "requests",
+			"request_id", req.ID, "err", err)
+	}
+	return req
+}
+
 func (s *Service) GetRequest(ctx context.Context, viewer Viewer, id string) (*Request, error) {
 	if err := s.ensureRequestsEnabled(ctx); err != nil {
 		return nil, err
@@ -1142,7 +1154,7 @@ func (s *Service) Approve(ctx context.Context, viewer Viewer, id string) (*Reque
 		return nil, err
 	}
 	s.notifyApproval(ctx, *approved, ApprovalOriginAdmin)
-	return s.submitAfterCommit(ctx, *approved, viewer), nil
+	return s.withLibraryContent(ctx, s.submitAfterCommit(ctx, *approved, viewer)), nil
 }
 
 // Decline rejects a request nothing has been sent for: a pending one, or an
@@ -1158,7 +1170,6 @@ func (s *Service) Decline(ctx context.Context, viewer Viewer, id, reason string)
 		return nil, err
 	}
 	s.notifyLifecycle(ctx, *declined, LifecycleNotifier.RequestDeclined)
-	s.forgetFollowsAfterWithdrawal(ctx, declined)
 	return declined, nil
 }
 
@@ -1207,7 +1218,6 @@ func (s *Service) cancel(ctx context.Context, viewer Viewer, id, reason string, 
 	if err != nil {
 		return nil, err
 	}
-	s.forgetFollowsAfterWithdrawal(ctx, withdrawn)
 	return withdrawn, nil
 }
 
@@ -1219,7 +1229,7 @@ func (s *Service) Retry(ctx context.Context, viewer Viewer, id string) (*Request
 	if err != nil {
 		return nil, err
 	}
-	return s.submitAfterCommit(ctx, *reopened, viewer), nil
+	return s.withLibraryContent(ctx, s.submitAfterCommit(ctx, *reopened, viewer)), nil
 }
 
 func (s *Service) ReconcileRequests(ctx context.Context, limit int) (ReconcileResult, error) {
@@ -2793,9 +2803,32 @@ func (s *Service) checkTargetStatuses(ctx context.Context, req Request, targets 
 			errs = append(errs, err)
 			continue
 		}
-		out = append(out, statuses...)
+		// A plugin that omits connection_id from its statuses omits it from
+		// its targets too, and a routed target was recorded on its server
+		// anyway. When every target in the group is on one server, a status
+		// without a connection is that server's.
+		server := soleRefConnection(g.refs)
+		for _, st := range statuses {
+			if st.ConnectionID == "" {
+				st.ConnectionID = server
+			}
+			out = append(out, st)
+		}
 	}
 	return out, errors.Join(errs...)
+}
+
+// soleRefConnection returns the one connection all refs are on, or "" when
+// they are on several or any is on none.
+func soleRefConnection(refs []RouterTargetRef) string {
+	server := ""
+	for _, ref := range refs {
+		if ref.ConnectionID == "" || (server != "" && ref.ConnectionID != server) {
+			return ""
+		}
+		server = ref.ConnectionID
+	}
+	return server
 }
 
 func integrationByID(fc *fulfillContext, id string) *Integration {
