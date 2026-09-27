@@ -702,6 +702,40 @@ func (r *Repository) DeferSubmission(ctx context.Context, id string, leaseUntil 
 	return req, nil
 }
 
+func (r *Repository) FailSubmission(ctx context.Context, id string, leaseUntil time.Time, actor Viewer, message string) (*Request, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin request fail transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	message = strings.TrimSpace(message)
+	req, err := scanRequest(tx.QueryRow(ctx, `
+		UPDATE media_requests
+		SET outcome = 'failed',
+		    last_error = $2,
+		    submit_lease_until = NULL,
+		    updated_at = now()
+		WHERE id = $1
+		  AND status = 'approved'
+		  AND outcome = 'active'
+		  AND submit_lease_until = $3
+		RETURNING `+requestColumns(), id, message, leaseUntil))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, guardMiss(ctx, tx, id)
+		}
+		return nil, fmt.Errorf("fail request submission: %w", err)
+	}
+	if err := r.recordEvent(ctx, tx, id, "outcome_"+string(OutcomeFailed), actor, message); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit request fail transaction: %w", err)
+	}
+	return req, nil
+}
+
 func (r *Repository) MarkAvailable(ctx context.Context, id string, actor Viewer) (*Request, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

@@ -47,6 +47,11 @@ type Store interface {
 	// and was claimed again gets ErrInvalidState and leaves the newer claim
 	// alone.
 	DeferSubmission(ctx context.Context, id string, leaseUntil time.Time, delay time.Duration, message string) (*Request, error)
+	// FailSubmission marks a still-approved request failed after its last
+	// submission attempt and releases the claim. It is fenced on leaseUntil
+	// the same way as DeferSubmission, so an attempt that outlived its lease
+	// cannot fail a newer claim's attempt.
+	FailSubmission(ctx context.Context, id string, leaseUntil time.Time, actor Viewer, message string) (*Request, error)
 	// MarkReconciled stamps last_reconciled_at so the reconcile pass rotates
 	// through every candidate.
 	MarkReconciled(ctx context.Context, id string) error

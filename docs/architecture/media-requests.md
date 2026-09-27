@@ -53,7 +53,7 @@ and answers the caller with
 the approved request rather than an error. Only the attempt holding the current
 lease can do this: one that outlived its lease while another server claimed the
 request leaves the newer claim alone. After `maxSubmitAttempts` the request
-is marked `failed` for an admin to retry.
+is marked `failed` for an admin to retry, under the same lease check.
 
 A submission converges the request's targets to the qualities it currently
 wants. A failed target for a quality it no longer wants is deleted, but only
