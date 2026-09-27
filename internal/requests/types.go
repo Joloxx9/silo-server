@@ -110,6 +110,9 @@ type FeatureStatus struct {
 	// detail (404) and create (403) requests are rejected. Additive v1
 	// capability field so clients can feature-detect instead of version-sniff.
 	RatingRestrictionsEnforced bool `json:"rating_restrictions_enforced"`
+	// MissingSeasonsRequestable reports whether a series already in the
+	// library can be requested for its missing seasons (v2 only).
+	MissingSeasonsRequestable bool `json:"-"`
 }
 
 type UserLimit struct {
@@ -174,6 +177,11 @@ type Request struct {
 	NextSubmitAt     *time.Time `json:"-"`
 	// RoutingFacts is the TMDB snapshot routing rules match on.
 	RoutingFacts RoutingFacts `json:"-"`
+	// Seasons are the season numbers a series request asks for; empty means
+	// the whole series. SeasonProgress is attached on reads: each requested
+	// season's episode counts once the series is in the library.
+	Seasons        []int            `json:"-"`
+	SeasonProgress []SeasonProgress `json:"-"`
 	// Followers are the profiles, other than the requester's, that asked to be
 	// told when the title is available; loaded for the fulfilled notification.
 	Followers []Follower `json:"-"`
@@ -214,15 +222,21 @@ const (
 	StatePending    State = "pending"
 	StateApproved   State = "approved"
 	StateProcessing State = "processing"
-	StateAvailable  State = "available"
-	StateDeclined   State = "declined"
-	StateCancelled  State = "cancelled" //nolint:misspell // matches the outcome spelling
-	StateFailed     State = "failed"
+	// StatePartiallyAvailable: some of a season request's seasons are in the
+	// library, not all.
+	StatePartiallyAvailable State = "partially_available"
+	StateAvailable          State = "available"
+	StateDeclined           State = "declined"
+	StateCancelled          State = "cancelled" //nolint:misspell // matches the outcome spelling
+	StateFailed             State = "failed"
 )
 
 // State derives the request's user-facing state. A completed request is
 // available once its title is in the library (LibraryContentID attached);
-// until the scan finds it, it is still processing.
+// until the scan finds it, it is still processing. A season request is
+// available when every requested season is complete (SeasonProgress
+// attached), and partially available while only some of their episodes are
+// in.
 func (r *Request) State() State {
 	switch r.Outcome {
 	case OutcomeDeclined:
@@ -232,13 +246,24 @@ func (r *Request) State() State {
 	case OutcomeFailed:
 		return StateFailed
 	}
-	switch r.Status {
-	case StatusPending:
+	if r.Status == StatusPending {
 		return StatePending
+	}
+	if len(r.SeasonProgress) > 0 {
+		if seasonsDelivered(r.SeasonProgress, r.Status == StatusCompleted) {
+			return StateAvailable
+		}
+		for _, p := range r.SeasonProgress {
+			if p.Have > 0 {
+				return StatePartiallyAvailable
+			}
+		}
+	}
+	switch r.Status {
 	case StatusApproved:
 		return StateApproved
 	case StatusCompleted:
-		if r.LibraryContentID != "" {
+		if r.LibraryContentID != "" && len(r.Seasons) == 0 {
 			return StateAvailable
 		}
 		return StateProcessing
@@ -341,6 +366,9 @@ type MediaDetail struct {
 	Availability        Availability      `json:"availability"`
 	LibraryContentID    string            `json:"library_content_id,omitempty"`
 	Request             RequestState      `json:"request"`
+	// Seasons lists a series' regular seasons with their library
+	// availability and whether the active request covers them.
+	Seasons []RequestSeason `json:"-"`
 }
 
 type CreateRequestInput struct {
@@ -353,6 +381,14 @@ type CreateRequestInput struct {
 	Overview     string    `json:"overview,omitempty"`
 	PosterPath   string    `json:"poster_path,omitempty"`
 	BackdropPath string    `json:"backdrop_path,omitempty"`
+	// Seasons are the season numbers a series request asks for; none means
+	// every aired season still missing. v2 only; the frozen v1 body does not
+	// carry it.
+	Seasons []int `json:"-"`
+	// WholeSeries keeps the rule from before season requests, for v1: a
+	// series request asks for the whole series and is refused once the
+	// series is in the library.
+	WholeSeries bool `json:"-"`
 }
 
 // RequestPageKey identifies the last emitted request in descending creation order.

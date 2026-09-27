@@ -91,6 +91,25 @@ type RequestMediaDetail struct {
 	Availability        string                   `json:"availability" doc:"missing or available in this server's catalog" example:"missing"`
 	LibraryContentID    string                   `json:"library_content_id,omitempty" doc:"The catalog item when the media is available"`
 	Request             RequestMediaState        `json:"request"`
+	Seasons             []RequestMediaSeason     `json:"seasons" doc:"Series: the regular seasons (specials excluded) with library availability and request coverage; empty for movies"`
+}
+
+// RequestMediaSeason is one season of a series on its detail document.
+type RequestMediaSeason struct {
+	SeasonNumber int    `json:"season_number" example:"2"`
+	Name         string `json:"name,omitempty" example:"Season 2"`
+	EpisodeCount int    `json:"episode_count" doc:"Episodes TMDB lists for the season, aired or not" example:"10"`
+	AirDate      string `json:"air_date,omitempty" doc:"Calendar date, YYYY-MM-DD" example:"2025-01-17"`
+	PosterPath   string `json:"poster_path,omitempty" doc:"TMDB image path"`
+	Availability string `json:"availability" enum:"missing,partial,available" doc:"Whether every aired episode is in the library" example:"partial"`
+	Requested    bool   `json:"requested" doc:"The title's active request covers this season"`
+}
+
+// RequestSeasonProgress is how far one requested season is.
+type RequestSeasonProgress struct {
+	SeasonNumber      int `json:"season_number" example:"2"`
+	EpisodesAired     int `json:"episodes_aired" doc:"Aired episodes by the library's own metadata; 0 when it has no air dates yet" example:"10"`
+	EpisodesAvailable int `json:"episodes_available" doc:"Episodes with a file in an enabled library" example:"4"`
 }
 
 // RequestMediaPage is one TMDB result page. Search and browse page by the
@@ -169,34 +188,36 @@ type RequestTarget struct {
 
 // MediaRequest is one media request.
 type MediaRequest struct {
-	ID                   ID              `json:"id" example:"1834729"`
-	Provider             string          `json:"provider" example:"tmdb"`
-	MediaType            string          `json:"media_type" doc:"movie or series" example:"movie"`
-	TMDBID               int             `json:"tmdb_id" doc:"TMDB identifier (external, not a Silo ID)" example:"949"`
-	TVDBID               *int            `json:"tvdb_id,omitempty" doc:"TVDB identifier (external, not a Silo ID)"`
-	IMDbID               string          `json:"imdb_id,omitempty" example:"tt0113277"`
-	Title                string          `json:"title" example:"Heat"`
-	Year                 *int            `json:"year,omitempty" example:"1995"`
-	Overview             string          `json:"overview,omitempty"`
-	PosterPath           string          `json:"poster_path,omitempty" doc:"TMDB image path"`
-	BackdropPath         string          `json:"backdrop_path,omitempty" doc:"TMDB image path"`
-	Status               string          `json:"status" doc:"pending, approved, queued, downloading, completed" example:"pending"`
-	Outcome              string          `json:"outcome" doc:"active, declined, cancelled, failed" example:"active"`                                                                                   //nolint:misspell // the store's spelling
-	State                string          `json:"state" doc:"The one state to show a user: pending, approved, processing, available (in the library), declined, cancelled or failed" example:"pending"` //nolint:misspell // the store's spelling
-	OutcomeReason        string          `json:"outcome_reason,omitempty" doc:"Why the request was declined or withdrawn, when a reason was given"`
-	RequestedByUserID    ID              `json:"requested_by_user_id,omitempty" example:"1"`
-	RequestedByProfileID ID              `json:"requested_by_profile_id,omitempty" example:"p-owner"`
-	IntegrationKind      string          `json:"integration_kind,omitempty" example:"radarr"`
-	IsAnime              bool            `json:"is_anime"`
-	Targets              []RequestTarget `json:"targets" doc:"Empty, never null"`
-	ExternalID           string          `json:"external_id,omitempty"`
-	ExternalStatus       string          `json:"external_status,omitempty"`
-	LibraryContentID     string          `json:"library_content_id,omitempty" doc:"The catalog item once the media is in the library"`
-	LastError            string          `json:"last_error,omitempty"`
-	CreatedAt            Instant         `json:"created_at" example:"2026-01-02T03:04:05.000Z"`
-	UpdatedAt            Instant         `json:"updated_at" example:"2026-01-02T03:04:05.000Z"`
-	ApprovedAt           *Instant        `json:"approved_at,omitempty"`
-	CompletedAt          *Instant        `json:"completed_at,omitempty"`
+	ID                   ID                      `json:"id" example:"1834729"`
+	Provider             string                  `json:"provider" example:"tmdb"`
+	MediaType            string                  `json:"media_type" doc:"movie or series" example:"movie"`
+	TMDBID               int                     `json:"tmdb_id" doc:"TMDB identifier (external, not a Silo ID)" example:"949"`
+	TVDBID               *int                    `json:"tvdb_id,omitempty" doc:"TVDB identifier (external, not a Silo ID)"`
+	IMDbID               string                  `json:"imdb_id,omitempty" example:"tt0113277"`
+	Title                string                  `json:"title" example:"Heat"`
+	Year                 *int                    `json:"year,omitempty" example:"1995"`
+	Overview             string                  `json:"overview,omitempty"`
+	PosterPath           string                  `json:"poster_path,omitempty" doc:"TMDB image path"`
+	BackdropPath         string                  `json:"backdrop_path,omitempty" doc:"TMDB image path"`
+	Status               string                  `json:"status" doc:"pending, approved, queued, downloading, completed" example:"pending"`
+	Outcome              string                  `json:"outcome" doc:"active, declined, cancelled, failed" example:"active"`                                                                                                                                                    //nolint:misspell // the store's spelling
+	State                string                  `json:"state" doc:"The one state to show a user: pending, approved, processing, partially_available (some requested seasons are in the library), available (in the library), declined, cancelled or failed" example:"pending"` //nolint:misspell // the store's spelling
+	Seasons              []int                   `json:"seasons" doc:"Series: the requested season numbers; empty means the whole series (requests made through v1 or before season requests)"`
+	SeasonProgress       []RequestSeasonProgress `json:"season_progress" doc:"Series season requests: each requested season's episodes, once the series is in the library; empty otherwise"`
+	OutcomeReason        string                  `json:"outcome_reason,omitempty" doc:"Why the request was declined or withdrawn, when a reason was given"`
+	RequestedByUserID    ID                      `json:"requested_by_user_id,omitempty" example:"1"`
+	RequestedByProfileID ID                      `json:"requested_by_profile_id,omitempty" example:"p-owner"`
+	IntegrationKind      string                  `json:"integration_kind,omitempty" example:"radarr"`
+	IsAnime              bool                    `json:"is_anime"`
+	Targets              []RequestTarget         `json:"targets" doc:"Empty, never null"`
+	ExternalID           string                  `json:"external_id,omitempty"`
+	ExternalStatus       string                  `json:"external_status,omitempty"`
+	LibraryContentID     string                  `json:"library_content_id,omitempty" doc:"The catalog item once the media is in the library"`
+	LastError            string                  `json:"last_error,omitempty"`
+	CreatedAt            Instant                 `json:"created_at" example:"2026-01-02T03:04:05.000Z"`
+	UpdatedAt            Instant                 `json:"updated_at" example:"2026-01-02T03:04:05.000Z"`
+	ApprovedAt           *Instant                `json:"approved_at,omitempty"`
+	CompletedAt          *Instant                `json:"completed_at,omitempty"`
 }
 
 // MediaRequestOutput is a single-request response.
@@ -221,6 +242,7 @@ type MediaRequestCreate struct {
 	Overview     string `json:"overview,omitempty"`
 	PosterPath   string `json:"poster_path,omitempty" doc:"TMDB image path"`
 	BackdropPath string `json:"backdrop_path,omitempty" doc:"TMDB image path"`
+	Seasons      []int  `json:"seasons,omitempty" maxItems:"200" doc:"Series only: the season numbers to request. Omitted: every aired season not yet complete in the library" example:"[2,3]"`
 }
 
 // MediaRequestCreateInput is the createRequest request.
@@ -425,8 +447,7 @@ func registerRequests(reg *Registry) {
 	// already requested, without learning whose request it is.
 	follow := humaOp(http.MethodPut, Prefix+"/requests/follows/{media_type}/{tmdb_id}", opFollowRequestMedia, requestsTag,
 		"Get notified when a title that already has an active request becomes available.")
-	// 409 when the title has no active request (request it instead) or is
-	// already in the library.
+	// 409 when the title has no active request (request it instead).
 	follow.Errors = []int{http.StatusNotFound, http.StatusConflict}
 	Register(reg, Operation{Operation: follow, Class: ClassProfileScoped, DemoRestricted: true, ServiceBacked: true, RetrySafety: RetrySafetyNaturalIdempotent}, reg.followRequestMedia)
 
@@ -477,6 +498,7 @@ func (reg *Registry) createRequest(ctx context.Context, in *MediaRequestCreateIn
 		Overview:     in.Body.Overview,
 		PosterPath:   in.Body.PosterPath,
 		BackdropPath: in.Body.BackdropPath,
+		Seasons:      in.Body.Seasons,
 	})
 	if err != nil {
 		return nil, requestProblem(err)
@@ -770,6 +792,8 @@ func mediaRequestOf(r *mediarequests.Request) MediaRequest {
 		Status:           string(r.Status),
 		Outcome:          string(r.Outcome),
 		State:            string(r.State()),
+		Seasons:          NonNil(r.Seasons),
+		SeasonProgress:   requestSeasonProgressOf(r.SeasonProgress),
 		OutcomeReason:    r.OutcomeReason,
 		IntegrationKind:  r.IntegrationKind,
 		IsAnime:          r.IsAnime,
@@ -794,6 +818,14 @@ func mediaRequestOf(r *mediarequests.Request) MediaRequest {
 			IsAnime: t.IsAnime, ExternalID: t.ExternalID, ExternalStatus: t.ExternalStatus, Status: string(t.Status),
 			LastError: t.LastError, RouteName: t.RouteName, CreatedAt: NewInstant(t.CreatedAt), UpdatedAt: NewInstant(t.UpdatedAt),
 		})
+	}
+	return out
+}
+
+func requestSeasonProgressOf(progress []mediarequests.SeasonProgress) []RequestSeasonProgress {
+	out := make([]RequestSeasonProgress, 0, len(progress))
+	for _, p := range progress {
+		out = append(out, RequestSeasonProgress{SeasonNumber: p.Season, EpisodesAired: p.Aired, EpisodesAvailable: p.Have})
 	}
 	return out
 }
@@ -835,7 +867,19 @@ func requestMediaDetailOf(d *mediarequests.MediaDetail) RequestMediaDetail {
 		Networks: NonNil(d.Networks), Cast: cast, Director: d.Director, Creators: NonNil(d.Creators),
 		Recommendations: requestMediaResultsOf(d.Recommendations), Availability: string(d.Availability),
 		LibraryContentID: d.LibraryContentID, Request: requestMediaStateOf(d.Request),
+		Seasons: requestMediaSeasonsOf(d.Seasons),
 	}
+}
+
+func requestMediaSeasonsOf(seasons []mediarequests.RequestSeason) []RequestMediaSeason {
+	out := make([]RequestMediaSeason, 0, len(seasons))
+	for _, s := range seasons {
+		out = append(out, RequestMediaSeason{
+			SeasonNumber: s.Number, Name: s.Name, EpisodeCount: s.EpisodeCount, AirDate: s.AirDate,
+			PosterPath: s.PosterPath, Availability: string(s.Availability), Requested: s.Requested,
+		})
+	}
+	return out
 }
 
 func discoverSectionOf(s *mediarequests.DiscoverySection) DiscoverSection {

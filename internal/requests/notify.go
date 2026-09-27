@@ -78,6 +78,15 @@ func (s *Service) notifyApproval(ctx context.Context, req Request, origin Approv
 // the next reconcile run.
 const notifyFulfilledLimit = 100
 
+// markNotifyChecked stamps a completed request the fulfilled pass checked
+// without notifying, which rotates it behind the others.
+func (s *Service) markNotifyChecked(ctx context.Context, id string) {
+	if err := s.store.MarkReconciled(ctx, id); err != nil {
+		slog.WarnContext(ctx, "request fulfill-notify: stamp check failed", "component", "requests",
+			"request_id", id, "err", err)
+	}
+}
+
 // notifyFulfilledPending notifies completed requests whose media has arrived
 // in the catalog. Requests completed by an integration before the library
 // scan imports the files stay pending (fulfilled_notified_at IS NULL) and are
@@ -103,11 +112,22 @@ func (s *Service) notifyFulfilledPending(ctx context.Context) {
 		if err != nil {
 			slog.WarnContext(ctx, "request fulfill-notify: presence lookup failed", "component", "requests",
 				"request_id", req.ID, "tmdb_id", req.TMDBID, "err", err)
+			s.markNotifyChecked(ctx, req.ID)
 			continue
 		}
 		match := matches[req.TMDBID]
-		if !match.Available {
-			continue // not in the catalog yet; retry next run
+		fulfilled, _, err := s.requestFulfilled(ctx, *req, match)
+		if err != nil {
+			slog.WarnContext(ctx, "request fulfill-notify: season lookup failed", "component", "requests",
+				"request_id", req.ID, "err", err)
+			s.markNotifyChecked(ctx, req.ID)
+			continue
+		}
+		if !fulfilled {
+			// Not in the catalog yet (or not every requested season); retry
+			// next run, after the requests not checked as recently.
+			s.markNotifyChecked(ctx, req.ID)
+			continue
 		}
 		followers, err := s.store.ListTitleFollowers(ctx, req.MediaType, req.TMDBID)
 		if err != nil {

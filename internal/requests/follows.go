@@ -22,8 +22,8 @@ type Follower struct {
 }
 
 // Follow records that the viewer's profile wants to hear when the title
-// becomes available. The title must have an active request and must not be in
-// the library yet. Following a title the viewer requested is a no-op.
+// becomes available. The title must have an open request. Following a title
+// the viewer requested is a no-op.
 func (s *Service) Follow(ctx context.Context, viewer Viewer, mediaType MediaType, tmdbID int) (RequestState, error) {
 	if err := validateViewer(viewer); err != nil {
 		return RequestState{}, err
@@ -54,13 +54,8 @@ func (s *Service) Follow(ctx context.Context, viewer Viewer, mediaType MediaType
 	if err := s.ensureCreateAllowedByCeiling(ctx, viewer, CreateRequestInput{MediaType: mediaType, TMDBID: tmdbID}); err != nil {
 		return RequestState{}, err
 	}
-	presence, err := s.lookupAvailable(ctx, mediaType, []int{tmdbID})
-	if err != nil {
-		return RequestState{}, err
-	}
-	if presence[tmdbID].Available {
-		return RequestState{}, ErrAlreadyAvailable
-	}
+	// An open request is what makes a title followable: a series partly in
+	// the library can have one for its missing seasons.
 	active, err := s.store.ListActiveByTMDB(ctx, mediaType, []int{tmdbID})
 	if err != nil {
 		return RequestState{}, err

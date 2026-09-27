@@ -17,6 +17,7 @@ const STATE_STYLES: Record<RequestDisplayState, { variant: BadgeVariant; classNa
   pending: { variant: "outline" },
   approved: { variant: "secondary" },
   processing: { variant: "secondary" },
+  partially_available: { variant: "secondary" },
   available: { variant: "default" },
   declined: { variant: "outline", className: "text-muted-foreground" },
   cancelled: { variant: "outline", className: "text-muted-foreground" },

@@ -328,20 +328,20 @@ func (r *Repository) insertRequest(
 			id, provider, media_type, tmdb_id, tvdb_id, imdb_id, title, year,
 			overview, poster_path, backdrop_path, status, outcome,
 			requested_by_user_id, requested_by_profile_id, is_anime, created_at, updated_at, approved_at,
-			routing_facts
+			routing_facts, seasons
 		)
 		VALUES (
 			$1, 'tmdb', $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12,
 			$13, $14, $15, $16, $16, $17,
-			$18
+			$18, $19
 		)
 		RETURNING `+requestColumns(), input.ID, input.Input.MediaType, input.Input.TMDBID, tvdbID,
 		strings.TrimSpace(input.Input.IMDbID), strings.TrimSpace(input.Input.Title), year,
 		strings.TrimSpace(input.Input.Overview), strings.TrimSpace(input.Input.PosterPath),
 		strings.TrimSpace(input.Input.BackdropPath), status, outcome,
 		input.Requester.UserID, input.Requester.ProfileID, input.IsAnime, now, approvedAt,
-		facts)
+		facts, nonNilSeasons(input.Input.Seasons))
 	req, err := scanRequest(row)
 	if err != nil {
 		return nil, fmt.Errorf("insert request: %w", err)
@@ -441,7 +441,9 @@ func (r *Repository) ListFulfilledUnnotified(ctx context.Context, limit int) ([]
 		  AND status = 'completed'
 		  AND fulfilled_notified_at IS NULL
 		  AND completed_at > now() - interval '30 days'
-		ORDER BY completed_at ASC
+		-- A request still waiting on the library is stamped each pass, so it
+		-- moves behind the others and cannot starve newer completions.
+		ORDER BY last_reconciled_at ASC NULLS FIRST, completed_at ASC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -1099,6 +1101,14 @@ func buildRequestListSQL(baseCondition string, baseArgs []any, filter ListFilter
 		LIMIT $` + strconv.Itoa(len(args)-1) + ` OFFSET $` + strconv.Itoa(len(args)), args
 }
 
+// nonNilSeasons stores no seasons as an empty array, not NULL.
+func nonNilSeasons(seasons []int) []int {
+	if seasons == nil {
+		return []int{}
+	}
+	return seasons
+}
+
 func requestSelectSQL() string {
 	return "SELECT " + requestColumns() + " FROM media_requests "
 }
@@ -1108,7 +1118,7 @@ func requestColumns() string {
 	        overview, poster_path, backdrop_path, status, outcome,
 	        requested_by_user_id, requested_by_profile_id, is_anime,
 	        last_error, created_at, updated_at, approved_at, completed_at,
-	        submit_attempts, submit_lease_until, next_submit_at, outcome_reason, routing_facts`
+	        submit_attempts, submit_lease_until, next_submit_at, outcome_reason, routing_facts, seasons`
 }
 
 type requestScanner interface {
@@ -1147,6 +1157,7 @@ func scanRequest(row requestScanner) (*Request, error) {
 		&nextSubmitAt,
 		&req.OutcomeReason,
 		&rawFacts,
+		&req.Seasons,
 	); err != nil {
 		return nil, err
 	}

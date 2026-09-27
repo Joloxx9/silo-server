@@ -86,11 +86,15 @@ export function useRequestDiscovery() {
   });
 }
 
-export function useRequestFeatureStatus() {
+export function useRequestFeatureStatus(
+  options: { enabled?: boolean; refetchOnMount?: boolean } = {},
+) {
   return useQuery({
     queryKey: requestKeys.status(),
     queryFn: () => v2("GET /api/v2/requests/status"),
     staleTime: REQUESTS_STALE_TIME,
+    enabled: options.enabled ?? true,
+    ...(options.refetchOnMount !== undefined && { refetchOnMount: options.refetchOnMount }),
   });
 }
 
@@ -155,11 +159,15 @@ export function useRequestBrowse({ kind, slug, mediaType, sort, page }: UseReque
   });
 }
 
-export function useRequestMediaDetail(mediaType: RequestMediaType, tmdbID: number) {
+export function useRequestMediaDetail(
+  mediaType: RequestMediaType,
+  tmdbID: number,
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: requestKeys.detail(mediaType, tmdbID),
     queryFn: () => getRequestMediaDetailV2(mediaType, tmdbID),
-    enabled: tmdbID > 0,
+    enabled: tmdbID > 0 && (options.enabled ?? true),
     staleTime: REQUESTS_STALE_TIME,
   });
 }

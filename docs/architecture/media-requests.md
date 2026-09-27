@@ -21,7 +21,7 @@ request's state.
 ## Routing facts
 
 Creating a request reads the title's TMDB detail once, after the cheap refusals
-(already in the library, already requested). The server's copy of the title and
+(a movie already in the library, a title already requested). The server's copy of the title and
 year replaces the client's, and a snapshot of what routing can match on is
 stored with the request as `routing_facts`: TMDB genre, keyword, network and
 company IDs, original language, origin countries, year, and whether TMDB tags it
@@ -135,6 +135,50 @@ or a connection skipped for a missing key makes the set look smaller than it
 is, so in either case every failed target is kept for an admin to see. If
 nothing is left to send, the remaining targets decide the status.
 
+## Season requests
+
+A series request names the seasons it wants (`seasons`). When the requester
+names none, the server asks for every aired regular season (TMDB's seasons that
+have started airing, specials excluded) that is not complete in the library.
+Requests from before season requests, and every v1 request, have no seasons:
+they mean the whole series and keep the old rule that any episode in the
+library fulfills them. A series with no aired season yet, and not in the
+library, is requested whole unless the requester names seasons.
+
+A series in the library can be requested for the seasons it lacks (aired
+and incomplete, or not aired yet) only when no download server takes series. The router plugin contract carries no
+seasons yet (that needs an SDK and plugin change), so a router would add the
+whole series again: refused by a server that has it, every season downloaded by
+one that does not. With a download server for series, a series in the library
+stays `already_available`, as before season requests; without one, the library
+fulfills the request. Only the series detail applies this: search, discover and
+recommendation cards report any series in the library as available.
+
+A season is complete when every aired episode of it has a file in an enabled
+library, judged by the library's own provider metadata, so no external service
+is involved. An episode has a file when one is linked to it
+(`episode_libraries`) or when a multi-episode file of its season spans it (the
+file links to its first episode only). Only aired episodes count toward an aired
+one, so an episode present ahead of its air date cannot stand in for a missing
+one. A season whose episodes have no air dates yet counts as complete once any
+episode of it is present.
+
+A season request is fulfilled, completed by the reconcile pass and notified,
+when every requested season is complete; while only some are, its state is
+`partially_available`. Once the download server reports the request done, a
+season also counts when any episode of it is present: an episode the server
+cannot find would otherwise hold the request and its notification open for
+good. A season with no episode in the library never counts, since it may not
+have aired yet. A library whose metadata provider numbers seasons differently
+from TMDB (absolute or TVDB order) can therefore leave a season request
+waiting; the fulfilled-notification pass stamps each request it checks without
+notifying, so such requests rotate behind newer ones rather than starve them.
+
+The series detail lists each regular season with its availability (`missing`,
+`partial`, `available`) and whether the active request covers it. A title still
+has at most one open request: a second profile that wants the same series while
+a request is open follows it.
+
 ## Following a title
 
 A profile that finds a title someone else already requested can follow it
@@ -142,11 +186,11 @@ instead of requesting it again (`PUT`/`DELETE
 /api/v2/requests/follows/{media_type}/{tmdb_id}`). Following needs the same
 access as requesting: requests enabled, the account allowed to request and not
 blocked by its request limit, and the title within the profile's rating
-ceiling. It is refused for a title with no open request (request it instead)
-and for one already in the library; the insert itself checks for the open
-request and holds a share lock on its row until the follow commits, so a
-follow cannot land just after the request was declined, cancelled or
-completed, and miss that transition's follow cleanup.
+ceiling. It is refused for a title with no open request (request it instead);
+the insert itself checks for the open request and holds a share lock on its
+row until the follow commits, so a follow cannot land just after the request
+was declined, cancelled or completed, and miss that transition's follow
+cleanup.
 
 A follow belongs to the title and the profile (`media_request_follows`, keyed
 by account and profile id, since profile ids repeat across accounts), not to

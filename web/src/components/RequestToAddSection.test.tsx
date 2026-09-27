@@ -188,8 +188,8 @@ describe("RequestToAddSection (dialog variant)", () => {
       isError: false,
     });
     const markup = render(<RequestToAddSection variant="dialog" query="dune" libraryHadHits />);
-    expect(markup).toContain("/requests/movie/1");
-    expect(markup).not.toContain("/requests/movie/2");
+    expect(markup).toContain("/title/movie/1");
+    expect(markup).not.toContain("/title/movie/2");
   });
 
   it("renders nothing when TMDB returned an error", () => {

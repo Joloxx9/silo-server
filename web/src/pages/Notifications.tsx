@@ -97,7 +97,7 @@ function notificationDescription(notification: AppNotification): string {
 /**
  * Where a row leads. Episode and fulfilled-request rows open the catalog item;
  * approved and declined requests have no catalog item yet, so they open the
- * request's detail page from the TMDB id their payload carries.
+ * title's page from the TMDB id their payload carries.
  */
 function notificationHref(notification: AppNotification): string | null {
   if (notification.episode_id) return `/item/${notification.episode_id}`;

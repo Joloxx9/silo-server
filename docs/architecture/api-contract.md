@@ -1813,6 +1813,11 @@ prevents concurrent active requests for the same media, but terminal requests no
 longer hold that uniqueness key. Safe automatic retries require a durable client
 request identity across terminal states. The web mutation disables retries.
 
+A series request can name its seasons (`seasons` on `POST /api/v2/requests`);
+series detail lists the regular seasons with availability and request coverage;
+requests carry `seasons`, `season_progress` and the `partially_available` state;
+`GET /api/v2/requests/status` advertises `season_requests_supported`.
+
 A profile can follow a title another profile already requested, to be notified
 when it becomes available, with `PUT` and `DELETE
 /api/v2/requests/follows/{media_type}/{tmdb_id}`. Both are naturally idempotent.

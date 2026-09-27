@@ -120,8 +120,12 @@ export default function Layout({ children }: LayoutProps) {
   // own gutter so text rows line up with MediaCarousel's edge padding.
   const isRequestsRoute =
     /^\/requests\/?$/.test(location.pathname) || location.pathname.startsWith("/requests/browse/");
-  // Only /requests/movie/… and /requests/series/… are title details.
-  const isRequestDetailRoute = /^\/requests\/(movie|series)\//.test(location.pathname);
+  // A title outside the library gets the item page's treatment. The old
+  // /requests/movie/… and /requests/series/… links redirect there, so they
+  // keep it too rather than expanding the sidebar for one frame.
+  const isTitleRoute =
+    location.pathname.startsWith("/title/") ||
+    /^\/requests\/(movie|series)\//.test(location.pathname);
   // A watch-party room owns its own full-height layout; the hub does not.
   const isWatchPartyRoomRoute = /^\/rooms\/(?!join$)[^/]+$/.test(location.pathname);
   const needsNoPadding =
@@ -130,7 +134,7 @@ export default function Layout({ children }: LayoutProps) {
     isLibraryRoute ||
     isItemRoute ||
     isRequestsRoute ||
-    isRequestDetailRoute ||
+    isTitleRoute ||
     isSearchLandingRoute ||
     isRecommendationsRoute ||
     isCalendarRoute;
@@ -138,7 +142,7 @@ export default function Layout({ children }: LayoutProps) {
   // Cold item routes commit a lightweight shell while the sidebar collapses.
   // A detail already cached before navigation skips that gate and renders on
   // the destination's first frame.
-  const isDetailImmersion = isItemRoute || isPersonRoute || isRequestDetailRoute;
+  const isDetailImmersion = isItemRoute || isPersonRoute || isTitleRoute;
   const targetDetailImmersion = isDetailImmersion;
   const visualDetailImmersion = useImmediateSidebarCollapse(targetDetailImmersion);
   const {

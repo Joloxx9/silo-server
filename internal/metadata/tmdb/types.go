@@ -206,6 +206,9 @@ type MediaDetail struct {
 	FirstAirDate     string
 	LastAirDate      string
 	Networks         []string
+	// Seasons lists a series' seasons as TMDB knows them, specials (season
+	// 0) included.
+	Seasons []SeasonSummary
 
 	Cast            []MediaCastMember
 	Director        string
@@ -224,6 +227,23 @@ type MediaCastMember struct {
 
 // genreEntry / companyEntry / networkEntry / personEntry mirror small object
 // shapes from the TMDB JSON. They're internal to the decode path.
+// SeasonSummary is one season of a series.
+type SeasonSummary struct {
+	Number       int
+	Name         string
+	EpisodeCount int
+	AirDate      string
+	PosterPath   string
+}
+
+type seasonEntry struct {
+	SeasonNumber int    `json:"season_number"`
+	Name         string `json:"name"`
+	EpisodeCount int    `json:"episode_count"`
+	AirDate      string `json:"air_date"`
+	PosterPath   string `json:"poster_path"`
+}
+
 type genreEntry struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
@@ -356,6 +376,7 @@ type tvDetailResponse struct {
 	Status          string                     `json:"status"`
 	Homepage        string                     `json:"homepage"`
 	Networks        []networkEntry             `json:"networks"`
+	Seasons         []seasonEntry              `json:"seasons"`
 	CreatedBy       []personEntry              `json:"created_by"`
 	Credits         *creditsResponse           `json:"credits"`
 	ExternalIDs     *ExternalIDs               `json:"external_ids"`

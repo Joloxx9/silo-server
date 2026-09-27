@@ -466,7 +466,7 @@ describe("GlobalSearch request rows", () => {
 
     await userEvent.click(screen.getByRole("option", { name: /Requested Show/ }));
 
-    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/requests/series/7");
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/title/series/7");
     expect(screen.queryByTestId("dialog")).not.toBeInTheDocument();
   });
 
@@ -490,7 +490,7 @@ describe("GlobalSearch request rows", () => {
     fireEvent.keyDown(input, { key: "ArrowUp" });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/requests/series/7");
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/title/series/7");
     expect(screen.queryByTestId("dialog")).not.toBeInTheDocument();
   });
 

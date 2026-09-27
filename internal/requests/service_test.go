@@ -1720,6 +1720,7 @@ func (f *fakeStore) CreateRequest(_ context.Context, input CreateRequestRecord) 
 		Outcome:              input.Outcome,
 		IsAnime:              input.IsAnime,
 		RoutingFacts:         input.Facts,
+		Seasons:              input.Input.Seasons,
 		RequestedByUserID:    input.Requester.UserID,
 		RequestedByProfileID: input.Requester.ProfileID,
 		CreatedAt:            input.Now,
@@ -2473,6 +2474,22 @@ type fakePresence struct {
 	available map[MediaType]map[int]bool
 	byTVDB    map[MediaType]map[int]int
 	got       []PresenceCandidate
+	// seasons holds per-season counts by series content ID.
+	seasons       map[string]map[int]SeasonCounts
+	seasonLookups int
+}
+
+func (f *fakePresence) SeasonAvailability(_ context.Context, seriesContentIDs []string) (map[string]map[int]SeasonCounts, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.seasonLookups++
+	out := map[string]map[int]SeasonCounts{}
+	for _, id := range seriesContentIDs {
+		if counts, ok := f.seasons[id]; ok {
+			out[id] = counts
+		}
+	}
+	return out, nil
 }
 
 func (f *fakePresence) Lookup(_ context.Context, mediaType MediaType, candidates []PresenceCandidate) (map[int]PresenceMatch, error) {

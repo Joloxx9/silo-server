@@ -970,6 +970,18 @@ func normalizeTVDetail(resp *tvDetailResponse) *MediaDetail {
 			detail.NetworkIDs = append(detail.NetworkIDs, network.ID)
 		}
 	}
+	for _, season := range resp.Seasons {
+		if season.SeasonNumber < 0 {
+			continue
+		}
+		detail.Seasons = append(detail.Seasons, SeasonSummary{
+			Number:       season.SeasonNumber,
+			Name:         strings.TrimSpace(season.Name),
+			EpisodeCount: season.EpisodeCount,
+			AirDate:      season.AirDate,
+			PosterPath:   season.PosterPath,
+		})
+	}
 	if resp.ExternalIDs != nil {
 		detail.IMDbID = resp.ExternalIDs.IMDbID
 		detail.TVDBID = resp.ExternalIDs.TVDBID

@@ -73,14 +73,14 @@ it.each([
   [
     "request.approved",
     { media_type: "movie", tmdb_id: 603, title: "The Matrix" },
-    "/requests/movie/603",
+    "/title/movie/603",
   ],
   [
     "request.declined",
     { media_type: "series", tmdb_id: 1399, title: "A Show" },
-    "/requests/series/1399",
+    "/title/series/1399",
   ],
-])("links a %s row to the request's detail page", (type, flags, href) => {
+])("links a %s row to the title's page", (type, flags, href) => {
   state.list.data = {
     pages: [{ notifications: [{ ...row, type, reason_flags: flags }], read_cutoff: "c" }],
   };

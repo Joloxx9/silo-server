@@ -8,6 +8,8 @@
   "status": "approved",
   "outcome": "active",
   "state": "approved",
+  "seasons": [],
+  "season_progress": [],
   "requested_by_user_id": "1",
   "requested_by_profile_id": "p-owner",
   "integration_kind": "radarr",

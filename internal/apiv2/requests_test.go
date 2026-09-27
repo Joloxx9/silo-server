@@ -549,3 +549,23 @@ func TestFollowRequestMedia(t *testing.T) {
 	svc.err = mediarequests.ErrAlreadyAvailable
 	requireProblem(t, do(t, h, http.MethodPut, "/api/v2/requests/follows/movie/949", "", requestOwner), TypeConflict)
 }
+
+func TestCreateSeriesRequestPassesSeasons(t *testing.T) {
+	svc := fixtureRequests()
+	h := newTestHandler(t, requestDeps(svc))
+	rec := do(t, h, http.MethodPost, "/api/v2/requests", `{"media_type":"series","tmdb_id":95396,"title":"Severance","seasons":[2,3]}`, requestOwner)
+	if rec.Code != http.StatusCreated {
+		t.Fatal(rec.Code, rec.Body.String())
+	}
+	if !slices.Equal(svc.lastCreate.Seasons, []int{2, 3}) {
+		t.Fatalf("seasons passed = %v, want [2 3]", svc.lastCreate.Seasons)
+	}
+	var got struct {
+		Seasons        []int `json:"seasons"`
+		SeasonProgress []any `json:"season_progress"`
+	}
+	decodeBody(t, rec.Body, &got)
+	if got.Seasons == nil || got.SeasonProgress == nil {
+		t.Fatalf("seasons fields must be arrays, never null: %s", rec.Body.String())
+	}
+}

@@ -238,7 +238,20 @@ func (h *RequestsHandler) HandleGetDetail(w http.ResponseWriter, r *http.Request
 		writeRequestServiceError(w, err)
 		return
 	}
+	wholeSeriesRequestState(detail)
 	writeJSON(w, http.StatusOK, detail)
+}
+
+// wholeSeriesRequestState keeps v1 on the rule from before season requests,
+// which v1 can neither name nor show: a series in the library is not
+// requestable, even with seasons missing. An active request still wins, as it
+// does for every title.
+func wholeSeriesRequestState(detail *mediarequests.MediaDetail) {
+	if detail == nil || detail.MediaType != mediarequests.MediaTypeSeries ||
+		detail.Availability != mediarequests.AvailabilityAvailable || detail.Request.Status != "" {
+		return
+	}
+	detail.Request = mediarequests.RequestState{Requestable: false, Reason: "already_available"}
 }
 
 func (h *RequestsHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
@@ -251,6 +264,7 @@ func (h *RequestsHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
 		return
 	}
+	input.WholeSeries = true
 	req, err := h.service.CreateRequest(r.Context(), viewer, input)
 	if err != nil {
 		writeRequestServiceError(w, err)
