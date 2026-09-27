@@ -472,11 +472,12 @@ export function useRequestIntegrationOptions(integrationId: string | undefined) 
   });
 }
 
-export function useRequestRoutes() {
+export function useRequestRoutes(enabled = true) {
   return useQuery({
     queryKey: adminKeys.requestRoutes(),
     queryFn: listAdminRequestRoutesV2,
     staleTime: REQUESTS_STALE_TIME,
+    enabled,
   });
 }
 

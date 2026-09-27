@@ -313,6 +313,58 @@ func TestReconcileChecksEachTargetThroughItsOwnPlugin(t *testing.T) {
 	}
 }
 
+// A plugin may return a target without its connection. Such a target is
+// still checked: through the plugin that routes the media type without rules,
+// with all its connections, as before routing.
+func TestReconcileChecksATargetWithoutAConnection(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{routerInstOn("seerr-a", 3), routerInstOn("seerr-b", 3), routerInstOn("other", 4)}
+	store.candidates = []*Request{{ID: "r1", MediaType: MediaTypeMovie, TMDBID: 1, Status: StatusQueued, Outcome: OutcomeActive}}
+	store.targets = map[string][]Target{"r1": {
+		{ID: 1, RequestID: "r1", Quality: Quality1080p, Status: StatusQueued, ExternalID: "a"},
+	}}
+	router := &fakeRouterProvider{statuses: []RouterTargetStatus{{Quality: Quality1080p, Status: StatusDownloading}}}
+	svc := newTestService(store)
+	svc.SetRouterProvider(router)
+
+	if _, err := svc.ReconcileRequests(context.Background(), 10); err != nil {
+		t.Fatalf("ReconcileRequests: %v", err)
+	}
+	if len(router.statusLog) != 1 {
+		t.Fatalf("status calls = %+v, want the unattributed target checked", router.statusLog)
+	}
+	call := router.statusLog[0]
+	if call.installationID != 3 || len(call.conns) != 2 || len(call.refs) != 1 || call.refs[0].ExternalID != "a" {
+		t.Fatalf("status call = %+v, want the first plugin with all its connections", call)
+	}
+	if got := store.targets["r1"][0].Status; got != StatusDownloading {
+		t.Fatalf("target = %s, want the plugin's status applied", got)
+	}
+}
+
+// A routed tier goes to one server, so a target returned without a connection
+// is recorded on that server and checked through its plugin.
+func TestSubmitRoutedRecordsTheServerOfATargetWithoutAConnection(t *testing.T) {
+	store := routingStore(capturedFacts(RoutingFacts{Anime: true}))
+	router := &fakeRouterProvider{targetsOverride: []RouterTarget{{Quality: Quality1080p, ExternalID: "x", Status: StatusQueued}}}
+	svc := newTestService(store)
+	svc.SetRouterProvider(router)
+
+	if _, err := svc.submitApprovedRequest(context.Background(), *store.requests["r1"], Viewer{}, nil); err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	targets, _ := store.ListTargets(context.Background(), "r1")
+	var hd *Target
+	for i := range targets {
+		if targets[i].Quality == Quality1080p {
+			hd = &targets[i]
+		}
+	}
+	if hd == nil || hd.IntegrationID != "radarr-anime" || hd.IntegrationKind != "radarr" {
+		t.Fatalf("targets = %+v, want the HD target recorded on the Anime route's server", targets)
+	}
+}
+
 func TestReconcileKeepsStatusesWhenOnePluginFails(t *testing.T) {
 	store := newFakeStore()
 	store.integrations = []Integration{routerInstOn("on-one", 1), routerInstOn("on-two", 2)}
@@ -344,18 +396,7 @@ func TestReconcileKeepsStatusesWhenOnePluginFails(t *testing.T) {
 // Sonarr/Radarr servers configured the old way and checks it produces the
 // routes that reproduce the plugin's own routing.
 func TestRouteSeedingMigrationDatabase(t *testing.T) {
-	matches, err := filepath.Glob("../../migrations/sql/*_request_routes.sql")
-	if err != nil || len(matches) != 1 {
-		t.Fatalf("find migration: %v %v", matches, err)
-	}
-	raw, err := os.ReadFile(matches[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	up := string(raw)
-	up = up[strings.Index(up, "-- +goose Up"):strings.Index(up, "-- +goose Down")]
-	up = strings.NewReplacer("-- +goose StatementBegin", "", "-- +goose StatementEnd", "").Replace(up)
-
+	up := migrationUp(t, "request_routes")
 	repo, pool := lifecycleTestRepository(t)
 	ctx := t.Context()
 	// The schema copy took the migrated columns; start from before them.
@@ -384,6 +425,11 @@ func TestRouteSeedingMigrationDatabase(t *testing.T) {
 	seed("seerr", "Seerr", true, 2, "k", `{"requester_mode":"admin"}`)
 	if _, err := pool.Exec(ctx, up); err != nil {
 		t.Fatalf("run migration: %v", err)
+	}
+	// The owner repair keeps these routes: every seeded server belongs to the
+	// plugin that owns the first usable connection of its media type.
+	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes_keep_legacy_owner")); err != nil {
+		t.Fatalf("run owner repair: %v", err)
 	}
 
 	routes, err := repo.ListRoutes(ctx)
@@ -420,6 +466,89 @@ func TestRouteSeedingMigrationDatabase(t *testing.T) {
 	if o := seriesAnime.UHD.Overrides; seriesAnime.UHD.IntegrationID != "sonarr-uhd" || o["root_folder"] != "/anime-4k" ||
 		!slices.Equal(anyInts(o["tags"]), []int{9}) || o["series_type"] != "anime" {
 		t.Fatalf("series anime 4K = %+v", seriesAnime.UHD)
+	}
+}
+
+// migrationUp returns the Up section of the migration named name, runnable as
+// one statement batch.
+func migrationUp(t *testing.T, name string) string {
+	t.Helper()
+	matches, err := filepath.Glob("../../migrations/sql/*_" + name + ".sql")
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("find migration %s: %v %v", name, matches, err)
+	}
+	raw, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	up := string(raw)
+	up = up[strings.Index(up, "-- +goose Up"):strings.Index(up, "-- +goose Down")]
+	return strings.NewReplacer("-- +goose StatementBegin", "", "-- +goose StatementEnd", "").Replace(up)
+}
+
+// TestRouteSeedingKeepsTheLegacyOwnerDatabase covers an install whose first
+// usable movie connection by name is Seerr: before routing, Seerr took every
+// movie request, so the seeded movie routes (which send to Radarr) are removed
+// and movies stay with Seerr. Series stay routed to Sonarr, and a seeded route
+// an admin has saved since is kept.
+func TestRouteSeedingKeepsTheLegacyOwnerDatabase(t *testing.T) {
+	repo, pool := lifecycleTestRepository(t)
+	ctx := t.Context()
+	if _, err := pool.Exec(ctx, `ALTER TABLE media_request_targets DROP COLUMN IF EXISTS route_id, DROP COLUMN IF EXISTS route_name`); err != nil {
+		t.Fatal(err)
+	}
+	seed := func(id, name string, installation int, capability, mediaTypes, config string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `INSERT INTO request_integrations (id, name, enabled, capability_id, installation_id, api_key_ref, supported_media_types, plugin_config)
+			VALUES ($1, $2, true, $3, $4, 'k', $5::text[], $6::jsonb)`, id, name, capability, installation, mediaTypes, config); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seed("seerr", "Jellyseerr", 2, "seerr", "{movie}", `{}`)
+	seed("radarr", "Radarr", 1, "arr", "{movie}", `{"service_kind":"radarr","is_default":true,"anime_enabled":true,"anime_root_folder":"/anime"}`)
+	seed("sonarr", "Sonarr", 1, "arr", "{series}", `{"service_kind":"sonarr","is_default":true,"anime_enabled":true}`)
+	seed("sonarr-4k", "Sonarr 4K", 1, "arr", "{series}", `{"service_kind":"sonarr","is_default_4k":true,"is_4k":true}`)
+	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes")); err != nil {
+		t.Fatalf("run migration: %v", err)
+	}
+	var seeded int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM request_routes`).Scan(&seeded); err != nil || seeded != 4 {
+		t.Fatalf("seeded %d routes (%v), want a fallback and an Anime route per media type", seeded, err)
+	}
+	// An admin saved the series Anime route after the seeding.
+	if _, err := pool.Exec(ctx, `UPDATE request_routes SET updated_at = updated_at + interval '1 minute' WHERE id = 'anime-series'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes_keep_legacy_owner")); err != nil {
+		t.Fatalf("run owner repair: %v", err)
+	}
+	routes, err := repo.ListRoutes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, route := range routes {
+		ids = append(ids, route.ID)
+	}
+	slices.Sort(ids)
+	if want := []string{"anime-series", "fallback-series"}; !slices.Equal(ids, want) {
+		t.Fatalf("routes = %v, want %v: movies go back to Seerr, series keep their routes", ids, want)
+	}
+
+	// An admin-saved route stays even when its server is outside the owner.
+	if _, err := pool.Exec(ctx, `UPDATE request_integrations SET name = 'A Seerr', supported_media_types = '{}' WHERE id = 'seerr'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, migrationUp(t, "request_routes_keep_legacy_owner")); err != nil {
+		t.Fatalf("rerun owner repair: %v", err)
+	}
+	routes, err = repo.ListRoutes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Seerr now also owns series: the untouched series fallback goes.
+	if len(routes) != 1 || routes[0].ID != "anime-series" {
+		t.Fatalf("routes = %+v, want only the saved anime-series route", routes)
 	}
 }
 

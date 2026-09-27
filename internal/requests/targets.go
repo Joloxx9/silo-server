@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -86,6 +87,10 @@ func (r *Repository) ListTargets(ctx context.Context, requestID string) ([]Targe
 }
 
 func (r *Repository) CreateTarget(ctx context.Context, t Target) (Target, error) {
+	return insertTarget(ctx, r.pool, t)
+}
+
+func insertTarget(ctx context.Context, exec requestExecutor, t Target) (Target, error) {
 	var integrationID, routeID any
 	if t.IntegrationID != "" {
 		integrationID = t.IntegrationID
@@ -93,7 +98,7 @@ func (r *Repository) CreateTarget(ctx context.Context, t Target) (Target, error)
 	if t.RouteID != "" {
 		routeID = t.RouteID
 	}
-	row := r.pool.QueryRow(ctx, `
+	row := exec.QueryRow(ctx, `
 		INSERT INTO media_request_targets
 			(request_id, integration_id, integration_kind, quality, is_anime,
 			 external_id, external_status, status, last_error, updated_at, route_id, route_name)
@@ -105,6 +110,45 @@ func (r *Repository) CreateTarget(ctx context.Context, t Target) (Target, error)
 		return Target{}, fmt.Errorf("create target: %w", err)
 	}
 	return t, nil
+}
+
+func (r *Repository) RecordSubmission(ctx context.Context, id string, leaseUntil time.Time, targets []Target, actor Viewer) (*Request, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin submission record transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Releasing the claim also locks the row, so a withdrawal or a newer
+	// claim cannot slip in before the targets land.
+	var claimedID string
+	if err := tx.QueryRow(ctx, `
+		UPDATE media_requests
+		SET submit_lease_until = NULL
+		WHERE id = $1
+		  AND status = 'approved'
+		  AND outcome = 'active'
+		  AND submit_lease_until = $2
+		RETURNING id`, id, leaseUntil).Scan(&claimedID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, guardMiss(ctx, tx, id)
+		}
+		return nil, fmt.Errorf("release request submission claim: %w", err)
+	}
+	for _, t := range targets {
+		t.RequestID = id
+		if _, err := insertTarget(ctx, tx, t); err != nil {
+			return nil, err
+		}
+	}
+	req, err := r.recomputeAggregate(ctx, tx, id, actor)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit submission record transaction: %w", err)
+	}
+	return req, nil
 }
 
 func (r *Repository) DeleteTarget(ctx context.Context, id int64) error {
