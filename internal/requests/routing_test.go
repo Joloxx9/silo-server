@@ -365,6 +365,28 @@ func TestSubmitRoutedRecordsTheServerOfATargetWithoutAConnection(t *testing.T) {
 	}
 }
 
+// A plugin that omits the connection from a routed target omits it from the
+// target's status too; the target was recorded on its route's server, so the
+// status still applies to it.
+func TestReconcileAppliesAStatusWithoutAConnectionToTheRoutedServer(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{routerInstOn("radarr-anime", 1)}
+	store.candidates = []*Request{{ID: "r1", MediaType: MediaTypeMovie, TMDBID: 1, Status: StatusQueued, Outcome: OutcomeActive}}
+	store.targets = map[string][]Target{"r1": {
+		{ID: 1, RequestID: "r1", IntegrationID: "radarr-anime", Quality: Quality1080p, Status: StatusQueued, ExternalID: "x"},
+	}}
+	router := &fakeRouterProvider{statuses: []RouterTargetStatus{{Quality: Quality1080p, Status: StatusDownloading}}}
+	svc := newTestService(store)
+	svc.SetRouterProvider(router)
+
+	if _, err := svc.ReconcileRequests(context.Background(), 10); err != nil {
+		t.Fatalf("ReconcileRequests: %v", err)
+	}
+	if got := store.targets["r1"][0].Status; got != StatusDownloading {
+		t.Fatalf("target = %s, want the connectionless status applied to the routed server's target", got)
+	}
+}
+
 func TestReconcileKeepsStatusesWhenOnePluginFails(t *testing.T) {
 	store := newFakeStore()
 	store.integrations = []Integration{routerInstOn("on-one", 1), routerInstOn("on-two", 2)}

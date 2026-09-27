@@ -2450,9 +2450,32 @@ func (s *Service) checkTargetStatuses(ctx context.Context, req Request, targets 
 			errs = append(errs, err)
 			continue
 		}
-		out = append(out, statuses...)
+		// A plugin that omits connection_id from its statuses omits it from
+		// its targets too, and a routed target was recorded on its server
+		// anyway. When every target in the group is on one server, a status
+		// without a connection is that server's.
+		server := soleRefConnection(g.refs)
+		for _, st := range statuses {
+			if st.ConnectionID == "" {
+				st.ConnectionID = server
+			}
+			out = append(out, st)
+		}
 	}
 	return out, errors.Join(errs...)
+}
+
+// soleRefConnection returns the one connection all refs are on, or "" when
+// they are on several or any is on none.
+func soleRefConnection(refs []RouterTargetRef) string {
+	server := ""
+	for _, ref := range refs {
+		if ref.ConnectionID == "" || (server != "" && ref.ConnectionID != server) {
+			return ""
+		}
+		server = ref.ConnectionID
+	}
+	return server
 }
 
 func integrationByID(fc *fulfillContext, id string) *Integration {
