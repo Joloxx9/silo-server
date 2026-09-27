@@ -2016,7 +2016,8 @@ read-only `preview` that shows which server each quality tier of a title would
 go to. Replacement and deletion require `If-Match` on the rule's revision; a
 fallback that was never saved reads as revision zero and its first replacement
 creates it. The fallback cannot be deleted, and a rule cannot be created until
-its media type's fallback has an HD server.
+its media type's fallback has an HD server. The `routing` field of
+`getAdminRequestCapabilities` reports whether the server offers these operations.
 
 Settings, account limits and integrations require `If-Match` for replacement and
 integration deletion. A shared PostgreSQL sequence assigns a new revision on every

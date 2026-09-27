@@ -3,6 +3,7 @@ package apiv2
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	mediarequests "github.com/Silo-Server/silo-server/internal/requests"
@@ -177,4 +178,22 @@ func TestAdminRequestRoutesCreateReorderPreview(t *testing.T) {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 	requireProblem(t, do(t, h, http.MethodPost, base+"/preview", `{"media_type":"movie","tmdb_id":129,"requester_user_id":"x"}`, actingRequestAdmin), TypeValidationFailed)
+}
+
+// Clients detect routing through the admin request capability document rather
+// than by probing the route operations.
+func TestAdminRequestCapabilitiesAdvertiseRouting(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		h    http.Handler
+		want string
+	}{
+		{"with routing", routeAdminHandler(fixtureRouteAdmin()), `"routing":true`},
+		{"without routing", adminRequestsHandler(fixtureAdminRequests()), `"routing":false`},
+	} {
+		r := do(t, tc.h, http.MethodGet, Prefix+"/admin/requests/capabilities", "", actingRequestAdmin)
+		if r.Code != http.StatusOK || !strings.Contains(r.Body.String(), tc.want) {
+			t.Fatalf("%s: %d %s, want %s", tc.name, r.Code, r.Body.String(), tc.want)
+		}
+	}
 }

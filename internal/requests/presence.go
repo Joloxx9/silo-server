@@ -76,7 +76,7 @@ func (p *CatalogPresence) SeasonAvailability(ctx context.Context, seriesContentI
 			if row.Aired > 0 {
 				have = row.HaveAired
 			}
-			counts[season] = SeasonCounts{Aired: row.Aired, Have: have}
+			counts[season] = SeasonCounts{Aired: row.Aired, Upcoming: row.Upcoming, Have: have}
 		}
 		out[series] = counts
 	}

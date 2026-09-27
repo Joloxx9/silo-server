@@ -49,6 +49,11 @@ func TestSeriesSeasonAvailabilityDatabase(t *testing.T) {
 		FROM (VALUES ('-s4e1', 1, DATE '2022-01-01'), ('-s4e2', 2, DATE '2022-01-08'), ('-s4e3', 3, DATE '2022-01-15'), ('-s4e4', 4, DATE '2999-01-01'))
 		     AS v(suffix, episode, aired)`, series)
 	seed(`INSERT INTO episode_libraries (episode_id, media_folder_id) VALUES ($1::text || '-s4e1', $2), ($1::text || '-s4e4', $2)`, series, enabled)
+	// Season 5 is dated but has not aired; one episode arrived early.
+	seed(`INSERT INTO episodes (content_id, series_id, season_number, episode_number, air_date)
+		SELECT $1::text || v.suffix, $1::text, 5, v.episode, v.aired
+		FROM (VALUES ('-s5e1', 1, DATE '2999-01-01'), ('-s5e2', 2, DATE '2999-01-08')) AS v(suffix, episode, aired)`, series)
+	seed(`INSERT INTO episode_libraries (episode_id, media_folder_id) VALUES ($1::text || '-s5e1', $2)`, series, enabled)
 	fileID := time.Now().UnixNano()
 	seed(`INSERT INTO media_files (id, media_folder_id, file_path, episode_id, multi_episode_start, multi_episode_end)
 		VALUES ($1, $2, $3, $4, 1, 2)`, fileID, enabled, "/season-test/"+suffix+"/S04E01-E02.mkv", series+"-s4e1")
@@ -68,10 +73,11 @@ func TestSeriesSeasonAvailabilityDatabase(t *testing.T) {
 	}
 	got := bySeries[series]
 	want := map[int]SeasonAvailability{
-		1: {Aired: 2, Have: 2, HaveAired: 2}, // complete
-		2: {Aired: 1, Have: 0, HaveAired: 0}, // its file is in a disabled library; e2 has not aired
-		3: {Aired: 0, Have: 1, HaveAired: 0}, // no air dates yet
-		4: {Aired: 3, Have: 3, HaveAired: 2}, // e2 through the multi-episode file; e3 missing
+		1: {Aired: 2, Have: 2, HaveAired: 2},              // complete
+		2: {Aired: 1, Upcoming: 1, Have: 0, HaveAired: 0}, // its file is in a disabled library; e2 has not aired
+		3: {Aired: 0, Have: 1, HaveAired: 0},              // no air dates yet
+		4: {Aired: 3, Upcoming: 1, Have: 3, HaveAired: 2}, // e2 through the multi-episode file; e3 missing
+		5: {Aired: 0, Upcoming: 2, Have: 1, HaveAired: 0}, // dated, not aired yet
 	}
 	if len(got) != len(want) {
 		t.Fatalf("seasons = %+v, want %+v (specials excluded)", got, want)
