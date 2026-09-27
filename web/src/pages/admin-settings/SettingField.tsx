@@ -147,7 +147,11 @@ export function SettingFieldRow({
         ) : null}
         {status ? <div className="mt-1.5">{status}</div> : null}
       </div>
-      <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
+      {/* `sm:ml-auto` pins the control column to the row's right edge. The
+          label column stops growing at its max width, so without it a row
+          with a short label and a narrow control (a switch, a link button)
+          would leave its control wherever the label column ended. */}
+      <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto sm:shrink-0 sm:justify-end">
         {/* Grows to fill the row on a stacked phone layout; content-sized and
             right-aligned from `sm` up, which is what puts every control on the
             shared edge. */}
