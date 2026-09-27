@@ -104,6 +104,7 @@ function ChipToggleList({
 function StackedField({
   label,
   htmlFor,
+  labelId,
   hint,
   error,
   className,
@@ -111,6 +112,7 @@ function StackedField({
 }: {
   label: string;
   htmlFor?: string;
+  labelId?: string;
   hint?: ReactNode;
   error?: string;
   className?: string;
@@ -118,7 +120,11 @@ function StackedField({
 }) {
   return (
     <div className={cn("min-w-0 space-y-1.5", className)}>
-      <label htmlFor={htmlFor} className="text-muted-foreground block text-xs font-medium">
+      <label
+        id={labelId}
+        htmlFor={htmlFor}
+        className="text-muted-foreground block text-xs font-medium"
+      >
         {label}
       </label>
       {children}
@@ -408,6 +414,13 @@ function MoreSettings({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(changed > 0);
+  // Settings that arrive set (a conflict reload, a preset) open the panel, so
+  // their values are not saved unseen.
+  const [prevChanged, setPrevChanged] = useState(changed);
+  if (changed !== prevChanged) {
+    setPrevChanged(changed);
+    if (prevChanged === 0 && changed > 0) setOpen(true);
+  }
   const shown = open || forceOpen;
   const panelId = useId();
   return (
@@ -507,6 +520,7 @@ export function RouteDestinationEditor({
 
   const headingId = useId();
   const captionId = useId();
+  const sendToId = useId();
   return (
     <section
       aria-labelledby={headingId}
@@ -522,11 +536,11 @@ export function RouteDestinationEditor({
           </p>
         ) : null}
       </div>
-      <StackedField label="Send to" htmlFor={controlId} error={error}>
+      <StackedField label="Send to" htmlFor={controlId} labelId={sendToId} error={error}>
         <Select value={selected} onValueChange={select}>
           <SelectTrigger
             id={controlId}
-            aria-labelledby={headingId}
+            aria-labelledby={`${headingId} ${sendToId}`}
             aria-describedby={caption ? captionId : undefined}
             className="w-full min-w-0 sm:w-1/2"
             aria-invalid={Boolean(error)}
