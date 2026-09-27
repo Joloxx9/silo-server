@@ -556,9 +556,9 @@ describe("request servers", () => {
   });
 
   it("lets the last server of its kind go with an Everything else only it serves", () => {
-    expect(serverDeleteBlockers("r1", [fallback("r1")], [radarr, sonarr])).toBe("");
+    expect(serverDeleteBlockers("r1", [fallback("r1")], [radarr, sonarr], false)).toBe("");
     // Another Radarr, a rule, or another server on Everything else keeps it.
-    expect(serverDeleteBlockers("r1", [fallback("r1")], [radarr, radarr4k])).toBe(
+    expect(serverDeleteBlockers("r1", [fallback("r1")], [radarr, radarr4k], false)).toBe(
       "Everything else (movies)",
     );
     expect(
@@ -566,11 +566,25 @@ describe("request servers", () => {
         "r1",
         [fallback("r1"), route({ name: "Kids", hd: { integration_id: "x" } })],
         [radarr],
+        false,
       ),
     ).toBe("Everything else (movies)");
-    expect(serverDeleteBlockers("r1", [fallback("r1", "r4")], [radarr])).toBe(
+    expect(serverDeleteBlockers("r1", [fallback("r1", "r4")], [radarr], false)).toBe(
       "Everything else (movies)",
     );
+  });
+
+  it("never lets the hidden Everything else keep a server under Standard", () => {
+    expect(serverDeleteBlockers("r1", [fallback("r1", "r4")], [radarr, radarr4k], true)).toBe("");
+    // A paused rule still keeps it.
+    expect(
+      serverDeleteBlockers(
+        "r1",
+        [fallback("r1"), route({ name: "Kids", hd: { integration_id: "r1" } })],
+        [radarr, radarr4k],
+        true,
+      ),
+    ).toBe("Kids (movies)");
   });
 
   it("offers overrides for the server's own settings, never the ones routing sets, and splits them", () => {

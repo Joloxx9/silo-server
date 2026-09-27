@@ -189,12 +189,14 @@ const MEDIA_TYPE_KIND: Record<RequestRouteMediaType, string> = {
  * The routes that stop a server from being deleted, as the server decides:
  * every route sending to it, except an Everything else that only this server
  * serves when it is the last server of its kind and its media type has no
- * rules. The server removes that one with it.
+ * rules. The server removes that one with it. Under Standard, Everything else
+ * is hidden and never keeps a server: the server clears it instead.
  */
 export function serverDeleteBlockers(
   serverId: string,
   routes: RequestRoute[],
   servers: readonly RequestIntegration[],
+  standard: boolean,
 ): string {
   return routes
     .filter((route) => {
@@ -202,6 +204,7 @@ export function serverDeleteBlockers(
         return false;
       }
       if (!route.is_fallback) return true;
+      if (standard) return false;
       const onlyThis = [route.hd.integration_id, route.uhd.integration_id].every(
         (id) => !id || id === serverId,
       );

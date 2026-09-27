@@ -247,6 +247,7 @@ export function RequestServersGroup({
               installations={installations}
               routes={routes}
               servers={servers}
+              standard={routing.data?.mode === "standard"}
               onDone={() => setEditing(null)}
             />
           ) : editingServer ? (
@@ -258,6 +259,7 @@ export function RequestServersGroup({
               installations={installations}
               routes={routes}
               servers={servers}
+              standard={routing.data?.mode === "standard"}
               onDone={() => setEditing(null)}
             />
           ) : null}
@@ -404,6 +406,7 @@ export function RequestServerEditor({
   installations,
   routes,
   servers,
+  standard,
   onDone,
 }: {
   source: RequestIntegration | null;
@@ -411,6 +414,8 @@ export function RequestServerEditor({
   routes: RequestRoute[];
   /** Every server, to tell whether this is the last of its kind. */
   servers: readonly RequestIntegration[];
+  /** Whether Standard routing is on, which hides Everything else. */
+  standard: boolean;
   onDone: () => void;
 }) {
   const sole = installations.length === 1 ? installations[0] : undefined;
@@ -430,9 +435,10 @@ export function RequestServerEditor({
   const routedBy = source ? serverRouteUsage(source.id, routes) : "";
   // The server refuses to delete a server routing still sends to, except the
   // last of its kind when only Everything else uses it; that goes with it.
-  const deleteBlockedBy = source ? serverDeleteBlockers(source.id, routes, servers) : "";
+  // Under Standard, Everything else never keeps a server.
+  const deleteBlockedBy = source ? serverDeleteBlockers(source.id, routes, servers, standard) : "";
   const clearsFallback =
-    source && routedBy && !deleteBlockedBy
+    source && routedBy && !deleteBlockedBy && !standard
       ? routes.find(
           (route) =>
             route.is_fallback &&
