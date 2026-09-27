@@ -62,7 +62,7 @@ vi.mock("@/hooks/queries/admin/policy", () => ({
   usePolicyCapability: () => mockUsePolicyCapability(),
 }));
 
-vi.mock("@/hooks/queries/useRequests", () => ({
+vi.mock("@/hooks/queries/admin/requests", () => ({
   useAdminRequestCounts: () => mockUseAdminRequestCounts(),
 }));
 

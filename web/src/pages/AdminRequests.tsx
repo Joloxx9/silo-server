@@ -3,7 +3,7 @@ import { Link, Navigate, useSearchParams } from "react-router";
 import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useAdminRequestCapabilities } from "@/hooks/queries/useRequests";
+import { useAdminRequestCapabilities } from "@/hooks/queries/admin/requests";
 import { RequestQueue } from "@/pages/admin-requests/RequestQueue";
 import { EmptyPanel, RowsSkeleton } from "@/pages/admin-requests/queueParts";
 

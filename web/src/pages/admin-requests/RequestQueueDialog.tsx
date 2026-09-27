@@ -28,7 +28,7 @@ import {
   useAdminRequestRoutePreview,
   useRequestIntegrations,
   useRequestRoutes,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 import { formatRelativeTime } from "@/lib/date";
 import { formatDateTime } from "@/lib/datetime";
 import {

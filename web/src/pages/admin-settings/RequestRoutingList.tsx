@@ -28,7 +28,7 @@ import {
   useReorderRequestRoutes,
   useRequestIntegrationOptions,
   useUpdateRequestRoute,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 import { useSortableList } from "@/hooks/useSortableList";
 import { cn } from "@/lib/utils";
 

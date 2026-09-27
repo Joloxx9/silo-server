@@ -56,7 +56,7 @@ import {
   useLoadRequestIntegrationOptions,
   useRequestRouting,
   useUpdateRequestIntegration,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 import { cn } from "@/lib/utils";
 
 import { FieldGroup } from "./FieldGroup";

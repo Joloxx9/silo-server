@@ -15,7 +15,7 @@ import {
   useRequestRoutes,
   useRequestSettings,
   useUpdateRequestSettings,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 import { useReportUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
 import { FieldGroup } from "./FieldGroup";

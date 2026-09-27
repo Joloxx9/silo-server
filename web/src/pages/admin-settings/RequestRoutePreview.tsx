@@ -23,7 +23,7 @@ import {
   useAdminRequestRoutePreview,
   useRequestIntegrationOptions,
   useRequestRouteTitles,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 
 import type { RoutingScope } from "./RequestRuleEditor";
 import {

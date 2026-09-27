@@ -3,7 +3,7 @@ import { useState } from "react";
 import { isRequestEditorConflict, requestValidationErrors } from "@/api/v2/adminRequests";
 import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useCreateRequestRoute } from "@/hooks/queries/useRequests";
+import { useCreateRequestRoute } from "@/hooks/queries/admin/requests";
 import { ChoiceCard } from "@/pages/admin/autoscan/ChoiceCard";
 
 import { RouteDestinationEditor } from "./RequestRouteFields";

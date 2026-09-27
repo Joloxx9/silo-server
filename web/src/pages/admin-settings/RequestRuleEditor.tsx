@@ -27,7 +27,7 @@ import {
   useCreateRequestRoute,
   useDeleteRequestRoute,
   useUpdateRequestRoute,
-} from "@/hooks/queries/useRequests";
+} from "@/hooks/queries/admin/requests";
 
 import { FieldError, RouteDestinationEditor } from "./RequestRouteFields";
 import { RuleConditionsEditor, type ConditionLookups } from "./RequestRuleConditions";

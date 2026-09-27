@@ -9,7 +9,7 @@ import {
 import { EditorConflict } from "@/components/admin/EditorConflict";
 import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useUpdateRequestRoute } from "@/hooks/queries/useRequests";
+import { useUpdateRequestRoute } from "@/hooks/queries/admin/requests";
 
 import { RouteDestinationEditor } from "./RequestRouteFields";
 import { EditorErrors, type RoutingScope } from "./RequestRuleEditor";
