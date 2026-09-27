@@ -1,4 +1,4 @@
-import { Ban, Check, RefreshCw, X } from "lucide-react";
+import { Ban, Check, Loader2, RefreshCw, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { MediaRequest } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,8 @@ import { requestQueueActions, type RequestQueueAction } from "./requestQueueMode
 /** Runs a queue action; decline and cancel ask for an optional reason first. */
 export interface RequestQueueActionHandlers {
   run: (action: RequestQueueAction, request: MediaRequest) => void;
-  /** An action for this request is on its way to the server. */
-  isBusy: (id: string) => boolean;
+  /** The action for this request that is on its way to the server, if any. */
+  busyAction: (id: string) => RequestQueueAction | undefined;
   /** Every action waits, as while a bulk action runs. */
   locked: boolean;
 }
@@ -33,11 +33,13 @@ export function RequestActionButtons({
 }) {
   const actions = requestQueueActions(request);
   if (actions.length === 0) return null;
-  const disabled = handlers.locked || handlers.isBusy(request.id);
+  const running = handlers.busyAction(request.id);
+  const disabled = handlers.locked || running !== undefined;
   return (
     <div className="flex flex-wrap gap-2">
       {actions.map((action) => {
         const { label, icon: Icon, variant } = ACTIONS[action];
+        const isRunning = action === running;
         return (
           <Button
             key={action}
@@ -45,9 +47,14 @@ export function RequestActionButtons({
             variant={variant}
             disabled={disabled}
             aria-label={`${label}: ${request.title}`}
+            aria-busy={isRunning || undefined}
             onClick={() => handlers.run(action, request)}
           >
-            <Icon aria-hidden="true" />
+            {isRunning ? (
+              <Loader2 aria-hidden="true" className="animate-spin" />
+            ) : (
+              <Icon aria-hidden="true" />
+            )}
             {label}
           </Button>
         );
