@@ -236,7 +236,9 @@ func TestQuotaRefundsDeclinedAndFailedRequestsDatabase(t *testing.T) {
 }
 
 // Closing a failed request from the admin queue keeps the refund its failure
-// gave: cleaning up the failed view must not use up the requester's quota.
+// gave: cleaning up the failed view must not use up the requester's quota. A
+// request the owner withdraws while it backs off after a failed attempt was
+// never failed, so it keeps counting.
 func TestQuotaKeepsRefundWhenAdminClosesFailedRequestDatabase(t *testing.T) {
 	repo, _ := lifecycleTestRepository(t)
 	ctx := t.Context()
@@ -248,6 +250,21 @@ func TestQuotaKeepsRefundWhenAdminClosesFailedRequestDatabase(t *testing.T) {
 	insertLifecycleRequest(t, repo, "withdrawn", 7, 411, StatusPending)
 	if _, err := repo.SetOutcome(ctx, "withdrawn", guardWithdrawable, OutcomeCancelled, Viewer{UserID: 7, ProfileID: "profile"}, ""); err != nil {
 		t.Fatal(err)
+	}
+	insertLifecycleRequest(t, repo, "deferred", 7, 412, StatusApproved)
+	claimed, ok, err := repo.ClaimSubmission(ctx, "deferred", time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("claim deferred: ok=%v err=%v", ok, err)
+	}
+	if _, err := repo.DeferSubmission(ctx, "deferred", *claimed.SubmitLeaseUntil, time.Hour, "router unreachable"); err != nil {
+		t.Fatal(err)
+	}
+	deferredWithdrawn, err := repo.SetOutcome(ctx, "deferred", guardWithdrawable, OutcomeCancelled, Viewer{UserID: 7, ProfileID: "profile"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deferredWithdrawn.LastError != "" {
+		t.Fatalf("withdrawn deferred request last_error = %q, want it cleared", deferredWithdrawn.LastError)
 	}
 	since := time.Now().Add(-time.Hour)
 	before, err := repo.CountUserRequestsSince(ctx, 7, since)
@@ -265,8 +282,8 @@ func TestQuotaKeepsRefundWhenAdminClosesFailedRequestDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if before != 1 || after != 1 {
-		t.Fatalf("used before/after closing = %d/%d, want 1/1: only the withdrawal counts", before, after)
+	if before != 2 || after != 2 {
+		t.Fatalf("used before/after closing = %d/%d, want 2/2: only the two withdrawals count", before, after)
 	}
 }
 

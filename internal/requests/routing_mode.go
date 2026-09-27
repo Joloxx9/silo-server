@@ -329,7 +329,8 @@ func setRoutingMode(ctx context.Context, tx pgx.Tx, mode RoutingMode) (RoutingSe
 // went before. That includes a 4K server an admin once cleared from
 // Everything else: Standard was sending 4K copies there since. Only Radarr and
 // Sonarr servers that still take the media type, as saved now, are used; a
-// media type another plugin (Seerr) routed itself stays with that plugin.
+// media type another plugin (Seerr) routed itself stays with that plugin (see
+// ensureSelfRoutedOwnerKept).
 // Each tier is carried on its own, so a server that no longer fits one tier
 // does not drop the other tier's server.
 func seedAdvancedFromStandard(ctx context.Context, tx pgx.Tx, layout []StandardDestination, integrations []Integration) error {
@@ -388,7 +389,8 @@ func (r *Repository) standardBeforeSave(ctx context.Context, tx pgx.Tx) (layout 
 
 // advanceIfStandardBroken turns Advanced on when a saved server leaves a media
 // type with two servers of a kind, and gives Everything else the servers
-// Standard was using before, so requests keep going where they went.
+// Standard was using before, so requests keep going where they went. It
+// refuses the save when that cannot be kept for a plugin that routes itself.
 func (r *Repository) advanceIfStandardBroken(ctx context.Context, tx pgx.Tx, before []StandardDestination) error {
 	integrations, err := r.listIntegrations(ctx, tx)
 	if err != nil {
@@ -400,8 +402,64 @@ func (r *Repository) advanceIfStandardBroken(ctx context.Context, tx pgx.Tx, bef
 	if err := seedAdvancedFromStandard(ctx, tx, before, integrations); err != nil {
 		return err
 	}
+	if err := ensureSelfRoutedOwnerKept(ctx, tx, before, integrations); err != nil {
+		return err
+	}
 	if _, err := setRoutingMode(ctx, tx, RoutingAdvanced); err != nil {
 		return fmt.Errorf("turn advanced routing on: %w", err)
+	}
+	return nil
+}
+
+// ensureSelfRoutedOwnerKept refuses a save that turns Advanced on when a media
+// type Standard sent to a plugin that picks its own server (Seerr) has no
+// routing rule and would now also be taken by another request service: with no
+// rule, the first of them by name would get its requests. Everything else is
+// not seeded with such a plugin, because a rule sends each tier on its own and
+// would change how the plugin handles 4K and anime; the admin sets it instead.
+func ensureSelfRoutedOwnerKept(ctx context.Context, tx pgx.Tx, before []StandardDestination, integrations []Integration) error {
+	type service struct {
+		installation int
+		capability   string
+	}
+	for _, dest := range before {
+		owners := map[service]bool{}
+		var ownerNames []string
+		selfRouted := false
+		for _, in := range integrations {
+			if in.ID != dest.HDIntegrationID && in.ID != dest.UHDIntegrationID || in.InstallationID == nil {
+				continue
+			}
+			if kind, _ := in.PluginConfig[configServiceKind].(string); kind == "" {
+				selfRouted = true
+			}
+			owners[service{*in.InstallationID, in.CapabilityID}] = true
+			ownerNames = append(ownerNames, in.Name)
+		}
+		if !selfRouted {
+			continue
+		}
+		var routed bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM request_routes WHERE media_type = $1)`, dest.MediaType).Scan(&routed); err != nil {
+			return fmt.Errorf("check routing rules: %w", err)
+		}
+		if routed {
+			continue
+		}
+		var rivals []Integration
+		for _, in := range integrations {
+			if eligibleRouterConnection(in, dest.MediaType) && !owners[service{*in.InstallationID, in.CapabilityID}] {
+				rivals = append(rivals, in)
+			}
+		}
+		if len(rivals) == 0 {
+			continue
+		}
+		slices.Sort(ownerNames)
+		noun := mediaTypePlural(dest.MediaType)
+		return &ValidationError{FormError: fmt.Sprintf(
+			"%s go to %s, which picks their server itself. With %s also taking %s, no routing rule would say which one gets them. Switch to Advanced routing and set Everything else for %s first.",
+			capitalize(noun), strings.Join(ownerNames, ", "), serverNames(rivals), noun, noun)}
 	}
 	return nil
 }

@@ -416,3 +416,39 @@ func TestSeasonRequestForALibrarySeriesSkipsALaterRouter(t *testing.T) {
 		t.Fatalf("absent request = %+v, want submitted", got)
 	}
 }
+
+// A mutation returns the request with its season progress, so its state
+// matches what a detail or list read reports.
+func TestSeasonRequestMutationsReturnSeasonProgress(t *testing.T) {
+	contentID := fakePresenceContentID(MediaTypeSeries, 95396)
+	input := CreateRequestInput{MediaType: MediaTypeSeries, TMDBID: 95396, Title: "Severance", Seasons: []int{2}}
+
+	store := newFakeStore()
+	store.settings.GlobalAutoApprovalEnabled = true
+	svc := seasonService(store, severanceInLibrary())
+	created, err := svc.CreateRequest(context.Background(), testViewer(1), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Status != StatusApproved || created.LibraryContentID != contentID || created.State() != StatePartiallyAvailable {
+		t.Fatalf("auto-approved create = status %s, content %q, state %s; want approved, %q, partially_available",
+			created.Status, created.LibraryContentID, created.State(), contentID)
+	}
+
+	store = newFakeStore()
+	svc = seasonService(store, severanceInLibrary())
+	pending, err := svc.CreateRequest(context.Background(), testViewer(1), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending.LibraryContentID != contentID {
+		t.Fatalf("pending create content = %q, want %q", pending.LibraryContentID, contentID)
+	}
+	approved, err := svc.Approve(context.Background(), Viewer{UserID: 99, ProfileID: "admin", IsAdmin: true}, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approved.LibraryContentID != contentID || approved.State() != StatePartiallyAvailable {
+		t.Fatalf("approve = content %q, state %s; want %q, partially_available", approved.LibraryContentID, approved.State(), contentID)
+	}
+}

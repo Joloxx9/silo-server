@@ -78,11 +78,16 @@ function requestQueueKey(filter: AdminRequestQueueFilter) {
 /**
  * One queue view, a page at a time. A new search or type filter keeps the
  * rows on screen until its first page arrives; a new view does not, since its
- * rows take different actions.
+ * rows take different actions. With `enabled: false` it only reads the rows
+ * another reader of the same view loads, and follows their refetches.
  */
-export function useAdminRequestQueue(filter: AdminRequestQueueFilter) {
+export function useAdminRequestQueue(
+  filter: AdminRequestQueueFilter,
+  options: { enabled?: boolean } = {},
+) {
   return useInfiniteQuery({
     queryKey: requestQueueKey(filter),
+    enabled: options.enabled ?? true,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
       listAdminRequestQueuePageV2(filter, {
