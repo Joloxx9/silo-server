@@ -25,6 +25,9 @@ export type RequestRouteDestination = Schemas["AdminRequestRouteDestination"];
 export type RequestRouteBody = Schemas["AdminRequestRouteBody"];
 export type RequestRoutePreview = Schemas["AdminRequestRoutePreviewOutputBody"];
 export type RequestRoutePreviewTier = Schemas["AdminRequestRoutePreviewTier"];
+export type RequestRoutePreviewRule = Schemas["AdminRequestRoutePreviewRule"];
+export type RequestRouteFacts = Schemas["AdminRequestRouteFacts"];
+export type RequestRouteTitle = Schemas["AdminRequestRouteTitle"];
 
 /**
  * A routing rule, or a media type's fallback, with the validator of the read
@@ -81,6 +84,32 @@ export async function putAdminRequestSettingsV2(
     },
   });
   return { ...body, updated_at: "", etag: requireETag(etag) };
+}
+/** How requests find their server: Standard, or Advanced with the rules. */
+export type RequestRouting = Schemas["AdminRequestRouting"] & { etag: string };
+export type RequestRoutingMode = RequestRouting["mode"];
+export async function getAdminRequestRoutingV2(): Promise<RequestRouting> {
+  let etag = "";
+  const body = await v2("GET /api/v2/admin/request-routing", {
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...body, etag: requireETag(etag) };
+}
+export async function putAdminRequestRoutingV2(
+  mode: RequestRoutingMode,
+  current: Pick<RequestRouting, "etag">,
+): Promise<RequestRouting> {
+  let etag = "";
+  const body = await v2("PUT /api/v2/admin/request-routing", {
+    headers: { "If-Match": requireETag(current.etag) },
+    body: { mode },
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...body, etag: requireETag(etag) };
 }
 export async function getAdminRequestUserLimitV2(userId: number): Promise<RequestUserLimit> {
   let etag = "";
@@ -411,6 +440,20 @@ export function previewAdminRequestRouteV2(
       requester_user_id: requesterUserId === undefined ? undefined : String(requesterUserId),
     },
   });
+}
+/**
+ * Titles to try the routing rules on, from TMDB. Admin-only, and answers
+ * whether or not requests are turned on.
+ */
+export function searchAdminRequestRouteTitlesV2(
+  mediaType: RequestRouteMediaType,
+  q: string,
+  signal?: AbortSignal,
+): Promise<RequestRouteTitle[]> {
+  return v2("GET /api/v2/admin/request-routes/titles", {
+    signal,
+    query: { media_type: mediaType, q },
+  }).then((result) => result.items);
 }
 export function loadAdminRequestIntegrationOptionsV2(
   id: string,

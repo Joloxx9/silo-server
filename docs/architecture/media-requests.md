@@ -24,10 +24,33 @@ Creating a request reads the title's TMDB detail once, after the cheap refusals
 (a movie already in the library, a title already requested). The server's copy of the title and
 year replaces the client's, and a snapshot of what routing can match on is
 stored with the request as `routing_facts`: TMDB genre, keyword, network and
-company IDs, original language, origin countries, year, and whether TMDB tags it
-anime. IDs rather than names, because names follow the configured TMDB
-language. When TMDB cannot answer, the request is still created from the
-client's copy, and the facts stay uncaptured until routing fetches them.
+company IDs, original language, origin countries, year, rating, and whether
+it is anime. IDs rather than names, because names follow the configured TMDB
+language.
+
+Anime means Japanese animation (`internal/requests/anime.go`). TMDB's anime
+keyword alone misses about one anime series in eight and one film in three, so
+a title also counts when TMDB files it as Animation in Japanese or from Japan,
+or when an AniDB-based list names it (a series also needs to be in Japanese or
+from Japan, since the list names some Western series and a series' anime flag
+can set Sonarr's series type). The list is Kometa's Anime-IDs, matched
+on the TVDB series ID (series) or IMDb ID TMDB reports; the "Refresh Anime
+List" task (`internal/animeids`) downloads it daily into `anime_ids`, one
+server at a time under a lease, keeping the stored copy when a download fails
+or looks truncated. The request path only reads the table, and a failed
+lookup counts as not listed. AniDB also lists Chinese and Korean animation,
+which counts only when TMDB itself tags it anime; an admin routes it with a
+genre and language rule instead.
+
+The rating is the US one when the title has one. A title never rated in the
+US falls back to its own country's (the first origin country TMDB rated it
+in, strictest where it rated it more than once), stored with the country as a
+prefix ("JP:PG12") so `access.Normalize` reads its age on that country's
+scale; so does a title rated only "NR" in the US. The parental-control path
+keeps to the US rating.
+
+When TMDB cannot answer, the request is still created from the client's copy,
+and the facts stay uncaptured until routing fetches them.
 
 ## Routing
 
@@ -37,15 +60,25 @@ media type and hold conditions and a destination per tier: a server plus
 overrides for its plugin config (root folder, quality profile, tags, series type,
 minimum availability, ...). Conditions match on the request's routing facts and
 requester: anime, genre, keyword, original language, origin country, year range,
-network, studio, requesting account. Every set condition must hold, and a list
-matches any of its values.
+network, studio, requesting account, and content rating ("at most PG"). Every
+set condition must hold; a list matches any of its values, and each list has an
+exclude form that matches when the title has none of them ("original language
+is not English"). A title with no rating (US or its own country's) never
+matches a rating condition, as a parental ceiling treats it. Ratings compare by
+their own minimum ages ("TV-Y7 or lower" does not take TV-PG), and a title TMDB
+had not rated yet is asked about again a day later. The rating is captured with
+the other facts from the detail TMDB already returns; a request captured before
+the rating was gets it at submission, only when a route checks ratings.
 
 Each tier is decided on its own: the first enabled route, in position order,
 whose conditions match and that has a destination for the tier wins, and the
 media type's fallback route (no conditions) comes last. A route with no
 destination for a tier lets that tier fall through; `skip_uhd` stops a matching
-title from getting a 4K copy at all, even with `force_dual_quality`. Without
-`force_dual_quality`, a title no route sends to a 4K server gets no 4K copy.
+title from getting a 4K copy at all, even with `force_dual_quality`, and so
+does Everything else with no 4K server: "no 4K copy" means the same on a rule
+and on the fallback. The admin preview explains a decision route by route: the
+conditions each failed and what it did per tier (sent, skipped, passed on, did
+not match, came after the tier was decided).
 
 A routed submission calls the plugin once per tier with only the chosen server.
 Its config carries the route's overrides and marks it the tier's default in the
@@ -72,6 +105,12 @@ and routing leaves the media type to the plugin. Saving it requires an HD server
 since a saved fallback moves the media type to Silo's routing. A rule cannot be added before
 the fallback has an HD server, because the first rule switches the media type to
 Silo's routing and titles no rule matches would otherwise have nowhere to go.
+The first Radarr (Sonarr) server added becomes Everything else for movies
+(series) in the same transaction, unless another enabled server already takes
+that media type (another of the kind, or a Seerr connection) or the new one is
+flagged 4K; a migration did the same for installs with exactly one usable
+server of a kind, so a single-server setup needs no routing. Deleting the last server of a kind removes that Everything else with
+it when no rule routes the media type; otherwise the delete is refused.
 Rules must narrow (at least one condition) and must do something (a destination,
 or skip 4K), and cannot override the config keys routing sets itself.
 
@@ -83,7 +122,45 @@ default and anime switches no longer decide anything.
 
 A request created before facts were captured, or while TMDB was unreachable, has
 them fetched when it is first routed; if TMDB still cannot answer, the
-submission retries rather than route on missing facts.
+submission retries rather than route on missing facts, unless no enabled route
+of its media type has a condition (Everything else or Standard alone decides),
+when it goes without them.
+
+### Standard and Advanced
+
+`request_routing` holds the routing mode (`internal/requests/routing_mode.go`).
+Advanced routes with the rules above. Standard pauses the rules (they stay
+stored and apply again under Advanced) and sends each media type to its one
+enabled server that is not marked 4K, and its 4K copies to its one enabled
+server marked 4K (the Sonarr/Radarr plugin's `is_4k` switch), with each
+server's own settings: Everything else's overrides do not apply. With no server
+marked 4K there is no 4K copy, even with `force_dual_quality`. A media type
+whose server is another plugin (Seerr) keeps that plugin's own routing. Targets
+record the route as "Standard".
+
+Standard needs at most one normal and one 4K enabled server per media type,
+counting other plugins that take it. When one of them is a plugin that picks
+its own server (Seerr), both must be connections of that one plugin: Standard
+hands such a plugin the whole request, so a 4K Radarr beside it would never be
+used. Switching to Standard is refused
+otherwise, and adding or enabling a server that breaks the rule turns Advanced
+on in the same transaction, with Everything else given the servers Standard was
+using where it has none, so requests keep going where they went. Only Radarr
+and Sonarr servers that still take the media type after the save are carried
+over; a media type another plugin routed stays with it. When that media type
+has no rule and another plugin installation would now also take it, the save
+is refused: with no rule, the first connection by name would get its requests.
+The admin switches to Advanced and sets Everything else first. Switching to
+Advanced by hand carries servers over the same way. Nothing switches back to Standard on its own. Every
+server write and mode switch takes one advisory lock first, so a server added
+while Standard is being turned on cannot leave Standard on with two servers of
+a kind; Standard read with two servers anyway routes with the rules. Under
+Standard, Everything else does not keep a server from being deleted (the
+reference is cleared); a paused rule still does. The migration put installs on
+Advanced when Standard would send a request elsewhere (an enabled rule, two
+servers of a kind, or an Everything else with overrides, a 4K server, an HD
+server other than the media type's one Radarr or Sonarr, or no 4K server while
+one marked 4K exists) and everyone else on Standard.
 
 ## Transitions are guarded
 

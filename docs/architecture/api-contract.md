@@ -2020,11 +2020,17 @@ Request routing rules (`/admin/request-routes`) are v2-only: list (bounded,
 unpaginated, in evaluation order, always including each media type's fallback),
 read, create, replace and delete by ID, reorder a media type's rules, and a
 read-only `preview` that shows which server each quality tier of a title would
-go to. Replacement and deletion require `If-Match` on the rule's revision; a
+go to and, rule by rule, why, plus an admin title search
+(`GET /admin/request-routes/titles`) for trying titles while requests are off. Replacement and deletion require `If-Match` on the rule's revision; a
 fallback that was never saved reads as revision zero and its first replacement
 creates it. The fallback cannot be deleted, and a rule cannot be created until
-its media type's fallback has an HD server. The `routing` field of
-`getAdminRequestCapabilities` reports whether the server offers these operations.
+its media type's fallback has an HD server.
+`GET`/`PUT /admin/request-routing` reads and switches the routing mode
+(`standard` or `advanced`) with `If-Match` on its revision; the read also says
+where Standard sends each media type, or why it cannot be used, and switching
+to Standard is refused with a validation problem while it cannot. The `routing`
+field of `getAdminRequestCapabilities` reports whether the server offers both
+the routing rule operations and the routing mode operations.
 
 Settings, account limits and integrations require `If-Match` for replacement and
 integration deletion. A shared PostgreSQL sequence assigns a new revision on every

@@ -4,7 +4,7 @@ import type {
   PluginInstallation,
   RequestIntegration,
 } from "@/api/types";
-import type { RequestRoute, RequestRouteMediaType } from "@/api/v2/adminRequests";
+import type { RequestRoute, RequestRouteMediaType, RequestRouting } from "@/api/v2/adminRequests";
 
 /** Every request server is fulfilled by a plugin exposing this capability. */
 export const REQUEST_ROUTER_CAPABILITY = "request_router.v1";
@@ -142,22 +142,79 @@ export function mediaTypePlural(mediaType: RequestRouteMediaType): string {
   return mediaType === "series" ? "series" : "movies";
 }
 
+function routeUsage(route: RequestRoute, serverId: string): string | null {
+  const hd = route.hd.integration_id === serverId;
+  const uhd = route.uhd.integration_id === serverId;
+  if (!hd && !uhd) return null;
+  const name = route.is_fallback ? "Everything else" : route.name;
+  return `${hd ? name : `${name} 4K`} (${mediaTypePlural(route.media_type)})`;
+}
+
 /**
- * Where a server is used, for its tile: "HD default for movies · Anime (4K)".
- * Empty when no route points at it.
+ * Where a server is used, for its tile: "Everything else (movies) · Anime
+ * (series)", with "4K" when only a route's 4K copies go there. Empty when no
+ * route points at it.
  */
 export function serverRouteUsage(serverId: string, routes: RequestRoute[]): string {
-  const uses: string[] = [];
-  for (const route of routes) {
-    const hd = route.hd.integration_id === serverId;
-    const uhd = route.uhd.integration_id === serverId;
-    if (!hd && !uhd) continue;
-    if (route.is_fallback) {
-      const which = hd && uhd ? "Default" : hd ? "HD default" : "4K default";
-      uses.push(`${which} for ${mediaTypePlural(route.media_type)}`);
-    } else {
-      uses.push(hd && uhd ? route.name : `${route.name} (${hd ? "HD" : "4K"})`);
-    }
-  }
-  return uses.join(" · ");
+  return routes
+    .map((route) => routeUsage(route, serverId))
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * Where Standard routing uses a server, for its tile: "Movies", "4K series".
+ * Empty when Standard does not send there.
+ */
+export function standardServerUsage(serverId: string, routing: RequestRouting): string {
+  return routing.standard
+    .flatMap((destination) => {
+      const plural = mediaTypePlural(destination.media_type);
+      const label = plural.charAt(0).toUpperCase() + plural.slice(1);
+      return [
+        destination.hd_integration_id === serverId ? label : null,
+        destination.uhd_integration_id === serverId ? `4K ${plural}` : null,
+      ];
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
+
+const MEDIA_TYPE_KIND: Record<RequestRouteMediaType, string> = {
+  movie: "radarr",
+  series: "sonarr",
+};
+
+/**
+ * The routes that stop a server from being deleted, as the server decides:
+ * every route sending to it, except an Everything else that only this server
+ * serves when it is the last server of its kind and its media type has no
+ * rules. The server removes that one with it. Under Standard, Everything else
+ * is hidden and never keeps a server: the server clears it instead.
+ */
+export function serverDeleteBlockers(
+  serverId: string,
+  routes: RequestRoute[],
+  servers: readonly RequestIntegration[],
+  standard: boolean,
+): string {
+  return routes
+    .filter((route) => {
+      if (route.hd.integration_id !== serverId && route.uhd.integration_id !== serverId) {
+        return false;
+      }
+      if (!route.is_fallback) return true;
+      if (standard) return false;
+      const onlyThis = [route.hd.integration_id, route.uhd.integration_id].every(
+        (id) => !id || id === serverId,
+      );
+      const noRules = !routes.some((r) => r.media_type === route.media_type && !r.is_fallback);
+      const lastOfKind = !servers.some(
+        (server) =>
+          server.id !== serverId && serverKind(server) === MEDIA_TYPE_KIND[route.media_type],
+      );
+      return !(onlyThis && noRules && lastOfKind);
+    })
+    .map((route) => routeUsage(route, serverId))
+    .join(" · ");
 }

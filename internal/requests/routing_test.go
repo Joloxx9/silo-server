@@ -175,7 +175,9 @@ func TestSubmitRoutedDropsUnroutedFourK(t *testing.T) {
 	}
 }
 
-func TestSubmitRoutedRecordsWhyATierFailed(t *testing.T) {
+// Everything else with no 4K server makes no 4K copy, even when every
+// request asks for one: the 4K tier is skipped rather than failed.
+func TestEverythingElseWithoutA4KServerMakesNoCopy(t *testing.T) {
 	store := routingStore(capturedFacts(RoutingFacts{}))
 	store.settings.ForceDualQuality = true
 	store.routes[0].UHD = RouteDestination{}
@@ -187,14 +189,8 @@ func TestSubmitRoutedRecordsWhyATierFailed(t *testing.T) {
 		t.Fatalf("submit: %v", err)
 	}
 	targets, _ := store.ListTargets(context.Background(), "r1")
-	var uhd *Target
-	for i := range targets {
-		if targets[i].Quality == Quality2160p {
-			uhd = &targets[i]
-		}
-	}
-	if uhd == nil || uhd.Status != StatusFailed || uhd.LastError != "no routing rule sends 4K for this title" {
-		t.Fatalf("4K target = %+v, want failed with the missing route explained", uhd)
+	if len(targets) != 1 || targets[0].Quality != Quality1080p {
+		t.Fatalf("targets = %+v, want HD only", targets)
 	}
 }
 
@@ -664,6 +660,7 @@ func TestDeleteIntegrationRefusesARoutedServerDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO request_integrations (id, name, enabled, capability_id) VALUES ('radarr', 'Radarr', true, 'arr'), ('spare', 'Spare', true, 'arr');
+		UPDATE request_integrations SET plugin_config = '{"service_kind":"radarr"}';
 		INSERT INTO request_routes (id, media_type, position, name, is_fallback, hd_integration_id) VALUES ('fallback-movie', 'movie', 1000, 'Everything else', true, 'radarr')`); err != nil {
 		t.Fatal(err)
 	}

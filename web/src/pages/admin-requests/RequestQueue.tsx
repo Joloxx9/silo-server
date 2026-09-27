@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { Link, useSearchParams } from "react-router";
-import { AlertTriangle, PanelRightOpen, RefreshCw, Search, X } from "lucide-react";
+import { AlertTriangle, Maximize2, RefreshCw, Search, X } from "lucide-react";
 import type { MediaRequest } from "@/api/types";
 import type { AdminRequestCounts } from "@/api/v2/adminRequests";
 import { BulkSelectionCheckbox } from "@/components/BulkSelectionCheckbox";
@@ -28,7 +28,7 @@ import { formatDateTime } from "@/lib/datetime";
 import { formatMediaType, formatSeasonList, requestDetailHref } from "@/lib/mediaRequests";
 import { cn } from "@/lib/utils";
 import { RequestActionButtons, type RequestQueueActionHandlers } from "./RequestActionButtons";
-import { RequestQueueSheet } from "./RequestQueueSheet";
+import { RequestQueueDialog } from "./RequestQueueDialog";
 import {
   EmptyPanel,
   ReasonDialog,
@@ -102,22 +102,22 @@ export function RequestQueue() {
     requestedByUserId: userId,
   });
 
-  // The sheet holds the open request's id, not a copy: it shows the view's
+  // The dialog holds the open request's id, not a copy: it shows the view's
   // current row, or this page's own action's answer when that is newer (the
   // request may have left the view). When neither exists, because another
-  // admin moved the request out of the view first, the sheet closes rather
+  // admin moved the request out of the view first, the dialog closes rather
   // than offer actions that no longer apply.
-  const [sheet, setSheet] = useState<{ id: string; acted?: MediaRequest } | null>(null);
-  const sheetRows = useAdminRequestQueue(queueFilter(urlView ?? "needs_approval"), {
+  const [opened, setOpened] = useState<{ id: string; acted?: MediaRequest } | null>(null);
+  const openedRows = useAdminRequestQueue(queueFilter(urlView ?? "needs_approval"), {
     enabled: false,
   });
-  const sheetRequest = sheet
+  const openRequest = opened
     ? newerRequest(
-        sheetRows.data?.pages.flatMap((page) => page.items).find((row) => row.id === sheet.id),
-        sheet.acted,
+        openedRows.data?.pages.flatMap((page) => page.items).find((row) => row.id === opened.id),
+        opened.acted,
       )
     : null;
-  if (sheet !== null && sheetRequest === null) setSheet(null);
+  if (opened !== null && openRequest === null) setOpened(null);
   const [prompt, setPrompt] = useState<ReasonPrompt | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
   const approve = useApproveMediaRequest();
@@ -137,12 +137,12 @@ export function RequestQueue() {
     setBusy((current) => new Set(current).add(request.id));
     send()
       .then((updated) => {
-        // The sheet follows the request, which may have left this view.
-        setSheet((open) => (open?.id === updated.id ? { id: open.id, acted: updated } : open));
+        // The dialog follows the request, which may have left this view.
+        setOpened((open) => (open?.id === updated.id ? { id: open.id, acted: updated } : open));
       })
-      // The mutation already said what went wrong. Whatever the sheet knew
+      // The mutation already said what went wrong. Whatever the dialog knew
       // is now suspect: it shows the refetched row, or closes.
-      .catch(() => setSheet((open) => (open?.id === request.id ? { id: open.id } : open)))
+      .catch(() => setOpened((open) => (open?.id === request.id ? { id: open.id } : open)))
       .finally(() =>
         setBusy((current) => {
           const next = new Set(current);
@@ -276,7 +276,7 @@ export function RequestQueue() {
                 username={username}
                 handlers={handlers}
                 bulk={bulk}
-                onOpen={(request) => setSheet({ id: request.id })}
+                onOpen={(request) => setOpened({ id: request.id })}
                 onFilterUser={filterByUser}
                 onBulkDecline={(requests, onDone) =>
                   setPrompt({ action: "bulk-decline", requests, onDone })
@@ -289,12 +289,12 @@ export function RequestQueue() {
         )}
       </Tabs>
 
-      <RequestQueueSheet
-        request={sheetRequest}
-        requesterName={username(sheetRequest?.requested_by_user_id)}
+      <RequestQueueDialog
+        request={openRequest}
+        requesterName={username(openRequest?.requested_by_user_id)}
         handlers={handlers}
         onOpenChange={(open) => {
-          if (!open) setSheet(null);
+          if (!open) setOpened(null);
         }}
       />
       <ReasonDialog
@@ -624,7 +624,7 @@ function BulkProgress({
   );
 }
 
-/** Clicks on the row's own controls do their own thing; anywhere else opens the sheet. */
+/** Clicks on the row's own controls do their own thing; anywhere else opens the dialog. */
 function fromControl(event: MouseEvent) {
   return (event.target as HTMLElement).closest("a, button, input, label") !== null;
 }
@@ -718,7 +718,7 @@ function QueueRow({
           aria-label={`Details: ${request.title}`}
           onClick={onOpen}
         >
-          <PanelRightOpen aria-hidden="true" />
+          <Maximize2 aria-hidden="true" />
         </Button>
       </div>
     </li>

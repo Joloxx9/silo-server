@@ -12,6 +12,7 @@ import {
   isRequestEditorConflict,
   requestValidationErrors,
   type RequestRoute,
+  type RequestRouting,
 } from "@/api/v2/adminRequests";
 import { EditorConflict } from "@/components/admin/EditorConflict";
 import { SchemaForm } from "@/components/admin/plugins/SchemaForm";
@@ -53,6 +54,7 @@ import {
   useCreateRequestIntegration,
   useDeleteRequestIntegration,
   useLoadRequestIntegrationOptions,
+  useRequestRouting,
   useUpdateRequestIntegration,
 } from "@/hooks/queries/useRequests";
 import { cn } from "@/lib/utils";
@@ -63,13 +65,16 @@ import { supportedMediaTypesForConfig } from "./requestIntegrationMediaTypes";
 import {
   installationOptionLabel,
   installationOptionValue,
+  mediaTypePlural,
   ROUTING_OWNED_CONFIG_KEYS,
   serverConfigSchema,
   serverInstallation,
   serverKind,
+  serverDeleteBlockers,
   serverReady,
   serverRouteUsage,
   serverTypeLabel,
+  standardServerUsage,
   SERVICE_KIND_KEY,
   type RequestRouterInstallation,
 } from "./requestServerModel";
@@ -79,6 +84,9 @@ const KIND_TILE_CLASSES: Record<string, string> = {
   radarr: "bg-amber-500/20 text-amber-700 dark:text-amber-300",
   sonarr: "bg-sky-500/20 text-sky-700 dark:text-sky-300",
 };
+
+/** The plugin config key that marks a server as the 4K one. */
+const FOUR_K_KEY = "is_4k";
 
 /** The plugin's per-kind default switches, which routing replaced. */
 const RETIRED_DEFAULT_KEYS = ["is_default", "is_default_4k"] as const;
@@ -105,16 +113,21 @@ function ServerTile({
   server,
   installations,
   routes,
+  routing,
   onEdit,
 }: {
   server: RequestIntegration;
   installations: RequestRouterInstallation[];
   routes: RequestRoute[];
+  routing: RequestRouting | undefined;
   onEdit: () => void;
 }) {
   const type = serverTypeLabel(server, installations);
   const ready = serverReady(server);
-  const usage = serverRouteUsage(server.id, routes);
+  const usage =
+    routing?.mode === "standard"
+      ? standardServerUsage(server.id, routing)
+      : serverRouteUsage(server.id, routes);
   const failing = ready && Boolean(server.last_check_error);
   return (
     <ProviderTile
@@ -146,6 +159,7 @@ export function RequestServersGroup({
   installations,
   installationsLoading,
   routes,
+  routing: routingAvailable,
 }: {
   servers: RequestIntegration[];
   serversLoading: boolean;
@@ -153,10 +167,13 @@ export function RequestServersGroup({
   installations: RequestRouterInstallation[];
   installationsLoading: boolean;
   routes: RequestRoute[];
+  /** Whether the server offers routing; without it the routing mode is not read. */
+  routing: boolean;
 }) {
   // null: closed; "new": adding; otherwise the id of the server being edited.
   const [editing, setEditing] = useState<string | null>(null);
   const [newKey, setNewKey] = useState(0);
+  const routing = useRequestRouting(routingAvailable);
   const noRouterPlugin = !installationsLoading && installations.length === 0;
   const editingServer =
     editing && editing !== "new" ? servers.find((server) => server.id === editing) : undefined;
@@ -211,6 +228,7 @@ export function RequestServersGroup({
                 server={server}
                 installations={installations}
                 routes={routes}
+                routing={routing.data}
                 onEdit={() => setEditing(server.id)}
               />
             ))}
@@ -231,6 +249,8 @@ export function RequestServersGroup({
               source={null}
               installations={installations}
               routes={routes}
+              servers={servers}
+              standard={routing.data?.mode === "standard"}
               onDone={() => setEditing(null)}
             />
           ) : editingServer ? (
@@ -241,6 +261,8 @@ export function RequestServersGroup({
               source={editingServer}
               installations={installations}
               routes={routes}
+              servers={servers}
+              standard={routing.data?.mode === "standard"}
               onDone={() => setEditing(null)}
             />
           ) : null}
@@ -386,11 +408,17 @@ export function RequestServerEditor({
   source,
   installations,
   routes,
+  servers,
+  standard,
   onDone,
 }: {
   source: RequestIntegration | null;
   installations: RequestRouterInstallation[];
   routes: RequestRoute[];
+  /** Every server, to tell whether this is the last of its kind. */
+  servers: readonly RequestIntegration[];
+  /** Whether Standard routing is on, which hides Everything else. */
+  standard: boolean;
   onDone: () => void;
 }) {
   const sole = installations.length === 1 ? installations[0] : undefined;
@@ -407,8 +435,19 @@ export function RequestServerEditor({
   const [testing, setTesting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  // The server refuses to delete a server routing still sends to.
   const routedBy = source ? serverRouteUsage(source.id, routes) : "";
+  // The server refuses to delete a server routing still sends to, except the
+  // last of its kind when only Everything else uses it; that goes with it.
+  // Under Standard, Everything else never keeps a server.
+  const deleteBlockedBy = source ? serverDeleteBlockers(source.id, routes, servers, standard) : "";
+  const clearsFallback =
+    source && routedBy && !deleteBlockedBy && !standard
+      ? routes.find(
+          (route) =>
+            route.is_fallback &&
+            (route.hd.integration_id === source.id || route.uhd.integration_id === source.id),
+        )?.media_type
+      : undefined;
   // Nor does it let a routed server change type (Sonarr ↔ Radarr): the routes
   // pointing at it are for one media type.
   const typeLock = routedBy
@@ -432,6 +471,12 @@ export function RequestServerEditor({
   );
   const { descriptor, jsonSchema } = serverConfigSchema(selected);
   const fieldTypes = useMemo(() => parseFieldTypes(jsonSchema), [jsonSchema]);
+  // The Sonarr/Radarr plugin's "4K instance" switch. Routing owns the
+  // plugin's other default switches, so the editor shows this one itself.
+  const offers4K = Boolean(descriptor?.fields?.some((field) => field.key === FOUR_K_KEY));
+  const is4K = [FOUR_K_KEY, "is_default_4k"].some(
+    (key) => pluginConfig[key] === true || pluginConfig[key] === "true",
+  );
 
   const {
     options,
@@ -584,7 +629,7 @@ export function RequestServerEditor({
     ...(installations.length > 1 ? ["installation_id", "capability_id"] : []),
     ...(descriptor?.fields ?? [])
       .map((field) => field.key)
-      .filter((key) => !ROUTING_OWNED_CONFIG_KEYS.includes(key)),
+      .filter((key) => !ROUTING_OWNED_CONFIG_KEYS.includes(key) || key === FOUR_K_KEY),
   ]);
   const unshownErrors = Object.entries(fieldErrors).filter(([key]) => !shownKeys.has(key));
 
@@ -689,6 +734,28 @@ export function RequestServerEditor({
             onCheckedChange={(enabled) => patch({ enabled })}
           />
         </SettingFieldRow>
+        {offers4K ? (
+          <SettingFieldRow
+            label="4K server"
+            htmlFor={`${nameId}-4k`}
+            description="With Standard routing, 4K copies go here and everything else goes to the other server of this type."
+            status={<FieldError>{fieldErrors[FOUR_K_KEY]}</FieldError>}
+          >
+            <Switch
+              id={`${nameId}-4k`}
+              checked={is4K}
+              onCheckedChange={(on) =>
+                // The plugin's older "4K default" switch meant the same; it
+                // goes off with this one.
+                patchConfig({
+                  ...pluginConfig,
+                  [FOUR_K_KEY]: on,
+                  ...(on ? {} : { is_default_4k: false }),
+                })
+              }
+            />
+          </SettingFieldRow>
+        ) : null}
       </div>
 
       {descriptor ? (
@@ -732,16 +799,16 @@ export function RequestServerEditor({
                 setDeleteError(null);
                 setConfirmDelete(true);
               }}
-              disabled={deleteServer.isPending || conflict || !etag || routedBy !== ""}
-              aria-describedby={routedBy ? deleteBlockedId : undefined}
+              disabled={deleteServer.isPending || conflict || !etag || deleteBlockedBy !== ""}
+              aria-describedby={deleteBlockedBy ? deleteBlockedId : undefined}
             >
               <Trash2 aria-hidden="true" />
               Delete
             </Button>
           ) : null}
-          {routedBy ? (
+          {deleteBlockedBy ? (
             <span id={deleteBlockedId} className="text-muted-foreground min-w-0 text-xs">
-              Routing sends requests here ({routedBy}). Change that first to delete it.
+              Routing still sends requests here ({deleteBlockedBy}); send them elsewhere first.
             </span>
           ) : null}
           {test ? (
@@ -781,6 +848,9 @@ export function RequestServerEditor({
             <AlertDialogDescription>
               Silo stops sending requests to it, and Autoscan connections that reuse it lose their
               connection details.
+              {clearsFallback
+                ? ` Everything else for ${mediaTypePlural(clearsFallback)} goes with it, so those requests have nowhere to go until you add another server.`
+                : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteError ? (

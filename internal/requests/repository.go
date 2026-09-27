@@ -849,7 +849,11 @@ const integrationColumns = `id, name, enabled, base_url, api_key_ref,
 	capability_id, installation_id, supported_media_types, plugin_config, revision`
 
 func (r *Repository) ListIntegrations(ctx context.Context) ([]Integration, error) {
-	rows, err := r.pool.Query(ctx, `SELECT `+integrationColumns+` FROM request_integrations ORDER BY name`)
+	return r.listIntegrations(ctx, r.pool)
+}
+
+func (r *Repository) listIntegrations(ctx context.Context, exec requestExecutor) ([]Integration, error) {
+	rows, err := exec.Query(ctx, `SELECT `+integrationColumns+` FROM request_integrations ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list request integrations: %w", err)
 	}
@@ -984,11 +988,21 @@ func (r *Repository) SaveIntegrationWithDefaults(ctx context.Context, in Integra
 	}
 	defer tx.Rollback(ctx)
 
+	before, standard, err := r.standardBeforeSave(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
 	var out *Integration
 	if isCreate {
 		out, err = r.insertIntegration(ctx, tx, in)
+		if err == nil {
+			err = defaultFirstServer(ctx, tx, out)
+		}
 	} else {
 		out, err = r.updateIntegration(ctx, tx, in)
+	}
+	if err == nil && standard {
+		err = r.advanceIfStandardBroken(ctx, tx, before)
 	}
 	if err != nil {
 		return nil, err
@@ -999,6 +1013,54 @@ func (r *Repository) SaveIntegrationWithDefaults(ctx context.Context, in Integra
 	return out, nil
 }
 
+// otherServerServes is true when an enabled request server other than $1
+// takes the media type $2 ('movie' or 'series'): one of the matching kind, or
+// a connection of another plugin (Seerr, say) that serves it.
+const otherServerServes = `EXISTS (
+	SELECT 1 FROM request_integrations i
+	WHERE i.id <> $1 AND i.enabled
+	  AND CASE WHEN coalesce(i.plugin_config->>'service_kind', '') <> ''
+	           THEN i.plugin_config->>'service_kind' = CASE $2::text WHEN 'movie' THEN 'radarr' ELSE 'sonarr' END
+	           ELSE cardinality(i.supported_media_types) = 0 OR $2::text = ANY(i.supported_media_types) END)`
+
+// lockServerRouting orders adding and deleting the servers of a kind, so
+// deleting the only Radarr while another is added cannot leave movies with no
+// Everything else.
+func lockServerRouting(ctx context.Context, tx pgx.Tx, kind string) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('request-routes-first-server:' || $1))`, kind)
+	return err
+}
+
+// defaultFirstServer makes the first Radarr (Sonarr) server added the
+// destination of Everything else for movies (series), when that media type has
+// none and no other server takes it: a single-server setup then needs no
+// routing. A server flagged 4K is left alone, since Everything else needs an
+// HD server. Later servers change nothing.
+func defaultFirstServer(ctx context.Context, tx pgx.Tx, in *Integration) error {
+	kind, _ := in.PluginConfig[configServiceKind].(string)
+	mediaType := map[string]MediaType{kindRadarr: MediaTypeMovie, kindSonarr: MediaTypeSeries}[kind]
+	if mediaType == "" || !in.Enabled {
+		return nil
+	}
+	for _, key := range []string{configIs4K, configIsDefault4K} {
+		if flagged, _ := in.PluginConfig[key].(bool); flagged {
+			return nil
+		}
+	}
+	if err := lockServerRouting(ctx, tx, kind); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO request_routes (id, media_type, position, name, is_fallback, hd_integration_id)
+		SELECT $3, $2::text, 1000, $4, true, $1
+		WHERE NOT `+otherServerServes+`
+		ON CONFLICT DO NOTHING
+	`, in.ID, mediaType, FallbackRouteID(mediaType), fallbackRouteName); err != nil {
+		return fmt.Errorf("route everything else to the first %s server: %w", kind, err)
+	}
+	return nil
+}
+
 func (r *Repository) DeleteIntegration(ctx context.Context, id string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -1006,12 +1068,17 @@ func (r *Repository) DeleteIntegration(ctx context.Context, id string) error {
 	}
 	defer tx.Rollback(ctx)
 
+	if err := lockRoutingMode(ctx, tx); err != nil {
+		return err
+	}
 	if err := r.deleteIntegration(ctx, tx, id); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
+// deleteIntegration deletes a server. The caller holds the routing mode lock,
+// taken before any row lock as every server write does.
 func (r *Repository) deleteIntegration(ctx context.Context, tx pgx.Tx, id string) error {
 	var lockedID string
 	if err := tx.QueryRow(ctx, `
@@ -1036,6 +1103,51 @@ func (r *Repository) deleteIntegration(ctx context.Context, tx pgx.Tx, id string
 		return ErrInvalidState
 	}
 
+	// The last server of its kind can go with the Everything else that
+	// only it served (made for it when it was added), as long as no rule
+	// routes that media type; the media type then has no routing.
+	var kind string
+	if err := tx.QueryRow(ctx, `SELECT coalesce(plugin_config->>'service_kind', '') FROM request_integrations WHERE id = $1`, id).Scan(&kind); err != nil {
+		return fmt.Errorf("read request integration kind: %w", err)
+	}
+	if kind != "" {
+		if err := lockServerRouting(ctx, tx, kind); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM request_routes f
+		WHERE f.is_fallback
+		  AND $1 IN (f.hd_integration_id, f.uhd_integration_id)
+		  AND coalesce(f.hd_integration_id, $1) = $1
+		  AND coalesce(f.uhd_integration_id, $1) = $1
+		  AND NOT EXISTS (SELECT 1 FROM request_routes r WHERE r.media_type = f.media_type AND NOT r.is_fallback)
+		  AND NOT EXISTS (
+			SELECT 1 FROM request_integrations i
+			WHERE i.id <> $1
+			  AND i.plugin_config->>'service_kind' = CASE f.media_type WHEN 'movie' THEN 'radarr' ELSE 'sonarr' END)
+	`, id); err != nil {
+		return fmt.Errorf("clear sole server's route: %w", err)
+	}
+
+	// Standard does not use Everything else, and hides it: a reference from
+	// there does not keep the server. Advanced fills it in again from
+	// Standard's servers.
+	routing, err := scanRoutingSettings(tx.QueryRow(ctx, `SELECT mode, revision, updated_at FROM request_routing WHERE id`))
+	if err != nil {
+		return err
+	}
+	standard := routing.Mode == RoutingStandard
+	if standard {
+		if _, err := tx.Exec(ctx, `
+			UPDATE request_routes SET
+				hd_integration_id = NULLIF(hd_integration_id, $1),
+				uhd_integration_id = NULLIF(uhd_integration_id, $1)
+			WHERE is_fallback AND $1 IN (hd_integration_id, uhd_integration_id)`, id); err != nil {
+			return fmt.Errorf("clear everything else under standard routing: %w", err)
+		}
+	}
+
 	// Deleting a server a route sends to would silently reroute its titles.
 	rows, err := tx.Query(ctx, `
 		SELECT name FROM request_routes
@@ -1057,8 +1169,11 @@ func (r *Repository) deleteIntegration(ctx context.Context, tx pgx.Tx, id string
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	if len(routes) > 0 && standard {
+		return &ValidationError{FormError: "Paused routing rules still send requests to this server (" + strings.Join(routes, ", ") + "). Switch to Advanced routing and send them elsewhere first."}
+	}
 	if len(routes) > 0 {
-		return &ValidationError{FormError: "Routing still sends requests to this server (" + strings.Join(routes, ", ") + "); change those routes first."}
+		return &ValidationError{FormError: "Routing still sends requests to this server (" + strings.Join(routes, ", ") + "); send them elsewhere first."}
 	}
 
 	if _, err := tx.Exec(ctx, `DELETE FROM request_integrations WHERE id = $1`, id); err != nil {

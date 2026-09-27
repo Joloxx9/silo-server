@@ -105,10 +105,18 @@ func (r *Repository) UpdateIntegrationConditional(ctx context.Context, in Integr
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// The routing mode lock comes before the row lock, as when adding a server.
+	before, standard, err := r.standardBeforeSave(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
 	if err = lockRevision(ctx, tx, `SELECT revision FROM request_integrations WHERE id=$1 FOR UPDATE`, []any{in.ID}, expected, false); err != nil {
 		return nil, err
 	}
 	out, err := r.updateIntegration(ctx, tx, in)
+	if err == nil && standard {
+		err = r.advanceIfStandardBroken(ctx, tx, before)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +131,9 @@ func (r *Repository) DeleteIntegrationConditional(ctx context.Context, id string
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err = lockRoutingMode(ctx, tx); err != nil {
+		return err
+	}
 	if err = lockRevision(ctx, tx, `SELECT revision FROM request_integrations WHERE id=$1 FOR UPDATE`, []any{id}, expected, false); err != nil {
 		return err
 	}

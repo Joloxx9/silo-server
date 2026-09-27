@@ -64,6 +64,7 @@ type RequesterIdentityResolver interface {
 type Service struct {
 	store             Store
 	tmdb              TMDBClient
+	animeIndex        AnimeIndex
 	presence          PresenceResolver
 	router            RequestRouterProvider
 	entitlements      EntitlementResolver
@@ -378,11 +379,20 @@ type fulfillContext struct {
 	integrations []Integration
 	settings     Settings
 	routes       []Route
+	// standard holds where Standard routing sends each media type, when
+	// Standard is on and the servers allow it.
+	standard []StandardDestination
+	// standardOn is set when Standard routing is in effect.
+	standardOn bool
 }
 
 // routesFor returns the media type's routing rules; none means the router
-// plugin routes the media type itself.
+// plugin routes the media type itself. Under Standard the rules are paused
+// and the media type's one server decides.
 func (fc *fulfillContext) routesFor(mediaType MediaType) []Route {
+	if fc.standardOn {
+		return standardRoutes(fc.integrations, fc.standard, mediaType)
+	}
 	var out []Route
 	for _, route := range fc.routes {
 		if route.MediaType == mediaType {
@@ -393,6 +403,20 @@ func (fc *fulfillContext) routesFor(mediaType MediaType) []Route {
 }
 
 func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error) {
+	// The mode is read before the servers and the rules, in separate queries.
+	// A switch to Advanced writes Everything else and the mode in one commit,
+	// so reading the mode first sees either Standard, which ignores the rules
+	// (and routes with the rules read after it when the servers read after it
+	// no longer allow Standard), or Advanced with the rules it was committed
+	// with. Reading the rules first could pair the old rules with Advanced.
+	mode := RoutingAdvanced
+	if store, ok := s.store.(RoutingModeStore); ok {
+		routing, err := store.GetRoutingSettings(ctx)
+		if err != nil {
+			return nil, err
+		}
+		mode = routing.Mode
+	}
 	integrations, err := s.store.ListIntegrations(ctx)
 	if err != nil {
 		return nil, err
@@ -405,7 +429,14 @@ func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error
 	if err != nil {
 		return nil, err
 	}
-	return &fulfillContext{integrations: integrations, settings: settings, routes: routes}, nil
+	fc := &fulfillContext{integrations: integrations, settings: settings, routes: routes}
+	if mode == RoutingStandard {
+		// Standard with two servers of a kind (saved around a server
+		// change) routes with the rules until an admin sorts it out.
+		layout, blocker := standardLayout(integrations)
+		fc.standard, fc.standardOn = layout, blocker == ""
+	}
+	return fc, nil
 }
 
 // resolveRouterConnections turns enabled request_router integrations that serve
@@ -854,7 +885,7 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 			normalized.Year = &year
 		}
 	}
-	facts := routingFactsFrom(detail, s.now())
+	facts := s.routingFacts(ctx, detail)
 	if normalized.MediaType == MediaTypeSeries && !normalized.WholeSeries {
 		// A series partly in the library can still be requested for the
 		// seasons it is missing.
@@ -2125,7 +2156,7 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 // for it, one plugin call per tier with only that server, so the plugin
 // cannot pick another.
 func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, fc *fulfillContext, routes []Route) (*Request, error) {
-	if err := s.ensureRoutingFacts(ctx, &req); err != nil {
+	if err := s.ensureRoutingFacts(ctx, &req, routes); err != nil {
 		return nil, err
 	}
 	allowed, resolved := s.allowedQualities(ctx, req, fc.settings)
@@ -2154,7 +2185,7 @@ func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, f
 	for _, q := range plan.want {
 		decision, ok := decisions[q]
 		if !ok {
-			failures[q] = "no routing rule sends " + qualityLabel(q) + " for this title"
+			failures[q] = unroutedMessage(routes, req.MediaType, q)
 			continue
 		}
 		conn, installationID, capabilityID, err := routedConnection(fc, decision, req.MediaType, q)
@@ -2205,6 +2236,15 @@ func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, f
 	return s.recordTargets(ctx, req, actor, plan, targets, connKind, decisions, failures)
 }
 
+// unroutedMessage says why a tier went nowhere. Under Standard it can only be
+// HD, when the media type's one server is marked 4K.
+func unroutedMessage(routes []Route, mediaType MediaType, q Quality) string {
+	if len(routes) == 1 && routes[0].ID == standardRouteID(mediaType) {
+		return fmt.Sprintf("no server takes %s %s: the only one is marked 4K", qualityLabel(q), mediaTypePlural(mediaType))
+	}
+	return "no routing rule sends " + qualityLabel(q) + " for this title"
+}
+
 // qualityLabel names a tier in messages.
 func qualityLabel(q Quality) string {
 	if q == Quality2160p {
@@ -2213,19 +2253,73 @@ func qualityLabel(q Quality) string {
 	return "HD"
 }
 
+// unratedRecheck is how long a title with no US rating goes before routing
+// asks TMDB again.
+const unratedRecheck = 24 * time.Hour
+
+// TMDBCertificationsClient reads every country's certifications, for the
+// routing rating's fallback to a title's own country.
+type TMDBCertificationsClient interface {
+	GetCertifications(ctx context.Context, mediaType string, id int) (map[string][]string, error)
+}
+
+// routingRatingOf reads a captured request's rating again: its US rating, or
+// its own country's when it has none. A client without the per-country read
+// answers with the US rating alone.
+func (s *Service) routingRatingOf(ctx context.Context, req Request) (string, error) {
+	if certs, ok := s.tmdb.(TMDBCertificationsClient); ok {
+		all, err := certs.GetCertifications(ctx, string(req.MediaType), req.TMDBID)
+		if err != nil {
+			return "", err
+		}
+		us := tmdb.USCertificationFrom(string(req.MediaType), all)
+		return routingRating(us, all, req.RoutingFacts.OriginCountries), nil
+	}
+	one, ok := s.tmdb.(TMDBCertificationClient)
+	if !ok {
+		return "", errors.New("no certification client")
+	}
+	return one.GetCertification(ctx, string(req.MediaType), req.TMDBID)
+}
+
 // ensureRoutingFacts fetches the routing facts of a request created before
 // they were captured, or while TMDB was unreachable, and stores them. Routing
 // without them could send a title to the wrong server, so a TMDB failure is a
-// submission error and the submission retries.
-func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request) error {
+// submission error and the submission retries. A request captured before its
+// rating was is given one, only when an enabled route checks ratings.
+func (s *Service) ensureRoutingFacts(ctx context.Context, req *Request, routes []Route) error {
 	if req.RoutingFacts.Captured() {
+		// A title TMDB had not rated yet (unreleased) is asked again a day
+		// later, so a rating route can still match it once it is rated.
+		stored := req.RoutingFacts.ContentRating
+		known := stored != nil && (*stored != "" || s.now().Sub(*req.RoutingFacts.CapturedAt) < unratedRecheck)
+		if known || !routesCheckRating(routes, req.MediaType) {
+			return nil
+		}
+		rating, err := s.routingRatingOf(ctx, *req)
+		if err != nil {
+			return fmt.Errorf("could not read the title's rating from TMDB to route it: %w", err)
+		}
+		facts := req.RoutingFacts
+		now := s.now()
+		facts.ContentRating, facts.CapturedAt = &rating, &now
+		updated, err := s.store.SetRoutingFacts(ctx, req.ID, facts)
+		if err != nil {
+			return err
+		}
+		req.RoutingFacts = updated.RoutingFacts
 		return nil
 	}
 	detail := s.requestDetail(ctx, req.MediaType, req.TMDBID)
 	if detail == nil {
+		if !routesUseConditions(routes, req.MediaType) {
+			// Only Everything else (or Standard) decides: the facts would
+			// not change where the request goes, so it is sent without them.
+			return nil
+		}
 		return errors.New("could not read the title's details from TMDB to route it")
 	}
-	updated, err := s.store.SetRoutingFacts(ctx, req.ID, routingFactsFrom(detail, s.now()))
+	updated, err := s.store.SetRoutingFacts(ctx, req.ID, s.routingFacts(ctx, detail))
 	if err != nil {
 		return err
 	}

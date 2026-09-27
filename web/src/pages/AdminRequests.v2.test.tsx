@@ -395,25 +395,47 @@ describe("request administration", () => {
           network_ids: [],
           origin_countries: [],
           year: 2019,
+          content_rating: "PG-13",
         },
+        rules: [
+          {
+            route_id: "kids",
+            route_name: "Kids",
+            is_fallback: false,
+            enabled: true,
+            unmet_conditions: ["max_content_rating"],
+            hd: "no_match",
+            uhd: "no_match",
+          },
+          {
+            route_id: "fallback-movie",
+            route_name: "Everything else",
+            is_fallback: true,
+            enabled: true,
+            unmet_conditions: [],
+            hd: "sends",
+            uhd: "skips",
+          },
+        ],
         tiers: [
           {
             quality: "1080p",
+            route_id: "fallback-movie",
             integration_id: "s1",
             integration_name: "Radarr",
             route_name: "Everything else",
           },
-          { quality: "2160p", note: "No rule sends 4K for this title." },
+          { quality: "2160p", route_id: "fallback-movie", route_name: "Everything else" },
         ],
       }),
     });
     mount("/admin/requests?view=needs_approval");
     const row = await rowOf("Waiting Title");
-    // A click anywhere on the row but its controls opens the sheet.
+    // A click anywhere on the row but its controls opens the dialog.
     fireEvent.click(within(row).getByText("Radarr did not answer"));
-    const sheet = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog");
 
-    const history = await within(sheet).findByRole("list", { name: "Request history" });
+    const history = await within(dialog).findByRole("list", { name: "Request history" });
     const entries = within(history).getAllByRole("listitem");
     expect(entries).toHaveLength(4);
     // Newest first; a type this client doesn't know shows as it is.
@@ -422,24 +444,85 @@ describe("request administration", () => {
     expect(entries[2]).toHaveTextContent(/^Approved by admin/);
     expect(entries[3]).toHaveTextContent(/^Requested by User 9/);
 
-    const servers = within(sheet).getByRole("table");
+    const servers = within(dialog).getByRole("table");
     expect(servers).toHaveTextContent("2160p");
     expect(servers).toHaveTextContent("Radarr 4K");
     expect(servers).toHaveTextContent("4K rule");
     expect(servers).toHaveTextContent("rejected");
     expect(servers).toHaveTextContent("quality profile missing");
 
-    expect(await within(sheet).findByText("Radarr")).toBeInTheDocument();
-    expect(within(sheet).getByText("No rule sends 4K for this title.")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Radarr (Everything else)")).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("no copy (Everything else doesn't make 4K copies)"),
+    ).toBeInTheDocument();
+    // How it was decided starts collapsed in the dialog.
+    const how = within(dialog).getByRole("button", { name: "How it was decided" });
+    expect(how).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(how);
+    expect(
+      within(dialog).getByText("Everything else — decides HD · decides 4K: no copy"),
+    ).toBeTruthy();
     expect(calls("POST /api/v2/admin/request-routes/preview")[0]?.body).toEqual({
       media_type: "movie",
       tmdb_id: 1,
       requester_user_id: "1",
     });
-    expect(within(sheet).getByRole("button", { name: "Approve: Waiting Title" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Approve: Waiting Title" })).toBeEnabled();
   });
 
-  it("shows the refetched request in the open sheet after another admin acted first", async () => {
+  it("says Standard decided, with no rule-by-rule explanation", async () => {
+    serve({
+      ...queue({ needs_approval: [request("r1", "Waiting Title")] }),
+      "GET /api/v2/admin/requests/{id}/events": () => ({ items: [] }),
+      "POST /api/v2/admin/request-routes/preview": () => ({
+        facts: {
+          anime: false,
+          company_ids: [],
+          genre_ids: [],
+          keyword_ids: [],
+          network_ids: [],
+          origin_countries: [],
+          year: 2019,
+        },
+        rules: [
+          {
+            route_id: "standard-movie",
+            route_name: "Standard",
+            is_fallback: true,
+            enabled: true,
+            unmet_conditions: [],
+            hd: "sends",
+            uhd: "skips",
+          },
+        ],
+        tiers: [
+          {
+            quality: "1080p",
+            route_id: "standard-movie",
+            integration_id: "s1",
+            integration_name: "Radarr",
+            route_name: "Standard",
+          },
+          {
+            quality: "2160p",
+            route_id: "standard-movie",
+            route_name: "Standard",
+            note: "No server is marked 4K, so there is no 4K copy.",
+          },
+        ],
+      }),
+    });
+    mount("/admin/requests?view=needs_approval");
+    fireEvent.click(
+      within(await rowOf("Waiting Title")).getByRole("button", { name: "Details: Waiting Title" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Radarr (Standard)")).toBeInTheDocument();
+    expect(within(dialog).getByText("no copy (no server is marked 4K)")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "How it was decided" })).toBeNull();
+  });
+
+  it("shows the refetched request in the open dialog after another admin acted first", async () => {
     const LATER = "2026-09-02T00:00:00Z";
     let sent = false;
     serve({
@@ -471,6 +554,7 @@ describe("request administration", () => {
           network_ids: [],
           origin_countries: [],
         },
+        rules: [],
         tiers: [],
       }),
       // Another admin sent the one and approved the other a moment ago.
@@ -487,29 +571,29 @@ describe("request administration", () => {
     fireEvent.click(
       within(await rowOf("Unsent Title")).getByRole("button", { name: "Details: Unsent Title" }),
     );
-    let sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "Cancel request: Unsent Title" }));
-    const prompt = (await screen.findAllByRole("dialog")).find((d) => d !== sheet)!;
+    let dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel request: Unsent Title" }));
+    const prompt = (await screen.findAllByRole("dialog")).find((d) => d !== dialog)!;
     fireEvent.click(within(prompt).getByRole("button", { name: "Cancel request" }));
-    // The refused cancel refetched the queue; the sheet shows the sent
+    // The refused cancel refetched the queue; the dialog shows the sent
     // request, which can no longer be cancelled.
     await waitFor(() =>
       expect(
-        within(sheet).queryByRole("button", { name: "Cancel request: Unsent Title" }),
+        within(dialog).queryByRole("button", { name: "Cancel request: Unsent Title" }),
       ).not.toBeInTheDocument(),
     );
-    expect(within(sheet).getByRole("table")).toHaveTextContent("Radarr");
+    expect(within(dialog).getByRole("table")).toHaveTextContent("Radarr");
 
-    // A request that left the view closes its sheet.
-    fireEvent.click(within(sheet).getByRole("button", { name: "Close" }));
+    // A request that left the view closes its dialog.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     sent = false;
     fireEvent.mouseDown(screen.getByRole("tab", { name: /^Needs approval/ }));
     fireEvent.click(
       within(await rowOf("Waiting Title")).getByRole("button", { name: "Details: Waiting Title" }),
     );
-    sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "Approve: Waiting Title" }));
+    dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Approve: Waiting Title" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.queryByRole("link", { name: "Waiting Title" })).not.toBeInTheDocument();
   });

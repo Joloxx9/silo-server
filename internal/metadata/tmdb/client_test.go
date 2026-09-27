@@ -1188,3 +1188,56 @@ func TestNotFoundWrapsErrNotFound(t *testing.T) {
 		t.Fatalf("err = %v, want ErrNotFound with the HTTP detail", err)
 	}
 }
+
+func TestGetCertificationsListsEveryCountry(t *testing.T) {
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/movie/129/release_dates":
+			_, _ = w.Write([]byte(`{"results":[
+				{"iso_3166_1":"JP","release_dates":[{"certification":"G","type":3},{"certification":"","type":4},{"certification":"G","type":5}]},
+				{"iso_3166_1":"de","release_dates":[{"certification":"6","type":3}]}
+			]}`))
+		case "/tv/209867/content_ratings":
+			_, _ = w.Write([]byte(`{"results":[{"iso_3166_1":"JP","rating":"PG12"},{"iso_3166_1":"KR","rating":""}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client := NewClient("test-key", 1000)
+	client.SetBaseURL(server.URL)
+
+	movie, err := client.GetCertifications(context.Background(), "movie", 129)
+	if err != nil || len(movie) != 2 || len(movie["JP"]) != 1 || movie["JP"][0] != "G" || movie["DE"][0] != "6" {
+		t.Fatalf("movie certifications = %v, %v", movie, err)
+	}
+	series, err := client.GetCertifications(context.Background(), "series", 209867)
+	if err != nil || len(series) != 1 || series["JP"][0] != "PG12" {
+		t.Fatalf("series certifications = %v, %v", series, err)
+	}
+	// Cached like GetCertification.
+	before := calls
+	if _, err := client.GetCertifications(context.Background(), "movie", 129); err != nil || calls != before {
+		t.Fatalf("second read made %d calls, err %v", calls-before, err)
+	}
+	// The detail carries the same map.
+	if got := movieCertifications(&releaseDatesResponse{Results: []releaseDatesCountryEntry{{ISO3166: "fr", ReleaseDates: []releaseDateEntry{{Certification: "U"}}}}}); got["FR"][0] != "U" {
+		t.Fatalf("detail certifications = %v", got)
+	}
+}
+
+func TestUSCertificationFromMatchesGetCertification(t *testing.T) {
+	movie := map[string][]string{"US": {"NR", "PG", "R"}, "JP": {"G"}}
+	if got := USCertificationFrom("movie", movie); got != "R" {
+		t.Fatalf("movie = %q, want the strictest, R", got)
+	}
+	if got := USCertificationFrom("series", map[string][]string{"US": {"TV-14", "TV-MA"}}); got != "TV-14" {
+		t.Fatalf("series = %q, want the first", got)
+	}
+	if got := USCertificationFrom("movie", map[string][]string{"JP": {"G"}}); got != "" {
+		t.Fatalf("no US entry = %q", got)
+	}
+}

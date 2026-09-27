@@ -3,12 +3,7 @@ import { Link } from "react-router";
 import { toast } from "sonner";
 
 import type { RequestSettings } from "@/api/types";
-import {
-  isRequestEditorConflict,
-  requestValidationErrors,
-  type RequestRoute,
-  type RequestRouteMediaType,
-} from "@/api/v2/adminRequests";
+import { isRequestEditorConflict } from "@/api/v2/adminRequests";
 import { EditorConflict } from "@/components/admin/EditorConflict";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { Button } from "@/components/ui/button";
@@ -19,7 +14,6 @@ import {
   useRequestIntegrations,
   useRequestRoutes,
   useRequestSettings,
-  useUpdateRequestRoute,
   useUpdateRequestSettings,
 } from "@/hooks/queries/useRequests";
 import { useReportUnsavedChanges } from "@/hooks/useUnsavedChanges";
@@ -27,16 +21,10 @@ import { useReportUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { FieldGroup } from "./FieldGroup";
 import { RequestRoutingGroup } from "./RequestRouting";
 import { RequestServersGroup } from "./RequestServers";
-import {
-  fallbackBody,
-  fallbackChanges,
-  fallbackDraft,
-  type FallbackDraft,
-} from "./requestRoutingModel";
 import { requestRouterInstallations } from "./requestServerModel";
 import { SaveBar } from "./SaveBar";
 import { SettingField, SettingFieldRow, SettingFieldStatus } from "./SettingField";
-import { useStagedDraft, type StagedDraft } from "./useStagedDraft";
+import { useStagedDraft } from "./useStagedDraft";
 
 interface GeneralDraft {
   requests_enabled: boolean;
@@ -66,12 +54,6 @@ function wholeNumber(value: string, min: number): number | null {
   if (trimmed === "") return null;
   const n = Number(trimmed);
   return Number.isInteger(n) && n >= min ? n : null;
-}
-
-const MEDIA_TYPES: RequestRouteMediaType[] = ["movie", "series"];
-
-function fallbackOf(routes: RequestRoute[] | undefined, mediaType: RequestRouteMediaType) {
-  return routes?.find((route) => route.is_fallback && route.media_type === mediaType);
 }
 
 /** Help text for the General group's defaults that groups and accounts can override. */
@@ -126,7 +108,6 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
   const serversQuery = useRequestIntegrations();
   const installationsQuery = useAdminPluginInstallations();
   const updateSettings = useUpdateRequestSettings();
-  const updateRoute = useUpdateRequestRoute({ inlineErrors: true });
   const installations = useMemo(
     () => requestRouterInstallations(installationsQuery.data ?? []),
     [installationsQuery.data],
@@ -134,22 +115,6 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
 
   const general = useStagedDraft(settingsQuery.data, generalDraft, generalChanges);
   const [generalConflict, setGeneralConflict] = useState(false);
-  const movie = useStagedDraft(
-    fallbackOf(routesQuery.data, "movie"),
-    fallbackDraft,
-    fallbackChanges,
-  );
-  const series = useStagedDraft(
-    fallbackOf(routesQuery.data, "series"),
-    fallbackDraft,
-    fallbackChanges,
-  );
-  const fallbacks: Record<RequestRouteMediaType, StagedDraft<RequestRoute, FallbackDraft>> = {
-    movie,
-    series,
-  };
-  const [fallbackConflicts, setFallbackConflicts] = useState<Record<string, boolean>>({});
-  const [fallbackErrors, setFallbackErrors] = useState<Record<string, Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
 
   // A limit of 0 lets only accounts with their own limit request.
@@ -161,11 +126,9 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
   const windowInvalid =
     windowDays === null && general.draft?.window_days !== baseGeneral?.window_days;
 
-  const dirtyCount = general.changes + movie.changes + series.changes;
+  const dirtyCount = general.changes;
   useReportUnsavedChanges(dirtyCount > 0);
-  const saveable =
-    (general.changes > 0 && !generalConflict && !maxInvalid && !windowInvalid) ||
-    MEDIA_TYPES.some((type) => fallbacks[type].changes > 0 && !fallbackConflicts[type]);
+  const saveable = general.changes > 0 && !generalConflict && !maxInvalid && !windowInvalid;
 
   function editGeneral(change: Partial<GeneralDraft>) {
     general.update((current) => ({ ...current, ...change }));
@@ -193,38 +156,11 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
     }
   }
 
-  async function saveFallback(mediaType: RequestRouteMediaType) {
-    const staged = fallbacks[mediaType];
-    const { base, draft } = staged;
-    if (!base || !draft || staged.changes === 0 || fallbackConflicts[mediaType]) return;
-    setFallbackErrors((current) => ({ ...current, [mediaType]: {} }));
-    try {
-      const saved = await updateRoute.mutateAsync({ route: base, body: fallbackBody(base, draft) });
-      staged.adopt(saved);
-    } catch (error) {
-      if (isRequestEditorConflict(error)) {
-        setFallbackConflicts((current) => ({ ...current, [mediaType]: true }));
-      }
-      const validation = requestValidationErrors(error);
-      if (validation) {
-        // With no field to point at, the server's own sentence is the error.
-        const fields =
-          Object.keys(validation.fields).length > 0
-            ? validation.fields
-            : { "": validation.message };
-        setFallbackErrors((current) => ({ ...current, [mediaType]: fields }));
-      }
-    }
-  }
-
-  // One save bar, three writers, one after another: the request settings and
-  // each media type's default destination. A writer that fails keeps its
-  // edits and says why beside them; the others still save.
+  // The save bar covers General only; routing saves as it goes.
   async function saveAll() {
     setSaving(true);
     try {
       await saveGeneral();
-      for (const mediaType of MEDIA_TYPES) await saveFallback(mediaType);
     } finally {
       setSaving(false);
     }
@@ -234,28 +170,7 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
   // the query to whatever is newest, so a conflict it hit no longer applies.
   function discardAll() {
     general.reset();
-    movie.reset();
-    series.reset();
     setGeneralConflict(false);
-    setFallbackConflicts({});
-    setFallbackErrors({});
-  }
-
-  // An edit to one tier makes that tier's save errors, and the form-level
-  // one, stale; the other tier's stay until it is edited too.
-  function clearFallbackErrors(mediaType: RequestRouteMediaType, tier: "hd" | "uhd") {
-    setFallbackErrors((current) => {
-      const errors = current[mediaType];
-      if (!errors) return current;
-      const kept = Object.fromEntries(
-        Object.entries(errors).filter(
-          ([key]) => key !== "" && key !== tier && !key.startsWith(`${tier}.`),
-        ),
-      );
-      return Object.keys(kept).length === Object.keys(errors).length
-        ? current
-        : { ...current, [mediaType]: kept };
-    });
   }
 
   async function reloadGeneral() {
@@ -270,24 +185,6 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
           : "Couldn't reload request settings.",
       );
     }
-  }
-
-  // Reloads through the query, so the draft and the cache it follows agree
-  // on the newest version.
-  async function reloadFallback(mediaType: RequestRouteMediaType) {
-    const result = await routesQuery.refetch();
-    const latest = result.isError ? undefined : fallbackOf(result.data, mediaType);
-    if (!latest) {
-      toast.error(
-        result.error instanceof Error
-          ? `Couldn't reload the default destination: ${result.error.message}`
-          : "Couldn't reload the default destination.",
-      );
-      return;
-    }
-    fallbacks[mediaType].adopt(latest);
-    setFallbackConflicts((current) => ({ ...current, [mediaType]: false }));
-    setFallbackErrors((current) => ({ ...current, [mediaType]: {} }));
   }
 
   const draft = general.draft;
@@ -402,27 +299,22 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
           installations={installations}
           installationsLoading={installationsQuery.isLoading}
           routes={routes}
+          routing={routing}
         />
 
-        {(routing ? MEDIA_TYPES : []).map((mediaType) => (
+        {routing ? (
           <RequestRoutingGroup
-            key={mediaType}
-            mediaType={mediaType}
             routes={routes}
             routesLoading={routesQuery.isLoading}
             routesFetching={routesQuery.isFetching}
             routesError={routesQuery.isError && !routesQuery.data}
+            serversLoading={serversQuery.isLoading}
             allServers={servers}
             installations={installations}
             requestsEnabled={general.base?.requests_enabled}
-            fallback={fallbacks[mediaType]}
-            fallbackSaving={saving}
-            fallbackErrors={fallbackErrors[mediaType] ?? {}}
-            fallbackConflict={Boolean(fallbackConflicts[mediaType])}
-            onFallbackEdited={(tier) => clearFallbackErrors(mediaType, tier)}
-            onReloadFallback={() => reloadFallback(mediaType)}
+            forceDual={general.base?.force_dual_quality ?? false}
           />
-        ))}
+        ) : null}
 
         <FieldGroup label="Related">
           <SettingFieldRow
