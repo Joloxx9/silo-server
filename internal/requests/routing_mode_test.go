@@ -585,7 +585,7 @@ func TestAdvancedSeedUsesOnlyServersThatStillFitDatabase(t *testing.T) {
 		repo, pool := routingModeRepository(t)
 		svc := NewService(repo, &fakeTMDBClient{}, &fakePresence{})
 		radarr := arrServer("radarr", kindRadarr, nil)
-		radarr.Name, radarr.SupportedMediaTypes = "Radarr", []string{"movie"}
+		radarr.Name, radarr.SupportedMediaTypes = "Radarr HD", []string{"movie"}
 		save(t, repo, radarr, true)
 		seerr := routerInstOn("seerr", 2)
 		seerr.Name, seerr.CapabilityID, seerr.PluginConfig = "Seerr", "seerr", map[string]any{"is_default_4k": true}
@@ -601,7 +601,7 @@ func TestAdvancedSeedUsesOnlyServersThatStillFitDatabase(t *testing.T) {
 			t.Fatalf("Everything else for movies = %v, want Radarr", got)
 		}
 		_, err = svc.UpdateRoutingModeConditional(ctx, routeAdmin, RoutingStandard, -1)
-		if msg := fieldErrors(t, err)["mode"]; !strings.Contains(msg, "Movies go to Radarr and their 4K copies to Seerr") {
+		if msg := fieldErrors(t, err)["mode"]; !strings.Contains(msg, "Movies go to Radarr HD and their 4K copies to Seerr") {
 			t.Fatalf("switch to Standard with Radarr and a 4K Seerr: %q", msg)
 		}
 	})
