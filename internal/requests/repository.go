@@ -165,6 +165,17 @@ func (r *Repository) upsertUserLimit(ctx context.Context, exec requestExecutor, 
 	return &row, nil
 }
 
+// quotaOutcomes are the outcomes whose requests count against the quota. A
+// decline or a failure gives the slot back; a withdrawal does not, or a
+// request-and-withdraw loop could repeat without limit. A failed request an
+// admin closes keeps its submission error (SetOutcome clears it on every
+// other cancel) and the refund its failure gave it: cleaning up the failed
+// view must not use up the requester's quota. A request withdrawn while it
+// backs off after a failed attempt was never failed, so it still counts.
+const quotaOutcomes = `(outcome = 'active' OR (outcome = 'cancelled' AND last_error = ''))`
+
+// CountUserRequestsSince counts the requests an account made since a time
+// that count against its quota.
 func (r *Repository) CountUserRequestsSince(ctx context.Context, userID int, since time.Time) (int, error) {
 	var count int
 	if err := r.pool.QueryRow(ctx, `
@@ -172,7 +183,7 @@ func (r *Repository) CountUserRequestsSince(ctx context.Context, userID int, sin
 		FROM media_requests
 		WHERE requested_by_user_id = $1
 		  AND created_at >= $2
-	`, userID, since).Scan(&count); err != nil {
+		  AND `+quotaOutcomes, userID, since).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count user requests: %w", err)
 	}
 	return count, nil
@@ -228,8 +239,7 @@ func (r *Repository) CreateRequest(ctx context.Context, input CreateRequestRecor
 	}
 	if input.ReplaceFailed {
 		// Only the requester's own rows: other accounts' failed requests for
-		// the title are their history, and deleting them would also refund
-		// their quota.
+		// the title are their history.
 		if _, err := tx.Exec(ctx, `
 			DELETE FROM media_requests
 			WHERE requested_by_user_id = $1
@@ -248,7 +258,7 @@ func (r *Repository) CreateRequest(ctx context.Context, input CreateRequestRecor
 			FROM media_requests
 			WHERE requested_by_user_id = $1
 			  AND created_at >= $2
-		`, input.Quota.UserID, input.Quota.WindowStart).Scan(&count); err != nil {
+			  AND `+quotaOutcomes, input.Quota.UserID, input.Quota.WindowStart).Scan(&count); err != nil {
 			return nil, fmt.Errorf("count requests for quota: %w", err)
 		}
 		if count >= input.Quota.MaxRequests {
@@ -590,6 +600,9 @@ func (r *Repository) SetOutcome(ctx context.Context, id string, from StateGuard,
 		    last_error = CASE
 		      WHEN $5 = 'failed' THEN $6
 		      WHEN $5 = 'active' THEN ''
+		      -- Only a failed request keeps its error when closed; the quota
+		      -- refunds exactly those (see quotaOutcomes).
+		      WHEN $5 = 'cancelled' AND outcome <> 'failed' THEN ''
 		      ELSE last_error
 		    END,
 		    outcome_reason = CASE
@@ -1082,6 +1095,27 @@ func buildRequestListSQL(baseCondition string, baseArgs []any, filter ListFilter
 		args = append(args, filter.Outcome)
 		conditions = append(conditions, "outcome = $"+strconv.Itoa(len(args)))
 	}
+	if cond := adminViewCondition(filter.View); cond != "" {
+		conditions = append(conditions, cond)
+	}
+	if filter.MediaType != "" {
+		args = append(args, filter.MediaType)
+		conditions = append(conditions, "media_type = $"+strconv.Itoa(len(args)))
+	}
+	if filter.RequestedByUserID > 0 {
+		args = append(args, filter.RequestedByUserID)
+		conditions = append(conditions, "requested_by_user_id = $"+strconv.Itoa(len(args)))
+	}
+	if q := strings.TrimSpace(filter.Query); q != "" {
+		args = append(args, "%"+likeEscaper.Replace(q)+"%")
+		cond := "title ILIKE $" + strconv.Itoa(len(args))
+		// TMDB IDs are 4-byte integers; a longer number is only a title search.
+		if tmdbID, err := strconv.ParseInt(q, 10, 32); err == nil && tmdbID > 0 {
+			args = append(args, tmdbID)
+			cond = "(" + cond + " OR tmdb_id = $" + strconv.Itoa(len(args)) + ")"
+		}
+		conditions = append(conditions, cond)
+	}
 	if filter.Before != nil {
 		args = append(args, filter.Before.CreatedAt, filter.Before.ID)
 		conditions = append(conditions, "(created_at, id) < ($"+strconv.Itoa(len(args)-1)+", $"+strconv.Itoa(len(args))+")")
@@ -1099,6 +1133,64 @@ func buildRequestListSQL(baseCondition string, baseArgs []any, filter ListFilter
 		WHERE ` + strings.Join(conditions, " AND ") + `
 		ORDER BY created_at DESC, id DESC
 		LIMIT $` + strconv.Itoa(len(args)-1) + ` OFFSET $` + strconv.Itoa(len(args)), args
+}
+
+// likeEscaper escapes LIKE wildcards in a search term, so "50%" matches
+// itself.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// adminViewSQL holds each admin view's condition; CountAdminViews counts
+// with the same ones.
+var adminViewSQL = map[AdminView]string{
+	AdminViewNeedsApproval: "(outcome = 'active' AND status = 'pending')",
+	AdminViewInProgress:    "(outcome = 'active' AND status IN ('approved', 'queued', 'downloading'))",
+	AdminViewFailed:        "(outcome = 'failed')",
+	AdminViewDone:          "((outcome = 'active' AND status = 'completed') OR outcome IN ('declined', 'cancelled'))",
+}
+
+func adminViewCondition(view AdminView) string {
+	return adminViewSQL[view]
+}
+
+// CountAdminViews counts the requests in each admin view.
+func (r *Repository) CountAdminViews(ctx context.Context) (AdminViewCounts, error) {
+	var c AdminViewCounts
+	err := r.pool.QueryRow(ctx, `
+		SELECT count(*) FILTER (WHERE `+adminViewSQL[AdminViewNeedsApproval]+`),
+		       count(*) FILTER (WHERE `+adminViewSQL[AdminViewInProgress]+`),
+		       count(*) FILTER (WHERE `+adminViewSQL[AdminViewFailed]+`),
+		       count(*) FILTER (WHERE `+adminViewSQL[AdminViewDone]+`)
+		FROM media_requests`).Scan(&c.NeedsApproval, &c.InProgress, &c.Failed, &c.Done)
+	if err != nil {
+		return AdminViewCounts{}, fmt.Errorf("count admin request views: %w", err)
+	}
+	return c, nil
+}
+
+// ListEvents reads a request's history, newest first.
+func (r *Repository) ListEvents(ctx context.Context, requestID string, limit int) ([]RequestEvent, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT e.id, e.request_id, e.event_type, e.actor_user_id, e.actor_profile_id, e.message,
+		       e.created_at, COALESCE(u.username, '')
+		FROM media_request_events e
+		LEFT JOIN users u ON u.id = e.actor_user_id
+		WHERE e.request_id = $1
+		ORDER BY e.created_at DESC, e.id DESC
+		LIMIT $2`, requestID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list request events: %w", err)
+	}
+	defer rows.Close()
+	var out []RequestEvent
+	for rows.Next() {
+		var e RequestEvent
+		if err := rows.Scan(&e.ID, &e.RequestID, &e.EventType, &e.ActorUserID, &e.ActorProfileID, &e.Message,
+			&e.CreatedAt, &e.ActorUsername); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 // nonNilSeasons stores no seasons as an empty array, not NULL.

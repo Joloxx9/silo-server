@@ -213,6 +213,10 @@ var guardWithdrawable = StateGuard{
 	UnsentOnly: true,
 }
 
+// guardFailed accepts a failed request, which an admin may close instead of
+// retrying it.
+var guardFailed = StateGuard{Outcomes: []Outcome{OutcomeFailed}}
+
 // State is the one lifecycle state a user sees for a request, derived from
 // its status, outcome and library presence. Status and outcome stay on the
 // wire for admin detail and older clients.
@@ -278,12 +282,15 @@ func (r *Request) requestedBy(viewer Viewer) bool {
 	return r.RequestedByUserID == viewer.UserID && r.RequestedByProfileID == viewer.ProfileID
 }
 
+// RequestEvent is one entry of a request's history. ActorUsername is set
+// when the actor's account still exists.
 type RequestEvent struct {
 	ID             int64     `json:"id"`
 	RequestID      string    `json:"request_id"`
 	EventType      string    `json:"event_type"`
 	ActorUserID    *int      `json:"actor_user_id,omitempty"`
 	ActorProfileID string    `json:"actor_profile_id,omitempty"`
+	ActorUsername  string    `json:"-"`
 	Message        string    `json:"message,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }
@@ -401,8 +408,44 @@ type ListFilter struct {
 	Before  *RequestPageKey
 	Status  Status
 	Outcome Outcome
-	Limit   int
-	Offset  int
+	// Admin queue filters.
+	View              AdminView
+	Query             string
+	MediaType         MediaType
+	RequestedByUserID int
+	Limit             int
+	Offset            int
+}
+
+// AdminView groups the admin queue by what an admin does next.
+type AdminView string
+
+const (
+	// AdminViewNeedsApproval: pending, waiting for an admin.
+	AdminViewNeedsApproval AdminView = "needs_approval"
+	// AdminViewInProgress: approved and on its way to the library.
+	AdminViewInProgress AdminView = "in_progress"
+	// AdminViewFailed: failed; Retry sends it again.
+	AdminViewFailed AdminView = "failed"
+	// AdminViewDone: completed, or closed by a decline or cancellation.
+	AdminViewDone AdminView = "done"
+)
+
+// Valid reports whether v names a view.
+func (v AdminView) Valid() bool {
+	switch v {
+	case AdminViewNeedsApproval, AdminViewInProgress, AdminViewFailed, AdminViewDone:
+		return true
+	}
+	return false
+}
+
+// AdminViewCounts counts the requests in each admin view.
+type AdminViewCounts struct {
+	NeedsApproval int
+	InProgress    int
+	Failed        int
+	Done          int
 }
 
 type Integration struct {

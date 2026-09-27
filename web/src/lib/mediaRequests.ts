@@ -12,25 +12,6 @@ import type {
 } from "@/api/types";
 import { formatDate } from "@/lib/datetime";
 
-export const REQUEST_STATUSES: Array<MediaRequestStatus | "all"> = [
-  "all",
-  "pending",
-  "approved",
-  "queued",
-  "downloading",
-  "completed",
-];
-
-export const REQUEST_OUTCOMES: Array<MediaRequestOutcome | "all"> = [
-  "all",
-  "active",
-  "declined",
-  "cancelled",
-  "failed",
-];
-
-type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
-
 export function formatMediaType(mediaType: RequestMediaType): string {
   return mediaType === "series" ? "Series" : "Movie";
 }
@@ -52,17 +33,6 @@ export function formatRequestStatus(status?: MediaRequestStatus): string {
   }
 }
 
-export function requestStatusBadgeVariant(status?: MediaRequestStatus): BadgeVariant {
-  switch (status) {
-    case "completed":
-      return "default";
-    case "pending":
-      return "outline";
-    default:
-      return "secondary";
-  }
-}
-
 export function formatRequestOutcome(outcome?: MediaRequestOutcome): string {
   switch (outcome) {
     case "active":
@@ -75,19 +45,6 @@ export function formatRequestOutcome(outcome?: MediaRequestOutcome): string {
       return "Failed";
     default:
       return "Active";
-  }
-}
-
-export function requestOutcomeBadgeVariant(outcome?: MediaRequestOutcome): BadgeVariant {
-  switch (outcome) {
-    case "failed":
-    case "declined":
-    case "cancelled":
-      return "destructive";
-    case "active":
-      return "secondary";
-    default:
-      return "outline";
   }
 }
 
@@ -138,17 +95,27 @@ export function formatRequestDisplayState(state: RequestDisplayState): string {
 }
 
 /**
- * Mirrors the server's rule for owner cancellation: a request can be withdrawn
- * until something has been sent for it, so while it is pending, or approved
- * with no target yet. (The server also refuses the moment a send is in flight.)
- * Callers must already know the viewer owns the request.
+ * Mirrors the server's rule for withdrawing a request, which decline and
+ * cancel share: a request can be withdrawn until something has been sent for
+ * it, so while it is pending, or approved with no target yet. (The server also
+ * refuses the moment a send is in flight.)
  */
-export function canCancelOwnRequest(
+export function canWithdrawRequest(
   request: Pick<MediaRequest, "status" | "outcome" | "targets">,
 ): boolean {
   if (request.outcome !== "active") return false;
   if (request.status === "pending") return true;
   return request.status === "approved" && (request.targets?.length ?? 0) === 0;
+}
+
+/**
+ * Whether an owner can cancel their request: the withdrawal rule above.
+ * Callers must already know the viewer owns the request.
+ */
+export function canCancelOwnRequest(
+  request: Pick<MediaRequest, "status" | "outcome" | "targets">,
+): boolean {
+  return canWithdrawRequest(request);
 }
 
 /**
@@ -304,6 +271,10 @@ export function formatSeasonProgress(progress: RequestSeasonProgress[]): string 
   return `${have} of ${aired} ${aired === 1 ? "episode" : "episodes"} in the library`;
 }
 
+export function formatRequestDate(request: Pick<MediaRequest, "created_at">): string {
+  return formatDate(request.created_at, "medium");
+}
+
 export function tmdbImageURL(path?: string, size = "w342"): string | null {
   if (!path) return null;
   return `https://image.tmdb.org/t/p/${size}${path}`;
@@ -319,8 +290,4 @@ export function requestInputFromMediaResult(item: RequestMediaResult): CreateMed
     poster_path: item.poster_path || undefined,
     backdrop_path: item.backdrop_path || undefined,
   };
-}
-
-export function formatRequestDate(request: Pick<MediaRequest, "created_at">): string {
-  return formatDate(request.created_at, "medium");
 }

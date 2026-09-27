@@ -6,12 +6,13 @@ import {
 } from "@/api/client";
 import type {
   LoadRequestIntegrationOptionsRequest,
+  MediaRequest,
   RequestIntegration,
-  RequestListParams,
+  RequestMediaType,
   RequestSettings,
   RequestUserLimit,
 } from "@/api/types";
-import { v2, type V2Body, type V2Result, V2ProblemError } from "./request";
+import { v2, type V2Body, type V2Query, V2ProblemError } from "./request";
 import { mediaRequestFromV2 } from "./requests";
 import type { components } from "./schema";
 
@@ -111,6 +112,53 @@ export async function putAdminRequestUserLimitV2(
   });
   return { ...body, user_id: Number(body.user_id), etag: requireETag(etag) };
 }
+
+/**
+ * An access group's request approval and limit, with the validator of the
+ * read it came from. A group with nothing saved reads as inherit at revision
+ * zero, and its first save sends that tag.
+ */
+export type RequestGroupLimit = Omit<Schemas["AdminRequestGroupLimit"], "group_id"> & {
+  group_id: number;
+  etag: string;
+};
+export type RequestGroupLimitBody = Schemas["AdminRequestGroupLimitBody"];
+
+/**
+ * The validator names the profile that read it, so the limit is read and
+ * saved under one captured authority.
+ */
+export async function getAdminRequestGroupLimitV2(
+  groupId: number,
+  profileContext?: ProfileRequestContextSnapshot,
+): Promise<RequestGroupLimit> {
+  let etag = "";
+  const body = await v2("GET /api/v2/admin/request-groups/{group_id}/limit", {
+    path: { group_id: String(groupId) },
+    profileContext,
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...body, group_id: Number(body.group_id), etag: requireETag(etag) };
+}
+export async function putAdminRequestGroupLimitV2(
+  limit: Pick<RequestGroupLimit, "group_id" | "etag">,
+  body: RequestGroupLimitBody,
+  profileContext?: ProfileRequestContextSnapshot,
+): Promise<RequestGroupLimit> {
+  let etag = "";
+  const saved = await v2("PUT /api/v2/admin/request-groups/{group_id}/limit", {
+    path: { group_id: String(limit.group_id) },
+    headers: { "If-Match": requireETag(limit.etag) },
+    body,
+    profileContext,
+    onResponse: (r) => {
+      etag = r.headers.get("ETag") ?? "";
+    },
+  });
+  return { ...saved, group_id: Number(saved.group_id), etag: requireETag(etag) };
+}
 function integrationBody(
   integration: RequestIntegration,
 ): V2Body<"POST /api/v2/admin/request-integrations"> {
@@ -203,33 +251,68 @@ export async function listAdminRequestIntegrationsV2(): Promise<RequestIntegrati
   if (!isProfileRequestContextCurrent(profileContext)) throw new StaleApiRequestContextError();
   return rows;
 }
-export async function listAdminMediaRequestsV2(params: RequestListParams = {}) {
+/** A queue view: what an admin does next with the requests in it. */
+export type AdminRequestQueueView = NonNullable<V2Query<"GET /api/v2/admin/requests">["view"]>;
+export type AdminRequestCounts = Schemas["AdminRequestCounts"];
+export type AdminRequestEvent = Schemas["AdminRequestEvent"];
+
+export interface AdminRequestQueueFilter {
+  view: AdminRequestQueueView;
+  /** A title substring, or an exact TMDB ID. */
+  q?: string;
+  mediaType?: RequestMediaType;
+  requestedByUserId?: number;
+}
+
+export interface AdminRequestQueuePage {
+  items: MediaRequest[];
+  /** Where the next page starts; absent on the last page. */
+  nextCursor?: string;
+}
+
+/** One page of the admin queue, newest request first. */
+export async function listAdminRequestQueuePageV2(
+  filter: AdminRequestQueueFilter,
+  options: { limit?: number; cursor?: string; signal?: AbortSignal } = {},
+): Promise<AdminRequestQueuePage> {
   const profileContext = captureProfileRequestContext();
   if (!profileContext) throw new StaleApiRequestContextError();
-  const seen = new Set<string>();
-  const wanted = Math.min(100, Math.max(1, params.limit ?? 50));
-  const out = [];
-  let cursor: string | undefined;
-  while (out.length < wanted) {
-    if (!isProfileRequestContextCurrent(profileContext)) throw new StaleApiRequestContextError();
-    const page: V2Result<"GET /api/v2/admin/requests"> = await v2("GET /api/v2/admin/requests", {
-      profileContext,
-      query: {
-        limit: Math.min(50, wanted - out.length),
-        cursor,
-        status: params.status && params.status !== "all" ? params.status : undefined,
-        outcome: params.outcome && params.outcome !== "all" ? params.outcome : undefined,
-      },
-    });
-    out.push(...page.items.map(mediaRequestFromV2));
-    if (!page.page?.has_more) break;
-    const next = page.page.next_cursor;
-    if (!next || seen.has(next)) throw new Error("Incomplete request page. Reload to try again.");
-    seen.add(next);
-    cursor = next;
-  }
+  const q = filter.q?.trim();
+  const page = await v2("GET /api/v2/admin/requests", {
+    profileContext,
+    signal: options.signal,
+    query: {
+      view: filter.view,
+      q: q || undefined,
+      media_type: filter.mediaType,
+      requested_by_user_id:
+        filter.requestedByUserId === undefined ? undefined : String(filter.requestedByUserId),
+      limit: options.limit,
+      cursor: options.cursor,
+    },
+  });
   if (!isProfileRequestContextCurrent(profileContext)) throw new StaleApiRequestContextError();
-  return out;
+  if (page.page?.has_more && !page.page.next_cursor) {
+    throw new Error("Incomplete request page. Reload to try again.");
+  }
+  return {
+    items: page.items.map(mediaRequestFromV2),
+    nextCursor: page.page?.has_more ? page.page.next_cursor : undefined,
+  };
+}
+export function getAdminRequestCountsV2(): Promise<AdminRequestCounts> {
+  return v2("GET /api/v2/admin/requests/counts");
+}
+/** A request's history, newest first. */
+export function listAdminRequestEventsV2(id: string): Promise<AdminRequestEvent[]> {
+  return v2("GET /api/v2/admin/requests/{id}/events", { path: { id } }).then(
+    (result) => result.items,
+  );
+}
+export function cancelAdminRequestV2(id: string, reason?: string) {
+  return v2("POST /api/v2/admin/requests/{id}/cancel", { path: { id }, body: { reason } }).then(
+    mediaRequestFromV2,
+  );
 }
 export function approveAdminRequestV2(id: string) {
   return v2("POST /api/v2/admin/requests/{id}/approve", { path: { id }, body: {} }).then(
@@ -311,12 +394,22 @@ export function reorderAdminRequestRoutesV2(mediaType: RequestRouteMediaType, id
     body: { media_type: mediaType, ids },
   }).then((result) => result.items);
 }
+/**
+ * Where each quality tier of a request for the title would go now. With a
+ * requester, rules that match on the account apply as they would to that
+ * account's request; without one they are skipped.
+ */
 export function previewAdminRequestRouteV2(
   mediaType: RequestRouteMediaType,
   tmdbId: number,
+  requesterUserId?: number,
 ): Promise<RequestRoutePreview> {
   return v2("POST /api/v2/admin/request-routes/preview", {
-    body: { media_type: mediaType, tmdb_id: tmdbId },
+    body: {
+      media_type: mediaType,
+      tmdb_id: tmdbId,
+      requester_user_id: requesterUserId === undefined ? undefined : String(requesterUserId),
+    },
   });
 }
 export function loadAdminRequestIntegrationOptionsV2(

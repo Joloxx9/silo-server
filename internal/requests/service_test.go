@@ -1586,6 +1586,9 @@ func testViewer(userID int) Viewer {
 
 type fakeStore struct {
 	mu            sync.Mutex
+	adminFilters  []ListFilter
+	viewCounts    AdminViewCounts
+	events        map[string][]RequestEvent
 	settings      Settings
 	limit         *UserLimit
 	count         int
@@ -1606,6 +1609,9 @@ type fakeStore struct {
 	clearErr      error               // returned by ClearTitleFollowers when set
 	routes        []Route
 	factsSet      map[string]RoutingFacts
+	groupLimits   map[int64]*GroupLimit
+	// userLimitReads counts policy resolutions (each reads the account's limit once).
+	userLimitReads int
 
 	listIntegrationsCalls int
 	getSettingsCalls      int
@@ -1652,6 +1658,7 @@ func (f *fakeStore) UpdateSettings(_ context.Context, settings Settings) (Settin
 func (f *fakeStore) GetUserLimit(context.Context, int) (*UserLimit, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.userLimitReads++
 	return f.limit, nil
 }
 
@@ -1787,8 +1794,55 @@ func (f *fakeStore) ListMine(context.Context, int, ListFilter) ([]*Request, erro
 	return append([]*Request(nil), f.mine...), nil
 }
 
-func (f *fakeStore) ListAdmin(context.Context, ListFilter) ([]*Request, error) {
+func (f *fakeStore) ListAdmin(_ context.Context, filter ListFilter) ([]*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.adminFilters = append(f.adminFilters, filter)
 	return nil, nil
+}
+
+func (f *fakeStore) GetGroupLimit(_ context.Context, groupID int64) (*GroupLimit, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if limit := f.groupLimits[groupID]; limit != nil {
+		out := *limit
+		return &out, nil
+	}
+	return nil, nil
+}
+
+func (f *fakeStore) GroupExists(_ context.Context, groupID int64) (bool, error) {
+	return groupID == 1, nil
+}
+
+func (f *fakeStore) UpsertGroupLimitConditional(_ context.Context, in GroupLimit, expected int64) (*GroupLimit, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	current := f.groupLimits[in.GroupID]
+	var revision int64
+	if current != nil {
+		revision = current.Revision
+	}
+	if expected != -1 && expected != revision {
+		return nil, ErrStaleRevision
+	}
+	if f.groupLimits == nil {
+		f.groupLimits = map[int64]*GroupLimit{}
+	}
+	in.Revision = revision + 1
+	f.groupLimits[in.GroupID] = &in
+	out := in
+	return &out, nil
+}
+
+func (f *fakeStore) CountAdminViews(context.Context) (AdminViewCounts, error) {
+	return f.viewCounts, nil
+}
+
+func (f *fakeStore) ListEvents(_ context.Context, requestID string, _ int) ([]RequestEvent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]RequestEvent(nil), f.events[requestID]...), nil
 }
 
 // guardAccepts mirrors the repository's guarded UPDATE. Callers hold f.mu.
@@ -2175,6 +2229,18 @@ func (f *fakeStore) ListTargets(_ context.Context, requestID string) ([]Target, 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]Target(nil), f.targets[requestID]...), nil
+}
+
+func (f *fakeStore) ListTargetsForRequests(_ context.Context, requestIDs []string) (map[string][]Target, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string][]Target{}
+	for _, id := range requestIDs {
+		if targets := f.targets[id]; len(targets) > 0 {
+			out[id] = append([]Target(nil), targets...)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeStore) CreateTarget(_ context.Context, t Target) (Target, error) {

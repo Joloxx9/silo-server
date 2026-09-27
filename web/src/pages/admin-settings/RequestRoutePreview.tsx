@@ -86,6 +86,37 @@ function TierOutcome({
   );
 }
 
+/** TMDB's facts for a title and where each quality tier of a request for it goes. */
+export function RoutePreviewResult({
+  preview,
+  mediaType,
+  servers,
+  installations,
+}: {
+  preview: RoutePreview;
+  mediaType: RequestRouteMediaType;
+  servers: readonly RequestIntegration[];
+  installations: RequestRouterInstallation[];
+}) {
+  return (
+    <>
+      <p className="text-muted-foreground text-xs">
+        {factsSummary(preview.facts, mediaType) || "TMDB has no facts for this title."}
+      </p>
+      <dl className="grid grid-cols-[3rem_1fr] gap-x-3 gap-y-2">
+        {preview.tiers.map((tier) => (
+          <div key={tier.quality} className="contents">
+            <dt className="text-muted-foreground">{TIER_LABELS[tier.quality] ?? tier.quality}</dt>
+            <dd>
+              <TierOutcome tier={tier} servers={servers} installations={installations} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </>
+  );
+}
+
 /**
  * Pick a title and see where each quality tier of a request for it would go
  * right now, from TMDB's facts and the saved rules.
@@ -228,23 +259,12 @@ export function RequestRoutePreview({
               {preview.error instanceof Error ? preview.error.message : "The preview failed."}
             </p>
           ) : preview.data ? (
-            <>
-              <p className="text-muted-foreground text-xs">
-                {factsSummary(preview.data.facts, mediaType) || "TMDB has no facts for this title."}
-              </p>
-              <dl className="grid grid-cols-[3rem_1fr] gap-x-3 gap-y-2">
-                {preview.data.tiers.map((tier) => (
-                  <div key={tier.quality} className="contents">
-                    <dt className="text-muted-foreground">
-                      {TIER_LABELS[tier.quality] ?? tier.quality}
-                    </dt>
-                    <dd>
-                      <TierOutcome tier={tier} servers={servers} installations={installations} />
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </>
+            <RoutePreviewResult
+              preview={preview.data}
+              mediaType={mediaType}
+              servers={servers}
+              installations={installations}
+            />
           ) : null}
         </div>
       ) : null}

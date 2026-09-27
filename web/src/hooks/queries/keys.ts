@@ -404,18 +404,31 @@ export const adminKeys = {
   networkAccessStatus: (provider: string) =>
     ["admin", "networkAccess", "status", provider] as const,
   requestsRoot: () => ["admin", "requests"] as const,
-  requests: (params: Record<string, unknown>) => ["admin", "requests", params] as const,
+  // The queue, its view counts, and a request's history sit under
+  // requestsRoot, so every request action refreshes them.
+  requestQueueRoot: () => ["admin", "requests", "queue"] as const,
+  requestQueue: (params: Record<string, unknown>) =>
+    ["admin", "requests", "queue", params] as const,
+  requestCounts: () => ["admin", "requests", "counts"] as const,
+  requestEvents: (id: string) => ["admin", "requests", "events", id] as const,
   requestSettings: () => ["admin", "requests", "settings"] as const,
   requestIntegrations: () => ["admin", "requests", "integrations"] as const,
-  // The next three sit outside requestsRoot on purpose: every request, server,
+  // The route and option keys sit outside requestsRoot on purpose: every request, server,
   // and settings write invalidates that root. Nothing those writes change shows
   // up in a route, and reading the routes is one GET per route; the options
   // each call out to the server's Sonarr or Radarr.
   requestRoutes: () => ["admin", "requestRoutes"] as const,
+  // Under requestRoutes, so saving a rule refreshes an open preview.
+  requestRoutePreview: (mediaType: string, tmdbId: number, requesterUserId?: number) =>
+    ["admin", "requestRoutes", "preview", mediaType, tmdbId, requesterUserId ?? null] as const,
   requestIntegrationOptionsRoot: () => ["admin", "requestIntegrationOptions"] as const,
   requestIntegrationOptions: (integrationId: string) =>
     ["admin", "requestIntegrationOptions", integrationId] as const,
   requestUserLimit: (userId: number) => ["admin", "requests", "users", userId, "limit"] as const,
+  // Scoped to the admin authority: the limit's validator names the profile
+  // that read it, so another profile's cached copy would fail its save.
+  requestGroupLimit: (groupId: number, scope: string) =>
+    ["admin", "requests", "groups", groupId, "limit", scope] as const,
   recommendationsStatus: () => ["admin", "recommendationsStatus"] as const,
   inviteCodes: () => ["admin", "inviteCodes"] as const,
   invitations: () => ["admin", "invitations"] as const,

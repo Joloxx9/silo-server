@@ -244,9 +244,45 @@ keeps an upgrade from completing, and notifying, a backlog of old failures.
 ## Re-requesting a failed title
 
 Creating a request deletes the requester's own failed requests for the same
-title inside the insert transaction, before the quota check, so the re-request
-does not count against itself. The quota is checked only there, under the
-requester's advisory lock. Other accounts' failed requests are left alone: they
-are those users' history and count against their quota. Retrying one of them
-after someone else has requested the title answers `ErrAlreadyRequested`, since
-only one active request per title may exist.
+title inside the insert transaction, so the re-request replaces them. The quota
+is checked only there, under the requester's advisory lock, and no failed
+request counts against it (see [Who can request](#who-can-request)). Other
+accounts' failed requests are left alone as those users' history. Retrying one
+of them after someone else has requested the title answers
+`ErrAlreadyRequested`, since only one active request per title may exist.
+
+## Admin queue
+
+The admin queue groups requests by what an admin does next, from status and
+outcome alone so the database can filter and count them: needs approval
+(pending), in progress (approved, queued or downloading), failed, and done
+(completed, or closed by a decline or cancellation). An admin can retry a
+failed request or close it, which moves it to done (v2 only; the v1 cancel
+still refuses a failed request). A closed request stays closed: a target that
+reports later updates only itself. A request's
+history is its `media_request_events` rows. Target updates record the
+request's status or outcome only when it changes, so neither a reconcile pass
+nor a second target repeats an entry.
+
+## Who can request
+
+Whether an account may request, whether its requests need approval, and how
+many it may make resolve in layers: the account's own settings, then its
+access group's (`request_group_limits`), then the server-wide request
+settings. A layer set to inherit defers to the next; admins are never capped
+by a group. An account is blocked in one of two places only: requests turned
+off server-wide, or the requests switch on the account or its access group
+(`requests_allowed`). The older `blocked` limit and approval modes on an
+account are still honored when an API client writes them, but the migration
+that added group limits moved existing ones onto the account's switch and no
+editor offers them.
+
+The quota counts the requests an account made in the window, except those
+declined or failed: those give their slot back. A cancelled request keeps
+counting, or requesting and cancelling could repeat without limit. The one
+exception is a failed request an admin closes from the queue: it keeps its
+submission error and the slot its failure returned. Every other cancel clears
+`last_error`, so withdrawing a request that is backing off after a failed
+attempt still counts. The store
+checks the quota under the requester's advisory lock, so concurrent creates
+cannot both take the last slot.

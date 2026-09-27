@@ -1999,6 +1999,8 @@ export interface RequestTarget {
   integration_id?: string;
   integration_kind?: string;
   instance_name?: string;
+  /** The routing rule that sent this target to its server, as named when it was sent. */
+  route_name?: string;
   quality: "1080p" | "2160p";
   is_anime: boolean;
   external_id?: string;
