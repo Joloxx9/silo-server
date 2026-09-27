@@ -15,7 +15,8 @@ import (
 // copies to its one 4K server, with each server's own settings; the routing
 // rules are kept but paused. Advanced routes with the rules. Standard needs at
 // most one enabled server of each kind per media type (a normal one and a 4K
-// one), so adding or enabling a second turns Advanced on.
+// one), both of one service when either is a plugin that routes itself (Seerr),
+// so adding or enabling a server that breaks that turns Advanced on.
 
 // RoutingMode is how requests find their server.
 type RoutingMode string
@@ -87,12 +88,35 @@ func is4KServer(in Integration) bool {
 	return false
 }
 
+// selfRouted reports whether a server is a plugin that picks its own server
+// (Seerr) rather than a Radarr or Sonarr.
+func selfRouted(in Integration) bool {
+	kind, _ := in.PluginConfig[configServiceKind].(string)
+	return kind == ""
+}
+
+// splitServices reports whether a media type's normal and 4K servers cannot
+// both be used by Standard: when either is a plugin that routes itself, the
+// plugin is handed the whole request with no rule, so both tiers must be its
+// connections. Two Radarrs or Sonarrs are routed tier by tier and may belong
+// to different plugins.
+func splitServices(hd, uhd Integration) bool {
+	if !selfRouted(hd) && !selfRouted(uhd) {
+		return false
+	}
+	return selfRouted(hd) != selfRouted(uhd) ||
+		hd.InstallationID == nil || uhd.InstallationID == nil ||
+		*hd.InstallationID != *uhd.InstallationID || hd.CapabilityID != uhd.CapabilityID
+}
+
 // standardLayout works out where Standard sends each media type from the
 // enabled servers, and why Standard cannot be used when a media type has more
-// than one normal or more than one 4K server.
+// than one normal or more than one 4K server, or its normal and 4K servers are
+// different services and one of them picks its own server.
 func standardLayout(integrations []Integration) ([]StandardDestination, string) {
 	var out []StandardDestination
 	var problems []string
+	split := false
 	for _, mediaType := range standardMediaTypes {
 		var hd, uhd []Integration
 		for _, in := range integrations {
@@ -115,6 +139,11 @@ func standardLayout(integrations []Integration) ([]StandardDestination, string) 
 		if len(hd) > 1 || len(uhd) > 1 || len(hd)+len(uhd) == 0 {
 			continue
 		}
+		if len(hd) == 1 && len(uhd) == 1 && splitServices(hd[0], uhd[0]) {
+			split = true
+			problems = append(problems, fmt.Sprintf("%s go to %s and their 4K copies to %s, which are different request services", noun, hd[0].Name, uhd[0].Name))
+			continue
+		}
 		dest := StandardDestination{MediaType: mediaType}
 		if len(hd) == 1 {
 			dest.HDIntegrationID = hd[0].ID
@@ -125,8 +154,11 @@ func standardLayout(integrations []Integration) ([]StandardDestination, string) 
 		out = append(out, dest)
 	}
 	if len(problems) > 0 {
-		return nil, capitalize(strings.Join(problems, "; ")) +
-			". Standard sends each request to one server, plus one server marked 4K."
+		rule := ". Standard sends each request to one server, plus one server marked 4K"
+		if split {
+			rule += ", through one request service. Switch to Advanced routing to send them to different services"
+		}
+		return nil, capitalize(strings.Join(problems, "; ")) + rule + "."
 	}
 	return out, ""
 }
@@ -166,10 +198,8 @@ func standardRoutes(integrations []Integration, layout []StandardDestination, me
 		}
 		for _, id := range []string{dest.HDIntegrationID, dest.UHDIntegrationID} {
 			for _, in := range integrations {
-				if in.ID == id {
-					if kind, _ := in.PluginConfig[configServiceKind].(string); kind == "" {
-						return nil
-					}
+				if in.ID == id && selfRouted(in) {
+					return nil
 				}
 			}
 		}

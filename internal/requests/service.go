@@ -403,6 +403,20 @@ func (fc *fulfillContext) routesFor(mediaType MediaType) []Route {
 }
 
 func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error) {
+	// The mode is read before the servers and the rules, in separate queries.
+	// A switch to Advanced writes Everything else and the mode in one commit,
+	// so reading the mode first sees either Standard, which ignores the rules
+	// (and routes with the rules read after it when the servers read after it
+	// no longer allow Standard), or Advanced with the rules it was committed
+	// with. Reading the rules first could pair the old rules with Advanced.
+	mode := RoutingAdvanced
+	if store, ok := s.store.(RoutingModeStore); ok {
+		routing, err := store.GetRoutingSettings(ctx)
+		if err != nil {
+			return nil, err
+		}
+		mode = routing.Mode
+	}
 	integrations, err := s.store.ListIntegrations(ctx)
 	if err != nil {
 		return nil, err
@@ -416,17 +430,11 @@ func (s *Service) newFulfillContext(ctx context.Context) (*fulfillContext, error
 		return nil, err
 	}
 	fc := &fulfillContext{integrations: integrations, settings: settings, routes: routes}
-	if store, ok := s.store.(RoutingModeStore); ok {
-		routing, err := store.GetRoutingSettings(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if routing.Mode == RoutingStandard {
-			// Standard with two servers of a kind (saved around a server
-			// change) routes with the rules until an admin sorts it out.
-			layout, blocker := standardLayout(integrations)
-			fc.standard, fc.standardOn = layout, blocker == ""
-		}
+	if mode == RoutingStandard {
+		// Standard with two servers of a kind (saved around a server
+		// change) routes with the rules until an admin sorts it out.
+		layout, blocker := standardLayout(integrations)
+		fc.standard, fc.standardOn = layout, blocker == ""
 	}
 	return fc, nil
 }
@@ -2202,18 +2210,28 @@ func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, f
 			failures[q] = err.Error()
 			continue
 		}
-		if len(got) == 0 && msg != "" {
-			failures[q] = msg
-		}
-		for i := range got {
+		// The call asked for this tier only. A target labeled with the other
+		// tier would sit on this tier's server and could win the other tier's
+		// slot in recordTargets over that tier's real target, so drop it.
+		var tier []RouterTarget
+		for _, t := range got {
+			if t.Quality != q {
+				slog.WarnContext(ctx, "requests: plugin returned a target for another quality; skipping", "component", "requests",
+					"request_id", req.ID, "requested_quality", string(q), "quality", string(t.Quality))
+				continue
+			}
 			// The plugin was handed only this server, so a target it returns
 			// without a connection is on it; recording that keeps the target
 			// checked through the plugin that owns the server.
-			if got[i].ConnectionID == "" {
-				got[i].ConnectionID = conn.ID
+			if t.ConnectionID == "" {
+				t.ConnectionID = conn.ID
 			}
+			tier = append(tier, t)
 		}
-		targets = append(targets, got...)
+		if len(tier) == 0 && msg != "" {
+			failures[q] = msg
+		}
+		targets = append(targets, tier...)
 	}
 	return s.recordTargets(ctx, req, actor, plan, targets, connKind, decisions, failures)
 }
