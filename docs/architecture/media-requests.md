@@ -55,6 +55,12 @@ lease can do this: one that outlived its lease while another server claimed the
 request leaves the newer claim alone. After `maxSubmitAttempts` the request
 is marked `failed` for an admin to retry, under the same lease check.
 
+A successful attempt records its targets under that check too, in one
+transaction with the status they imply. An attempt that outlived its lease while
+the request was withdrawn, completed from the library, or claimed again drops
+its result and leaves the request as it finds it. The router call itself carries
+no idempotency key, so a service the stale call reached may still hold the title.
+
 A submission converges the request's targets to the qualities it currently
 wants. A failed target for a quality it no longer wants is deleted, but only
 when that quality set was resolved without error. A failed entitlement lookup

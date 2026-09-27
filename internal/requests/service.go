@@ -1897,7 +1897,6 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 		return s.markSubmissionFailed(ctx, req, actor, errors.New(msg))
 	}
 	connKind := connectionKindByID(conns)
-	latest := &req
 	// The plugin is an out-of-process trust boundary: validate every returned
 	// target against the DB CHECK constraints (quality, status) and skip any
 	// quality that is duplicated in the batch or already has a healthy target, so
@@ -1906,6 +1905,7 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 	validQuality := map[Quality]bool{Quality1080p: true, Quality2160p: true}
 	validStatus := map[Status]bool{StatusQueued: true, StatusDownloading: true, StatusCompleted: true, StatusFailed: true}
 	returned := map[Quality]bool{}
+	var record []Target
 	for _, rt := range targets {
 		if !validQuality[rt.Quality] {
 			slog.WarnContext(ctx, "requests: plugin returned unknown quality; skipping", "component", "requests", "request_id", req.ID, "quality", string(rt.Quality))
@@ -1921,24 +1921,15 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 			}
 		}
 		returned[rt.Quality] = true
-		created, err := s.store.CreateTarget(ctx, Target{
-			RequestID: req.ID, IntegrationID: rt.ConnectionID, IntegrationKind: connKind[rt.ConnectionID],
-			Quality: rt.Quality, IsAnime: req.IsAnime, Status: StatusQueued,
-		})
-		if err != nil {
-			return nil, err
-		}
 		status := rt.Status
 		if status == "" || !validStatus[status] {
 			status = StatusQueued // coerce unknown/empty status to the DB-valid default
 		}
-		updated, err := s.store.UpdateTargetStatus(ctx, created.ID, status, rt.ExternalID, rt.ExternalStatus, rt.Message, actor)
-		if err != nil {
-			return nil, err
-		}
-		if updated != nil {
-			latest = updated
-		}
+		record = append(record, Target{
+			IntegrationID: rt.ConnectionID, IntegrationKind: connKind[rt.ConnectionID],
+			Quality: rt.Quality, IsAnime: req.IsAnime, Status: status,
+			ExternalID: rt.ExternalID, ExternalStatus: rt.ExternalStatus, LastError: rt.Message,
+		})
 	}
 	// Any wanted quality the plugin did not fulfill is recorded as a failed target
 	// rather than silently dropped, so it stays visible and Retry re-attempts it
@@ -1948,21 +1939,19 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 		if returned[q] {
 			continue
 		}
-		created, err := s.store.CreateTarget(ctx, Target{
-			RequestID: req.ID, Quality: q, IsAnime: req.IsAnime, Status: StatusFailed, LastError: noTargetMsg,
-		})
-		if err != nil {
-			return nil, err
-		}
-		updated, err := s.store.UpdateTargetStatus(ctx, created.ID, StatusFailed, "", "", noTargetMsg, actor)
-		if err != nil {
-			return nil, err
-		}
-		if updated != nil {
-			latest = updated
-		}
+		record = append(record, Target{Quality: q, IsAnime: req.IsAnime, Status: StatusFailed, LastError: noTargetMsg})
 	}
-	return latest, nil
+	recorded, err := s.store.RecordSubmission(ctx, req.ID, claimLease(req), record, actor)
+	if errors.Is(err, ErrInvalidState) {
+		// The router call outlived this claim's lease, and meanwhile the
+		// request was withdrawn, completed from the library, or claimed
+		// again. That state stands; the downstream service may still hold
+		// what this call added.
+		slog.WarnContext(ctx, "requests: submission outlived its claim; result dropped", "component", "requests",
+			"request_id", req.ID, "targets", len(record))
+		return s.store.GetRequest(ctx, req.ID)
+	}
+	return recorded, err
 }
 
 // connectionKindByID maps each connection id to its plugin-declared service kind
