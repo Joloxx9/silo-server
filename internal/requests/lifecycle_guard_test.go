@@ -143,30 +143,50 @@ func TestWithdrawGuardDatabase(t *testing.T) {
 }
 
 func TestSubmissionClaimDatabase(t *testing.T) {
-	repo, _ := lifecycleTestRepository(t)
+	repo, pool := lifecycleTestRepository(t)
 	ctx := t.Context()
 	insertLifecycleRequest(t, repo, "req-claim", 1, 202, StatusApproved)
 
+	var lease atomic.Pointer[time.Time]
 	won := raceLifecycle(t, func() error {
-		_, claimed, err := repo.ClaimSubmission(ctx, "req-claim", time.Minute)
+		req, claimed, err := repo.ClaimSubmission(ctx, "req-claim", time.Minute)
 		if err != nil {
 			return err
 		}
 		if !claimed {
 			return ErrInvalidState
 		}
+		lease.Store(req.SubmitLeaseUntil)
 		return nil
 	}, ErrInvalidState)
 	if won != 1 {
 		t.Fatalf("concurrent claims succeeded %d times, want exactly 1", won)
 	}
 
-	deferred, err := repo.DeferSubmission(ctx, "req-claim", time.Hour, "radarr unreachable")
+	// A worker whose lease ran out while another server claimed the request
+	// again must not release or reschedule the newer claim.
+	stale := *lease.Load()
+	if _, err := pool.Exec(ctx, `UPDATE media_requests SET submit_lease_until = now() - interval '1 second' WHERE id = 'req-claim'`); err != nil {
+		t.Fatal(err)
+	}
+	reclaimed, claimed, err := repo.ClaimSubmission(ctx, "req-claim", time.Minute)
+	if err != nil || !claimed {
+		t.Fatalf("claim after the lease expired: claimed = %v, err = %v; want claimed", claimed, err)
+	}
+	if _, err := repo.DeferSubmission(ctx, "req-claim", stale, time.Hour, "stale"); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("defer with an expired lease: err = %v, want ErrInvalidState", err)
+	}
+	if current, err := repo.GetRequest(ctx, "req-claim"); err != nil || current.SubmitLeaseUntil == nil || current.NextSubmitAt != nil {
+		t.Fatalf("after a stale defer: request = %+v, err = %v; want the newer claim untouched", current, err)
+	}
+	lease.Store(reclaimed.SubmitLeaseUntil)
+
+	deferred, err := repo.DeferSubmission(ctx, "req-claim", *lease.Load(), time.Hour, "radarr unreachable")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if deferred.LastError != "radarr unreachable" || deferred.SubmitAttempts != 1 || deferred.NextSubmitAt == nil || deferred.SubmitLeaseUntil != nil {
-		t.Fatalf("deferred = %+v, want last error, one attempt, a next attempt time, and the claim released", deferred)
+	if deferred.LastError != "radarr unreachable" || deferred.SubmitAttempts != 2 || deferred.NextSubmitAt == nil || deferred.SubmitLeaseUntil != nil {
+		t.Fatalf("deferred = %+v, want last error, two attempts, a next attempt time, and the claim released", deferred)
 	}
 	if _, claimed, err := repo.ClaimSubmission(ctx, "req-claim", time.Minute); err != nil || claimed {
 		t.Fatalf("claim during backoff: claimed = %v, err = %v; want refused", claimed, err)
@@ -176,7 +196,7 @@ func TestSubmissionClaimDatabase(t *testing.T) {
 	if _, err := repo.SetOutcome(ctx, "req-claim", StateGuard{Statuses: []Status{StatusApproved}}, OutcomeFailed, Viewer{}, "gave up"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.DeferSubmission(ctx, "req-claim", time.Minute, "late"); !errors.Is(err, ErrInvalidState) {
+	if _, err := repo.DeferSubmission(ctx, "req-claim", *lease.Load(), time.Minute, "late"); !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("defer on failed request: err = %v, want ErrInvalidState", err)
 	}
 

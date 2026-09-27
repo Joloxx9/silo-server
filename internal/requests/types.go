@@ -272,6 +272,12 @@ func (r *Request) State() State {
 	}
 }
 
+// requestedBy reports whether the viewer's profile made the request. A profile
+// id is unique only within its account, so the account must match too.
+func (r *Request) requestedBy(viewer Viewer) bool {
+	return r.RequestedByUserID == viewer.UserID && r.RequestedByProfileID == viewer.ProfileID
+}
+
 type RequestEvent struct {
 	ID             int64     `json:"id"`
 	RequestID      string    `json:"request_id"`
