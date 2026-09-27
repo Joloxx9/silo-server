@@ -120,20 +120,22 @@ func (n *RequestFulfillmentNotifier) NotifyFulfilled(ctx context.Context, req re
 	}
 	base := RequestFlags{RequestID: req.ID, TMDBID: req.TMDBID, MediaType: string(req.MediaType)}
 	// Legacy rows without attribution have no requester recipient.
-	told := map[string]bool{}
+	// Profile ids repeat across accounts, so recipients are keyed by both.
+	told := map[requests.Follower]bool{}
 	if req.RequestedByProfileID != "" && req.RequestedByUserID > 0 {
-		told[req.RequestedByProfileID] = true
-		if err := n.notifyFulfilledProfile(ctx, requests.Follower{UserID: req.RequestedByUserID, ProfileID: req.RequestedByProfileID}, contentID, base); err != nil {
+		requester := requests.Follower{UserID: req.RequestedByUserID, ProfileID: req.RequestedByProfileID}
+		told[requester] = true
+		if err := n.notifyFulfilledProfile(ctx, requester, contentID, base); err != nil {
 			return err
 		}
 	}
 	follower := base
 	follower.Follower = true
 	for _, recipient := range req.Followers {
-		if told[recipient.ProfileID] {
+		if told[recipient] {
 			continue
 		}
-		told[recipient.ProfileID] = true
+		told[recipient] = true
 		if err := n.notifyFulfilledProfile(ctx, recipient, contentID, follower); err != nil {
 			return err
 		}

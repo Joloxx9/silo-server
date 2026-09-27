@@ -6,10 +6,11 @@ import (
 )
 
 // SeasonAvailability counts one season's episodes: how many have aired (by
-// the provider's air dates), and how many have a file in an enabled library,
-// in all and among the aired ones.
+// the provider's air dates), how many are dated to air later, and how many
+// have a file in an enabled library, in all and among the aired ones.
 type SeasonAvailability struct {
 	Aired     int
+	Upcoming  int
 	Have      int
 	HaveAired int
 }
@@ -44,6 +45,7 @@ func (r *ItemRepository) SeriesSeasonAvailability(ctx context.Context, seriesCon
 		)
 		SELECT e.series_id, e.season_number,
 		       count(*) FILTER (WHERE e.air_date <= current_date),
+		       count(*) FILTER (WHERE e.air_date > current_date),
 		       count(p.content_id),
 		       count(p.content_id) FILTER (WHERE e.air_date <= current_date)
 		FROM episodes e
@@ -59,7 +61,7 @@ func (r *ItemRepository) SeriesSeasonAvailability(ctx context.Context, seriesCon
 		var series string
 		var season int
 		var a SeasonAvailability
-		if err := rows.Scan(&series, &season, &a.Aired, &a.Have, &a.HaveAired); err != nil {
+		if err := rows.Scan(&series, &season, &a.Aired, &a.Upcoming, &a.Have, &a.HaveAired); err != nil {
 			return nil, err
 		}
 		if out[series] == nil {

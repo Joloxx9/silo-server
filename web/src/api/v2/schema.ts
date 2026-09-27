@@ -14474,6 +14474,8 @@ export interface components {
       guarded_configuration: boolean;
       /** @description Opaque revision of this document */
       revision: string;
+      /** @description Whether the request routing rules under /admin/request-routes are available */
+      routing: boolean;
       /**
        * @description Support and configuration state, not health
        * @enum {string}

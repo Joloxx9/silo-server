@@ -65,7 +65,7 @@ func (s *Service) Follow(ctx context.Context, viewer Viewer, mediaType MediaType
 	if req == nil {
 		return RequestState{}, ErrNotRequested
 	}
-	if req.RequestedByProfileID != viewer.ProfileID {
+	if !req.requestedBy(viewer) {
 		if err := s.store.FollowTitle(ctx, mediaType, tmdbID, viewer); err != nil {
 			return RequestState{}, err
 		}
@@ -91,7 +91,7 @@ func (s *Service) Unfollow(ctx context.Context, viewer Viewer, mediaType MediaTy
 	if tmdbID <= 0 {
 		return fmt.Errorf("%w: tmdb id is required", ErrInvalidInput)
 	}
-	return s.store.UnfollowTitle(ctx, mediaType, tmdbID, viewer.ProfileID)
+	return s.store.UnfollowTitle(ctx, mediaType, tmdbID, viewer)
 }
 
 // forgetFollowsAfterWithdrawal clears a withdrawn request's title follows.
@@ -116,7 +116,7 @@ func (s *Service) followedTitles(ctx context.Context, viewer Viewer, mediaType M
 		if req == nil {
 			continue
 		}
-		if req.RequestedByProfileID == viewer.ProfileID {
+		if req.requestedBy(viewer) {
 			out[tmdbID] = true
 			continue
 		}
@@ -125,7 +125,7 @@ func (s *Service) followedTitles(ctx context.Context, viewer Viewer, mediaType M
 	if len(others) == 0 || strings.TrimSpace(viewer.ProfileID) == "" {
 		return out, nil
 	}
-	followed, err := s.store.FollowedTitles(ctx, mediaType, others, viewer.ProfileID)
+	followed, err := s.store.FollowedTitles(ctx, mediaType, others, viewer)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (r *Repository) FollowTitle(ctx context.Context, mediaType MediaType, tmdbI
 		), inserted AS (
 			INSERT INTO media_request_follows (media_type, tmdb_id, user_id, profile_id)
 			SELECT $1, $2, $3, $4 FROM open_request
-			ON CONFLICT (media_type, tmdb_id, profile_id) DO NOTHING
+			ON CONFLICT (media_type, tmdb_id, user_id, profile_id) DO NOTHING
 		)
 		SELECT EXISTS (SELECT 1 FROM open_request)
 	`, mediaType, tmdbID, viewer.UserID, viewer.ProfileID).Scan(&open); err != nil {
@@ -173,25 +173,25 @@ func (r *Repository) ForgetTitleFollows(ctx context.Context, mediaType MediaType
 	return nil
 }
 
-func (r *Repository) UnfollowTitle(ctx context.Context, mediaType MediaType, tmdbID int, profileID string) error {
+func (r *Repository) UnfollowTitle(ctx context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error {
 	if _, err := r.pool.Exec(ctx, `
 		DELETE FROM media_request_follows
-		WHERE media_type = $1 AND tmdb_id = $2 AND profile_id = $3
-	`, mediaType, tmdbID, profileID); err != nil {
+		WHERE media_type = $1 AND tmdb_id = $2 AND user_id = $3 AND profile_id = $4
+	`, mediaType, tmdbID, viewer.UserID, viewer.ProfileID); err != nil {
 		return fmt.Errorf("unfollow title: %w", err)
 	}
 	return nil
 }
 
-func (r *Repository) FollowedTitles(ctx context.Context, mediaType MediaType, tmdbIDs []int, profileID string) (map[int]bool, error) {
+func (r *Repository) FollowedTitles(ctx context.Context, mediaType MediaType, tmdbIDs []int, viewer Viewer) (map[int]bool, error) {
 	out := map[int]bool{}
 	if len(tmdbIDs) == 0 {
 		return out, nil
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT tmdb_id FROM media_request_follows
-		WHERE media_type = $1 AND tmdb_id = ANY($2) AND profile_id = $3
-	`, mediaType, tmdbIDs, profileID)
+		WHERE media_type = $1 AND tmdb_id = ANY($2) AND user_id = $3 AND profile_id = $4
+	`, mediaType, tmdbIDs, viewer.UserID, viewer.ProfileID)
 	if err != nil {
 		return nil, fmt.Errorf("list followed titles: %w", err)
 	}
@@ -210,7 +210,7 @@ func (r *Repository) ListTitleFollowers(ctx context.Context, mediaType MediaType
 	rows, err := r.pool.Query(ctx, `
 		SELECT user_id, profile_id FROM media_request_follows
 		WHERE media_type = $1 AND tmdb_id = $2
-		ORDER BY created_at, profile_id
+		ORDER BY created_at, user_id, profile_id
 	`, mediaType, tmdbID)
 	if err != nil {
 		return nil, fmt.Errorf("list title followers: %w", err)
@@ -227,14 +227,21 @@ func (r *Repository) ListTitleFollowers(ctx context.Context, mediaType MediaType
 	return out, rows.Err()
 }
 
-func (r *Repository) ClearTitleFollowers(ctx context.Context, mediaType MediaType, tmdbID int, profileIDs []string) error {
-	if len(profileIDs) == 0 {
+func (r *Repository) ClearTitleFollowers(ctx context.Context, mediaType MediaType, tmdbID int, followers []Follower) error {
+	if len(followers) == 0 {
 		return nil
+	}
+	userIDs := make([]int, 0, len(followers))
+	profileIDs := make([]string, 0, len(followers))
+	for _, f := range followers {
+		userIDs = append(userIDs, f.UserID)
+		profileIDs = append(profileIDs, f.ProfileID)
 	}
 	if _, err := r.pool.Exec(ctx, `
 		DELETE FROM media_request_follows
-		WHERE media_type = $1 AND tmdb_id = $2 AND profile_id = ANY($3)
-	`, mediaType, tmdbID, profileIDs); err != nil {
+		WHERE media_type = $1 AND tmdb_id = $2
+		  AND (user_id, profile_id) IN (SELECT * FROM unnest($3::int[], $4::text[]))
+	`, mediaType, tmdbID, userIDs, profileIDs); err != nil {
 		return fmt.Errorf("clear title followers: %w", err)
 	}
 	return nil

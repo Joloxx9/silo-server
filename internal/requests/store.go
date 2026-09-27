@@ -45,7 +45,10 @@ type Store interface {
 	ClaimSubmission(ctx context.Context, id string, lease time.Duration) (req *Request, claimed bool, err error)
 	// DeferSubmission records a failed submission attempt on a still-approved
 	// request, releases the claim, and schedules the next attempt after delay.
-	DeferSubmission(ctx context.Context, id string, delay time.Duration, message string) (*Request, error)
+	// leaseUntil is the claim's SubmitLeaseUntil: a caller whose lease expired
+	// and was claimed again gets ErrInvalidState and leaves the newer claim
+	// alone.
+	DeferSubmission(ctx context.Context, id string, leaseUntil time.Time, delay time.Duration, message string) (*Request, error)
 	// MarkReconciled stamps last_reconciled_at so the reconcile pass rotates
 	// through every candidate.
 	MarkReconciled(ctx context.Context, id string) error
@@ -60,14 +63,14 @@ type Store interface {
 	// its targets, for a submission that found nothing left to send.
 	RecomputeStatus(ctx context.Context, id string, actor Viewer) (*Request, error)
 	// FollowTitle, UnfollowTitle and FollowedTitles manage a profile's follows
-	// on titles; ListTitleFollowers and ClearTitleFollowers serve the
+	// on titles, keyed by account and profile; ListTitleFollowers and ClearTitleFollowers serve the
 	// fulfilled notification. All are idempotent. FollowTitle answers
 	// ErrNotRequested when the title has no open request.
 	FollowTitle(ctx context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error
-	UnfollowTitle(ctx context.Context, mediaType MediaType, tmdbID int, profileID string) error
-	FollowedTitles(ctx context.Context, mediaType MediaType, tmdbIDs []int, profileID string) (map[int]bool, error)
+	UnfollowTitle(ctx context.Context, mediaType MediaType, tmdbID int, viewer Viewer) error
+	FollowedTitles(ctx context.Context, mediaType MediaType, tmdbIDs []int, viewer Viewer) (map[int]bool, error)
 	ListTitleFollowers(ctx context.Context, mediaType MediaType, tmdbID int) ([]Follower, error)
-	ClearTitleFollowers(ctx context.Context, mediaType MediaType, tmdbID int, profileIDs []string) error
+	ClearTitleFollowers(ctx context.Context, mediaType MediaType, tmdbID int, followers []Follower) error
 	// ForgetTitleFollows removes every follow on a title whose request was
 	// withdrawn.
 	ForgetTitleFollows(ctx context.Context, mediaType MediaType, tmdbID int) error

@@ -146,6 +146,7 @@ export const requestKeys = {
   discoverBrowseAll: () => ["requests", "discover", "browse"] as const,
   detailAll: () => ["requests", "detail"] as const,
   mineAll: () => ["requests", "mine"] as const,
+  searchAll: () => ["requests", "search"] as const,
 };
 
 export const libraryCollectionKeys = {
