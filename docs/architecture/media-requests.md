@@ -124,10 +124,10 @@ is marked `failed` for an admin to retry.
 
 A submission converges the request's targets to the qualities it currently
 wants. A failed target for a quality it no longer wants is deleted, but only
-when that quality set was resolved without error: a failed entitlement lookup or
-a connection skipped for a missing key also shrinks it, and must not erase a
-failure an admin still needs to see. If nothing is left to send, the remaining
-targets decide the status.
+when that quality set was resolved without error. A failed entitlement lookup
+or a connection skipped for a missing key makes the set look smaller than it
+is, so in either case every failed target is kept for an admin to see. If
+nothing is left to send, the remaining targets decide the status.
 
 ## Following a title
 
