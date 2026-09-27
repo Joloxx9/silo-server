@@ -105,7 +105,7 @@ func (f *fakeAdminRequests) LoadIntegrationOptions(_ context.Context, v mediareq
 		return nil, &mediarequests.ValidationError{FieldErrors: map[string]string{"api_key_ref": "invalid key"}}
 	}
 	if r.APIKeyRef == "unreachable" {
-		return nil, fmt.Errorf("%w: dial tcp: connect: connection refused", mediarequests.ErrIntegrationUnreachable)
+		return nil, &mediarequests.IntegrationUnreachableError{Detail: "Nothing answered at that address. Check the host and port.", Err: fmt.Errorf("dial tcp: connect: connection refused")}
 	}
 	return map[string][]mediarequests.RouterOption{}, nil
 }
@@ -116,8 +116,13 @@ func TestAdminRequestOptionsUnreachableIntegration(t *testing.T) {
 	h := adminRequestsHandler(fixtureAdminRequests())
 	rec := do(t, h, http.MethodPost, Prefix+"/admin/request-integrations/new/options", `{"api_key_ref":"unreachable"}`, actingRequestAdmin)
 	requireProblem(t, rec, TypeDependencyUnavailable)
-	if strings.Contains(rec.Body.String(), "connection refused") {
-		t.Fatal("upstream failure detail leaked")
+	if !strings.Contains(rec.Body.String(), "Nothing answered at that address. Check the host and port.") {
+		t.Fatalf("body = %s, want the classified detail", rec.Body.String())
+	}
+	for _, leaked := range []string{"connection refused", "dial tcp"} {
+		if strings.Contains(rec.Body.String(), leaked) {
+			t.Fatalf("upstream failure detail %q leaked: %s", leaked, rec.Body.String())
+		}
 	}
 }
 func (f *fakeAdminRequests) ListAdmin(_ context.Context, v mediarequests.Viewer, filter mediarequests.ListFilter) ([]*mediarequests.Request, error) {

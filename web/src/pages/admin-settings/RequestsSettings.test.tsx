@@ -11,6 +11,7 @@ import {
   conflict,
   fallback,
   group,
+  invalid,
   mount,
   problem,
   radarr,
@@ -244,6 +245,134 @@ describe("Requests settings: servers", () => {
     expect(await within(dialog).findByText("401 Unauthorized from Radarr")).toBeInTheDocument();
     const probes = calls("POST /api/v2/admin/request-integrations/{id}/options");
     expect(probes.at(-1)).toMatchObject({ path: { id: "radarr-1" } });
+  });
+
+  it("puts a failed probe's reason beside the field it is about", async () => {
+    let answer = (): unknown =>
+      Promise.reject(
+        invalid([{ location: "body.base_url", detail: "That port serves http, not https." }]),
+      );
+    serve({
+      handlers: { "POST /api/v2/admin/request-integrations/{id}/options": () => answer() },
+    });
+    const dialog = await openServer("Radarr");
+    expect(
+      await within(dialog).findByText("That port serves http, not https."),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("URL").getAttribute("aria-invalid")).toBe("true");
+    expect(within(dialog).queryByText(/Couldn't read root folders/)).toBeNull();
+
+    answer = () =>
+      Promise.reject(
+        invalid([{ location: "body.api_key_ref", detail: "The server rejected this API key." }]),
+      );
+    fireEvent.change(within(dialog).getByLabelText("API key"), { target: { value: "wrong" } });
+    // The edit clears the old complaint before the next probe answers.
+    expect(within(dialog).queryByText("That port serves http, not https.")).toBeNull();
+    expect(
+      await within(dialog).findByText("The server rejected this API key."),
+    ).toBeInTheDocument();
+
+    answer = () =>
+      Promise.reject(
+        problem(
+          503,
+          "dependency_unavailable",
+          "Nothing answered at that address. Check the host and port.",
+        ),
+      );
+    fireEvent.change(within(dialog).getByLabelText("API key"), { target: { value: "wrong-2" } });
+    expect(
+      await within(dialog).findByText("Nothing answered at that address. Check the host and port."),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText("The server rejected this API key.")).toBeNull();
+  });
+
+  it("adds http:// to an address typed without one", async () => {
+    serve();
+    const dialog = await openServer("Radarr");
+    const url = within(dialog).getByLabelText("URL") as HTMLInputElement;
+    fireEvent.change(url, { target: { value: "10.0.0.5:8989" } });
+    fireEvent.blur(url);
+    expect(url.value).toBe("http://10.0.0.5:8989");
+    fireEvent.change(url, { target: { value: "https://radarr.lan" } });
+    fireEvent.blur(url);
+    expect(url.value).toBe("https://radarr.lan");
+  });
+
+  it("takes the type and name from the service the plugin detected", async () => {
+    serve({
+      servers: [radarr],
+      handlers: {
+        "POST /api/v2/admin/request-integrations/{id}/options": (options) =>
+          reply(options, {
+            options: {
+              ...serverOptions,
+              service_kind: [{ value: "sonarr", label: "Sonarr 4.0.14" }],
+            },
+          }),
+        "POST /api/v2/admin/request-integrations": (options) =>
+          reply(options, server("sonarr-9", "Sonarr 4K", "sonarr"), '"new"'),
+      },
+    });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Add server" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("switch", { name: "4K server" }));
+    fireEvent.change(within(dialog).getByLabelText("URL"), {
+      target: { value: "http://10.0.0.5:8989" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("API key"), { target: { value: "key" } });
+
+    expect(await within(dialog).findByText("Detected Sonarr 4.0.14.")).toBeInTheDocument();
+    expect((within(dialog).getByLabelText("Name") as HTMLInputElement).value).toBe("Sonarr 4K");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Test" }));
+    expect(
+      await within(dialog).findByText(
+        "Detected Sonarr 4.0.14 — 2 quality profiles, 2 root folders",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add server" }));
+    await waitFor(() => expect(calls("POST /api/v2/admin/request-integrations")).toHaveLength(1));
+    const body = calls("POST /api/v2/admin/request-integrations")[0]!.body as {
+      name: string;
+      plugin_config: Record<string, unknown>;
+    };
+    expect(body.name).toBe("Sonarr 4K");
+    expect(body.plugin_config).toMatchObject({ service_kind: "sonarr", is_4k: true });
+  });
+
+  it("only warns when routing pins a type the detected service does not match", async () => {
+    serve({
+      handlers: {
+        "POST /api/v2/admin/request-integrations/{id}/options": (options) =>
+          reply(options, {
+            options: {
+              ...serverOptions,
+              service_kind: [{ value: "radarr", label: "Radarr 5.2.0" }],
+            },
+          }),
+        "PUT /api/v2/admin/request-integrations/{id}": (options) =>
+          reply(options, sonarr, '"saved"'),
+      },
+    });
+    const dialog = await openServer("Sonarr");
+    expect(
+      await within(dialog).findByText(/This address answers as Radarr 5.2.0, not Sonarr\./),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText("Detected Radarr 5.2.0.")).toBeNull();
+    expect((within(dialog).getByLabelText("Name") as HTMLInputElement).value).toBe("Sonarr");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(calls("PUT /api/v2/admin/request-integrations/{id}")).toHaveLength(1),
+    );
+    const body = calls("PUT /api/v2/admin/request-integrations/{id}")[0]!.body as {
+      plugin_config: Record<string, unknown>;
+    };
+    expect(body.plugin_config).toMatchObject({ service_kind: "sonarr" });
   });
 
   it("keeps the delete confirmation open after a stale delete", async () => {

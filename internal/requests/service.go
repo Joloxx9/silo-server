@@ -1491,7 +1491,7 @@ func (s *Service) validateViaPlugin(ctx context.Context, in Integration) error {
 			// Don't pair a stored API key with a caller-changed base URL: require the
 			// key to be re-entered when the server URL changes (defense against
 			// exfiltrating a stored, API-unreadable key to an attacker-supplied URL).
-			if strings.TrimSpace(in.BaseURL) != "" && strings.TrimSpace(in.BaseURL) != strings.TrimSpace(stored.BaseURL) {
+			if strings.TrimSpace(in.BaseURL) != "" && !sameIntegrationBaseURL(in.BaseURL, stored.BaseURL) {
 				return &ValidationError{FieldErrors: map[string]string{"api_key_ref": "re-enter the API key when changing the base URL"}}
 			}
 			in.APIKeyRef = stored.APIKeyRef
@@ -1567,6 +1567,15 @@ func validateInstance(in *Integration) error {
 	if in.InstallationID == nil {
 		return fmt.Errorf("%w: installation_id is required", ErrInvalidInput)
 	}
+	// A blank URL on update keeps the saved one (validateViaPlugin backfills
+	// it); anything typed is saved in the form the options probe used.
+	if strings.TrimSpace(in.BaseURL) != "" {
+		baseURL, err := normalizeIntegrationBaseURL(in.BaseURL)
+		if err != nil {
+			return invalidBaseURLError()
+		}
+		in.BaseURL = baseURL
+	}
 	// The is_default/is_4k/is_default_4k cross-field consistency check is owned by
 	// the request_router plugin's Validate RPC, which surfaces it as an inline
 	// field error (better UX than a generic host 400). See validateViaPlugin.
@@ -1588,11 +1597,10 @@ func (s *Service) LoadIntegrationOptions(ctx context.Context, viewer Viewer, int
 		}
 		if stored != nil {
 			submittedBaseURL := strings.TrimSpace(integration.BaseURL)
-			storedBaseURL := strings.TrimSpace(stored.BaseURL)
-			if strings.TrimSpace(integration.BaseURL) == "" {
+			if submittedBaseURL == "" {
 				integration.BaseURL = stored.BaseURL
 			}
-			if strings.TrimSpace(integration.APIKeyRef) == "" && (submittedBaseURL == "" || submittedBaseURL == storedBaseURL) {
+			if strings.TrimSpace(integration.APIKeyRef) == "" && (submittedBaseURL == "" || sameIntegrationBaseURL(submittedBaseURL, stored.BaseURL)) {
 				integration.APIKeyRef = stored.APIKeyRef
 			}
 			if strings.TrimSpace(integration.CapabilityID) == "" {
@@ -1607,47 +1615,28 @@ func (s *Service) LoadIntegrationOptions(ctx context.Context, viewer Viewer, int
 		}
 	}
 
+	// Refuse what the plugin could only fail on, and say which field is wrong.
+	fieldErrors := map[string]string{}
+	baseURL, err := normalizeIntegrationBaseURL(integration.BaseURL)
+	if err != nil {
+		fieldErrors[fieldBaseURL] = integrationAddressMessage
+	}
 	apiKey := strings.TrimSpace(integration.APIKeyRef)
+	if apiKey == "" {
+		fieldErrors[fieldAPIKey] = integrationKeyMissing
+	}
+	if len(fieldErrors) > 0 {
+		return nil, &ValidationError{FieldErrors: fieldErrors}
+	}
 	if s.router == nil || integration.InstallationID == nil {
 		return nil, fmt.Errorf("no fulfillment backend configured")
 	}
-	conn := ResolvedRouterConnection{ID: integration.ID, BaseURL: integration.BaseURL, APIKey: apiKey, Config: integration.PluginConfig}
+	conn := ResolvedRouterConnection{ID: integration.ID, BaseURL: baseURL, APIKey: apiKey, Config: integration.PluginConfig}
 	options, err := s.router.ListConfigOptions(ctx, *integration.InstallationID, integration.CapabilityID, conn)
 	if err != nil {
-		return nil, classifyIntegrationTransportError(err)
+		return nil, classifyIntegrationError(err, integration.CapabilityID)
 	}
 	return options, nil
-}
-
-// classifyIntegrationTransportError marks a failure to reach the configured
-// integration as a dependency failure. Errors the router already classifies
-// (plugin validation results and the request-domain sentinels) pass through
-// untouched so the API keeps rendering them as client problems.
-func classifyIntegrationTransportError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var validation *ValidationError
-	if errors.As(err, &validation) {
-		return err
-	}
-	for _, sentinel := range []error{
-		ErrInvalidInput,
-		ErrInvalidMediaType,
-		ErrRequestsDisabled,
-		ErrUserBlocked,
-		ErrQuotaExceeded,
-		ErrAlreadyAvailable,
-		ErrAlreadyRequested,
-		ErrNotFound,
-		ErrForbidden,
-		ErrInvalidState,
-	} {
-		if errors.Is(err, sentinel) {
-			return err
-		}
-	}
-	return fmt.Errorf("%w: %w", ErrIntegrationUnreachable, err)
 }
 
 func (s *Service) EffectivePolicy(ctx context.Context, userID int) (EffectivePolicy, error) {
