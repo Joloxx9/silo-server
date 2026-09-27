@@ -37,6 +37,8 @@ import {
   buildCatalogQueryUpdateHref,
   catalogSourceAllowsOverlay,
   parseCatalogSearchParams,
+  readCatalogRequestPage,
+  withCatalogRequestPage,
 } from "./catalogSearchParams";
 import type { CatalogSearchState } from "./catalogSearchParams";
 
@@ -101,7 +103,9 @@ function CatalogResults({
   state: ReturnType<typeof parseCatalogSearchParams>;
 }) {
   const limit = 60;
-  const searchKey = searchParams.toString();
+  // Paging the Request to add grid is not a new search: it keeps the library
+  // results' loaded range and selection.
+  const searchKey = withCatalogRequestPage(searchParams, 1).toString();
   const [visibleRangeState, setVisibleRangeState] = useState<{
     key: string;
     range: [number, number];
@@ -164,7 +168,8 @@ function CatalogResults({
   const handleChipScopeChange = useCallback(
     (scope: SearchMediaScope) => {
       setPreferredScope(scope);
-      const next = new URLSearchParams(searchParams);
+      // Another scope searches other TMDB types, so its grid starts at page 1.
+      const next = withCatalogRequestPage(searchParams, 1);
       next.set("type", scope);
       setSearchParams(next);
     },
@@ -533,6 +538,8 @@ function CatalogResults({
           mediaType={requestSearchType}
           libraryHadHits={libraryHasResults}
           libraryResultsKnown={libraryResultsKnown}
+          page={readCatalogRequestPage(searchParams)}
+          onPageChange={(page) => setSearchParams(withCatalogRequestPage(searchParams, page))}
         />
       ) : null}
 
