@@ -83,9 +83,10 @@ func normalizeIntegrationBaseURL(raw string) (string, error) {
 	return parsed.Scheme + "://" + parsed.Host + strings.TrimRight(parsed.EscapedPath(), "/"), nil
 }
 
-// NormalizeIntegrationBaseURL is normalizeIntegrationBaseURL for a v2 save,
-// so the saved address is the one the options probe used. A refused address
-// is a field error on base_url. The frozen v1 save path does not call it.
+// NormalizeIntegrationBaseURL is normalizeIntegrationBaseURL for the v2
+// options probe and save, so the saved address is the one the probe used. A
+// refused address is a field error on base_url. The frozen v1 routes do not
+// call it.
 func NormalizeIntegrationBaseURL(raw string) (string, error) {
 	baseURL, err := normalizeIntegrationBaseURL(raw)
 	if err != nil {

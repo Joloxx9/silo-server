@@ -21,6 +21,7 @@ type fakeAdminRequests struct {
 	stale                     bool
 	filter                    mediarequests.ListFilter
 	action, reason, requestID string
+	probedBaseURL             string
 }
 
 func fixtureAdminRequests() *fakeAdminRequests {
@@ -101,6 +102,7 @@ func (f *fakeAdminRequests) DeleteIntegrationConditional(_ context.Context, v me
 }
 func (f *fakeAdminRequests) LoadIntegrationOptions(_ context.Context, v mediarequests.Viewer, r mediarequests.Integration) (map[string][]mediarequests.RouterOption, error) {
 	f.viewer = v
+	f.probedBaseURL = r.BaseURL
 	if r.APIKeyRef == "bad" {
 		return nil, &mediarequests.ValidationError{FieldErrors: map[string]string{"api_key_ref": "invalid key"}}
 	}
@@ -241,6 +243,26 @@ func TestAdminRequestIntegrationSecretsAndGuard(t *testing.T) {
 	created := do(t, h, http.MethodPost, Prefix+"/admin/request-integrations", requestIntegrationBody, actingRequestAdmin)
 	if created.Code != 201 || created.Header().Get("Location") != Prefix+"/admin/request-integrations/created-1" {
 		t.Fatal(created.Code, created.Body.String())
+	}
+}
+
+// The v2 probe sends a scheme-less address with http:// in front and refuses
+// one it could never reach as a field error, without asking the plugin.
+func TestAdminRequestOptionsNormalizesBaseURL(t *testing.T) {
+	f := fixtureAdminRequests()
+	h := adminRequestsHandler(f)
+	path := Prefix + "/admin/request-integrations/new/options"
+	if rec := do(t, h, http.MethodPost, path, `{"base_url":"10.0.0.5:8989/","api_key_ref":"k"}`, actingRequestAdmin); rec.Code != 200 {
+		t.Fatal(rec.Code, rec.Body.String())
+	}
+	if f.probedBaseURL != "http://10.0.0.5:8989" {
+		t.Fatalf("probed base URL = %q", f.probedBaseURL)
+	}
+	f.probedBaseURL = "unset"
+	rec := do(t, h, http.MethodPost, path, `{"base_url":"ftp://10.0.0.5","api_key_ref":"k"}`, actingRequestAdmin)
+	requireProblem(t, rec, TypeValidationFailed)
+	if !strings.Contains(rec.Body.String(), `"body.base_url"`) || f.probedBaseURL != "unset" {
+		t.Fatal(rec.Body.String(), f.probedBaseURL)
 	}
 }
 

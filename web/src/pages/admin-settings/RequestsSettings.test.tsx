@@ -412,6 +412,72 @@ describe("Requests settings: servers", () => {
     expect(within(dialog).queryByText(/^Connected/)).toBeNull();
   });
 
+  it("reports a Test the debounced probe overtook for the same address", async () => {
+    const slow = deferred<unknown>();
+    let holdNext = false;
+    serve({
+      handlers: {
+        "POST /api/v2/admin/request-integrations/{id}/options": (options) => {
+          if (holdNext) {
+            holdNext = false;
+            return slow.promise;
+          }
+          return reply(options, { options: serverOptions });
+        },
+      },
+    });
+    const dialog = await openServer("Radarr");
+    await waitFor(() =>
+      expect(calls("POST /api/v2/admin/request-integrations/{id}/options").length).toBeGreaterThan(
+        0,
+      ),
+    );
+    const before = calls("POST /api/v2/admin/request-integrations/{id}/options").length;
+    fireEvent.change(within(dialog).getByLabelText("URL"), {
+      target: { value: "http://radarr-2:7878" },
+    });
+    holdNext = true;
+    fireEvent.click(within(dialog).getByRole("button", { name: "Test" }));
+    // The debounced probe for the same address runs while the Test waits.
+    await waitFor(() =>
+      expect(calls("POST /api/v2/admin/request-integrations/{id}/options").length).toBe(before + 2),
+    );
+    await act(async () => {
+      slow.resolve({ options: serverOptions });
+      await slow.promise;
+    });
+    expect(
+      await within(dialog).findByText("Connected — 2 quality profiles, 2 root folders"),
+    ).toBeInTheDocument();
+  });
+
+  it("adds 4K to a name it filled in when the 4K switch goes on", async () => {
+    serve({
+      servers: [radarr],
+      handlers: {
+        "POST /api/v2/admin/request-integrations/{id}/options": (options) =>
+          reply(options, {
+            options: {
+              ...serverOptions,
+              service_kind: [{ value: "radarr", label: "Radarr 5.2.0" }],
+            },
+          }),
+      },
+    });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Add server" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("URL"), {
+      target: { value: "http://10.0.0.5:7878" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("API key"), { target: { value: "key" } });
+    expect(await within(dialog).findByText("Detected Radarr 5.2.0.")).toBeInTheDocument();
+    const name = within(dialog).getByLabelText("Name") as HTMLInputElement;
+    expect(name.value).toBe("Radarr");
+    fireEvent.click(within(dialog).getByRole("switch", { name: "4K server" }));
+    expect(name.value).toBe("Radarr 4K");
+  });
+
   it("only warns when routing pins a type the detected service does not match", async () => {
     serve({
       handlers: {

@@ -367,7 +367,10 @@ function useServerOptions(
   const [options, setOptions] = useState<RequestIntegrationOptions>({});
   const [status, setStatus] = useState<OptionsStatus>("idle");
   const [problem, setProblem] = useState<ProbeProblem | null>(null);
-  const genRef = useRef(0);
+  // Bumped whenever the connection changes. A probe that finishes under a
+  // later value answered for an address or key no longer in the form. Probes
+  // of the same connection (the debounced one and a Test) are interchangeable.
+  const connRef = useRef(0);
 
   const canLoad =
     draft.base_url.trim().length > 0 &&
@@ -402,17 +405,17 @@ function useServerOptions(
    * address or key no longer in the form.
    */
   async function probe(): Promise<RequestIntegrationOptions | null> {
-    const gen = ++genRef.current;
+    const conn = connRef.current;
     setStatus("loading");
     try {
       const loaded = await load.mutateAsync({ id: connectionID || "new", body: body() });
-      if (gen !== genRef.current) return null;
+      if (conn !== connRef.current) return null;
       setOptions(loaded);
       setStatus("idle");
       setProblem(null);
       return loaded;
     } catch (error) {
-      if (gen !== genRef.current) return null;
+      if (conn !== connRef.current) return null;
       setOptions({});
       setStatus("error");
       setProblem(probeProblem(error));
@@ -424,14 +427,14 @@ function useServerOptions(
   // flight is dropped, and its complaint is cleared while the next probe
   // waits out the debounce.
   useEffect(() => {
-    genRef.current += 1;
+    connRef.current += 1;
     setProblem(null);
     setStatus("idle");
   }, [sig]);
 
   useEffect(() => {
     if (!canLoad) {
-      genRef.current += 1;
+      connRef.current += 1;
       setOptions({});
       setStatus("idle");
       setProblem(null);
@@ -582,8 +585,6 @@ export function RequestServerEditor({
     detectsKind && typeLock !== undefined && currentKind !== "" && currentKind !== detectedKind
       ? `This address answers as ${detected?.label}, not ${serviceKindLabel(currentKind) || currentKind}. ${typeLock}`
       : undefined;
-  const is4KRef = useRef(is4K);
-  is4KRef.current = is4K;
   // The name detection last filled in: a later detection may replace it, but
   // never a name the admin typed.
   const autoNameRef = useRef("");
@@ -596,13 +597,13 @@ export function RequestServerEditor({
     );
     const label = serviceKindLabel(detectedKind);
     if (!label) return;
-    const name = is4KRef.current ? `${label} 4K` : label;
+    const name = is4K ? `${label} 4K` : label;
     setForm((current) => {
       if (current.name.trim() && current.name !== autoNameRef.current) return current;
       autoNameRef.current = name;
       return { ...current, name };
     });
-  }, [detectsKind, detectedKind, typeLock]);
+  }, [detectsKind, detectedKind, typeLock, is4K]);
   const schemaErrors = useMemo(
     () =>
       kindMismatch && !fieldErrors[SERVICE_KIND_KEY]

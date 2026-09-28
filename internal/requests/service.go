@@ -1606,23 +1606,17 @@ func (s *Service) LoadIntegrationOptions(ctx context.Context, viewer Viewer, int
 		}
 	}
 
-	// Refuse what the plugin could only fail on, and say which field is wrong.
-	fieldErrors := map[string]string{}
-	baseURL, err := normalizeIntegrationBaseURL(integration.BaseURL)
-	if err != nil {
-		fieldErrors[fieldBaseURL] = integrationAddressMessage
-	}
+	// Without a key the plugin could only fail; say so on the key field. The
+	// address is passed as given: the v2 adapter normalizes it first, and the
+	// frozen v1 route keeps sending what the client submitted.
 	apiKey := strings.TrimSpace(integration.APIKeyRef)
 	if apiKey == "" {
-		fieldErrors[fieldAPIKey] = integrationKeyMissing
-	}
-	if len(fieldErrors) > 0 {
-		return nil, &ValidationError{FieldErrors: fieldErrors}
+		return nil, &ValidationError{FieldErrors: map[string]string{fieldAPIKey: integrationKeyMissing}}
 	}
 	if s.router == nil || integration.InstallationID == nil {
 		return nil, fmt.Errorf("no fulfillment backend configured")
 	}
-	conn := ResolvedRouterConnection{ID: integration.ID, BaseURL: baseURL, APIKey: apiKey, Config: integration.PluginConfig}
+	conn := ResolvedRouterConnection{ID: integration.ID, BaseURL: integration.BaseURL, APIKey: apiKey, Config: integration.PluginConfig}
 	options, err := s.router.ListConfigOptions(ctx, *integration.InstallationID, integration.CapabilityID, conn)
 	if err != nil {
 		return nil, classifyIntegrationError(err, integration.CapabilityID)

@@ -79,9 +79,10 @@ func TestLoadIntegrationOptionsClassifiesProbeFailures(t *testing.T) {
 	}
 }
 
-// The probe refuses a missing key or an unusable address itself, and sends a
-// scheme-less address to the plugin with http:// in front.
-func TestLoadIntegrationOptionsChecksAddressAndKey(t *testing.T) {
+// The probe refuses a missing key itself, and passes the address on as given:
+// normalizing it is the v2 adapter's job, and the frozen v1 route sends what
+// its client submitted.
+func TestLoadIntegrationOptionsChecksKeyAndPassesAddressThrough(t *testing.T) {
 	install := 1
 	probe := func(baseURL, key string) (*fakeRouterProvider, error) {
 		router := &fakeRouterProvider{}
@@ -93,15 +94,15 @@ func TestLoadIntegrationOptionsChecksAddressAndKey(t *testing.T) {
 		return router, err
 	}
 
-	router, err := probe(" 10.0.0.5:8989/ ", "key")
+	router, err := probe("10.0.0.5:8989", "key")
 	if err != nil {
 		t.Fatalf("probe: %v", err)
 	}
-	if router.gotOptionsConn.BaseURL != "http://10.0.0.5:8989" {
-		t.Fatalf("probe base URL = %q, want http://10.0.0.5:8989", router.gotOptionsConn.BaseURL)
+	if router.gotOptionsConn.BaseURL != "10.0.0.5:8989" {
+		t.Fatalf("probe base URL = %q, want it as given", router.gotOptionsConn.BaseURL)
 	}
 
-	router, err = probe("10.0.0.5:8989", "")
+	router, err = probe("http://10.0.0.5:8989", "")
 	var ve *ValidationError
 	if !errors.As(err, &ve) || ve.FieldErrors["api_key_ref"] != integrationKeyMissing {
 		t.Fatalf("err = %v, want api_key_ref field error", err)
@@ -109,16 +110,14 @@ func TestLoadIntegrationOptionsChecksAddressAndKey(t *testing.T) {
 	if router.gotOptionsConn.BaseURL != "" {
 		t.Fatal("plugin was asked without a key")
 	}
-
-	for _, bad := range []string{"", "ftp://10.0.0.5", "http://", "http://user:pw@10.0.0.5:8989", "http://10.0.0.5:8989/?a=1", "http://10.0.0.5:8989/#x"} {
-		_, err = probe(bad, "key")
-		if !errors.As(err, &ve) || ve.FieldErrors["base_url"] != integrationAddressMessage {
-			t.Fatalf("base_url %q: err = %v, want base_url field error", bad, err)
-		}
-	}
 }
 
 func TestNormalizeIntegrationBaseURL(t *testing.T) {
+	for _, bad := range []string{"", "ftp://10.0.0.5", "http://", "http://user:pw@10.0.0.5:8989", "http://10.0.0.5:8989/?a=1", "http://10.0.0.5:8989/#x"} {
+		if got, err := normalizeIntegrationBaseURL(bad); err == nil {
+			t.Errorf("normalizeIntegrationBaseURL(%q) = %q, want an error", bad, got)
+		}
+	}
 	for in, want := range map[string]string{
 		"10.0.0.5:8989":              "http://10.0.0.5:8989",
 		"sonarr.lan":                 "http://sonarr.lan",
