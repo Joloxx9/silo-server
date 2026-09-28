@@ -514,3 +514,28 @@ func TestRoutesKeepHDAnd4KServersApart(t *testing.T) {
 		t.Fatalf("mark: err = %v, want an is_4k field error", err)
 	}
 }
+
+// Standard pauses the stored routes and the editor hides them, so a server's
+// 4K switch can change there even when a paused route sends it the other
+// version.
+func TestStandardRoutingLeavesThe4KSwitchFree(t *testing.T) {
+	store := &modeStore{fakeStore: routingStore(RoutingFacts{}), mode: RoutingStandard}
+	svc := modeService(store, &fakeTMDBClient{})
+	ctx := context.Background()
+
+	// The paused Anime rule sends HD versions to radarr-anime.
+	marked := store.integrations[2]
+	marked.PluginConfig = map[string]any{"service_kind": "radarr", "root_folder": "/movies", "is_4k": true}
+	if _, err := svc.UpdateIntegration(ctx, routeAdmin, marked); err != nil {
+		t.Fatalf("mark under Standard: %v", err)
+	}
+
+	store.mode = RoutingAdvanced
+	unmarked := store.integrations[1]
+	unmarked.PluginConfig = map[string]any{"service_kind": "radarr", "root_folder": "/movies", "is_4k": false}
+	_, err := svc.UpdateIntegration(ctx, routeAdmin, unmarked)
+	var verr *ValidationError
+	if !errors.As(err, &verr) || verr.FieldErrors["plugin_config.is_4k"] == "" {
+		t.Fatalf("unmark under Advanced: err = %v, want an is_4k field error", err)
+	}
+}

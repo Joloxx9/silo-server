@@ -373,19 +373,30 @@ func serverKindMismatch(in Integration, mediaType MediaType) string {
 
 // ensureRoutesKeepServerKind refuses to switch a server to a type, or to media
 // types, the routes sending to it cannot use: their requests would fail when
-// sent.
+// sent. Under Advanced it also refuses a 4K switch change that would leave a
+// route sending the wrong version to the server. Standard pauses the stored
+// routes, which the admin cannot edit there, and places servers by their 4K
+// switch itself, so the switch stays free under Standard.
 func (s *Service) ensureRoutesKeepServerKind(ctx context.Context, in Integration) error {
 	routes, err := s.store.ListRoutes(ctx)
 	if err != nil {
 		return err
+	}
+	checkTier := true
+	if modes, ok := s.store.(RoutingModeStore); ok {
+		settings, err := modes.GetRoutingSettings(ctx)
+		if err != nil {
+			return err
+		}
+		checkTier = settings.Mode != RoutingStandard
 	}
 	var wrongKind, unsupported, wrongTier []string
 	for _, r := range routes {
 		if r.HD.IntegrationID != in.ID && r.UHD.IntegrationID != in.ID {
 			continue
 		}
-		if (r.HD.IntegrationID == in.ID && tierMismatch(in, false) != "") ||
-			(r.UHD.IntegrationID == in.ID && tierMismatch(in, true) != "") {
+		if checkTier && ((r.HD.IntegrationID == in.ID && tierMismatch(in, false) != "") ||
+			(r.UHD.IntegrationID == in.ID && tierMismatch(in, true) != "")) {
 			wrongTier = append(wrongTier, r.Name)
 		}
 		if serverKindMismatch(in, r.MediaType) != "" {
