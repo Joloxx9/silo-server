@@ -1,9 +1,11 @@
+import { useCallback } from "react";
 import { useParams, useSearchParams } from "react-router";
 import PageBack from "@/components/PageBack";
 import RequestResultsGrid, {
   RequestResultsGridSkeleton,
-  RequestResultsPager,
+  RequestResultsLoadMore,
 } from "@/components/RequestResultsGrid";
+import ScrollToTopButton from "@/components/ScrollToTopButton";
 import {
   Select,
   SelectContent,
@@ -14,7 +16,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useRequestBrowse } from "@/hooks/queries/useRequests";
-import { tmdbPageCount } from "@/lib/mediaRequests";
+import { flattenResultPages, pendingPageSize } from "@/lib/mediaRequests";
 import type { DiscoverBrowseKind, DiscoverBrowseResponse, RequestMediaType } from "@/api/types";
 
 type BrowseSort = "popularity" | "vote_average" | "release_date";
@@ -34,45 +36,42 @@ export default function RequestBrowse({ kind }: RequestBrowseProps) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const sort = normalizeSort(searchParams.get("sort"));
-  const rawPage = Number(searchParams.get("page") ?? "1");
-  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
   const mediaTypeFromQuery = normalizeMediaType(searchParams.get("media_type"));
   const mediaType: RequestMediaType | undefined =
     kind === "studio" ? "movie" : kind === "network" ? "series" : (mediaTypeFromQuery ?? "movie");
 
-  const browse = useRequestBrowse({ kind, slug, mediaType, sort, page });
+  const browse = useRequestBrowse({ kind, slug, mediaType, sort });
+  const firstPage = browse.data?.pages[0];
 
-  const title = browse.data?.display_name ?? humanizeSlug(slug);
+  const title = firstPage?.display_name ?? humanizeSlug(slug);
   useDocumentTitle(title ? `${title} - Requests` : "Requests");
 
   function updateSort(next: string) {
     const params = new URLSearchParams(searchParams);
     params.set("sort", next);
-    params.set("page", "1");
+    params.delete("page");
     setSearchParams(params, { replace: true });
   }
 
   function updateMediaType(next: RequestMediaType) {
     const params = new URLSearchParams(searchParams);
     params.set("media_type", next);
-    params.set("page", "1");
+    params.delete("page");
     setSearchParams(params, { replace: true });
   }
 
-  function goToPage(next: number) {
-    const params = new URLSearchParams(searchParams);
-    params.set("page", String(next));
-    setSearchParams(params, { replace: false });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  // Browse pages read TMDB one page at a time (the server does no rating
-  // backfill here), so page + 1 is the next page, up to TMDB's cap.
-  const totalPages = tmdbPageCount(browse.data?.total_pages);
-  const results = browse.data?.results ?? [];
+  const results = flattenResultPages(browse.data?.pages);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = browse;
+  const loadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
   const kindLabel = kind === "studio" ? "Studio" : kind === "network" ? "Network" : "Genre";
 
-  if (browse.isError && (browse.error as { status?: number }).status === 404) {
+  if (
+    browse.isError &&
+    results.length === 0 &&
+    (browse.error as { status?: number }).status === 404
+  ) {
     return (
       <div className="relative space-y-6 px-4 pt-6 pb-12 sm:px-6 lg:px-10 xl:px-12">
         <PageBack to="/requests" up />
@@ -90,17 +89,13 @@ export default function RequestBrowse({ kind }: RequestBrowseProps) {
       <PageBack to="/requests" up />
       <header className="mt-10 flex flex-wrap items-end justify-between gap-4 sm:mt-12">
         <div className="flex min-w-0 items-center gap-4">
-          <BrowseHeaderTile browse={browse.data} kind={kind} fallback={title} />
+          <BrowseHeaderTile browse={firstPage} kind={kind} fallback={title} />
           <div className="min-w-0">
             <h1 className="text-foreground truncate text-2xl font-bold tracking-tight sm:text-3xl">
               {title}
             </h1>
-            <p className="text-muted-foreground mt-1 text-sm tabular-nums">
-              {browse.isLoading
-                ? "Loading..."
-                : results.length > 0
-                  ? `${kindLabel} · Page ${page} of ${totalPages}`
-                  : kindLabel}
+            <p className="text-muted-foreground mt-1 text-sm">
+              {browse.isLoading ? "Loading..." : kindLabel}
             </p>
           </div>
         </div>
@@ -133,23 +128,28 @@ export default function RequestBrowse({ kind }: RequestBrowseProps) {
 
       {browse.isLoading ? (
         <RequestResultsGridSkeleton />
-      ) : browse.isError ? (
+      ) : browse.isError && results.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           Could not load this browse page. Try a different sort or media type.
         </p>
       ) : results.length === 0 ? (
         <p className="text-muted-foreground text-sm">Nothing matched. Try a different sort.</p>
       ) : (
-        <RequestResultsGrid results={results} />
+        <RequestResultsGrid
+          results={results}
+          pendingCount={isFetchingNextPage ? pendingPageSize(browse.data?.pages) : 0}
+        />
       )}
 
-      <RequestResultsPager
-        position={`Page ${page} of ${totalPages}`}
-        hasPrevious={page > 1}
-        hasNext={page < totalPages}
-        onPrevious={() => goToPage(page - 1)}
-        onNext={() => goToPage(page + 1)}
-      />
+      {results.length > 0 ? (
+        <RequestResultsLoadMore
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          isError={browse.isFetchNextPageError}
+          onLoadMore={loadMore}
+        />
+      ) : null}
+      <ScrollToTopButton />
     </div>
   );
 }
