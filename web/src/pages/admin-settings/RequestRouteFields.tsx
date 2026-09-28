@@ -23,7 +23,9 @@ import {
 } from "./requestRoutingModel";
 import {
   serverConfigSchema,
+  serverFitsTier,
   serverInstallation,
+  serverIs4K,
   type RequestRouterInstallation,
 } from "./requestServerModel";
 
@@ -475,7 +477,10 @@ export function RouteDestinationEditor({
    * keeps its own open state.
    */
   sectionId: string;
-  /** The servers this copy may go to (the media type's kind). */
+  /**
+   * The media type's servers. Only those that fit the tier are offered: the
+   * ones marked 4K for the 4K version, the others for HD.
+   */
   servers: readonly RequestIntegration[];
   /** Every server, to name one that no longer fits the media type. */
   allServers: readonly RequestIntegration[];
@@ -484,7 +489,7 @@ export function RouteDestinationEditor({
   onChange: (next: DestinationChoice) => void;
   /** Offers passing the copy on, labelled so; without it a server is required. */
   passLabel?: string;
-  /** Offers "Don't make a 4K copy". */
+  /** Offers "Don't send a 4K version". */
   allowSkip?: boolean;
   caption?: ReactNode;
   /** A line under the chosen server, e.g. what a preset set. */
@@ -496,19 +501,35 @@ export function RouteDestinationEditor({
   const server = dest.integration_id
     ? allServers.find((candidate) => candidate.id === dest.integration_id)
     : undefined;
-  const serverChoices: Choice[] = servers.map((candidate) => ({
-    value: candidate.id,
-    label: candidate.enabled ? candidate.name : `${candidate.name} (turned off)`,
-  }));
+  const serverChoices: Choice[] = servers
+    .filter((candidate) => serverFitsTier(candidate, tier))
+    .map((candidate) => ({
+      value: candidate.id,
+      label: candidate.enabled ? candidate.name : `${candidate.name} (turned off)`,
+    }));
   if (
     dest.integration_id &&
     !serverChoices.some((choice) => choice.value === dest.integration_id)
   ) {
-    serverChoices.push({ value: dest.integration_id, label: server?.name ?? "Missing server" });
+    // A saved choice that no longer fits stays visible, saying why, until
+    // the admin picks another.
+    const why = !server
+      ? ""
+      : !servers.some((candidate) => candidate.id === server.id)
+        ? " (wrong type)"
+        : serverIs4K(server)
+          ? " (marked 4K)"
+          : " (not marked 4K)";
+    serverChoices.push({
+      value: dest.integration_id,
+      label: server ? `${server.name}${why}` : "Missing server",
+    });
   }
+  const no4KServers =
+    tier === "uhd" && !servers.some((candidate) => serverFitsTier(candidate, "uhd"));
   const selected = skip ? DEST_SKIP : dest.integration_id || (passLabel ? DEST_PASS : "");
   const error = errors[tier] ?? errors[`${tier}.integration_id`];
-  const label = tier === "hd" ? "HD copies" : "4K copies";
+  const label = tier === "hd" ? "HD version" : "4K version";
 
   function select(next: string) {
     if (next === DEST_SKIP) onChange({ dest: { integration_id: "", overrides: {} }, skip: true });
@@ -554,12 +575,18 @@ export function RouteDestinationEditor({
               </SelectItem>
             ))}
             {allowSkip ? (
-              <SelectItem value={DEST_SKIP}>Don&apos;t make a 4K copy</SelectItem>
+              <SelectItem value={DEST_SKIP}>Don&apos;t send a 4K version</SelectItem>
             ) : null}
             {passLabel ? <SelectItem value={DEST_PASS}>{passLabel}</SelectItem> : null}
           </SelectContent>
         </Select>
       </StackedField>
+      {no4KServers ? (
+        <p className="text-muted-foreground text-xs">
+          No server is marked 4K. Turn on &ldquo;4K server&rdquo; on a server to send 4K versions to
+          it.
+        </p>
+      ) : null}
       {server ? (
         <DestinationOverrides
           key={server.id}

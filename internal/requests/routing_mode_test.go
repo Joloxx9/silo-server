@@ -81,7 +81,7 @@ func TestStandardLayout(t *testing.T) {
 	// Seerr for movies with a Radarr marked 4K: with no rule Seerr would be
 	// handed every tier, so Standard cannot use both.
 	if layout, blocker := standardLayout([]Integration{seerr, radarr4K}); layout != nil ||
-		!strings.Contains(blocker, "Movies go to seerr and their 4K copies to radarr-4k, which are different request services") ||
+		!strings.Contains(blocker, "Movies go to seerr and their 4K versions to radarr-4k, which are different request services") ||
 		!strings.Contains(blocker, "Switch to Advanced routing") {
 		t.Fatalf("Seerr + 4K Radarr: layout = %+v blocker = %q", layout, blocker)
 	}
@@ -239,7 +239,7 @@ func TestPreviewUnderStandard(t *testing.T) {
 	if hd.IntegrationID != "radarr-hd" || hd.RouteName != standardRouteName || len(hd.Overrides) != 0 {
 		t.Fatalf("HD tier = %+v, want Standard's Radarr", hd)
 	}
-	if uhd.Reason != "No server is marked 4K, so there is no 4K copy." {
+	if uhd.Reason != "No server is marked 4K, so there is no 4K version." {
 		t.Fatalf("4K tier = %+v", uhd)
 	}
 	if len(preview.Rules) != 1 || preview.Rules[0].Route.ID != standardRouteID(MediaTypeMovie) {
@@ -529,14 +529,16 @@ func TestAdvancedSeedUsesOnlyServersThatStillFitDatabase(t *testing.T) {
 			repo, pool := routingModeRepository(t)
 			save(t, repo, arrServer("radarr-a", kindRadarr, nil), true)
 			save(t, repo, arrServer("radarr-4k", kindRadarr, map[string]any{"is_4k": true}), true)
-			wantHD := "radarr-a"
 			if !withFallback {
 				// Standard from the migration: no Everything else yet.
 				if _, err := pool.Exec(ctx, `DELETE FROM request_routes`); err != nil {
 					t.Fatal(err)
 				}
-				wantHD = ""
 			}
+			// radarr-a is marked 4K now, so Everything else no longer sends
+			// it HD versions, whether it did before or not: no HD server is
+			// left.
+			wantHD := ""
 			marked, err := repo.GetIntegration(ctx, "radarr-a")
 			if err != nil {
 				t.Fatal(err)
@@ -601,7 +603,7 @@ func TestAdvancedSeedUsesOnlyServersThatStillFitDatabase(t *testing.T) {
 			t.Fatalf("Everything else for movies = %v, want Radarr", got)
 		}
 		_, err = svc.UpdateRoutingModeConditional(ctx, routeAdmin, RoutingStandard, -1)
-		if msg := fieldErrors(t, err)["mode"]; !strings.Contains(msg, "Movies go to Radarr HD and their 4K copies to Seerr") {
+		if msg := fieldErrors(t, err)["mode"]; !strings.Contains(msg, "Movies go to Radarr HD and their 4K versions to Seerr") {
 			t.Fatalf("switch to Standard with Radarr and a 4K Seerr: %q", msg)
 		}
 	})
@@ -695,5 +697,129 @@ func TestStandardRoutesLegacySeriesByItsAnimeFlagWhenTMDBIsDown(t *testing.T) {
 		if store.requests["r1"].RoutingFacts.Captured() {
 			t.Errorf("anime=%v: facts stored as captured without TMDB", anime)
 		}
+	}
+}
+
+// A 4K switch changed under Standard can leave a paused route sending the
+// other version to the server. Turning Advanced on, by hand or because the
+// change broke Standard, clears those destinations: that version falls through
+// to Everything else, which gets Standard's server.
+func TestAdvancedClearsDestinationsThatChangedTierDatabase(t *testing.T) {
+	ctx := t.Context()
+	destinations := func(t *testing.T, pool *pgxpool.Pool, id string) [2]string {
+		t.Helper()
+		var hd, uhd string
+		if err := pool.QueryRow(ctx, `SELECT coalesce(hd_integration_id, ''), coalesce(uhd_integration_id, '') FROM request_routes WHERE id = $1`, id).Scan(&hd, &uhd); err != nil {
+			t.Fatal(err)
+		}
+		return [2]string{hd, uhd}
+	}
+	setup := func(t *testing.T, servers ...Integration) (*Service, *Repository, *pgxpool.Pool) {
+		t.Helper()
+		repo, pool := routingModeRepository(t)
+		for _, in := range servers {
+			in.APIKeyRef = ""
+			if _, err := repo.SaveIntegrationWithDefaults(ctx, in, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return NewService(repo, &fakeTMDBClient{}, &fakePresence{}), repo, pool
+	}
+	flip := func(t *testing.T, svc *Service, repo *Repository, id string, fourK bool) {
+		t.Helper()
+		in, err := repo.GetIntegration(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in.PluginConfig["is_4k"] = fourK
+		if _, err := svc.UpdateIntegration(ctx, routeAdmin, *in); err != nil {
+			t.Fatalf("flip %s under Standard: %v", id, err)
+		}
+	}
+
+	t.Run("switched by hand", func(t *testing.T) {
+		svc, repo, pool := setup(t, arrServer("radarr", kindRadarr, nil))
+		if _, err := pool.Exec(ctx, `INSERT INTO request_routes (id, media_type, position, name, is_fallback, hd_integration_id, hd_overrides)
+			VALUES ('fallback-movie', 'movie', 1000, 'Everything else', true, 'radarr', '{"root_folder":"/hd"}')
+			ON CONFLICT (id) DO UPDATE SET hd_integration_id = 'radarr', hd_overrides = '{"root_folder":"/hd"}'`); err != nil {
+			t.Fatal(err)
+		}
+		flip(t, svc, repo, "radarr", true)
+		if _, err := svc.UpdateRoutingModeConditional(ctx, routeAdmin, RoutingAdvanced, -1); err != nil {
+			t.Fatal(err)
+		}
+		if got := destinations(t, pool, "fallback-movie"); got != [2]string{"", "radarr"} {
+			t.Fatalf("Everything else = %v, want no HD server and 4K to radarr", got)
+		}
+		var overrides string
+		if err := pool.QueryRow(ctx, `SELECT hd_overrides::text FROM request_routes WHERE id = 'fallback-movie'`).Scan(&overrides); err != nil || overrides != "{}" {
+			t.Fatalf("HD overrides = %q %v, want cleared with the server", overrides, err)
+		}
+	})
+
+	t.Run("Advanced turned on by the change", func(t *testing.T) {
+		svc, repo, pool := setup(t, arrServer("radarr", kindRadarr, nil), arrServer("radarr-4k", kindRadarr, map[string]any{"is_4k": true}))
+		if _, err := pool.Exec(ctx, `INSERT INTO request_routes (id, media_type, position, name, enabled, conditions, hd_integration_id, uhd_integration_id)
+			VALUES ('anime', 'movie', 0, 'Anime', true, '{"anime":true}', 'radarr', 'radarr-4k')`); err != nil {
+			t.Fatal(err)
+		}
+		// Two normal Radarrs break Standard, which turns Advanced on.
+		flip(t, svc, repo, "radarr-4k", false)
+		if got, _ := repo.GetRoutingSettings(ctx); got.Mode != RoutingAdvanced {
+			t.Fatalf("mode = %q, want Advanced", got.Mode)
+		}
+		if got := destinations(t, pool, "anime"); got != [2]string{"radarr", ""} {
+			t.Fatalf("Anime = %v, want HD kept and 4K cleared", got)
+		}
+		if got := destinations(t, pool, FallbackRouteID(MediaTypeMovie)); got != [2]string{"radarr", ""} {
+			t.Fatalf("Everything else = %v, want HD to radarr and no 4K server", got)
+		}
+	})
+}
+
+// The service checks a 4K switch change against the routes before the save,
+// reading the mode then; the save checks again under the routing-mode lock, so
+// Advanced turned on in between cannot leave a route sending a server the other
+// version. A route saved before the rule does not block other edits.
+func TestSaveRechecksTierUnderAdvancedDatabase(t *testing.T) {
+	ctx := t.Context()
+	repo, pool := routingModeRepository(t)
+	for _, in := range []Integration{arrServer("radarr", kindRadarr, nil), arrServer("radarr-4k", kindRadarr, map[string]any{"is_4k": true})} {
+		in.APIKeyRef = ""
+		if _, err := repo.SaveIntegrationWithDefaults(ctx, in, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := repo.UpdateRoutingModeConditional(ctx, RoutingAdvanced, -1); err != nil {
+		t.Fatal(err)
+	}
+	// An older rule sending HD versions to the 4K server.
+	if _, err := pool.Exec(ctx, `INSERT INTO request_routes (id, media_type, position, name, enabled, conditions, hd_integration_id)
+		VALUES ('anime', 'movie', 0, 'Anime', true, '{"anime":true}', 'radarr-4k')`); err != nil {
+		t.Fatal(err)
+	}
+	get := func(id string) Integration {
+		t.Helper()
+		in, err := repo.GetIntegration(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return *in
+	}
+
+	flipped := get("radarr")
+	flipped.PluginConfig["is_4k"] = true
+	_, err := repo.UpdateIntegrationConditional(ctx, flipped, flipped.Revision)
+	if msg := fieldErrors(t, err)["plugin_config.is_4k"]; !strings.Contains(msg, "Everything else") {
+		t.Fatalf("conditional save marking radarr 4K: %q, want the is_4k error naming Everything else", msg)
+	}
+	if _, err := repo.SaveIntegrationWithDefaults(ctx, flipped, false); !strings.Contains(fieldErrors(t, err)["plugin_config.is_4k"], "can't be marked 4K") {
+		t.Fatalf("save marking radarr 4K: %v, want an is_4k field error", err)
+	}
+
+	renamed := get("radarr-4k")
+	renamed.Name = "Radarr UHD"
+	if _, err := repo.UpdateIntegrationConditional(ctx, renamed, renamed.Revision); err != nil {
+		t.Fatalf("rename the 4K server an older rule sends HD to: %v", err)
 	}
 }

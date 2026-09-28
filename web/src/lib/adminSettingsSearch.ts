@@ -382,7 +382,7 @@ export const ADMIN_SETTINGS_GROUPS: AdminSettingsSearchGroup[] = [
           "Approval",
           "Request limit",
           "Limit window",
-          "Also request a 4K copy of every title",
+          "Also request a 4K version of every title",
           "Servers",
           "Add server",
           "API key",

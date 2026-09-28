@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { Fragment, useId, useState, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 
 import type { DiscoverBrandCard } from "@/api/types";
@@ -34,9 +34,12 @@ import {
   isListRow,
   ROUTING_RATINGS,
   rowField,
+  rowsToConditions,
+  ruleSentence,
   type ConditionKind,
   type ConditionRow,
   type ListConditionRow,
+  type RoutingNames,
 } from "./requestRoutingModel";
 
 export interface ConditionLookups {
@@ -393,6 +396,19 @@ function ConditionLine({
   );
 }
 
+/** Names for the summary: accounts, and the media type's networks or studios. */
+function conditionNames(lookups: ConditionLookups, mediaType: RequestRouteMediaType): RoutingNames {
+  const brands = new Map(
+    lookups.brands.flatMap((brand) =>
+      brand.tmdb_id ? [[brand.tmdb_id, brand.display_name] as const] : [],
+    ),
+  );
+  return {
+    users: new Map(lookups.users.map((user) => [user.id, user.username])),
+    ...(mediaType === "series" ? { networks: brands } : { studios: brands }),
+  };
+}
+
 const MENU_KINDS: readonly ConditionKind[] = [
   "anime",
   "genre",
@@ -423,6 +439,13 @@ export function RuleConditionsEditor({
   const headingId = useId();
   const brandKind: ConditionKind = mediaType === "series" ? "network" : "studio";
   const menu: ConditionKind[] = [...MENU_KINDS, brandKind, "requester"];
+  // The rule in words, as the list shows it: "When a movie is Action or
+  // Documentary and came out in 1970–1979".
+  const conditions = rowsToConditions(rows);
+  const summary =
+    Object.keys(conditions).length > 0
+      ? `${ruleSentence(conditions, mediaType, conditionNames(lookups, mediaType))}.`
+      : "";
   const add = (kind: ConditionKind) => {
     const row = newRow(kind, rows);
     if (row) onChange([...rows, row]);
@@ -442,29 +465,48 @@ export function RuleConditionsEditor({
           Which requests
         </h3>
         <p className="text-muted-foreground text-xs leading-relaxed">
-          A request must match every line. A line with several values matches any of them.
+          A request has to match every condition. Where a condition lists several values, one of
+          them is enough.
         </p>
       </div>
       <FieldError>{errors.conditions}</FieldError>
       {rows.length > 0 ? (
-        <ul className="flex list-none flex-col gap-2">
+        <ul className="flex list-none flex-col gap-1">
           {rows.map((row, index) => (
-            <ConditionLine
-              key={`${row.kind}-${isListRow(row) ? row.mode : ""}`}
-              row={row}
-              mediaType={mediaType}
-              lookups={lookups}
-              takenModes={rows
-                .filter((other, i) => i !== index && other.kind === row.kind && isListRow(other))
-                .map((other) => (other as ListConditionRow).mode)}
-              error={errorFor(row)}
-              onChange={(next) =>
-                onChange(rows.map((current, i) => (i === index ? next : current)))
-              }
-              onRemove={() => onChange(rows.filter((_, i) => i !== index))}
-            />
+            <Fragment key={`${row.kind}-${isListRow(row) ? row.mode : ""}`}>
+              {index > 0 ? (
+                <li
+                  aria-hidden="true"
+                  className="text-muted-foreground px-3 text-[11px] font-semibold tracking-wide uppercase"
+                >
+                  and
+                </li>
+              ) : null}
+              <ConditionLine
+                row={row}
+                mediaType={mediaType}
+                lookups={lookups}
+                takenModes={rows
+                  .filter((other, i) => i !== index && other.kind === row.kind && isListRow(other))
+                  .map((other) => (other as ListConditionRow).mode)}
+                error={errorFor(row)}
+                onChange={(next) =>
+                  onChange(rows.map((current, i) => (i === index ? next : current)))
+                }
+                onRemove={() => onChange(rows.filter((_, i) => i !== index))}
+              />
+            </Fragment>
           ))}
         </ul>
+      ) : null}
+      {summary ? (
+        <p
+          aria-live="polite"
+          className="border-border/70 text-muted-foreground rounded-lg border border-dashed px-3 py-2 text-xs"
+        >
+          <span className="text-foreground font-medium">Takes: </span>
+          {summary}
+        </p>
       ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

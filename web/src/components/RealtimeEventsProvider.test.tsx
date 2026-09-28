@@ -852,8 +852,8 @@ describe("RealtimeEventsProvider", () => {
       requestKeys.mine({ status: "all", outcome: "all", limit: 100, offset: 0 }),
       requestKeys.detail("movie", 1),
       requestKeys.discovery(),
-      requestKeys.discoverySection("trending_movies", 2),
-      requestKeys.discoverBrowse("genre", "drama", "movie", "popularity", 1),
+      requestKeys.discoverySection("trending_movies"),
+      requestKeys.discoverBrowse("genre", "drama", "movie", "popularity"),
       requestKeys.search("all", "dune", 1, "profile-1"),
     ];
     const untouched = [requestKeys.status(), requestKeys.discoverStudios()];

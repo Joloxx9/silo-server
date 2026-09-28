@@ -2,6 +2,7 @@ package requests
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -141,7 +142,7 @@ func standardLayout(integrations []Integration) ([]StandardDestination, string) 
 		}
 		if len(hd) == 1 && len(uhd) == 1 && splitServices(hd[0], uhd[0]) {
 			split = true
-			problems = append(problems, fmt.Sprintf("%s go to %s and their 4K copies to %s, which are different request services", noun, hd[0].Name, uhd[0].Name))
+			problems = append(problems, fmt.Sprintf("%s go to %s and their 4K versions to %s, which are different request services", noun, hd[0].Name, uhd[0].Name))
 			continue
 		}
 		dest := StandardDestination{MediaType: mediaType}
@@ -363,7 +364,31 @@ func setRoutingMode(ctx context.Context, tx pgx.Tx, mode RoutingMode) (RoutingSe
 // ensureSelfRoutedOwnerKept).
 // Each tier is carried on its own, so a server that no longer fits one tier
 // does not drop the other tier's server.
+//
+// A Radarr or Sonarr whose 4K switch changed under Standard can still be a
+// paused route's destination for the other version (see
+// ensureRoutesKeepServerKind). Those destinations are cleared first, so that
+// version falls through to Everything else, which then gets Standard's server.
 func seedAdvancedFromStandard(ctx context.Context, tx pgx.Tx, layout []StandardDestination, integrations []Integration) error {
+	marked, unmarked := []string{}, []string{}
+	for _, in := range integrations {
+		switch {
+		case selfRouted(in):
+		case is4KServer(in):
+			marked = append(marked, in.ID)
+		default:
+			unmarked = append(unmarked, in.ID)
+		}
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE request_routes SET
+			hd_integration_id = CASE WHEN hd_integration_id = ANY($1) THEN NULL ELSE hd_integration_id END,
+			hd_overrides = CASE WHEN hd_integration_id = ANY($1) THEN '{}'::jsonb ELSE hd_overrides END,
+			uhd_integration_id = CASE WHEN uhd_integration_id = ANY($2) THEN NULL ELSE uhd_integration_id END,
+			uhd_overrides = CASE WHEN uhd_integration_id = ANY($2) THEN '{}'::jsonb ELSE uhd_overrides END
+		WHERE hd_integration_id = ANY($1) OR uhd_integration_id = ANY($2)`, marked, unmarked); err != nil {
+		return fmt.Errorf("clear routes to servers that changed tier: %w", err)
+	}
 	usable := func(id string, mediaType MediaType, fourK bool) *string {
 		for _, in := range integrations {
 			if in.ID != id {
@@ -415,6 +440,41 @@ func (r *Repository) standardBeforeSave(ctx context.Context, tx pgx.Tx) (layout 
 	}
 	layout, _ = standardLayout(integrations)
 	return layout, true, nil
+}
+
+// ensureTierKeptUnderAdvanced refuses, under the routing-mode lock taken by
+// standardBeforeSave, a server update whose 4K switch leaves an active route
+// sending it the other version. The service checks the same before the save;
+// this catches Advanced turned on in between.
+func ensureTierKeptUnderAdvanced(ctx context.Context, tx pgx.Tx, in Integration) error {
+	var raw []byte
+	// FOR UPDATE before reading the routes: a route save holds its servers
+	// FOR SHARE (ensureDestinationTiers), so one in flight commits first and
+	// its route is read below.
+	err := tx.QueryRow(ctx, `SELECT plugin_config FROM request_integrations WHERE id = $1 FOR UPDATE`, in.ID).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read request integration %s: %w", in.ID, err)
+	}
+	stored := Integration{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &stored.PluginConfig); err != nil {
+			return fmt.Errorf("decode request integration %s config: %w", in.ID, err)
+		}
+	}
+	if is4KServer(stored) == is4KServer(in) {
+		return nil
+	}
+	routes, err := listRoutes(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if msg := tierConflict(in, routes); msg != "" {
+		return &ValidationError{FieldErrors: map[string]string{"plugin_config." + configIs4K: msg}}
+	}
+	return nil
 }
 
 // advanceIfStandardBroken turns Advanced on when a saved server leaves a media

@@ -149,7 +149,7 @@ describe("Requests settings: general", () => {
     mount();
     expect(
       await screen.findByText(
-        "Normally only requesters who can play 4K get a 4K copy, and only when a server takes 4K. With this on, every request also asks for 4K.",
+        "Normally a 4K version is requested only for people whose playback limit allows 4K, and only when a server takes 4K. With this on, every request also asks for 4K.",
       ),
     ).toBeInTheDocument();
   });

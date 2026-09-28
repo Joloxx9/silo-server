@@ -318,10 +318,10 @@ func (s *Service) PreviewRoute(ctx context.Context, viewer Viewer, mediaType Med
 			tier.Reason = "No rule sends " + qualityLabel(q) + " for this title."
 		case decision.Skip && isStandardRouting(routes, mediaType):
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
-			tier.Reason = "No server is marked 4K, so there is no 4K copy."
+			tier.Reason = "No server is marked 4K, so there is no 4K version."
 		case decision.Skip:
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
-			tier.Reason = decision.RouteName + " makes no 4K copy."
+			tier.Reason = decision.RouteName + " sends no 4K version."
 		default:
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
 			tier.IntegrationID, tier.Overrides = decision.IntegrationID, decision.Overrides
@@ -373,11 +373,23 @@ func serverKindMismatch(in Integration, mediaType MediaType) string {
 
 // ensureRoutesKeepServerKind refuses to switch a server to a type, or to media
 // types, the routes sending to it cannot use: their requests would fail when
-// sent.
+// sent. Under Advanced it also refuses a 4K switch change that would leave a
+// route sending the wrong version to the server. Standard pauses the stored
+// routes, which the admin cannot edit there, and places servers by their 4K
+// switch itself, so the switch stays free under Standard; turning Advanced on
+// clears the destinations that no longer fit (seedAdvancedFromStandard).
 func (s *Service) ensureRoutesKeepServerKind(ctx context.Context, in Integration) error {
 	routes, err := s.store.ListRoutes(ctx)
 	if err != nil {
 		return err
+	}
+	checkTier := true
+	if modes, ok := s.store.(RoutingModeStore); ok {
+		settings, err := modes.GetRoutingSettings(ctx)
+		if err != nil {
+			return err
+		}
+		checkTier = settings.Mode != RoutingStandard
 	}
 	var wrongKind, unsupported []string
 	for _, r := range routes {
@@ -400,10 +412,46 @@ func (s *Service) ensureRoutesKeepServerKind(ctx context.Context, in Integration
 		fields["supported_media_types"] = "Routing sends a media type this server would no longer take to it (" +
 			strings.Join(unsupported, ", ") + "); change those routes first."
 	}
+	if checkTier {
+		current, err := s.store.GetIntegration(ctx, in.ID)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		if current == nil || is4KServer(*current) != is4KServer(in) {
+			if msg := tierConflict(in, routes); msg != "" {
+				fields["plugin_config."+configIs4K] = msg
+			}
+		}
+	}
 	if len(fields) == 0 {
 		return nil
 	}
 	return &ValidationError{FieldErrors: fields}
+}
+
+// tierConflict explains why routes keep a server's 4K switch where it is: they
+// send it the version the server would no longer take. It is empty when none
+// do. It is checked only when the switch changes, so a route saved before the
+// rule existed does not block unrelated edits to its server. The repository
+// checks again under the routing-mode lock, since a switch to Advanced can
+// commit between this check and the save.
+func tierConflict(in Integration, routes []Route) string {
+	var names []string
+	for _, r := range routes {
+		if (r.HD.IntegrationID == in.ID && tierMismatch(in, false) != "") ||
+			(r.UHD.IntegrationID == in.ID && tierMismatch(in, true) != "") {
+			names = append(names, r.Name)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	if is4KServer(in) {
+		return "Routing sends HD versions to this server (" + strings.Join(names, ", ") +
+			`), so it can't be marked 4K; change those routes first.`
+	}
+	return "Routing sends 4K versions to this server (" + strings.Join(names, ", ") +
+		`), so "4K server" has to stay on; change those routes first.`
 }
 
 // validateRoute normalizes a route and checks it against the configured
@@ -451,16 +499,34 @@ func (s *Service) validateRoute(ctx context.Context, route *Route) error {
 			fields["conditions"] = "Add at least one condition. Requests no rule matches go to Everything else."
 		}
 		if route.HD.IntegrationID == "" && route.UHD.IntegrationID == "" && !route.SkipUHD {
-			fields["hd"] = "Choose where HD or 4K copies go, or don't make a 4K copy."
+			fields["hd"] = "Choose where the HD and 4K versions go, or don't send a 4K version."
 		}
 		if route.SkipUHD && route.UHD.IntegrationID != "" {
-			fields["uhd"] = "A rule can't both send 4K copies somewhere and skip them."
+			fields["uhd"] = "A rule can't both send 4K versions somewhere and skip them."
 		}
 	}
 	if len(fields) > 0 {
 		return &ValidationError{FieldErrors: fields}
 	}
 	return nil
+}
+
+// tierMismatch explains why a Radarr or Sonarr can't take the HD or 4K
+// version: 4K versions go only to servers marked 4K, and HD versions only to
+// the others. It is empty when the server fits. A server of another plugin
+// (Seerr) has no 4K switch of ours and handles both versions itself, so it
+// fits either.
+func tierMismatch(in Integration, uhd bool) string {
+	if selfRouted(in) {
+		return ""
+	}
+	switch marked := is4KServer(in); {
+	case uhd && !marked:
+		return in.Name + ` isn't marked 4K. Turn on "4K server" in its settings to send 4K versions to it.`
+	case !uhd && marked:
+		return in.Name + " is marked 4K; it can only take the 4K version."
+	}
+	return ""
 }
 
 func validateDestination(field string, dest *RouteDestination, mediaType MediaType, integrations []Integration, fields map[string]string) {
@@ -487,6 +553,11 @@ func validateDestination(field string, dest *RouteDestination, mediaType MediaTy
 	}
 	if mediaType != "" && fields[field+".integration_id"] == "" && !integrationSupportsMediaType(*in, mediaType) {
 		fields[field+".integration_id"] = fmt.Sprintf("%s does not take %s.", in.Name, mediaTypePlural(mediaType))
+	}
+	if fields[field+".integration_id"] == "" {
+		if msg := tierMismatch(*in, field == "uhd"); msg != "" {
+			fields[field+".integration_id"] = msg
+		}
 	}
 	for _, key := range routingOwnedConfigKeys {
 		if _, ok := dest.Overrides[key]; ok {
@@ -652,6 +723,11 @@ func (r *Repository) SaveRouteConditional(ctx context.Context, route Route, expe
 	// Only a create (expected 0) or the fallback's first save may find no
 	// row; a rule deleted under an editor must not come back.
 	allowMissing := expected == 0 || route.IsFallback
+	// Servers before the route row, the order a server save that turns
+	// Advanced on takes them in.
+	if err := ensureDestinationTiers(ctx, tx, route); err != nil {
+		return nil, err
+	}
 	if err := lockRevision(ctx, tx, `SELECT revision FROM request_routes WHERE id = $1 FOR UPDATE`, []any{route.ID}, expected, allowMissing); err != nil {
 		return nil, err
 	}
@@ -677,6 +753,58 @@ func (r *Repository) SaveRouteConditional(ctx context.Context, route Route, expe
 		return nil, fmt.Errorf("save request route: %w", err)
 	}
 	return &saved, tx.Commit(ctx)
+}
+
+// ensureDestinationTiers checks the route's servers against the tier rule
+// again inside the save, holding their rows FOR SHARE: a 4K switch change
+// committed since validateRoute is seen here, and one still in flight waits
+// for this save and then finds the route (ensureTierKeptUnderAdvanced).
+func ensureDestinationTiers(ctx context.Context, tx pgx.Tx, route Route) error {
+	ids := make([]string, 0, 2)
+	for _, id := range []string{route.HD.IntegrationID, route.UHD.IntegrationID} {
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT id, name, plugin_config FROM request_integrations WHERE id = ANY($1) ORDER BY id FOR SHARE`, ids)
+	if err != nil {
+		return fmt.Errorf("lock route servers: %w", err)
+	}
+	defer rows.Close()
+	fields := map[string]string{}
+	for rows.Next() {
+		var in Integration
+		var raw []byte
+		if err := rows.Scan(&in.ID, &in.Name, &raw); err != nil {
+			return fmt.Errorf("scan route server: %w", err)
+		}
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &in.PluginConfig); err != nil {
+				return fmt.Errorf("decode route server %s config: %w", in.ID, err)
+			}
+		}
+		for field, uhd := range map[string]bool{"hd": false, "uhd": true} {
+			dest := route.HD
+			if uhd {
+				dest = route.UHD
+			}
+			if dest.IntegrationID == in.ID {
+				if msg := tierMismatch(in, uhd); msg != "" {
+					fields[field+".integration_id"] = msg
+				}
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(fields) > 0 {
+		return &ValidationError{FieldErrors: fields}
+	}
+	return nil
 }
 
 func nonNilOverrides(overrides map[string]any) map[string]any {

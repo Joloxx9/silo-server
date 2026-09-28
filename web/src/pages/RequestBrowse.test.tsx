@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import type { DiscoverBrowseResponse } from "@/api/types";
 
 const mocks = vi.hoisted(() => ({
   useRequestBrowse: vi.fn(),
+  fetchNextPage: vi.fn(),
   mutate: vi.fn(),
 }));
 
@@ -54,59 +55,100 @@ function renderAt(url: string) {
   );
 }
 
+function loaded(pages: DiscoverBrowseResponse[], overrides: Record<string, unknown> = {}) {
+  return {
+    data: { pages, pageParams: pages.map((page) => page.page) },
+    isLoading: false,
+    isError: false,
+    isFetchNextPageError: false,
+    hasNextPage: true,
+    isFetchingNextPage: false,
+    fetchNextPage: mocks.fetchNextPage,
+    ...overrides,
+  };
+}
+
 describe("RequestBrowse", () => {
   beforeEach(() => {
     mocks.mutate.mockReset();
+    mocks.fetchNextPage.mockReset();
     mocks.useRequestBrowse.mockReset();
-    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
-    mocks.useRequestBrowse.mockImplementation(({ page }: { page: number }) => ({
-      data: browse(page),
-      isLoading: false,
-      isError: false,
-    }));
+    mocks.useRequestBrowse.mockReturnValue(loaded([browse(1)]));
   });
 
   it("lays out a genre like the other full grids: back link, title, then posters", () => {
-    renderAt("/requests/browse/genre/drama?media_type=series&page=2");
+    renderAt("/requests/browse/genre/drama?media_type=series");
 
     expect(mocks.useRequestBrowse).toHaveBeenLastCalledWith({
       kind: "genre",
       slug: "drama",
       mediaType: "series",
       sort: "popularity",
-      page: 2,
     });
     expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Drama" })).toBeInTheDocument();
-    expect(screen.getByText("Genre · Page 2 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Genre")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Series" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getAllByRole("link", { name: "Heat" })[0]).toHaveAttribute(
       "href",
       "/title/movie/42",
     );
+    expect(screen.queryByRole("navigation", { name: "Result pages" })).not.toBeInTheDocument();
   });
 
-  it("pages through the results", () => {
+  it("shows every loaded page and loads the next from the foot of the grid", () => {
+    const second = browse(2);
+    second.results = [
+      {
+        media_type: "movie",
+        tmdb_id: 43,
+        title: "Ronin",
+        availability: "missing",
+        request: { requestable: true },
+      },
+    ];
+    mocks.useRequestBrowse.mockReturnValue(loaded([browse(1), second]));
     renderAt("/requests/browse/genre/drama?media_type=movie");
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getAllByRole("link", { name: "Heat" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Ronin" }).length).toBeGreaterThan(0);
 
-    expect(screen.getByTestId("location")).toHaveTextContent(
-      "/requests/browse/genre/drama?media_type=movie&page=2",
-    );
+    // jsdom has no IntersectionObserver, so the foot offers a button.
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(mocks.fetchNextPage).toHaveBeenCalledTimes(1);
   });
 
-  it("stops at TMDB's 500-page cap whatever total it reports", () => {
-    mocks.useRequestBrowse.mockImplementation(({ page }: { page: number }) => ({
-      data: { ...browse(page), total_pages: 1001 },
-      isLoading: false,
-      isError: false,
-    }));
-    renderAt("/requests/browse/genre/drama?media_type=movie&page=500");
+  it("stops offering more at the end of the list", () => {
+    mocks.useRequestBrowse.mockReturnValue(loaded([browse(1)], { hasNextPage: false }));
+    renderAt("/requests/browse/genre/drama?media_type=movie");
 
-    expect(screen.getByText("Genre · Page 500 of 500")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
+
+  it("keeps loading past a page a rating limit emptied", () => {
+    const empty = { ...browse(1), results: [] };
+    mocks.useRequestBrowse.mockReturnValue(loaded([empty]));
+    renderAt("/requests/browse/genre/drama?media_type=movie");
+
+    expect(screen.queryByText(/Nothing matched/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(mocks.fetchNextPage).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    mocks.useRequestBrowse.mockReturnValue(loaded([empty], { hasNextPage: false }));
+    renderAt("/requests/browse/genre/drama?media_type=movie");
+    expect(screen.getByText("Nothing matched. Try a different sort.")).toBeInTheDocument();
+  });
+
+  it("drops a legacy page parameter when the media type changes", () => {
+    renderAt("/requests/browse/genre/drama?media_type=movie&page=3");
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Series" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/requests/browse/genre/drama?media_type=series",
+    );
+    expect(screen.getByTestId("location")).not.toHaveTextContent("page=");
   });
 
   it("requests a title from its card", () => {

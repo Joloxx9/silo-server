@@ -57,7 +57,7 @@ export interface RoutingScope {
   installations: RequestRouterInstallation[];
   lookups: ConditionLookups;
   names: RoutingNames;
-  /** "Also request a 4K copy of every title", as saved. */
+  /** "Also request a 4K version of every title", as saved. */
   forceDual: boolean;
   /** The admin's language, as the Foreign-language preset uses it. */
   language: string;
@@ -205,7 +205,7 @@ export function RequestRuleEditor({
       <DialogHeader>
         <DialogTitle>{isNew ? "Custom rule" : `Edit ${source.name}`}</DialogTitle>
         <DialogDescription>
-          Choose which requests this rule takes and where their copies go.
+          Choose which requests this rule takes and where they go.
         </DialogDescription>
       </DialogHeader>
 

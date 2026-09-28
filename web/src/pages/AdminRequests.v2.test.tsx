@@ -487,14 +487,14 @@ describe("request administration", () => {
 
     expect(await within(dialog).findByText("Radarr (Everything else)")).toBeInTheDocument();
     expect(
-      within(dialog).getByText("no copy (Everything else doesn't make 4K copies)"),
+      within(dialog).getByText("none (Everything else doesn't send 4K versions)"),
     ).toBeInTheDocument();
     // How it was decided starts collapsed in the dialog.
     const how = within(dialog).getByRole("button", { name: "How it was decided" });
     expect(how).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(how);
     expect(
-      within(dialog).getByText("Everything else — decides HD · decides 4K: no copy"),
+      within(dialog).getByText("Everything else — decides HD · decides 4K: none"),
     ).toBeTruthy();
     expect(calls("POST /api/v2/admin/request-routes/preview")[0]?.body).toEqual({
       media_type: "movie",
@@ -541,7 +541,7 @@ describe("request administration", () => {
             quality: "2160p",
             route_id: "standard-movie",
             route_name: "Standard",
-            note: "No server is marked 4K, so there is no 4K copy.",
+            note: "No server is marked 4K, so there is no 4K version.",
           },
         ],
       }),
@@ -552,7 +552,7 @@ describe("request administration", () => {
     );
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("Radarr (Standard)")).toBeInTheDocument();
-    expect(within(dialog).getByText("no copy (no server is marked 4K)")).toBeInTheDocument();
+    expect(within(dialog).getByText("none (no server is marked 4K)")).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "How it was decided" })).toBeNull();
   });
 

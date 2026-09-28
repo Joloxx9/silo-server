@@ -105,6 +105,9 @@ func routingStore(facts RoutingFacts) *fakeStore {
 	for _, id := range []string{"radarr-hd", "radarr-4k", "radarr-anime"} {
 		in := routerInst(id)
 		in.PluginConfig = map[string]any{"service_kind": "radarr", "root_folder": "/movies", "is_default": false, "anime_enabled": true}
+		if id == "radarr-4k" {
+			in.PluginConfig["is_4k"] = true
+		}
 		store.integrations = append(store.integrations, in)
 	}
 	store.routes = testRoutes()
