@@ -237,8 +237,9 @@ func TestRequestListsReadSeasonCountsOnce(t *testing.T) {
 	}
 }
 
-// Router plugins take a whole series, so with a download server for series a
-// series already in the library is not requestable for its missing seasons.
+// A router plugin without supports_seasons takes a whole series, so with a
+// download server for series on one, a series already in the library is not
+// requestable for its missing seasons.
 func TestMissingSeasonsNeedALibraryOnlySetup(t *testing.T) {
 	store := newFakeStore()
 	store.integrations = []Integration{routerInst("sonarr")}
@@ -387,8 +388,9 @@ func TestPresentRequestsReadSeasonCountsOnce(t *testing.T) {
 }
 
 // A season request made for a series in the library while no download server
-// took series is not sent to one set up later: the router would add the whole
-// series. A season request for a series outside the library still goes.
+// took series is not sent to one set up later on a plugin without
+// supports_seasons: it would add the whole series. A season request for a
+// series outside the library still goes.
 func TestSeasonRequestForALibrarySeriesSkipsALaterRouter(t *testing.T) {
 	store := newFakeStore()
 	store.integrations = []Integration{routerInst("sonarr")}

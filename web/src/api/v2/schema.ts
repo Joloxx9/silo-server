@@ -19375,7 +19375,7 @@ export interface components {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
       follow_supported: boolean;
-      /** @description Whether a series already in the library can be requested for the seasons it is missing. False while a download server takes series: router plugins cannot receive seasons yet, so such a series stays already_available. */
+      /** @description Whether a series already in the library can be requested for the seasons it is missing. False while a download server that takes series uses a request plugin that cannot fetch individual seasons, so such a series stays already_available. */
       missing_seasons_requestable: boolean;
       rating_restrictions_enforced: boolean;
       requests_enabled: boolean;

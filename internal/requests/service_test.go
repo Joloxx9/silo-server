@@ -2739,6 +2739,13 @@ type fakeRouterProvider struct {
 
 	gotRequesterEmail    string
 	gotRequesterUsername string
+	// gotSeasons records the seasons of each Fulfill call's request.
+	gotSeasons [][]int
+
+	// seasonCapable marks the installations whose router declares
+	// supports_seasons; RouterFeatures answers from it.
+	seasonCapable map[int]bool
+	featuresErr   error
 
 	// CheckStatus behavior.
 	statuses  []RouterTargetStatus
@@ -2762,11 +2769,22 @@ type fakeRouterProvider struct {
 	gotValidateSiblings   []ResolvedRouterConnection
 }
 
+func (f *fakeRouterProvider) RouterFeatures(_ context.Context, installationID int, _ string) (RouterFeatures, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return RouterFeatures{SupportsSeasons: f.seasonCapable[installationID]}, f.featuresErr
+}
+
 func (f *fakeRouterProvider) Fulfill(_ context.Context, installationID int, _ string, req Request, qualities []Quality, conns []ResolvedRouterConnection) ([]RouterTarget, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.gotRequesterEmail = req.RequesterEmail
 	f.gotRequesterUsername = req.RequesterUsername
+	var seasons []int
+	for _, season := range routerDescriptor(req).GetSeasons() {
+		seasons = append(seasons, int(season))
+	}
+	f.gotSeasons = append(f.gotSeasons, seasons)
 	f.fulfillCalls++
 	f.fulfillLog = append(f.fulfillLog, fulfillCall{installationID: installationID, qualities: slices.Clone(qualities), conns: slices.Clone(conns)})
 	f.gotQualities = append(f.gotQualities, qualities...)

@@ -384,6 +384,11 @@ type fulfillContext struct {
 	standard []StandardDestination
 	// standardOn is set when Standard routing is in effect.
 	standardOn bool
+
+	// mu guards seasonSupport, which caches whether each router capability
+	// takes seasons (see routerSupportsSeasons).
+	mu            sync.Mutex
+	seasonSupport map[routerCapabilityKey]bool
 }
 
 // routesFor returns the media type's routing rules; none means the router
@@ -509,13 +514,14 @@ func unusableRouterMessage(fc *fulfillContext, mediaType MediaType) string {
 }
 
 // moreSeasonsRequestable reports whether a series already in the library can
-// be requested for the seasons it is missing. Router plugins take a whole
-// series today (the request descriptor carries no seasons), so sending such a
-// request would add the series again: refused by a download server that has
-// it, every season downloaded by one that does not. Until they can take
-// seasons, only the library fulfills one, so it is offered only when no
-// download server takes series. A download server set up after such a request
-// was made does not receive it either (see submitApprovedRequest).
+// be requested for the seasons it is missing. The library fulfills such a
+// request when no download server takes series. A download server fetches
+// only the missing seasons when its router plugin declares supports_seasons;
+// any other plugin would add the whole series again, refused by a download
+// server that has it and every season downloaded by one that does not. So it
+// is offered when every download server that takes series is bound to a
+// plugin that takes seasons. A request made before a server that cannot was
+// set up waits for the library (see submitApprovedRequest).
 func (s *Service) moreSeasonsRequestable(ctx context.Context) (bool, error) {
 	if s.router == nil {
 		return true, nil
@@ -524,7 +530,7 @@ func (s *Service) moreSeasonsRequestable(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return !routerConfiguredFor(fc, MediaTypeSeries), nil
+	return s.allTakeSeasons(ctx, fc, seriesRouterConnections(fc))
 }
 
 // routerConfiguredFor reports whether any enabled router connection is meant to
@@ -2039,16 +2045,25 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 		// the reconcile pass completes it when the title reaches the library.
 		return &req, nil
 	}
+	missingSeasons := false
 	if req.MediaType == MediaTypeSeries && len(req.Seasons) > 0 {
-		// A router would add the whole series (see moreSeasonsRequestable),
-		// so a season request for a series already in the library waits for
-		// the library, even when the router was set up after it was made.
+		// A season request for a series already in the library goes only to
+		// a server whose plugin takes seasons; any other would add the whole
+		// series (see moreSeasonsRequestable). Otherwise it waits for the
+		// library, even when the server was set up after it was made.
 		matches, err := s.lookupPresence(ctx, req.MediaType, []PresenceCandidate{requestPresenceCandidate(req)})
 		if err != nil {
 			return nil, err
 		}
 		if matches[req.TMDBID].Available {
-			return &req, nil
+			deliverable, err := s.missingSeasonsDeliverable(ctx, fc, req)
+			if err != nil {
+				return nil, err
+			}
+			if !deliverable {
+				return &req, nil
+			}
+			missingSeasons = true
 		}
 	}
 	claimed, ok, err := s.store.ClaimSubmission(ctx, req.ID, submitLease)
@@ -2060,7 +2075,7 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 		// not elapsed; a later reconcile pass submits it.
 		return &req, nil
 	}
-	submitted, submitErr := s.submitClaimed(ctx, *claimed, actor, fc)
+	submitted, submitErr := s.submitClaimed(ctx, *claimed, actor, fc, missingSeasons)
 	if submitErr == nil {
 		return submitted, nil
 	}
@@ -2088,10 +2103,11 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 }
 
 // submitClaimed does the submission work for a request whose claim the caller
-// holds.
-func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, fc *fulfillContext) (*Request, error) {
+// holds. missingSeasons marks a request for seasons of a series already in the
+// library, which only a router that takes seasons may receive.
+func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, fc *fulfillContext, missingSeasons bool) (*Request, error) {
 	if routes := fc.routesFor(req.MediaType); len(routes) > 0 {
-		return s.submitRouted(ctx, req, actor, fc, routes)
+		return s.submitRouted(ctx, req, actor, fc, routes, missingSeasons)
 	}
 	conns, installationID, capabilityID, err := s.resolveRouterConnections(ctx, fc, req.MediaType)
 	if err != nil {
@@ -2103,6 +2119,17 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 		// returned as a submission error: the request keeps its approval and
 		// retries with backoff, and goes through once the connection is fixed.
 		return nil, errors.New(unusableRouterMessage(fc, req.MediaType))
+	}
+	if missingSeasons {
+		// missingSeasonsDeliverable checked every series connection; this
+		// guards the plugin actually chosen.
+		ok, err := s.routerSupportsSeasons(ctx, fc, installationID, capabilityID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, errMissingSeasonsUnsupported("The request backend")
+		}
 	}
 	allowed, resolved := s.allowedQualities(ctx, req, fc.settings)
 	if !fc.settings.ForceDualQuality {
@@ -2129,7 +2156,7 @@ func (s *Service) submitClaimed(ctx context.Context, req Request, actor Viewer, 
 // submitRouted sends each wanted tier to the server the routing rules chose
 // for it, one plugin call per tier with only that server, so the plugin
 // cannot pick another.
-func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, fc *fulfillContext, routes []Route) (*Request, error) {
+func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, fc *fulfillContext, routes []Route, missingSeasons bool) (*Request, error) {
 	if err := s.ensureRoutingFacts(ctx, &req, routes); err != nil {
 		return nil, err
 	}
@@ -2173,6 +2200,21 @@ func (s *Service) submitRouted(ctx context.Context, req Request, actor Viewer, f
 			}
 			failures[q] = err.Error()
 			continue
+		}
+		if missingSeasons {
+			// Routing facts read after the claim can choose a server
+			// missingSeasonsDeliverable did not check.
+			ok, err := s.routerSupportsSeasons(ctx, fc, installationID, capabilityID)
+			if err == nil && !ok {
+				err = errMissingSeasonsUnsupported(fmt.Sprintf("%q (route %q)", integrationName(fc, conn.ID), decision.RouteName))
+			}
+			if err != nil {
+				if len(targets) == 0 {
+					return nil, err
+				}
+				failures[q] = err.Error()
+				continue
+			}
 		}
 		maps.Copy(connKind, connectionKindByID([]ResolvedRouterConnection{conn}))
 		got, msg, err := s.router.Fulfill(ctx, installationID, capabilityID, req, []Quality{q}, []ResolvedRouterConnection{conn})

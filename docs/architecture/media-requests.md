@@ -225,14 +225,35 @@ they mean the whole series and keep the old rule that any episode in the
 library fulfills them. A series with no aired season yet, and not in the
 library, is requested whole unless the requester names seasons.
 
-A series in the library can be requested for the seasons it lacks (aired
-and incomplete, or not aired yet) only when no download server takes series. The router plugin contract carries no
-seasons yet (that needs an SDK and plugin change), so a router would add the
-whole series again: refused by a server that has it, every season downloaded by
-one that does not. With a download server for series, a series in the library
-stays `already_available`, as before season requests; without one, the library
-fulfills the request. Only the series detail applies this: search, discover and
+The request sent to a router plugin names the same seasons
+(`RequestDescriptor.seasons`, empty for the whole series). A plugin whose
+manifest declares `request_router.supports_seasons` acquires only those
+seasons: it adds them to a series its download server already tracks and
+leaves the other seasons alone, and a repeated request converges. Any other
+plugin, including every one built before the flag existed, ignores the seasons
+and takes the whole series. The host reads the flag from the capability
+metadata stored at install, so checking it never launches the plugin.
+
+A series in the library can be requested for the seasons it lacks (aired and
+incomplete, or not aired yet) when no download server takes series, in which
+case the library fulfills the request, or when every enabled download server
+that takes series is bound to a plugin that declares `supports_seasons`. A
+server on any other plugin would add the whole series again: refused by a
+server that has it, every season downloaded by one that does not. So with such
+a server, a series in the library stays `already_available`, as before season
+requests. `missing_seasons_requestable` on the feature status reports the same
+answer. Only the series detail applies this: search, discover and
 recommendation cards report any series in the library as available.
+
+Submission applies the rule per request. A season request for a series outside
+the library goes to its server as usual. One for a series in the library goes
+only where the servers chosen for it take seasons: without routing rules every
+series server, with rules the servers the rules choose for the title, or every
+server a series rule sends to while its routing facts are not captured yet.
+Otherwise it waits for the library, as when it was made before a server that
+cannot take seasons was set up. If routing facts read after the submission
+claim choose a server that cannot, that tier is not sent and the attempt fails
+with a message naming the server.
 
 A season is complete when every aired episode of it has a file in an enabled
 library, judged by the library's own provider metadata, so no external service
