@@ -293,6 +293,40 @@ describe("request administration", () => {
     );
   });
 
+  it("shows a spinner on the running action until the server answers", async () => {
+    const failed = request("r4", "Broken Title", {
+      status: "approved",
+      outcome: "failed",
+      state: "failed",
+    });
+    let finish: (() => void) | undefined;
+    serve({
+      ...queue({ failed: [failed] }),
+      "POST /api/v2/admin/requests/{id}/retry": ({ path }) =>
+        new Promise((resolve) => {
+          finish = () => resolve(request(path!.id!, "Broken Title", { status: "queued" }));
+        }),
+    });
+    mount("/admin/requests?view=failed");
+    const row = await rowOf("Broken Title");
+    const retry = within(row).getByRole("button", { name: "Retry: Broken Title" });
+    const cancel = within(row).getByRole("button", { name: "Cancel request: Broken Title" });
+    expect(retry).not.toHaveAttribute("aria-busy");
+
+    fireEvent.click(retry);
+    await waitFor(() => expect(retry).toHaveAttribute("aria-busy", "true"));
+    expect(retry.querySelector(".animate-spin")).not.toBeNull();
+    // The row's other actions wait too, without a spinner of their own.
+    expect(retry).toBeDisabled();
+    expect(cancel).toBeDisabled();
+    expect(cancel).not.toHaveAttribute("aria-busy");
+
+    await act(async () => finish!());
+    await waitFor(() => expect(retry).not.toHaveAttribute("aria-busy"));
+    expect(retry.querySelector(".animate-spin")).toBeNull();
+    expect(retry).toBeEnabled();
+  });
+
   it("approves in bulk four at a time and reports the ones that failed", async () => {
     const rows = Array.from({ length: 6 }, (_, i) => request(`p${i + 1}`, `Title ${i + 1}`));
     const pending = new Map<string, { resolve: () => void; reject: (err: unknown) => void }>();

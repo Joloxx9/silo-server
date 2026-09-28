@@ -119,7 +119,7 @@ export function RequestQueue() {
     : null;
   if (opened !== null && openRequest === null) setOpened(null);
   const [prompt, setPrompt] = useState<ReasonPrompt | null>(null);
-  const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
+  const [busy, setBusy] = useState<ReadonlyMap<string, RequestQueueAction>>(() => new Map());
   const approve = useApproveMediaRequest();
   const decline = useDeclineMediaRequest();
   const retry = useRetryMediaRequest();
@@ -133,8 +133,12 @@ export function RequestQueue() {
   }
 
   /** Runs one request's action, keeping its buttons busy until the server answers. */
-  function track(request: MediaRequest, send: () => Promise<MediaRequest>) {
-    setBusy((current) => new Set(current).add(request.id));
+  function track(
+    request: MediaRequest,
+    action: RequestQueueAction,
+    send: () => Promise<MediaRequest>,
+  ) {
+    setBusy((current) => new Map(current).set(request.id, action));
     send()
       .then((updated) => {
         // The dialog follows the request, which may have left this view.
@@ -145,7 +149,7 @@ export function RequestQueue() {
       .catch(() => setOpened((open) => (open?.id === request.id ? { id: open.id } : open)))
       .finally(() =>
         setBusy((current) => {
-          const next = new Set(current);
+          const next = new Map(current);
           next.delete(request.id);
           return next;
         }),
@@ -154,13 +158,13 @@ export function RequestQueue() {
 
   const handlers: RequestQueueActionHandlers = {
     locked: bulk.isRunning,
-    isBusy: (id) => busy.has(id),
+    busyAction: (id) => busy.get(id),
     run: (action: RequestQueueAction, request: MediaRequest) => {
       switch (action) {
         case "approve":
-          return track(request, () => approve.mutateAsync(request.id));
+          return track(request, action, () => approve.mutateAsync(request.id));
         case "retry":
-          return track(request, () => retry.mutateAsync(request.id));
+          return track(request, action, () => retry.mutateAsync(request.id));
         case "decline":
         case "cancel":
           return setPrompt({ action, request });
@@ -179,7 +183,7 @@ export function RequestQueue() {
       );
     } else {
       const { request } = prompt;
-      track(request, () =>
+      track(request, prompt.action, () =>
         (prompt.action === "decline" ? decline : cancel).mutateAsync({
           id: request.id,
           reason: note,
