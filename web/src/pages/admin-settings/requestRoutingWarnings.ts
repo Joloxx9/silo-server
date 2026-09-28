@@ -40,7 +40,7 @@ export interface RoutingWarningInput {
   serverFields: (server: RequestIntegration) => readonly PluginAdminFormField[];
   /** The admin's language, as the Foreign-language preset uses it. */
   language: string;
-  /** "Also request a 4K copy of every title" is on (as saved). */
+  /** "Also request a 4K version of every title" is on (as saved). */
   forceDual: boolean;
 }
 
@@ -245,7 +245,7 @@ export function routingWarnings(input: RoutingWarningInput): Map<string, Routing
     if (input.forceDual && !fallback.uhd.integration_id) {
       warnings.push({
         key: "force-dual",
-        text: "“Also request a 4K copy of every title” is on, but Everything else doesn't make 4K copies. Titles no rule sends to a 4K server get HD only.",
+        text: "“Also request a 4K version of every title” is on, but Everything else doesn't send 4K versions. Titles no rule sends to a 4K server get HD only.",
         fix: { kind: "edit-fallback" },
       });
     }

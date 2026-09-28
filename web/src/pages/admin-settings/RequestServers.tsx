@@ -848,7 +848,7 @@ export function RequestServerEditor({
           <SettingFieldRow
             label="4K server"
             htmlFor={`${nameId}-4k`}
-            description="With Standard routing, 4K copies go here and everything else goes to the other server of this type."
+            description="With Standard routing, 4K versions go here and everything else goes to the other server of this type."
             status={<FieldError>{fieldErrors[FOUR_K_KEY]}</FieldError>}
           >
             <Switch

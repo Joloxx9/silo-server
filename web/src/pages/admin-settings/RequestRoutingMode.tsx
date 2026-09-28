@@ -109,7 +109,7 @@ export function StandardRoutingSummary({
               ) : uhd ? (
                 <span className="text-muted-foreground">
                   {" "}
-                  — only a 4K server, so HD copies go nowhere. Add a {type.kind} server that
+                  — only a 4K server, so HD versions go nowhere. Add a {type.kind} server that
                   isn&apos;t marked 4K.
                 </span>
               ) : (
@@ -120,7 +120,7 @@ export function StandardRoutingSummary({
               )}
               {hd || uhd ? (
                 <span className="text-muted-foreground block text-xs">
-                  {uhd ? `4K copies → ${uhd}` : "No 4K copies"}
+                  {uhd ? `4K versions → ${uhd}` : "No 4K versions"}
                 </span>
               ) : null}
             </li>
@@ -135,8 +135,8 @@ export function StandardRoutingSummary({
       ) : null}
       {missing4K ? (
         <p className="text-muted-foreground text-xs">
-          To send 4K copies to their own server, add it and turn on &ldquo;4K server&rdquo;. Adding
-          a second server of the same type turns on Advanced.
+          To send 4K versions to their own server, add it and turn on &ldquo;4K server&rdquo;.
+          Adding a second server of the same type turns on Advanced.
         </p>
       ) : null}
       {pausedRules > 0 ? (

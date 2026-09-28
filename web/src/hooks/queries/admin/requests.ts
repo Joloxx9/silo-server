@@ -418,7 +418,7 @@ async function savedServerMessage(
         (d) => d.hd_integration_id === saved.id || d.uhd_integration_id === saved.id,
       );
       if (destination?.uhd_integration_id === saved.id) {
-        return `${saved.name} added. 4K copies of ${destination.media_type === "series" ? "series" : "movies"} now go to it.`;
+        return `${saved.name} added. 4K versions of ${destination.media_type === "series" ? "series" : "movies"} now go to it.`;
       }
       if (destination) {
         return `${saved.name} added. Every ${destination.media_type} request now goes to it.`;

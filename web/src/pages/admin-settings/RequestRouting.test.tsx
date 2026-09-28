@@ -129,7 +129,7 @@ describe("Where requests go: the list", () => {
     const [first, second] = within(rules).getAllByRole("listitem");
     expect(first).toHaveTextContent("When a movie is Horror");
     expect(await within(first!).findByText(/Radarr Anime · \/anime · Anime 1080p/)).toBeTruthy();
-    expect(first).toHaveTextContent("4K → no copy");
+    expect(first).toHaveTextContent("4K → none");
     expect(second).toHaveTextContent("Off");
     expect(second).toHaveTextContent(
       "When a movie came out in 1989 or earlier and is requested by kid",
@@ -146,7 +146,7 @@ describe("Where requests go: the list", () => {
       "When a series is anime",
     );
     expect(within(series).getByRole("group", { name: "Everything else" })).toHaveTextContent(
-      "4K → no copy",
+      "4K → none",
     );
   });
 
@@ -385,6 +385,99 @@ describe("Where requests go: Everything else", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Everything else saved"));
   });
 
+  it("offers only HD servers for a never-saved Everything else", async () => {
+    const radarr4K = server("radarr-4k", "Radarr 4K", "radarr", {
+      plugin_config: { service_kind: "radarr", quality_profile_id: 1, is_4k: true },
+    });
+    serve({ servers: [radarr, radarr4K, sonarr] });
+    mount();
+    const movies = await section();
+    await user().click(
+      await within(movies).findByRole("combobox", { name: "Everything else server" }),
+    );
+    expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual([
+      "Radarr",
+    ]);
+  });
+
+  it("offers only HD servers for the HD version and only 4K servers for the 4K version", async () => {
+    const radarr4K = server("radarr-4k", "Radarr 4K", "radarr", {
+      plugin_config: { service_kind: "radarr", quality_profile_id: 1, is_4k: true },
+    });
+    // A 4K version saved before the rule stays visible, saying why it no longer fits.
+    const stored = { ...fallback("movie", "radarr-1"), uhd: { integration_id: radarrAnime.id } };
+    serve({
+      servers: [radarr, radarrAnime, radarr4K, sonarr],
+      routes: [stored, fallback("series", "sonarr-1")],
+      handlers: {
+        "GET /api/v2/admin/request-routes/{id}": (options) =>
+          reply(
+            options,
+            options.path?.id === "fallback-movie" ? stored : fallback("series", "sonarr-1"),
+            '"v1"',
+          ),
+      },
+    });
+    mount();
+    const movies = await section();
+    fireEvent.click(
+      within(await within(movies).findByRole("group", { name: "Everything else" })).getByRole(
+        "button",
+      ),
+    );
+    const dialog = await screen.findByRole("dialog");
+    const optionNames = async (label: string) => {
+      await user().click(await within(dialog).findByRole("combobox", { name: label }));
+      const names = (await screen.findAllByRole("option")).map((option) => option.textContent);
+      await user().keyboard("{Escape}");
+      return names;
+    };
+
+    expect(await optionNames("HD version Send to")).toEqual([radarr.name, radarrAnime.name]);
+    expect(await optionNames("4K version Send to")).toEqual([
+      "Radarr 4K",
+      `${radarrAnime.name} (not marked 4K)`,
+      "Don't send a 4K version",
+    ]);
+  });
+
+  it("offers a server of another plugin for both versions", async () => {
+    // Seerr has no 4K switch of ours and handles both versions itself.
+    const seerr = {
+      ...server("seerr-1", "Seerr", "radarr"),
+      capability_id: "seerr",
+      plugin_config: {},
+      supported_media_types: ["movie"],
+    } as unknown as ReturnType<typeof server>;
+    const stored = fallback("movie", "radarr-1");
+    serve({
+      servers: [radarr, seerr, sonarr],
+      routes: [stored, fallback("series", "sonarr-1")],
+      handlers: {
+        "GET /api/v2/admin/request-routes/{id}": (options) =>
+          reply(
+            options,
+            options.path?.id === "fallback-movie" ? stored : fallback("series", "sonarr-1"),
+            '"v1"',
+          ),
+      },
+    });
+    mount();
+    const movies = await section();
+    fireEvent.click(
+      within(await within(movies).findByRole("group", { name: "Everything else" })).getByRole(
+        "button",
+      ),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await user().click(await within(dialog).findByRole("combobox", { name: "4K version Send to" }));
+    expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual([
+      "Seerr",
+      "Don't send a 4K version",
+    ]);
+    expect(within(dialog).queryByText(/No server is marked 4K/)).toBeNull();
+  });
+
   it("stops making 4K copies from its editor, and reloads after a 412", async () => {
     let reads = 0;
     const stored = { ...fallback("movie", "radarr-1"), uhd: { integration_id: "radarr-2" } };
@@ -416,7 +509,7 @@ describe("Where requests go: Everything else", () => {
     expect(
       within(dialog).getByText(/^Where movies go when no rule matches them\./),
     ).toBeInTheDocument();
-    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
+    await choose(dialog, "4K version Send to", "Don't send a 4K version");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await within(dialog).findByRole("button", { name: "Reload latest version" });
     expect(calls("PUT /api/v2/admin/request-routes/{id}")[0]).toMatchObject({
@@ -428,7 +521,7 @@ describe("Where requests go: Everything else", () => {
     await waitFor(() =>
       expect(within(dialog).queryByRole("button", { name: "Reload latest version" })).toBeNull(),
     );
-    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
+    await choose(dialog, "4K version Send to", "Don't send a 4K version");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls("PUT /api/v2/admin/request-routes/{id}")).toHaveLength(2));
     expect(calls("PUT /api/v2/admin/request-routes/{id}")[1]).toMatchObject({
@@ -468,7 +561,7 @@ describe("Where requests go: Everything else", () => {
     const dialog = await screen.findByRole("dialog");
     const more = await within(dialog).findByRole("button", { name: /^More settings/ });
     expect(more).toHaveAttribute("aria-expanded", "false");
-    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
+    await choose(dialog, "4K version Send to", "Don't send a 4K version");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     fireEvent.click(await within(dialog).findByRole("button", { name: "Reload latest version" }));
 
@@ -507,7 +600,7 @@ describe("Where requests go: adding rules", () => {
     ).toBeTruthy();
     expect(within(dialog).getByText(/Matches: series that are anime/)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Add rule" })).toBeDisabled();
-    await choose(dialog, "HD copies Send to", "Sonarr Anime");
+    await choose(dialog, "HD version Send to", "Sonarr Anime");
     expect(
       within(dialog).getByText("Series type: Anime (set by the Anime preset)"),
     ).toBeInTheDocument();
@@ -538,7 +631,7 @@ describe("Where requests go: adding rules", () => {
     });
     mount();
     const dialog = await pick("Movies", "Anime");
-    await choose(dialog, "HD copies Send to", "Radarr Anime");
+    await choose(dialog, "HD version Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toEqual({
@@ -565,8 +658,8 @@ describe("Where requests go: adding rules", () => {
     expect(
       within(dialog).getByRole("heading", { name: "Where should foreign-language movies go?" }),
     ).toBeTruthy();
-    await choose(dialog, "HD copies Send to", "Radarr Anime");
-    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
+    await choose(dialog, "HD version Send to", "Radarr Anime");
+    await choose(dialog, "4K version Send to", "Don't send a 4K version");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toEqual({
@@ -593,7 +686,7 @@ describe("Where requests go: adding rules", () => {
     const dialog = await pick(tab, "Kids & family");
     await choose(
       dialog,
-      "HD copies Send to",
+      "HD version Send to",
       mediaType === "movie" ? "Radarr Anime" : "Sonarr Anime",
     );
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
@@ -634,7 +727,7 @@ describe("Where requests go: adding rules", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Change" }));
     await choose(dialog, "Anime", "isn't anime");
-    await choose(dialog, "HD copies Send to", "Radarr Anime");
+    await choose(dialog, "HD version Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toMatchObject({
@@ -660,7 +753,7 @@ describe("Where requests go: adding rules", () => {
       "placeholder",
       "Not Horror or Thriller",
     );
-    await choose(dialog, "HD copies Send to", "Radarr Anime");
+    await choose(dialog, "HD version Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toEqual({
@@ -699,14 +792,32 @@ describe("Where requests go: the rule editor", () => {
         .getAllByRole("listitem", { name: /condition$/ })
         .map((item) => item.getAttribute("aria-label")),
     ).toEqual(["Anime condition", "Original language condition", "Release year condition"]);
-    expect(within(dialog).getByRole("combobox", { name: "4K copies Send to" })).toHaveTextContent(
-      "Same as Everything else (no copy)",
+    // Every condition has to match; values within one are alternatives.
+    expect(
+      within(dialog)
+        .getAllByText("and", { exact: true })
+        .filter((marker) => marker.tagName === "LI"),
+    ).toHaveLength(2);
+    expect(
+      within(dialog).getByText(
+        (_, element) =>
+          element?.tagName === "P" &&
+          element.textContent ===
+            "Takes: When a movie is anime, is originally in Japanese and came out in 1980–1989.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("combobox", { name: "4K version Send to" })).toHaveTextContent(
+      "Same as Everything else (no 4K version)",
     );
-    expect(within(dialog).getByText("Only people who can play 4K get a 4K copy.")).toBeTruthy();
+    expect(
+      within(dialog).getByText(
+        "Sent along with the HD version when the requester's playback limit allows 4K.",
+      ),
+    ).toBeTruthy();
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Remove the release year condition" }),
     );
-    await choose(dialog, "4K copies Send to", "Don't make a 4K copy");
+    await choose(dialog, "4K version Send to", "Don't send a 4K version");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save rule" }));
 
     await waitFor(() => expect(calls("PUT /api/v2/admin/request-routes/{id}")).toHaveLength(1));
@@ -917,12 +1028,14 @@ describe("Where requests go: warnings", () => {
     const everythingElse = within(movies).getByRole("group", { name: "Everything else" });
     expect(
       await within(everythingElse).findByText(
-        "“Also request a 4K copy of every title” is on, but Everything else doesn't make 4K copies. Titles no rule sends to a 4K server get HD only.",
+        "“Also request a 4K version of every title” is on, but Everything else doesn't send 4K versions. Titles no rule sends to a 4K server get HD only.",
       ),
     ).toBeInTheDocument();
     fireEvent.click(within(everythingElse).getByRole("button", { name: "Choose a 4K server" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Every request also asks for 4K (General).")).toBeTruthy();
+    expect(
+      within(dialog).getByText("Sent along with the HD version for every request (General)."),
+    ).toBeTruthy();
   });
 });
 
@@ -1034,7 +1147,7 @@ describe("Where requests go: try a title", () => {
     const series = await section("Series");
     expect(
       within(series).getByText(
-        "See which rule a request would match and where each copy would go, with the rules as saved.",
+        "See which rule a request would match and where each version would go, with the rules as saved.",
       ),
     ).toBeInTheDocument();
     await choose(series, "Requested by", "kid");
@@ -1061,7 +1174,9 @@ describe("Where requests go: try a title", () => {
     expect(
       await within(result).findByText(/Sonarr Anime · \/anime · Anime 1080p \(rule 2, For kid\)/),
     ).toBeInTheDocument();
-    expect(result).toHaveTextContent("4K copy → no copy (Everything else doesn't make 4K copies)");
+    expect(result).toHaveTextContent(
+      "4K version → none (Everything else doesn't send 4K versions)",
+    );
     const steps = within(result)
       .getAllByRole("listitem")
       .map((item) => item.textContent)
@@ -1070,7 +1185,7 @@ describe("Where requests go: try a title", () => {
       "1. Kids & family — doesn't match: genre is Animation (wants Family or Kids); no rating (wants PG or lower)",
       "2. For kid — matches · decides HD",
       "Off: Old anime",
-      "Everything else — decides 4K: no copy",
+      "Everything else — decides 4K: none",
     ]);
   });
 });
@@ -1143,7 +1258,7 @@ describe("Where requests go: names, second lines and refused conditions", () => 
       "true",
     );
     await user().keyboard("{Escape}");
-    await choose(dialog, "HD copies Send to", "Radarr Anime");
+    await choose(dialog, "HD version Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-routes")).toHaveLength(1));
     expect(calls("POST /api/v2/admin/request-routes")[0]!.body).toMatchObject({
@@ -1174,7 +1289,7 @@ describe("Where requests go: names, second lines and refused conditions", () => 
       within(await screen.findByRole("dialog")).getByRole("button", { name: /^Kids & family/ }),
     );
     const dialog = await screen.findByRole("dialog");
-    await choose(dialog, "HD copies Send to", "Radarr Anime");
+    await choose(dialog, "HD version Send to", "Radarr Anime");
     fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
     expect(
       await within(dialog).findByText("Choose a rating such as G, PG, PG-13 or TV-Y7."),

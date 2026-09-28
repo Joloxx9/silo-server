@@ -58,7 +58,7 @@ export function RequestRoutingGroup({
   installations: RequestRouterInstallation[];
   /** The saved request switch; undefined until the settings have loaded. */
   requestsEnabled: boolean | undefined;
-  /** "Also request a 4K copy of every title", as saved. */
+  /** "Also request a 4K version of every title", as saved. */
   forceDual: boolean;
 }) {
   const [tab, setTab] = useState<RequestRouteMediaType>("movie");

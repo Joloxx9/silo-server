@@ -113,6 +113,11 @@ server of a kind, so a single-server setup needs no routing. Deleting the last s
 it when no rule routes the media type; otherwise the delete is refused.
 Rules must narrow (at least one condition) and must do something (a destination,
 or skip 4K), and cannot override the config keys routing sets itself.
+A Radarr or Sonarr takes one version only: 4K versions go only to a server
+marked 4K (the plugin's `is_4k` switch, or its older `is_default_4k`), HD
+versions only to one that is not. Saving a route that breaks this is refused,
+and so, under Advanced, is changing a server's 4K switch while a route sends it
+the other version. A server of another plugin (Seerr) takes either version.
 
 The migration that introduced routes carried the Sonarr/Radarr plugin's routing
 over unchanged: each media type's first usable default and default-4K servers
@@ -154,7 +159,11 @@ over; a media type another plugin routed stays with it. When that media type
 has no rule and another plugin installation would now also take it, the save
 is refused: with no rule, the first connection by name would get its requests.
 The admin switches to Advanced and sets Everything else first. Switching to
-Advanced by hand carries servers over the same way. Nothing switches back to Standard on its own. Every
+Advanced by hand carries servers over the same way. Standard lets a server's
+4K switch change even while a paused route sends it the other version, since
+those routes cannot be edited there; turning Advanced on, either way, first
+clears every route destination whose server no longer fits its version, so that
+version falls through to Everything else and its carried-over server. Nothing switches back to Standard on its own. Every
 server write and mode switch takes one advisory lock first, so a server added
 while Standard is being turned on cannot leave Standard on with two servers of
 a kind; Standard read with two servers anyway routes with the rules. Under

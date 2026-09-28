@@ -88,7 +88,7 @@ describe("Standard and Advanced routing", () => {
     ).toHaveTextContent("Until you switch to Advanced or remove a server, the rules decide.");
   });
 
-  it("says HD copies go nowhere when a media type has only a 4K server", async () => {
+  it("says HD versions go nowhere when a media type has only a 4K server", async () => {
     serve({
       servers: [radarr4K, sonarr],
       routing: {
@@ -102,7 +102,7 @@ describe("Standard and Advanced routing", () => {
     mount();
     const summary = await screen.findByRole("list", { name: "Where Standard sends requests" });
     expect(within(summary).getAllByRole("listitem")[0]).toHaveTextContent(
-      "only a 4K server, so HD copies go nowhere",
+      "only a 4K server, so HD versions go nowhere",
     );
   });
 
@@ -118,8 +118,8 @@ describe("Standard and Advanced routing", () => {
       name: "Where Standard sends requests",
     });
     const [movies, series] = within(summary).getAllByRole("listitem");
-    expect(movies).toHaveTextContent("Movies → Radarr4K copies → Radarr 4K");
-    expect(series).toHaveTextContent("Series → SonarrNo 4K copies");
+    expect(movies).toHaveTextContent("Movies → Radarr4K versions → Radarr 4K");
+    expect(series).toHaveTextContent("Series → SonarrNo 4K versions");
     expect(group).toHaveTextContent("1 rule is paused. Switch to Advanced to use it again.");
     expect(group).toHaveTextContent("Anime series go to Sonarr with the Anime series type");
     // Series has no 4K server, so the page says how to add one.

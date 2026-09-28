@@ -234,7 +234,7 @@ function PresetStep({
         />
       ) : null}
 
-      <div className="settings-field-list">
+      <div className="space-y-3">
         <RouteDestinationEditor
           tier="hd"
           sectionId={`preset-${preset.id}-${mediaType}.hd`}

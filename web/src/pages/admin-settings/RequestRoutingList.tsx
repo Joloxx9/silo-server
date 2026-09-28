@@ -45,6 +45,7 @@ import {
   SERVER_NAMED_OVERRIDES,
   serverOverrideFields,
 } from "./requestRoutingModel";
+import { serverFitsTier } from "./requestServerModel";
 import {
   animeSeriesTypeTiers,
   fixLabel,
@@ -152,7 +153,7 @@ function RuleRow({
   const below = scope.rules.slice(index + 1);
   const fourK: ReactNode = rule.skip_uhd ? (
     fallback?.uhd.integration_id ? (
-      "4K → no copy"
+      "4K → none"
     ) : null
   ) : rule.uhd.integration_id && !sameDestination(rule.uhd, fallback?.uhd ?? {}) ? (
     <>
@@ -321,7 +322,7 @@ function FallbackRow({
                 {fallback.uhd.integration_id ? (
                   <DestinationText dest={fallback.uhd} scope={scope} />
                 ) : (
-                  "no copy"
+                  "none"
                 )}
               </span>
             </span>
@@ -350,11 +351,13 @@ function FallbackRow({
                 <SelectValue placeholder="Choose a server" />
               </SelectTrigger>
               <SelectContent>
-                {scope.servers.map((server) => (
-                  <SelectItem key={server.id} value={server.id}>
-                    {server.name}
-                  </SelectItem>
-                ))}
+                {scope.servers
+                  .filter((server) => serverFitsTier(server, "hd"))
+                  .map((server) => (
+                    <SelectItem key={server.id} value={server.id}>
+                      {server.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
