@@ -29,6 +29,13 @@ const maxRoutesPerMediaType = 100
 // FallbackRouteID is the ID of a media type's fallback route.
 func FallbackRouteID(mediaType MediaType) string { return "fallback-" + string(mediaType) }
 
+// The field names of a route's HD and 4K destinations, as the API and its
+// field errors name them.
+const (
+	fieldHD  = "hd"
+	fieldUHD = "uhd"
+)
+
 // routingOwnedConfigKeys are the plugin config keys routing sets itself; a
 // route cannot override them.
 var routingOwnedConfigKeys = []string{
@@ -480,7 +487,7 @@ func (s *Service) validateRoute(ctx context.Context, route *Route) error {
 	if err != nil {
 		return err
 	}
-	for field, dest := range map[string]*RouteDestination{"hd": &route.HD, "uhd": &route.UHD} {
+	for field, dest := range map[string]*RouteDestination{fieldHD: &route.HD, fieldUHD: &route.UHD} {
 		validateDestination(field, dest, route.MediaType, integrations, fields)
 	}
 	if route.IsFallback {
@@ -499,10 +506,10 @@ func (s *Service) validateRoute(ctx context.Context, route *Route) error {
 			fields["conditions"] = "Add at least one condition. Requests no rule matches go to Everything else."
 		}
 		if route.HD.IntegrationID == "" && route.UHD.IntegrationID == "" && !route.SkipUHD {
-			fields["hd"] = "Choose where the HD and 4K versions go, or don't send a 4K version."
+			fields[fieldHD] = "Choose where the HD and 4K versions go, or don't send a 4K version."
 		}
 		if route.SkipUHD && route.UHD.IntegrationID != "" {
-			fields["uhd"] = "A rule can't both send 4K versions somewhere and skip them."
+			fields[fieldUHD] = "A rule can't both send 4K versions somewhere and skip them."
 		}
 	}
 	if len(fields) > 0 {
@@ -555,7 +562,7 @@ func validateDestination(field string, dest *RouteDestination, mediaType MediaTy
 		fields[field+".integration_id"] = fmt.Sprintf("%s does not take %s.", in.Name, mediaTypePlural(mediaType))
 	}
 	if fields[field+".integration_id"] == "" {
-		if msg := tierMismatch(*in, field == "uhd"); msg != "" {
+		if msg := tierMismatch(*in, field == fieldUHD); msg != "" {
 			fields[field+".integration_id"] = msg
 		}
 	}
@@ -786,7 +793,7 @@ func ensureDestinationTiers(ctx context.Context, tx pgx.Tx, route Route) error {
 				return fmt.Errorf("decode route server %s config: %w", in.ID, err)
 			}
 		}
-		for field, uhd := range map[string]bool{"hd": false, "uhd": true} {
+		for field, uhd := range map[string]bool{fieldHD: false, fieldUHD: true} {
 			dest := route.HD
 			if uhd {
 				dest = route.UHD
