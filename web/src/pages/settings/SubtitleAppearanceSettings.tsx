@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { RotateCcw } from "lucide-react";
 import { SettingsGroup } from "@/components/settings/SettingsGroup";
 import { LanguageSelect } from "@/components/settings/LanguageSelect";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { usePercentDraft } from "@/hooks/usePercentDraft";
 import {
   Select,
   SelectContent,
@@ -108,20 +109,7 @@ function PercentInput({
   id?: string;
   descriptionId?: string;
 }) {
-  const [draft, setDraft] = useState(String(value));
-
-  useEffect(() => {
-    setDraft(String(value));
-  }, [value]);
-
-  function commit(raw: string) {
-    const parsed = Math.round(Number(raw));
-    if (Number.isFinite(parsed)) {
-      onChange(Math.min(100, Math.max(min, parsed)));
-    } else {
-      setDraft(String(value));
-    }
-  }
+  const { draft, setDraft, commit } = usePercentDraft(value, min, onChange);
 
   return (
     <div className="flex items-center gap-2">

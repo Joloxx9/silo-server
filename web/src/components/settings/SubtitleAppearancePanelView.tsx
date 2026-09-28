@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { RotateCcw, X } from "lucide-react";
+import { usePercentDraft } from "@/hooks/usePercentDraft";
 import {
   BACKGROUND_STYLE_OPTIONS,
   BG_COLOR_PALETTE,
@@ -368,20 +369,7 @@ function PercentField({
   min?: number;
   ariaLabel?: string;
 }) {
-  const [draft, setDraft] = useState(String(value));
-
-  useEffect(() => {
-    setDraft(String(value));
-  }, [value]);
-
-  function commit(raw: string) {
-    const parsed = Math.round(Number(raw));
-    if (Number.isFinite(parsed)) {
-      onChange(Math.min(100, Math.max(min, parsed)));
-    } else {
-      setDraft(String(value));
-    }
-  }
+  const { draft, setDraft, commit } = usePercentDraft(value, min, onChange);
 
   return (
     <div className="flex items-center gap-1.5">
