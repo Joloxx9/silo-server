@@ -275,9 +275,9 @@ function RequestsSettingsContent({ routing }: { routing: boolean }) {
                   }
                 />
                 <SettingField
-                  label="Also request a 4K copy of every title"
+                  label="Also request a 4K version of every title"
                   type="toggle"
-                  description="Normally only requesters who can play 4K get a 4K copy, and only when a server takes 4K. With this on, every request also asks for 4K."
+                  description="Normally a 4K version is requested only for people whose playback limit allows 4K, and only when a server takes 4K. With this on, every request also asks for 4K."
                   value={String(draft.force_dual_quality)}
                   onChange={(value) => editGeneral({ force_dual_quality: value === "true" })}
                   dirty={draft.force_dual_quality !== baseGeneral.force_dual_quality}

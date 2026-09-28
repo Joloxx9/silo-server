@@ -176,7 +176,7 @@ describe("the pass-through choice", () => {
       "Same as Everything else (Radarr)",
     );
     expect(passThroughLabel("uhd", below, fallback("r1"), servers)).toBe(
-      "Same as Everything else (no copy)",
+      "Same as Everything else (no 4K version)",
     );
   });
 
@@ -405,7 +405,7 @@ describe("routing warnings", () => {
   it("says Everything else makes no 4K copies while every request asks for one", () => {
     const warnings = routingWarnings(input({ forceDual: true }));
     expect(warnings.get("fallback-series")?.[0]).toMatchObject({
-      text: "“Also request a 4K copy of every title” is on, but Everything else doesn't make 4K copies. Titles no rule sends to a 4K server get HD only.",
+      text: "“Also request a 4K version of every title” is on, but Everything else doesn't send 4K versions. Titles no rule sends to a 4K server get HD only.",
       fix: { kind: "edit-fallback" },
     });
     expect(
@@ -490,7 +490,7 @@ describe("how it was decided", () => {
         {},
         ctx,
       ),
-    ).toBe("Everything else — decides 4K: no copy");
+    ).toBe("Everything else — decides 4K: none");
     expect(
       traceLine(
         step({ unmet_conditions: ["year_from", "year_to"] }),
