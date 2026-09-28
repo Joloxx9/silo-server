@@ -28768,6 +28768,7 @@
             ],
             "items": {
               "format": "int64",
+              "minimum": 1,
               "type": "integer"
             },
             "maxItems": 200,

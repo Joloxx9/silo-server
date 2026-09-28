@@ -260,6 +260,23 @@ func TestCreateRequest(t *testing.T) {
 	// An unknown member is refused.
 	requireProblem(t, do(t, h, http.MethodPost, "/api/v2/requests", `{"media_type":"movie","tmdb_id":1,"title":"x","quality":"4k"}`, requestOwner), TypeValidationFailed)
 
+	// Season numbers start at 1: a zero or negative season is refused with a
+	// field error, never dropped into a request for every missing season.
+	svc.lastCreate = mediarequests.CreateRequestInput{}
+	for body, location := range map[string]string{
+		`{"media_type":"series","tmdb_id":1399,"title":"x","seasons":[0]}`:   "body.seasons[0]",
+		`{"media_type":"series","tmdb_id":1399,"title":"x","seasons":[-1]}`:  "body.seasons[0]",
+		`{"media_type":"series","tmdb_id":1399,"title":"x","seasons":[2,0]}`: "body.seasons[1]",
+	} {
+		p := requireProblem(t, do(t, h, http.MethodPost, "/api/v2/requests", body, requestOwner), TypeValidationFailed)
+		if len(p.Errors) != 1 || p.Errors[0].Location != location {
+			t.Fatalf("%s: errors = %+v, want one at %s", body, p.Errors, location)
+		}
+	}
+	if svc.lastCreate.TMDBID != 0 {
+		t.Fatalf("service saw %+v, want the schema to refuse first", svc.lastCreate)
+	}
+
 	// Service decisions render as problems.
 	svc.err = mediarequests.QuotaError{Used: 5, Limit: 5, WindowDays: 7}
 	rec = do(t, h, http.MethodPost, "/api/v2/requests", `{"media_type":"movie","tmdb_id":7,"title":"x"}`, requestOwner)
