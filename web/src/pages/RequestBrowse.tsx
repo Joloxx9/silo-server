@@ -67,11 +67,11 @@ export default function RequestBrowse({ kind }: RequestBrowseProps) {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
   const kindLabel = kind === "studio" ? "Studio" : kind === "network" ? "Network" : "Genre";
 
-  if (
-    browse.isError &&
-    results.length === 0 &&
-    (browse.error as { status?: number }).status === 404
-  ) {
+  // A later page's failure keeps what loaded and offers a retry at the foot,
+  // even when every loaded page was empty.
+  const firstPageFailed = browse.isError && !browse.isFetchNextPageError && results.length === 0;
+
+  if (firstPageFailed && (browse.error as { status?: number }).status === 404) {
     return (
       <div className="relative space-y-6 px-4 pt-6 pb-12 sm:px-6 lg:px-10 xl:px-12">
         <PageBack to="/requests" up />
@@ -128,27 +128,29 @@ export default function RequestBrowse({ kind }: RequestBrowseProps) {
 
       {browse.isLoading ? (
         <RequestResultsGridSkeleton />
-      ) : browse.isError && results.length === 0 ? (
+      ) : firstPageFailed ? (
         <p className="text-muted-foreground text-sm">
           Could not load this browse page. Try a different sort or media type.
         </p>
-      ) : results.length === 0 ? (
+      ) : results.length === 0 && !hasNextPage ? (
         <p className="text-muted-foreground text-sm">Nothing matched. Try a different sort.</p>
       ) : (
-        <RequestResultsGrid
-          results={results}
-          pendingCount={isFetchingNextPage ? pendingPageSize(browse.data?.pages) : 0}
-        />
+        // A page can come back empty, e.g. when a profile's rating limit
+        // filters out every title on it; the foot keeps loading.
+        <>
+          <RequestResultsGrid
+            results={results}
+            pendingCount={isFetchingNextPage ? pendingPageSize(browse.data?.pages) : 0}
+          />
+          <RequestResultsLoadMore
+            hasNextPage={hasNextPage}
+            isFetchingNextPage={isFetchingNextPage}
+            isError={browse.isFetchNextPageError}
+            onLoadMore={loadMore}
+          />
+        </>
       )}
 
-      {results.length > 0 ? (
-        <RequestResultsLoadMore
-          hasNextPage={hasNextPage}
-          isFetchingNextPage={isFetchingNextPage}
-          isError={browse.isFetchNextPageError}
-          onLoadMore={loadMore}
-        />
-      ) : null}
       <ScrollToTopButton />
     </div>
   );

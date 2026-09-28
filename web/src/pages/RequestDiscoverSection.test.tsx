@@ -139,6 +139,37 @@ describe("RequestDiscoverSection", () => {
     expect(mocks.fetchNextPage).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps loading past pages a rating limit emptied", () => {
+    // The server read its whole budget for a restricted profile and found
+    // nothing allowed, but the row goes on.
+    mocks.useRequestDiscoverySection.mockReturnValue(loaded([section(1, [])]));
+    renderAt("/requests/discover/trending_movies");
+
+    expect(screen.queryByText("Nothing here right now.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(mocks.fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers a retry when a later page fails after only empty pages", () => {
+    mocks.useRequestDiscoverySection.mockReturnValue(
+      loaded([section(1, [])], { isError: true, isFetchNextPageError: true }),
+    );
+    renderAt("/requests/discover/trending_movies");
+
+    expect(screen.queryByText(/TMDB couldn/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(mocks.fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("says the row is empty once no page is left", () => {
+    mocks.useRequestDiscoverySection.mockReturnValue(
+      loaded([section(1, [])], { hasNextPage: false }),
+    );
+    renderAt("/requests/discover/trending_movies");
+
+    expect(screen.getByText("Nothing here right now.")).toBeInTheDocument();
+  });
+
   it("goes back to the Requests hub", () => {
     renderAt("/requests/discover/trending_movies");
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import type { DiscoverBrowseResponse } from "@/api/types";
 
@@ -123,6 +123,21 @@ describe("RequestBrowse", () => {
     renderAt("/requests/browse/genre/drama?media_type=movie");
 
     expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
+
+  it("keeps loading past a page a rating limit emptied", () => {
+    const empty = { ...browse(1), results: [] };
+    mocks.useRequestBrowse.mockReturnValue(loaded([empty]));
+    renderAt("/requests/browse/genre/drama?media_type=movie");
+
+    expect(screen.queryByText(/Nothing matched/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(mocks.fetchNextPage).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    mocks.useRequestBrowse.mockReturnValue(loaded([empty], { hasNextPage: false }));
+    renderAt("/requests/browse/genre/drama?media_type=movie");
+    expect(screen.getByText("Nothing matched. Try a different sort.")).toBeInTheDocument();
   });
 
   it("drops a legacy page parameter when the media type changes", () => {

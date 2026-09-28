@@ -24,7 +24,9 @@ export default function RequestDiscoverSection() {
   useDocumentTitle(`${title} - Requests`);
 
   const results = flattenResultPages(query.data?.pages);
-  const firstPageFailed = query.isError && results.length === 0;
+  // A later page's failure keeps what loaded and offers a retry at the foot,
+  // even when every loaded page was empty.
+  const firstPageFailed = query.isError && !query.isFetchNextPageError && results.length === 0;
   const unknownSection =
     firstPageFailed &&
     query.error instanceof V2ProblemError &&
@@ -61,9 +63,11 @@ export default function RequestDiscoverSection() {
             Retry
           </button>
         </div>
-      ) : results.length === 0 ? (
+      ) : results.length === 0 && !hasNextPage ? (
         <p className="text-muted-foreground text-sm">Nothing here right now.</p>
       ) : (
+        // A page can come back empty, e.g. when a profile's rating limit
+        // filters out every title the server read; the foot keeps loading.
         <>
           <RequestResultsGrid
             results={results}
