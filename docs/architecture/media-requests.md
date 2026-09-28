@@ -258,9 +258,10 @@ Submission applies the rule per request. A season request for a series outside
 the library goes to its server as usual. One for a series in the library goes
 only where the servers chosen for it take seasons: without routing rules every
 series server, with rules the servers the rules choose for the title, or every
-server a series rule sends to while its routing facts are not captured yet.
+server a series rule sends to while TMDB cannot supply its routing facts.
 Otherwise it waits for the library, as when it was made before a server that
-cannot take seasons was set up. If routing facts read after the submission
+cannot take seasons was set up. One whose seasons are already complete in the
+library when it is approved is not sent; the reconcile pass completes it. If routing facts read after the submission
 claim choose a server that cannot, that tier is not sent and the attempt fails
 with a message naming the server.
 

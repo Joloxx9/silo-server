@@ -221,17 +221,21 @@ func TestSubmitRoutedMissingSeasonsToAMixedSetup(t *testing.T) {
 		}
 	}
 
-	for name, facts := range map[string]RoutingFacts{
-		"anime goes to the old plugin": capturedFacts(RoutingFacts{Anime: true}),
-		"facts not captured yet":       {},
+	for name, tc := range map[string]struct {
+		facts   RoutingFacts
+		tmdbErr error
+	}{
+		"anime goes to the old plugin":        {facts: capturedFacts(RoutingFacts{Anime: true})},
+		"facts not captured and TMDB is down": {tmdbErr: errors.New("tmdb down")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			store := newFakeStore()
 			seasonRoutes(store)
 			approvedSeasonRequest(store, "r", 95396, []int{2})
-			store.requests["r"].RoutingFacts = facts
+			store.requests["r"].RoutingFacts = tc.facts
 			router := &fakeRouterProvider{seasonCapable: map[int]bool{1: true}}
 			svc := seasonService(store, severanceInLibrary())
+			svc.tmdb.(*fakeTMDBClient).detailErr = tc.tmdbErr
 			svc.SetRouterProvider(router)
 			got, err := svc.submitApprovedRequest(context.Background(), *store.requests["r"], Viewer{}, nil)
 			if err != nil {
@@ -264,5 +268,52 @@ func TestSubmitRoutedMissingSeasonsRefusesAnOldPluginAfterTheClaim(t *testing.T)
 	}
 	if router.fulfillCalls != 0 {
 		t.Fatalf("fulfill calls = %d, want none", router.fulfillCalls)
+	}
+}
+
+// Facts not captured yet are read before the servers are checked, so a
+// request the rules send to season-capable servers is not held once TMDB
+// answers.
+func TestSubmitRoutedMissingSeasonsReadsTheFactsFirst(t *testing.T) {
+	store := newFakeStore()
+	seasonRoutes(store)
+	approvedSeasonRequest(store, "r", 95396, []int{2})
+	router := &fakeRouterProvider{seasonCapable: map[int]bool{1: true}}
+	svc := seasonService(store, severanceInLibrary())
+	svc.SetRouterProvider(router)
+	if _, err := svc.submitApprovedRequest(context.Background(), *store.requests["r"], Viewer{}, nil); err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if router.fulfillCalls == 0 || !store.requests["r"].RoutingFacts.Captured() {
+		t.Fatalf("calls = %d, facts = %+v; want the facts captured and the request sent", router.fulfillCalls, store.requests["r"].RoutingFacts)
+	}
+	for i, call := range router.fulfillLog {
+		if call.installationID != 1 {
+			t.Fatalf("call %d = %+v, want the season plugin", i, call)
+		}
+	}
+}
+
+// A season request approved after its seasons reached the library is not
+// sent: the reconcile pass completes it from the library.
+func TestSubmitSkipsSeasonsAlreadyInTheLibrary(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{seriesRouterInst("sonarr", 1)}
+	approvedSeasonRequest(store, "done", 95396, []int{1})
+	router := &fakeRouterProvider{seasonCapable: map[int]bool{1: true}}
+	svc := seasonService(store, severanceInLibrary())
+	svc.SetRouterProvider(router)
+	got, err := svc.submitApprovedRequest(context.Background(), *store.requests["done"], Viewer{}, nil)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if router.fulfillCalls != 0 || got.Status != StatusApproved || store.requests["done"].SubmitAttempts != 0 {
+		t.Fatalf("calls = %d, request = %+v; want unsent, left for the library", router.fulfillCalls, got)
+	}
+	if _, err := svc.ReconcileRequests(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	if router.fulfillCalls != 0 || store.requests["done"].Status != StatusCompleted {
+		t.Fatalf("calls = %d, request = %+v; want completed from the library", router.fulfillCalls, store.requests["done"])
 	}
 }

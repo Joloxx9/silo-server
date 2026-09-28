@@ -105,16 +105,17 @@ func integrationsByID(fc *fulfillContext, ids []string) []Integration {
 //
 // Without routing rules the plugin picks among the series connections, so all
 // of them must take seasons. With rules, the servers the rules choose for this
-// title must; before its routing facts are captured that is every server a
-// series rule sends to. submitRouted checks the chosen server again, since
-// facts read after the claim can choose another.
+// title must. Its routing facts are read first, as submission would; while
+// TMDB cannot answer, every server a series rule sends to must, and a later
+// pass tries again. submitRouted checks the chosen server again, since facts
+// read after the claim can choose another.
 func (s *Service) missingSeasonsDeliverable(ctx context.Context, fc *fulfillContext, req Request) (bool, error) {
 	routes := fc.routesFor(MediaTypeSeries)
 	if len(routes) == 0 {
 		return s.allTakeSeasons(ctx, fc, seriesRouterConnections(fc))
 	}
 	var ids []string
-	if req.RoutingFacts.Captured() {
+	if err := s.ensureRoutingFacts(ctx, &req, routes); err == nil {
 		allowed, _ := s.allowedQualities(ctx, req, fc.settings)
 		for _, decision := range decideRoutes(routes, req, allowed) {
 			if !decision.Skip {

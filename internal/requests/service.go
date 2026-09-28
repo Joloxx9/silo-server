@@ -2055,7 +2055,16 @@ func (s *Service) submitApprovedRequest(ctx context.Context, req Request, actor 
 		if err != nil {
 			return nil, err
 		}
-		if matches[req.TMDBID].Available {
+		if match := matches[req.TMDBID]; match.Available {
+			// Seasons that reached the library since the request was made
+			// need no download: the reconcile pass completes the request.
+			fulfilled, _, err := s.requestFulfilled(ctx, req, match)
+			if err != nil {
+				return nil, err
+			}
+			if fulfilled {
+				return &req, nil
+			}
 			deliverable, err := s.missingSeasonsDeliverable(ctx, fc, req)
 			if err != nil {
 				return nil, err
