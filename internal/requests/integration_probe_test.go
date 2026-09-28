@@ -57,8 +57,9 @@ func TestLoadIntegrationOptionsClassifiesProbeFailures(t *testing.T) {
 			})
 			if tc.field != "" || tc.formError != "" {
 				var ve *ValidationError
-				if !errors.As(err, &ve) {
-					t.Fatalf("err = %v, want *ValidationError", err)
+				var probe *ProbeValidationError
+				if !errors.As(err, &ve) || !errors.As(err, &probe) {
+					t.Fatalf("err = %v, want a classified *ValidationError", err)
 				}
 				if tc.field != "" && ve.FieldErrors[tc.field] != tc.fieldText {
 					t.Fatalf("field errors = %+v, want %s = %q", ve.FieldErrors, tc.field, tc.fieldText)

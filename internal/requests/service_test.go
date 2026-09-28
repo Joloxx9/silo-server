@@ -1355,6 +1355,11 @@ func TestLoadIntegrationOptionsKeepsValidationErrors(t *testing.T) {
 	if !errors.As(err, &validation) || errors.Is(err, ErrIntegrationUnreachable) {
 		t.Fatalf("err = %v, want the plugin validation error", err)
 	}
+	// Returned as is, not as a host-classified probe error.
+	var probe *ProbeValidationError
+	if errors.As(err, &probe) {
+		t.Fatalf("err = %v, want the router's error unchanged", err)
+	}
 }
 
 func TestCancelOwnerCanWithdrawPendingRequest(t *testing.T) {

@@ -83,6 +83,20 @@ func normalizeIntegrationBaseURL(raw string) (string, error) {
 	return parsed.Scheme + "://" + parsed.Host + strings.TrimRight(parsed.EscapedPath(), "/"), nil
 }
 
+// ProbeValidationError is a failed options probe the host classified into a
+// field or form error for the v2 editor. It unwraps to the ValidationError, so
+// v2 renders it like any other; the frozen v1 route recognizes it and keeps its
+// original answer. A ValidationError the router returned itself is not one.
+type ProbeValidationError struct {
+	*ValidationError
+}
+
+func (e *ProbeValidationError) Unwrap() error { return e.ValidationError }
+
+func probeValidation(ve *ValidationError) *ProbeValidationError {
+	return &ProbeValidationError{ValidationError: ve}
+}
+
 // NormalizeIntegrationBaseURL is normalizeIntegrationBaseURL for the v2
 // options probe and save, so the saved address is the one the probe used. A
 // refused address is a field error on base_url. The frozen v1 routes do not
@@ -151,7 +165,7 @@ func classifyIntegrationError(err error, capabilityID string) error {
 		switch st.Code() {
 		case codes.InvalidArgument, codes.FailedPrecondition:
 			if text := strings.TrimSpace(st.Message()); text != "" {
-				return &ValidationError{FormError: text}
+				return probeValidation(&ValidationError{FormError: text})
 			}
 		case codes.DeadlineExceeded:
 			return &IntegrationUnreachableError{Detail: integrationTimedOut, Err: err}
@@ -161,7 +175,7 @@ func classifyIntegrationError(err error, capabilityID string) error {
 	lower := strings.ToLower(message)
 
 	fieldError := func(field, text string) error {
-		return &ValidationError{FieldErrors: map[string]string{field: text}}
+		return probeValidation(&ValidationError{FieldErrors: map[string]string{field: text}})
 	}
 	notTheService := func() error {
 		if strings.TrimSpace(capabilityID) == arrCapabilityID {

@@ -1611,7 +1611,7 @@ func (s *Service) LoadIntegrationOptions(ctx context.Context, viewer Viewer, int
 	// frozen v1 route keeps sending what the client submitted.
 	apiKey := strings.TrimSpace(integration.APIKeyRef)
 	if apiKey == "" {
-		return nil, &ValidationError{FieldErrors: map[string]string{fieldAPIKey: integrationKeyMissing}}
+		return nil, probeValidation(&ValidationError{FieldErrors: map[string]string{fieldAPIKey: integrationKeyMissing}})
 	}
 	if s.router == nil || integration.InstallationID == nil {
 		return nil, fmt.Errorf("no fulfillment backend configured")

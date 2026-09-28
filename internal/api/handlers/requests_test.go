@@ -161,7 +161,7 @@ func (f *fakeRequestService) LoadIntegrationOptions(context.Context, mediareques
 // field errors the service now returns are for v2 only.
 func TestHandleLoadIntegrationOptionsKeepsV1FailureShape(t *testing.T) {
 	for _, err := range []error{
-		&mediarequests.ValidationError{FieldErrors: map[string]string{"api_key_ref": "The server rejected this API key."}},
+		&mediarequests.ProbeValidationError{ValidationError: &mediarequests.ValidationError{FieldErrors: map[string]string{"api_key_ref": "The server rejected this API key."}}},
 		&mediarequests.IntegrationUnreachableError{Detail: "Nothing answered at that address. Check the host and port."},
 	} {
 		h := NewRequestsHandler(&fakeRequestService{loadOptionsErr: err})
@@ -175,6 +175,16 @@ func TestHandleLoadIntegrationOptionsKeepsV1FailureShape(t *testing.T) {
 		if strings.Contains(rec.Body.String(), "API key") || strings.Contains(rec.Body.String(), "Nothing answered") {
 			t.Fatalf("%T: v1 body carries the v2 detail: %s", err, rec.Body.String())
 		}
+	}
+
+	// A validation error the router returned itself keeps v1's 400.
+	h := NewRequestsHandler(&fakeRequestService{loadOptionsErr: &mediarequests.ValidationError{FormError: "api key rejected"}})
+	rec := httptest.NewRecorder()
+	req := authedRequest("POST", "/api/v1/admin/request-integrations/new/options")
+	req.Body = io.NopCloser(strings.NewReader(`{"base_url":"http://10.0.0.5:8989"}`))
+	h.HandleLoadIntegrationOptions(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "validation_failed") {
+		t.Fatalf("router validation error: status = %d body = %s, want the v1 400", rec.Code, rec.Body.String())
 	}
 }
 
