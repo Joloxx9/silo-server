@@ -471,3 +471,46 @@ func TestRoutesRespectSupportedMediaTypes(t *testing.T) {
 		t.Fatalf("narrow: err = %v, want a supported_media_types field error naming the route", err)
 	}
 }
+
+// HD versions go only to servers not marked 4K, and 4K versions only to
+// servers marked 4K; a server can't flip its 4K switch while routes rely on
+// the other.
+func TestRoutesKeepHDAnd4KServersApart(t *testing.T) {
+	store := routingStore(RoutingFacts{})
+	svc := newTestServiceWithTMDB(store, &fakeTMDBClient{})
+	ctx := context.Background()
+
+	route := Route{MediaType: MediaTypeMovie, Name: "Anime", Enabled: true,
+		Conditions: RouteConditions{Anime: boolPtr(true)},
+		HD:         RouteDestination{IntegrationID: "radarr-4k"}, UHD: RouteDestination{IntegrationID: "radarr-anime"}}
+	fields := fieldErrors(t, svc.validateRoute(ctx, &route))
+	if !strings.Contains(fields["hd.integration_id"], "marked 4K") {
+		t.Fatalf("hd error = %q, want the 4K server refused for HD", fields["hd.integration_id"])
+	}
+	if !strings.Contains(fields["uhd.integration_id"], "isn't marked 4K") {
+		t.Fatalf("uhd error = %q, want the HD server refused for 4K", fields["uhd.integration_id"])
+	}
+
+	route.HD.IntegrationID, route.UHD.IntegrationID = "radarr-anime", "radarr-4k"
+	if err := svc.validateRoute(ctx, &route); err != nil {
+		t.Fatalf("matching tiers: %v", err)
+	}
+
+	// Everything else sends 4K versions to radarr-4k; turning its switch off
+	// would leave that 4K version on an HD server.
+	unmarked := store.integrations[1]
+	unmarked.PluginConfig = map[string]any{"service_kind": "radarr", "root_folder": "/movies", "is_4k": false}
+	_, err := svc.UpdateIntegration(ctx, routeAdmin, unmarked)
+	var verr *ValidationError
+	if !errors.As(err, &verr) || !strings.Contains(verr.FieldErrors["plugin_config.is_4k"], "Everything else") {
+		t.Fatalf("unmark: err = %v, want an is_4k field error naming the route", err)
+	}
+
+	// The Anime rule sends HD versions to radarr-anime, so it can't be marked 4K.
+	marked := store.integrations[2]
+	marked.PluginConfig = map[string]any{"service_kind": "radarr", "root_folder": "/movies", "is_4k": true}
+	_, err = svc.UpdateIntegration(ctx, routeAdmin, marked)
+	if !errors.As(err, &verr) || !strings.Contains(verr.FieldErrors["plugin_config.is_4k"], "can't be marked 4K") {
+		t.Fatalf("mark: err = %v, want an is_4k field error", err)
+	}
+}

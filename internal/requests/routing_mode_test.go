@@ -81,7 +81,7 @@ func TestStandardLayout(t *testing.T) {
 	// Seerr for movies with a Radarr marked 4K: with no rule Seerr would be
 	// handed every tier, so Standard cannot use both.
 	if layout, blocker := standardLayout([]Integration{seerr, radarr4K}); layout != nil ||
-		!strings.Contains(blocker, "Movies go to seerr and their 4K copies to radarr-4k, which are different request services") ||
+		!strings.Contains(blocker, "Movies go to seerr and their 4K versions to radarr-4k, which are different request services") ||
 		!strings.Contains(blocker, "Switch to Advanced routing") {
 		t.Fatalf("Seerr + 4K Radarr: layout = %+v blocker = %q", layout, blocker)
 	}
@@ -239,7 +239,7 @@ func TestPreviewUnderStandard(t *testing.T) {
 	if hd.IntegrationID != "radarr-hd" || hd.RouteName != standardRouteName || len(hd.Overrides) != 0 {
 		t.Fatalf("HD tier = %+v, want Standard's Radarr", hd)
 	}
-	if uhd.Reason != "No server is marked 4K, so there is no 4K copy." {
+	if uhd.Reason != "No server is marked 4K, so there is no 4K version." {
 		t.Fatalf("4K tier = %+v", uhd)
 	}
 	if len(preview.Rules) != 1 || preview.Rules[0].Route.ID != standardRouteID(MediaTypeMovie) {
@@ -601,7 +601,7 @@ func TestAdvancedSeedUsesOnlyServersThatStillFitDatabase(t *testing.T) {
 			t.Fatalf("Everything else for movies = %v, want Radarr", got)
 		}
 		_, err = svc.UpdateRoutingModeConditional(ctx, routeAdmin, RoutingStandard, -1)
-		if msg := fieldErrors(t, err)["mode"]; !strings.Contains(msg, "Movies go to Radarr HD and their 4K copies to Seerr") {
+		if msg := fieldErrors(t, err)["mode"]; !strings.Contains(msg, "Movies go to Radarr HD and their 4K versions to Seerr") {
 			t.Fatalf("switch to Standard with Radarr and a 4K Seerr: %q", msg)
 		}
 	})

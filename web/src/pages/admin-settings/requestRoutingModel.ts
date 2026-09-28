@@ -80,11 +80,11 @@ export function initialChoices(source: RequestRoute | null): {
   };
 }
 
-/** The caption under 4K copies. */
+/** The caption under the 4K version. */
 export function fourKCaption(forceDual: boolean): string {
   return forceDual
-    ? "Every request also asks for 4K (General)."
-    : "Only people who can play 4K get a 4K copy.";
+    ? "Sent along with the HD version for every request (General)."
+    : "Sent along with the HD version when the requester's playback limit allows 4K.";
 }
 
 /** A routing rule while it is being edited. */
@@ -569,7 +569,7 @@ export function passThroughLabel(
   }
   const dest = tier === "hd" ? fallback?.hd : fallback?.uhd;
   const server = servers.find((candidate) => candidate.id === dest?.integration_id);
-  return `Same as Everything else (${server?.name ?? "no copy"})`;
+  return `Same as Everything else (${server?.name ?? (tier === "hd" ? "none" : "no 4K version")})`;
 }
 
 const OVERRIDABLE_CONTROLS = new Set(["SELECT", "MULTI_SELECT", "SWITCH"]);
@@ -787,13 +787,13 @@ function traceMisses(
   return keys.map((key) => traceMissSentence(key, conditions, ctx));
 }
 
-/** What a matching rule did: "decides HD", "decides HD and 4K", "decides 4K: no copy". */
+/** What a matching rule did: "decides HD", "decides HD and 4K", "decides 4K: none". */
 function traceDecision(rule: Pick<RequestRoutePreviewRule, "hd" | "uhd">): string {
   const parts: string[] = [];
   if (rule.hd === "sends" && rule.uhd === "sends") return "decides HD and 4K";
   if (rule.hd === "sends") parts.push("decides HD");
   if (rule.uhd === "sends") parts.push("decides 4K");
-  if (rule.uhd === "skips") parts.push("decides 4K: no copy");
+  if (rule.uhd === "skips") parts.push("decides 4K: none");
   if (parts.length > 0) return parts.join(" · ");
   const passed = rule.hd === "passes" || rule.uhd === "passes";
   return passed ? "leaves it to the rules below" : "earlier rules already decided";

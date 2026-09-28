@@ -141,7 +141,7 @@ func standardLayout(integrations []Integration) ([]StandardDestination, string) 
 		}
 		if len(hd) == 1 && len(uhd) == 1 && splitServices(hd[0], uhd[0]) {
 			split = true
-			problems = append(problems, fmt.Sprintf("%s go to %s and their 4K copies to %s, which are different request services", noun, hd[0].Name, uhd[0].Name))
+			problems = append(problems, fmt.Sprintf("%s go to %s and their 4K versions to %s, which are different request services", noun, hd[0].Name, uhd[0].Name))
 			continue
 		}
 		dest := StandardDestination{MediaType: mediaType}

@@ -136,6 +136,18 @@ export function serverServesMediaType(
 }
 
 /**
+ * Whether the server is marked 4K ("4K server" on, or the plugin's older 4K
+ * default switch). Routing sends 4K versions only to these, and HD versions
+ * only to the others.
+ */
+export function serverIs4K(server: Pick<RequestIntegration, "plugin_config">): boolean {
+  return ["is_4k", "is_default_4k"].some((key) => {
+    const flag = server.plugin_config?.[key];
+    return flag === true || flag === "true";
+  });
+}
+
+/**
  * Whether the server could take a request right now: switched on, bound to a
  * plugin, and holding an API key. Anything less reads "Needs setup".
  */

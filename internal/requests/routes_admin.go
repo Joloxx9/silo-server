@@ -318,10 +318,10 @@ func (s *Service) PreviewRoute(ctx context.Context, viewer Viewer, mediaType Med
 			tier.Reason = "No rule sends " + qualityLabel(q) + " for this title."
 		case decision.Skip && isStandardRouting(routes, mediaType):
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
-			tier.Reason = "No server is marked 4K, so there is no 4K copy."
+			tier.Reason = "No server is marked 4K, so there is no 4K version."
 		case decision.Skip:
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
-			tier.Reason = decision.RouteName + " makes no 4K copy."
+			tier.Reason = decision.RouteName + " sends no 4K version."
 		default:
 			tier.RouteID, tier.RouteName = decision.RouteID, decision.RouteName
 			tier.IntegrationID, tier.Overrides = decision.IntegrationID, decision.Overrides
@@ -379,10 +379,14 @@ func (s *Service) ensureRoutesKeepServerKind(ctx context.Context, in Integration
 	if err != nil {
 		return err
 	}
-	var wrongKind, unsupported []string
+	var wrongKind, unsupported, wrongTier []string
 	for _, r := range routes {
 		if r.HD.IntegrationID != in.ID && r.UHD.IntegrationID != in.ID {
 			continue
+		}
+		if (r.HD.IntegrationID == in.ID && tierMismatch(in, false) != "") ||
+			(r.UHD.IntegrationID == in.ID && tierMismatch(in, true) != "") {
+			wrongTier = append(wrongTier, r.Name)
 		}
 		if serverKindMismatch(in, r.MediaType) != "" {
 			wrongKind = append(wrongKind, r.Name)
@@ -399,6 +403,15 @@ func (s *Service) ensureRoutesKeepServerKind(ctx context.Context, in Integration
 	if len(unsupported) > 0 {
 		fields["supported_media_types"] = "Routing sends a media type this server would no longer take to it (" +
 			strings.Join(unsupported, ", ") + "); change those routes first."
+	}
+	if len(wrongTier) > 0 {
+		msg := "Routing sends 4K versions to this server (" + strings.Join(wrongTier, ", ") +
+			`), so "4K server" has to stay on; change those routes first.`
+		if is4KServer(in) {
+			msg = "Routing sends HD versions to this server (" + strings.Join(wrongTier, ", ") +
+				`), so it can't be marked 4K; change those routes first.`
+		}
+		fields["plugin_config."+configIs4K] = msg
 	}
 	if len(fields) == 0 {
 		return nil
@@ -451,16 +464,29 @@ func (s *Service) validateRoute(ctx context.Context, route *Route) error {
 			fields["conditions"] = "Add at least one condition. Requests no rule matches go to Everything else."
 		}
 		if route.HD.IntegrationID == "" && route.UHD.IntegrationID == "" && !route.SkipUHD {
-			fields["hd"] = "Choose where HD or 4K copies go, or don't make a 4K copy."
+			fields["hd"] = "Choose where the HD and 4K versions go, or don't send a 4K version."
 		}
 		if route.SkipUHD && route.UHD.IntegrationID != "" {
-			fields["uhd"] = "A rule can't both send 4K copies somewhere and skip them."
+			fields["uhd"] = "A rule can't both send 4K versions somewhere and skip them."
 		}
 	}
 	if len(fields) > 0 {
 		return &ValidationError{FieldErrors: fields}
 	}
 	return nil
+}
+
+// tierMismatch explains why a server can't take the HD or 4K version: 4K
+// versions go only to servers marked 4K, and HD versions only to the others.
+// It is empty when the server fits.
+func tierMismatch(in Integration, uhd bool) string {
+	switch marked := is4KServer(in); {
+	case uhd && !marked:
+		return in.Name + ` isn't marked 4K. Turn on "4K server" in its settings to send 4K versions to it.`
+	case !uhd && marked:
+		return in.Name + " is marked 4K; it can only take the 4K version."
+	}
+	return ""
 }
 
 func validateDestination(field string, dest *RouteDestination, mediaType MediaType, integrations []Integration, fields map[string]string) {
@@ -487,6 +513,11 @@ func validateDestination(field string, dest *RouteDestination, mediaType MediaTy
 	}
 	if mediaType != "" && fields[field+".integration_id"] == "" && !integrationSupportsMediaType(*in, mediaType) {
 		fields[field+".integration_id"] = fmt.Sprintf("%s does not take %s.", in.Name, mediaTypePlural(mediaType))
+	}
+	if fields[field+".integration_id"] == "" {
+		if msg := tierMismatch(*in, field == "uhd"); msg != "" {
+			fields[field+".integration_id"] = msg
+		}
 	}
 	for _, key := range routingOwnedConfigKeys {
 		if _, ok := dest.Overrides[key]; ok {

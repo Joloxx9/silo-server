@@ -152,7 +152,7 @@ function RuleRow({
   const below = scope.rules.slice(index + 1);
   const fourK: ReactNode = rule.skip_uhd ? (
     fallback?.uhd.integration_id ? (
-      "4K → no copy"
+      "4K → none"
     ) : null
   ) : rule.uhd.integration_id && !sameDestination(rule.uhd, fallback?.uhd ?? {}) ? (
     <>
@@ -321,7 +321,7 @@ function FallbackRow({
                 {fallback.uhd.integration_id ? (
                   <DestinationText dest={fallback.uhd} scope={scope} />
                 ) : (
-                  "no copy"
+                  "none"
                 )}
               </span>
             </span>

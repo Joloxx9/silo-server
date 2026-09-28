@@ -87,12 +87,12 @@ function TierLine({
     );
     outcome = decider ? `${where} (${decider})` : where;
   } else if (isStandardRoute(tier.route_id)) {
-    outcome = "no copy (no server is marked 4K)";
+    outcome = "none (no server is marked 4K)";
   } else if (tier.route_id) {
     outcome =
       decider === "Everything else"
-        ? "no copy (Everything else doesn't make 4K copies)"
-        : `no copy (${decider ?? tier.route_name} doesn't make 4K copies)`;
+        ? "none (Everything else doesn't send 4K versions)"
+        : `none (${decider ?? tier.route_name} doesn't send 4K versions)`;
   } else {
     outcome = "not sent";
   }
@@ -145,7 +145,7 @@ export function RoutePreviewResult({
 }) {
   const [open, setOpen] = useState(traceOpen);
   const traceId = useId();
-  const tiers: Record<string, string> = { "1080p": "HD copy", "2160p": "4K copy" };
+  const tiers: Record<string, string> = { "1080p": "HD version", "2160p": "4K version" };
   // Rules are numbered as the list numbers them; Everything else is not.
   const numbers = preview.rules.map(
     (_, index) => preview.rules.slice(0, index + 1).filter((rule) => !rule.is_fallback).length,
@@ -232,7 +232,7 @@ export function RequestRoutePreview({ scope }: { scope: RoutingScope }) {
 
   return (
     <div className="pb-3.5">
-      <SettingsSubheading caption="See which rule a request would match and where each copy would go, with the rules as saved.">
+      <SettingsSubheading caption="See which rule a request would match and where each version would go, with the rules as saved.">
         Try a title
       </SettingsSubheading>
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-start">
