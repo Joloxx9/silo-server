@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { MediaRequest, RequestMediaSeason } from "@/api/types";
+import type { MediaRequest, RequestMediaResult, RequestMediaSeason } from "@/api/types";
 import {
   canCancelOwnRequest,
   defaultRequestSeasons,
+  flattenResultPages,
+  pendingPageSize,
   formatRequestDisplayState,
   formatRequestSeasonMeta,
   formatSeasonList,
@@ -14,6 +16,34 @@ import {
   requestSearchHref,
   requestSearchTypeForScope,
 } from "./mediaRequests";
+
+describe("flattenResultPages", () => {
+  it("keeps page order and drops a title an earlier page already showed", () => {
+    const title = (tmdbID: number, mediaType: "movie" | "series" = "movie") =>
+      ({ media_type: mediaType, tmdb_id: tmdbID }) as RequestMediaResult;
+    const pages = [
+      { results: [title(1), title(2)] },
+      { results: [title(2), title(3), title(1, "series")] },
+    ];
+
+    expect(flattenResultPages(pages).map((item) => `${item.media_type}-${item.tmdb_id}`)).toEqual([
+      "movie-1",
+      "movie-2",
+      "movie-3",
+      "series-1",
+    ]);
+    expect(flattenResultPages(undefined)).toEqual([]);
+  });
+});
+
+describe("pendingPageSize", () => {
+  it("expects a page the size of the last one, or TMDB's page size before any", () => {
+    const results = (count: number) => Array.from({ length: count }) as RequestMediaResult[];
+    expect(pendingPageSize([{ results: results(20) }, { results: results(17) }])).toBe(17);
+    expect(pendingPageSize([{ results: [] }])).toBe(20);
+    expect(pendingPageSize(undefined)).toBe(20);
+  });
+});
 
 describe("requestSearchHref", () => {
   it("opens the app's search page on movies and series", () => {

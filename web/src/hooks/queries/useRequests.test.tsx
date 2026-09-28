@@ -31,7 +31,10 @@ vi.mock("@/api/v2/request", () => ({
   v2: (...args: unknown[]) => mocks.api(...args),
 }));
 
+import type { DiscoverBrowseResponse, RequestDiscoverySection } from "@/api/types";
 import {
+  nextBrowsePage,
+  nextDiscoverySectionPage,
   useCancelMediaRequest,
   useCreateMediaRequest,
   useRequestFeatureStatus,
@@ -179,6 +182,43 @@ describe("useRequestSearch", () => {
 
     const options = mocks.useQuery.mock.calls[0]![0] as { enabled: boolean };
     expect(options.enabled).toBe(false);
+  });
+});
+
+describe("infinite request browse paging", () => {
+  function sectionPage(page: number, totalPages: number, nextPage?: number) {
+    return { page, total_pages: totalPages, next_page: nextPage } as RequestDiscoverySection;
+  }
+
+  it("numbers a Discover row's pages up to its total", () => {
+    const first = sectionPage(1, 3);
+    expect(nextDiscoverySectionPage(first, [first], 1)).toBe(2);
+    const last = sectionPage(3, 3);
+    expect(nextDiscoverySectionPage(last, [first, last], 3)).toBeUndefined();
+  });
+
+  it("follows a rating-restricted row's cursor and ends where the cursor does", () => {
+    // Page 1 covers TMDB pages 1–3 and page 4 covers 4–8; page 9 reaches the end.
+    const first = sectionPage(1, 40, 4);
+    const second = sectionPage(4, 40, 9);
+    const last = sectionPage(9, 40);
+    expect(nextDiscoverySectionPage(first, [first], 1)).toBe(4);
+    expect(nextDiscoverySectionPage(second, [first, second], 4)).toBe(9);
+    // No cursor after cursor pages: the end, even though TMDB counts 40 pages.
+    expect(nextDiscoverySectionPage(last, [first, second, last], 9)).toBeUndefined();
+  });
+
+  it("ignores a cursor that does not move forward", () => {
+    const page = sectionPage(5, 10, 5);
+    expect(nextDiscoverySectionPage(page, [page], 5)).toBeUndefined();
+  });
+
+  it("stops at TMDB's 500-page cap whatever total it reports", () => {
+    const section = sectionPage(500, 900);
+    expect(nextDiscoverySectionPage(section, [section], 500)).toBeUndefined();
+    const browse = { page: 500, total_pages: 1001 } as DiscoverBrowseResponse;
+    expect(nextBrowsePage(browse, [browse], 500)).toBeUndefined();
+    expect(nextBrowsePage(browse, [browse], 499)).toBe(500);
   });
 });
 

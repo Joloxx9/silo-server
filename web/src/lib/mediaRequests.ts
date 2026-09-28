@@ -173,6 +173,40 @@ export function tmdbPageCount(totalPages: number | undefined): number {
   return Math.min(Math.max(totalPages ?? 0, 0), TMDB_MAX_PAGE);
 }
 
+/** TMDB's page size, the placeholder count before any page has loaded. */
+const TMDB_PAGE_SIZE = 20;
+
+/**
+ * How many placeholder cards stand in for the page being loaded: as many as
+ * the last page held, so the grid barely moves when the titles arrive.
+ */
+export function pendingPageSize(
+  pages: readonly { results: RequestMediaResult[] }[] | undefined,
+): number {
+  return pages?.at(-1)?.results.length || TMDB_PAGE_SIZE;
+}
+
+/**
+ * The titles of a list read page by page, in order. A TMDB list can shift
+ * between page reads (popularity changes), so a title already shown on an
+ * earlier page is dropped.
+ */
+export function flattenResultPages(
+  pages: readonly { results: RequestMediaResult[] }[] | undefined,
+): RequestMediaResult[] {
+  const seen = new Set<string>();
+  const out: RequestMediaResult[] = [];
+  for (const page of pages ?? []) {
+    for (const item of page.results) {
+      const key = `${item.media_type}-${item.tmdb_id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+  }
+  return out;
+}
+
 /** The page listing every title of a Discover row, such as Trending Movies. */
 export function requestDiscoverSectionHref(sectionKey: string): string {
   return `/requests/discover/${encodeURIComponent(sectionKey)}`;

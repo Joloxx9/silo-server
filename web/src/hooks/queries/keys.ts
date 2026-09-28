@@ -126,8 +126,7 @@ export const requestKeys = {
   all: ["requests"] as const,
   status: () => ["requests", "status"] as const,
   discovery: () => ["requests", "discovery"] as const,
-  discoverySection: (section: string, page: number) =>
-    ["requests", "discovery", section, page] as const,
+  discoverySection: (section: string) => ["requests", "discovery", section] as const,
   discoverStudios: () => ["requests", "discover", "studios"] as const,
   discoverNetworks: () => ["requests", "discover", "networks"] as const,
   discoverGenres: () => ["requests", "discover", "genres"] as const,
@@ -136,13 +135,12 @@ export const requestKeys = {
     slug: string,
     mediaType: string | undefined,
     sort: string,
-    page: number,
-  ) => ["requests", "discover", "browse", kind, slug, mediaType ?? "", sort, page] as const,
+  ) => ["requests", "discover", "browse", kind, slug, mediaType ?? "", sort] as const,
   search: (mediaType: string, query: string, page: number, viewerKey: string) =>
     ["requests", "search", viewerKey, mediaType, query, page] as const,
   detail: (mediaType: string, tmdbID: number) => ["requests", "detail", mediaType, tmdbID] as const,
   mine: (params: Record<string, unknown>) => ["requests", "mine", params] as const,
-  // Prefixes for refreshing every page or params variant at once.
+  // Prefixes for refreshing every params variant at once.
   discoverBrowseAll: () => ["requests", "discover", "browse"] as const,
   detailAll: () => ["requests", "detail"] as const,
   mineAll: () => ["requests", "mine"] as const,
