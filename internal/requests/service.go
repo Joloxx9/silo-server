@@ -1491,7 +1491,7 @@ func (s *Service) validateViaPlugin(ctx context.Context, in Integration) error {
 			// Don't pair a stored API key with a caller-changed base URL: require the
 			// key to be re-entered when the server URL changes (defense against
 			// exfiltrating a stored, API-unreadable key to an attacker-supplied URL).
-			if strings.TrimSpace(in.BaseURL) != "" && strings.TrimSpace(in.BaseURL) != strings.TrimSpace(stored.BaseURL) {
+			if strings.TrimSpace(in.BaseURL) != "" && !sameIntegrationBaseURL(in.BaseURL, stored.BaseURL) {
 				return &ValidationError{FieldErrors: map[string]string{"api_key_ref": "re-enter the API key when changing the base URL"}}
 			}
 			in.APIKeyRef = stored.APIKeyRef
@@ -1588,11 +1588,10 @@ func (s *Service) LoadIntegrationOptions(ctx context.Context, viewer Viewer, int
 		}
 		if stored != nil {
 			submittedBaseURL := strings.TrimSpace(integration.BaseURL)
-			storedBaseURL := strings.TrimSpace(stored.BaseURL)
-			if strings.TrimSpace(integration.BaseURL) == "" {
+			if submittedBaseURL == "" {
 				integration.BaseURL = stored.BaseURL
 			}
-			if strings.TrimSpace(integration.APIKeyRef) == "" && (submittedBaseURL == "" || submittedBaseURL == storedBaseURL) {
+			if strings.TrimSpace(integration.APIKeyRef) == "" && (submittedBaseURL == "" || sameIntegrationBaseURL(submittedBaseURL, stored.BaseURL)) {
 				integration.APIKeyRef = stored.APIKeyRef
 			}
 			if strings.TrimSpace(integration.CapabilityID) == "" {
@@ -1607,47 +1606,22 @@ func (s *Service) LoadIntegrationOptions(ctx context.Context, viewer Viewer, int
 		}
 	}
 
+	// Without a key the plugin could only fail; say so on the key field. The
+	// address is passed as given: the v2 adapter normalizes it first, and the
+	// frozen v1 route keeps sending what the client submitted.
 	apiKey := strings.TrimSpace(integration.APIKeyRef)
+	if apiKey == "" {
+		return nil, probeValidation(&ValidationError{FieldErrors: map[string]string{fieldAPIKey: integrationKeyMissing}})
+	}
 	if s.router == nil || integration.InstallationID == nil {
 		return nil, fmt.Errorf("no fulfillment backend configured")
 	}
 	conn := ResolvedRouterConnection{ID: integration.ID, BaseURL: integration.BaseURL, APIKey: apiKey, Config: integration.PluginConfig}
 	options, err := s.router.ListConfigOptions(ctx, *integration.InstallationID, integration.CapabilityID, conn)
 	if err != nil {
-		return nil, classifyIntegrationTransportError(err)
+		return nil, classifyIntegrationError(err, integration.CapabilityID)
 	}
 	return options, nil
-}
-
-// classifyIntegrationTransportError marks a failure to reach the configured
-// integration as a dependency failure. Errors the router already classifies
-// (plugin validation results and the request-domain sentinels) pass through
-// untouched so the API keeps rendering them as client problems.
-func classifyIntegrationTransportError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var validation *ValidationError
-	if errors.As(err, &validation) {
-		return err
-	}
-	for _, sentinel := range []error{
-		ErrInvalidInput,
-		ErrInvalidMediaType,
-		ErrRequestsDisabled,
-		ErrUserBlocked,
-		ErrQuotaExceeded,
-		ErrAlreadyAvailable,
-		ErrAlreadyRequested,
-		ErrNotFound,
-		ErrForbidden,
-		ErrInvalidState,
-	} {
-		if errors.Is(err, sentinel) {
-			return err
-		}
-	}
-	return fmt.Errorf("%w: %w", ErrIntegrationUnreachable, err)
 }
 
 func (s *Service) EffectivePolicy(ctx context.Context, userID int) (EffectivePolicy, error) {

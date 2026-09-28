@@ -99,6 +99,11 @@ export function serverKind(server: Pick<RequestIntegration, "plugin_config">): s
 }
 
 const KIND_LABELS: Record<string, string> = { radarr: "Radarr", sonarr: "Sonarr" };
+
+/** "Radarr" or "Sonarr" for those service kinds, otherwise "". */
+export function serviceKindLabel(kind: string): string {
+  return KIND_LABELS[kind] ?? "";
+}
 const KIND_MEDIA_TYPE: Record<string, RequestRouteMediaType> = {
   radarr: "movie",
   sonarr: "series",

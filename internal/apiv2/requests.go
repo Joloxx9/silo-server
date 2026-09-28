@@ -771,6 +771,10 @@ func requestProblem(err error) *Problem {
 	case errors.Is(err, mediarequests.ErrInvalidState):
 		return NewProblem(TypeConflict, "The request is not in a state that allows this action.")
 	case errors.Is(err, mediarequests.ErrIntegrationUnreachable):
+		// Detail is a host-written sentence; the underlying cause stays out.
+		if unreachable, ok := errors.AsType[*mediarequests.IntegrationUnreachableError](err); ok && unreachable.Detail != "" {
+			return NewProblem(TypeDependencyUnavailable, unreachable.Detail)
+		}
 		return NewProblem(TypeDependencyUnavailable, "The request integration could not be reached.")
 	}
 	return NewProblem(TypeInternalError, "An unexpected error occurred.")

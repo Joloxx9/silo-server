@@ -431,12 +431,31 @@ func adminIntegrationOf(r mediarequests.Integration) AdminRequestIntegration {
 	}
 	return AdminRequestIntegration{ID: ID(r.ID), Name: r.Name, CapabilityID: r.CapabilityID, InstallationID: install, SupportedMediaTypes: types, PluginConfig: config, Enabled: r.Enabled, BaseURL: r.BaseURL, HasAPIKey: strings.TrimSpace(r.APIKeyRef) != "", LastCheckAt: checked, LastCheckStatus: r.LastCheckStatus, LastCheckError: r.LastCheckError, UpdatedAt: NewInstant(r.UpdatedAt)}
 }
+
+// adminRequestBaseURL is the address a v2 probe or save sends on: http://
+// assumed and no trailing slash, so the probe and the saved row agree. A blank
+// address stays blank; the service then uses the saved one.
+func adminRequestBaseURL(raw string) (string, *Problem) {
+	if strings.TrimSpace(raw) == "" {
+		return raw, nil
+	}
+	normalized, err := mediarequests.NormalizeIntegrationBaseURL(raw)
+	if err != nil {
+		return "", requestProblem(err)
+	}
+	return normalized, nil
+}
+
 func (b AdminRequestIntegrationBody) domain() (mediarequests.Integration, *Problem) {
 	id, err := strconv.Atoi(string(b.InstallationID))
 	if err != nil || id <= 0 {
 		return mediarequests.Integration{}, NewProblem(TypeValidationFailed, "Invalid installation ID.")
 	}
-	return mediarequests.Integration{Name: b.Name, CapabilityID: b.CapabilityID, InstallationID: &id, SupportedMediaTypes: b.SupportedMediaTypes, PluginConfig: b.PluginConfig, Enabled: b.Enabled, BaseURL: b.BaseURL, APIKeyRef: b.APIKey}, nil
+	baseURL, p := adminRequestBaseURL(b.BaseURL)
+	if p != nil {
+		return mediarequests.Integration{}, p
+	}
+	return mediarequests.Integration{Name: b.Name, CapabilityID: b.CapabilityID, InstallationID: &id, SupportedMediaTypes: b.SupportedMediaTypes, PluginConfig: b.PluginConfig, Enabled: b.Enabled, BaseURL: baseURL, APIKeyRef: b.APIKey}, nil
 }
 func (reg *Registry) listAdminRequestIntegrations(ctx context.Context, cursors *Cursors, in *CursorListInput) (*AdminRequestIntegrationCollectionOutput, error) {
 	s, p := reg.adminRequestService()
@@ -575,7 +594,11 @@ func (reg *Registry) loadAdminRequestOptions(ctx context.Context, in *AdminReque
 		}
 		install = &id
 	}
-	options, err := s.LoadIntegrationOptions(ctx, adminRequestViewer(ctx), mediarequests.Integration{ID: string(in.ID), Name: b.Name, CapabilityID: b.CapabilityID, InstallationID: install, BaseURL: b.BaseURL, APIKeyRef: b.APIKey, PluginConfig: b.PluginConfig})
+	baseURL, p := adminRequestBaseURL(b.BaseURL)
+	if p != nil {
+		return nil, p
+	}
+	options, err := s.LoadIntegrationOptions(ctx, adminRequestViewer(ctx), mediarequests.Integration{ID: string(in.ID), Name: b.Name, CapabilityID: b.CapabilityID, InstallationID: install, BaseURL: baseURL, APIKeyRef: b.APIKey, PluginConfig: b.PluginConfig})
 	if err != nil {
 		return nil, requestProblem(err)
 	}

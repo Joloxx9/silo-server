@@ -511,6 +511,14 @@ func (h *RequestsHandler) HandleLoadIntegrationOptions(w http.ResponseWriter, r 
 	}
 	options, err := h.service.LoadIntegrationOptions(r.Context(), viewer, integration)
 	if err != nil {
+		// v1 is frozen: the host's classified probe answers are a v2 feature,
+		// so this route keeps answering those with its original 500. A
+		// validation error the router returned itself keeps its v1 400.
+		var probe *mediarequests.ProbeValidationError
+		if errors.As(err, &probe) {
+			writeError(w, http.StatusInternalServerError, "internal_error", "Request operation failed")
+			return
+		}
 		writeRequestServiceError(w, err)
 		return
 	}

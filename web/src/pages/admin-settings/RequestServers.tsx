@@ -14,6 +14,7 @@ import {
   type RequestRoute,
   type RequestRouting,
 } from "@/api/v2/adminRequests";
+import { V2ProblemError } from "@/api/v2/request";
 import { EditorConflict } from "@/components/admin/EditorConflict";
 import { SchemaForm } from "@/components/admin/plugins/SchemaForm";
 import { buildSchemaValues, parseFieldTypes } from "@/components/admin/plugins/schemaFormUtils";
@@ -74,6 +75,7 @@ import {
   serverReady,
   serverRouteUsage,
   serverTypeLabel,
+  serviceKindLabel,
   standardServerUsage,
   SERVICE_KIND_KEY,
   type RequestRouterInstallation,
@@ -96,6 +98,15 @@ function plural(count: number, word: string) {
 }
 
 /**
+ * The service the plugin found at the address, e.g. Sonarr 4.0.14. Plugins
+ * that detect it answer one `service_kind` option; older ones answer none.
+ */
+function detectedService(options: RequestIntegrationOptions) {
+  const found = options[SERVICE_KIND_KEY];
+  return found?.length === 1 ? found[0] : undefined;
+}
+
+/**
  * The Test result in words. Sonarr and Radarr answer with their quality
  * profiles and root folders; another plugin's options are just counted.
  */
@@ -106,7 +117,33 @@ function connectedMessage(options: RequestIntegrationOptions): string {
     profiles !== undefined ? plural(profiles, "quality profile") : null,
     folders !== undefined ? plural(folders, "root folder") : null,
   ].filter(Boolean);
-  return parts.length > 0 ? `Connected — ${parts.join(", ")}` : "Connected";
+  const detected = detectedService(options);
+  const lead = detected ? `Detected ${detected.label}` : "Connected";
+  return parts.length > 0 ? `${lead} — ${parts.join(", ")}` : lead;
+}
+
+/**
+ * Why a probe failed, in the editor's terms: messages for the URL and API
+ * key fields, and otherwise the server's sentence for the whole connection.
+ */
+interface ProbeProblem {
+  fields: Record<string, string>;
+  message: string | null;
+}
+
+function probeProblem(error: unknown): ProbeProblem {
+  const validation = requestValidationErrors(error);
+  if (validation) {
+    const hasFields = Object.keys(validation.fields).length > 0;
+    return { fields: validation.fields, message: hasFields ? null : validation.message };
+  }
+  return { fields: {}, message: error instanceof V2ProblemError ? error.message : null };
+}
+
+/** The address as it will be probed and saved: http:// when none is given. */
+function withScheme(url: string): string {
+  const trimmed = url.trim();
+  return trimmed && !trimmed.includes("://") ? `http://${trimmed}` : url;
 }
 
 function ServerTile({
@@ -329,7 +366,11 @@ function useServerOptions(
   const load = useLoadRequestIntegrationOptions();
   const [options, setOptions] = useState<RequestIntegrationOptions>({});
   const [status, setStatus] = useState<OptionsStatus>("idle");
-  const genRef = useRef(0);
+  const [problem, setProblem] = useState<ProbeProblem | null>(null);
+  // Bumped whenever the connection changes. A probe that finishes under a
+  // later value answered for an address or key no longer in the form. Probes
+  // of the same connection (the debounced one and a Test) are interchangeable.
+  const connRef = useRef(0);
 
   const canLoad =
     draft.base_url.trim().length > 0 &&
@@ -358,30 +399,45 @@ function useServerOptions(
     };
   }
 
-  async function probe(): Promise<RequestIntegrationOptions> {
-    const gen = ++genRef.current;
+  /**
+   * Probes the connection now. Resolves to null, whatever the answer, when
+   * the connection changed while the probe ran: that answer is for an
+   * address or key no longer in the form.
+   */
+  async function probe(): Promise<RequestIntegrationOptions | null> {
+    const conn = connRef.current;
     setStatus("loading");
     try {
       const loaded = await load.mutateAsync({ id: connectionID || "new", body: body() });
-      if (gen === genRef.current) {
-        setOptions(loaded);
-        setStatus("idle");
-      }
+      if (conn !== connRef.current) return null;
+      setOptions(loaded);
+      setStatus("idle");
+      setProblem(null);
       return loaded;
     } catch (error) {
-      if (gen === genRef.current) {
-        setOptions({});
-        setStatus("error");
-      }
+      if (conn !== connRef.current) return null;
+      setOptions({});
+      setStatus("error");
+      setProblem(probeProblem(error));
       throw error;
     }
   }
 
+  // A changed connection makes the last probe stale: an answer still in
+  // flight is dropped, and its complaint is cleared while the next probe
+  // waits out the debounce.
+  useEffect(() => {
+    connRef.current += 1;
+    setProblem(null);
+    setStatus("idle");
+  }, [sig]);
+
   useEffect(() => {
     if (!canLoad) {
-      genRef.current += 1;
+      connRef.current += 1;
       setOptions({});
       setStatus("idle");
+      setProblem(null);
       return;
     }
     probe().catch(() => {
@@ -391,7 +447,7 @@ function useServerOptions(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSig, canLoad]);
 
-  return { options, status, canLoad, probe };
+  return { options, status, problem, canLoad, probe };
 }
 
 interface TestResult {
@@ -481,6 +537,7 @@ export function RequestServerEditor({
   const {
     options,
     status: optionsStatus,
+    problem: probeError,
     canLoad,
     probe,
   } = useServerOptions(form.id, {
@@ -495,22 +552,65 @@ export function RequestServerEditor({
   // Once the server's choices arrive, fill each empty single choice with the
   // first one (the root folder and quality profile a new server needs). A
   // choice the admin already made is never replaced.
-  const configRef = useRef(pluginConfig);
-  configRef.current = pluginConfig;
+  // Both this and detection below update from the latest config, so the
+  // first probe's defaults and detected type land together.
   useEffect(() => {
     if (!descriptor) return;
-    const patch: Record<string, unknown> = {};
-    for (const field of descriptor.fields) {
-      if (field.control !== "SELECT" || !field.dynamic_options) continue;
-      if (ROUTING_OWNED_CONFIG_KEYS.includes(field.key)) continue;
-      const first = options[field.key]?.[0];
-      const value = configRef.current[field.key];
-      if (first && (value === undefined || value === null || value === "")) {
-        patch[field.key] = first.value;
+    setPluginConfig((current) => {
+      const patch: Record<string, unknown> = {};
+      for (const field of descriptor.fields) {
+        if (field.control !== "SELECT" || !field.dynamic_options) continue;
+        if (ROUTING_OWNED_CONFIG_KEYS.includes(field.key)) continue;
+        const first = options[field.key]?.[0];
+        const value = current[field.key];
+        if (first && (value === undefined || value === null || value === "")) {
+          patch[field.key] = first.value;
+        }
       }
-    }
-    if (Object.keys(patch).length > 0) setPluginConfig({ ...configRef.current, ...patch });
+      return Object.keys(patch).length > 0 ? { ...current, ...patch } : current;
+    });
   }, [options, descriptor]);
+
+  // A plugin that tells Sonarr from Radarr sets the type from what answered,
+  // and names an unnamed server after it. A server routing sends requests to
+  // keeps its type; a different answer is only shown as a warning.
+  const detected = detectedService(options);
+  const detectedKind = detected?.value ?? "";
+  const kindField = descriptor?.fields.find((field) => field.key === SERVICE_KIND_KEY);
+  const detectsKind = Boolean(
+    detectedKind && kindField?.options?.some((option) => option.value === detectedKind),
+  );
+  const currentKind = serverKind({ plugin_config: pluginConfig });
+  const kindMismatch =
+    detectsKind && typeLock !== undefined && currentKind !== "" && currentKind !== detectedKind
+      ? `This address answers as ${detected?.label}, not ${serviceKindLabel(currentKind) || currentKind}. ${typeLock}`
+      : undefined;
+  // The name detection last filled in: a later detection may replace it, but
+  // never a name the admin typed.
+  const autoNameRef = useRef("");
+  useEffect(() => {
+    if (!detectsKind || typeLock !== undefined) return;
+    setPluginConfig((current) =>
+      serverKind({ plugin_config: current }) === detectedKind
+        ? current
+        : { ...current, [SERVICE_KIND_KEY]: detectedKind },
+    );
+    const label = serviceKindLabel(detectedKind);
+    if (!label) return;
+    const name = is4K ? `${label} 4K` : label;
+    setForm((current) => {
+      if (current.name.trim() && current.name !== autoNameRef.current) return current;
+      autoNameRef.current = name;
+      return { ...current, name };
+    });
+  }, [detectsKind, detectedKind, typeLock, is4K]);
+  const schemaErrors = useMemo(
+    () =>
+      kindMismatch && !fieldErrors[SERVICE_KIND_KEY]
+        ? { ...fieldErrors, [SERVICE_KIND_KEY]: kindMismatch }
+        : fieldErrors,
+    [fieldErrors, kindMismatch],
+  );
 
   // Any edit makes a failed save's answer stale.
   function clearSaveErrors() {
@@ -555,11 +655,19 @@ export function RequestServerEditor({
     setTesting(true);
     try {
       const loaded = await probe();
-      setTest({ ok: true, message: connectedMessage(loaded) });
+      // A stale answer says nothing about the connection now in the form.
+      if (loaded) setTest({ ok: true, message: connectedMessage(loaded) });
     } catch (error) {
+      const problem = probeProblem(error);
       setTest({
         ok: false,
-        message: error instanceof Error ? error.message : "The server could not be reached.",
+        message:
+          problem.message ??
+          (Object.keys(problem.fields).length > 0
+            ? "Check the fields marked above."
+            : error instanceof Error
+              ? error.message
+              : "The server could not be reached."),
       });
     } finally {
       setTesting(false);
@@ -632,6 +740,8 @@ export function RequestServerEditor({
       .filter((key) => !ROUTING_OWNED_CONFIG_KEYS.includes(key) || key === FOUR_K_KEY),
   ]);
   const unshownErrors = Object.entries(fieldErrors).filter(([key]) => !shownKeys.has(key));
+  const urlError = fieldErrors.base_url ?? probeError?.fields.base_url;
+  const keyError = fieldErrors.api_key_ref ?? probeError?.fields.api_key_ref;
 
   return (
     <>
@@ -701,17 +811,17 @@ export function RequestServerEditor({
             className={SETTINGS_CONTROL_WIDTH}
           />
         </SettingFieldRow>
-        <SettingFieldRow
-          label="URL"
-          htmlFor={urlId}
-          status={<FieldError>{fieldErrors.base_url}</FieldError>}
-        >
+        <SettingFieldRow label="URL" htmlFor={urlId} status={<FieldError>{urlError}</FieldError>}>
           <Input
             id={urlId}
             value={form.base_url}
             onChange={(event) => patch({ base_url: event.target.value })}
-            placeholder="http://radarr:7878"
-            aria-invalid={Boolean(fieldErrors.base_url)}
+            onBlur={() => {
+              const next = withScheme(form.base_url);
+              if (next !== form.base_url) patch({ base_url: next });
+            }}
+            placeholder="http://192.168.1.10:8989"
+            aria-invalid={Boolean(urlError)}
             className={SETTINGS_CONTROL_WIDTH}
           />
         </SettingFieldRow>
@@ -725,7 +835,7 @@ export function RequestServerEditor({
               ? "Saved. Type a new key to replace it; leave blank to keep it."
               : "From the server's Settings › General."
           }
-          status={<FieldError>{fieldErrors.api_key_ref}</FieldError>}
+          status={<FieldError>{keyError}</FieldError>}
         />
         <SettingFieldRow label="Enabled" htmlFor={`${nameId}-enabled`}>
           <Switch
@@ -766,18 +876,23 @@ export function RequestServerEditor({
             onChange={patchConfig}
             dynamicOptions={options}
             optionsLoading={optionsStatus === "loading"}
-            errors={fieldErrors}
+            errors={schemaErrors}
             onValidityChange={setSchemaValid}
             idPrefix={`server-${form.id || "new"}`}
             hiddenKeys={ROUTING_OWNED_CONFIG_KEYS}
             lockedKeys={typeLock ? { [SERVICE_KIND_KEY]: typeLock } : undefined}
             expandSections
           />
-          {optionsStatus === "error" && !test ? (
+          {optionsStatus === "error" &&
+          !test &&
+          (probeError?.message || Object.keys(probeError?.fields ?? {}).length === 0) ? (
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              Couldn&apos;t read root folders and profiles from the server. Check the URL and API
-              key, then Test.
+              {probeError?.message ||
+                "Couldn't read root folders and profiles from the server. Check the URL and API key, then Test."}
             </p>
+          ) : null}
+          {optionsStatus === "idle" && detected && !test && !kindMismatch ? (
+            <p className="text-muted-foreground text-xs">Detected {detected.label}.</p>
           ) : null}
         </div>
       ) : hasInstallation ? (

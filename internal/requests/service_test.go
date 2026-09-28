@@ -1293,17 +1293,18 @@ func TestLoadIntegrationOptionsDoesNotBackfillStoredKeyForChangedBaseURL(t *test
 	service := newTestService(store)
 	service.SetRouterProvider(router)
 
-	if _, err := service.LoadIntegrationOptions(context.Background(), Viewer{UserID: 1, IsAdmin: true}, Integration{
+	_, err := service.LoadIntegrationOptions(context.Background(), Viewer{UserID: 1, IsAdmin: true}, Integration{
 		ID:      "router-1",
 		BaseURL: "http://attacker.example",
-	}); err != nil {
-		t.Fatalf("LoadIntegrationOptions: %v", err)
+	})
+	// The stored key stays with the stored address: a changed URL needs the
+	// key typed again, and the plugin is never asked without one.
+	var ve *ValidationError
+	if !errors.As(err, &ve) || ve.FieldErrors["api_key_ref"] != integrationKeyMissing {
+		t.Fatalf("err = %v, want the api_key_ref field error", err)
 	}
-	if router.gotOptionsConn.APIKey != "" {
-		t.Fatalf("probe API key = %q, want empty for changed base URL", router.gotOptionsConn.APIKey)
-	}
-	if router.gotOptionsConn.BaseURL != "http://attacker.example" {
-		t.Fatalf("probe base URL = %q, want submitted URL", router.gotOptionsConn.BaseURL)
+	if router.gotOptionsConn.APIKey != "" || router.gotOptionsConn.BaseURL != "" {
+		t.Fatalf("probe conn = %+v, want no probe for changed base URL without a key", router.gotOptionsConn)
 	}
 }
 
@@ -1353,6 +1354,11 @@ func TestLoadIntegrationOptionsKeepsValidationErrors(t *testing.T) {
 	var validation *ValidationError
 	if !errors.As(err, &validation) || errors.Is(err, ErrIntegrationUnreachable) {
 		t.Fatalf("err = %v, want the plugin validation error", err)
+	}
+	// Returned as is, not as a host-classified probe error.
+	var probe *ProbeValidationError
+	if errors.As(err, &probe) {
+		t.Fatalf("err = %v, want the router's error unchanged", err)
 	}
 }
 
