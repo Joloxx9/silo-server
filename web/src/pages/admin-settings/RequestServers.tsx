@@ -546,21 +546,23 @@ export function RequestServerEditor({
   // Once the server's choices arrive, fill each empty single choice with the
   // first one (the root folder and quality profile a new server needs). A
   // choice the admin already made is never replaced.
-  const configRef = useRef(pluginConfig);
-  configRef.current = pluginConfig;
+  // Both this and detection below update from the latest config, so the
+  // first probe's defaults and detected type land together.
   useEffect(() => {
     if (!descriptor) return;
-    const patch: Record<string, unknown> = {};
-    for (const field of descriptor.fields) {
-      if (field.control !== "SELECT" || !field.dynamic_options) continue;
-      if (ROUTING_OWNED_CONFIG_KEYS.includes(field.key)) continue;
-      const first = options[field.key]?.[0];
-      const value = configRef.current[field.key];
-      if (first && (value === undefined || value === null || value === "")) {
-        patch[field.key] = first.value;
+    setPluginConfig((current) => {
+      const patch: Record<string, unknown> = {};
+      for (const field of descriptor.fields) {
+        if (field.control !== "SELECT" || !field.dynamic_options) continue;
+        if (ROUTING_OWNED_CONFIG_KEYS.includes(field.key)) continue;
+        const first = options[field.key]?.[0];
+        const value = current[field.key];
+        if (first && (value === undefined || value === null || value === "")) {
+          patch[field.key] = first.value;
+        }
       }
-    }
-    if (Object.keys(patch).length > 0) setPluginConfig({ ...configRef.current, ...patch });
+      return Object.keys(patch).length > 0 ? { ...current, ...patch } : current;
+    });
   }, [options, descriptor]);
 
   // A plugin that tells Sonarr from Radarr sets the type from what answered,
@@ -584,9 +586,11 @@ export function RequestServerEditor({
   const autoNameRef = useRef("");
   useEffect(() => {
     if (!detectsKind || typeLock !== undefined) return;
-    if (serverKind({ plugin_config: configRef.current }) !== detectedKind) {
-      setPluginConfig({ ...configRef.current, [SERVICE_KIND_KEY]: detectedKind });
-    }
+    setPluginConfig((current) =>
+      serverKind({ plugin_config: current }) === detectedKind
+        ? current
+        : { ...current, [SERVICE_KIND_KEY]: detectedKind },
+    );
     const label = serviceKindLabel(detectedKind);
     if (!label) return;
     const name = is4KRef.current ? `${label} 4K` : label;

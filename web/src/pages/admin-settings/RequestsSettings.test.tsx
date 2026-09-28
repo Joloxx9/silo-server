@@ -327,13 +327,8 @@ describe("Requests settings: servers", () => {
     expect(await within(dialog).findByText("Detected Sonarr 4.0.14.")).toBeInTheDocument();
     expect((within(dialog).getByLabelText("Name") as HTMLInputElement).value).toBe("Sonarr 4K");
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Test" }));
-    expect(
-      await within(dialog).findByText(
-        "Detected Sonarr 4.0.14 — 2 quality profiles, 2 root folders",
-      ),
-    ).toBeInTheDocument();
-
+    // The first probe alone fills the required choices beside the type, so
+    // the server can be added without a Test.
     fireEvent.click(within(dialog).getByRole("button", { name: "Add server" }));
     await waitFor(() => expect(calls("POST /api/v2/admin/request-integrations")).toHaveLength(1));
     const body = calls("POST /api/v2/admin/request-integrations")[0]!.body as {
@@ -341,7 +336,12 @@ describe("Requests settings: servers", () => {
       plugin_config: Record<string, unknown>;
     };
     expect(body.name).toBe("Sonarr 4K");
-    expect(body.plugin_config).toMatchObject({ service_kind: "sonarr", is_4k: true });
+    expect(body.plugin_config).toMatchObject({
+      service_kind: "sonarr",
+      is_4k: true,
+      root_folder: "/movies",
+      quality_profile_id: 1,
+    });
   });
 
   it("renames a server it named when a later address answers as the other service", async () => {
@@ -366,6 +366,12 @@ describe("Requests settings: servers", () => {
     fireEvent.change(url, { target: { value: "http://10.0.0.5:8989" } });
     expect(await within(dialog).findByText("Detected Sonarr 4.0.14.")).toBeInTheDocument();
     expect(name.value).toBe("Sonarr");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Test" }));
+    expect(
+      await within(dialog).findByText(
+        "Detected Sonarr 4.0.14 — 2 quality profiles, 2 root folders",
+      ),
+    ).toBeInTheDocument();
 
     fireEvent.change(url, { target: { value: "http://10.0.0.5:7878" } });
     expect(await within(dialog).findByText("Detected Radarr 5.2.0.")).toBeInTheDocument();
