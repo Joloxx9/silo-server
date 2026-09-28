@@ -193,8 +193,9 @@ func classifyIntegrationError(err error, capabilityID string) error {
 	}
 	switch {
 	// A web page where the API should be: Sonarr and Radarr serve their UI
-	// for any unknown path, so a missing URL base answers HTML, not JSON.
-	case strings.Contains(lower, "decode response"):
+	// for any unknown path, so a missing URL base answers HTML, not JSON. A
+	// truncated or oddly shaped JSON body is not this.
+	case strings.Contains(lower, "decode response") && strings.Contains(lower, "invalid character '<'"):
 		return notTheService()
 	case strings.Contains(lower, "server gave http response to https client"):
 		return fieldError(fieldBaseURL, integrationHTTPNotHTTPS)

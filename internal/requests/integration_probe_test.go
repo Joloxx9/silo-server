@@ -29,6 +29,7 @@ func TestLoadIntegrationOptionsClassifiesProbeFailures(t *testing.T) {
 		{name: "forbidden", err: errors.New("httpclient: HTTP 403"), field: "api_key_ref", fieldText: integrationKeyRejected},
 		{name: "not found arr", capability: "arr", err: grpcUnknown("httpclient: HTTP 404: <html>not found</html>"), field: "base_url", fieldText: integrationNotArr},
 		{name: "web page instead of the api", capability: "arr", err: grpcUnknown("httpclient: decode response: invalid character '<' looking for beginning of value"), field: "base_url", fieldText: integrationNotArr},
+		{name: "truncated json", capability: "arr", err: grpcUnknown("httpclient: decode response: unexpected EOF"), detail: ""},
 		{name: "not found other plugin", capability: "seerr", err: grpcUnknown("httpclient: HTTP 404"), field: "base_url", fieldText: integrationNotService},
 		{name: "http on https", err: grpcUnknown(`httpclient: request failed: Get "https://10.0.0.5:8989/api/v3/rootfolder": http: server gave HTTP response to HTTPS client`), field: "base_url", fieldText: integrationHTTPNotHTTPS},
 		{name: "no scheme", err: grpcUnknown(`httpclient: request failed: Get "10.0.0.5:8989/api/v3/rootfolder": unsupported protocol scheme ""`), field: "base_url", fieldText: integrationAddressMessage},

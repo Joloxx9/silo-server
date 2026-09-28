@@ -2049,6 +2049,24 @@ base URL. Plugin validation happens before the storage transaction; an interveni
 edit still fails the final comparison instead of overwriting it. A failed plugin
 validation uses structured v2 problem errors for the web's inline field messages.
 
+A v2 integration's `base_url` is normalized before option loading and before
+create or update: `http://` is assumed when no scheme is given and a trailing
+slash is dropped, so the saved address is the one the options probe used. An
+address with credentials, a query or a fragment, or another scheme, is a
+`validation_failed` problem on `body.base_url`. When `POST
+/admin/request-integrations/{id}/options` fails, the host answers with its own
+sentences and never echoes the plugin's upstream text. What the admin must fix
+is a `validation_failed` problem on `body.base_url` (wrong address, missing URL
+base, https on an http port) or `body.api_key_ref` (missing or rejected key). A
+message the plugin wrote as gRPC `InvalidArgument` or `FailedPrecondition` is
+the problem detail. A server that cannot be reached stays `dependency_unavailable`,
+with a detail naming the cause when known (nothing listening, unknown host,
+timeout, rejected certificate). A plugin may return a single `service_kind`
+option naming the service it found; the Sonarr and Radarr plugin does, and the
+web uses it to set the server type. The frozen v1 routes keep their behavior:
+they pass and store the address as submitted, and a failed v1 probe the host
+classified still answers 500.
+
 All mutations remain non-retryable after an uncertain response. Approve, retry and
 option loading retain their owning service behavior and may invoke a plugin; they
 have no new accepted-job or durable-dispatch guarantee. Configuration guards prevent
