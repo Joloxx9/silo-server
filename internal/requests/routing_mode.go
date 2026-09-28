@@ -448,7 +448,10 @@ func (r *Repository) standardBeforeSave(ctx context.Context, tx pgx.Tx) (layout 
 // this catches Advanced turned on in between.
 func ensureTierKeptUnderAdvanced(ctx context.Context, tx pgx.Tx, in Integration) error {
 	var raw []byte
-	err := tx.QueryRow(ctx, `SELECT plugin_config FROM request_integrations WHERE id = $1`, in.ID).Scan(&raw)
+	// FOR UPDATE before reading the routes: a route save holds its servers
+	// FOR SHARE (ensureDestinationTiers), so one in flight commits first and
+	// its route is read below.
+	err := tx.QueryRow(ctx, `SELECT plugin_config FROM request_integrations WHERE id = $1 FOR UPDATE`, in.ID).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}

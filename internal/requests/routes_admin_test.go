@@ -557,3 +557,32 @@ func TestStandardRoutingLeavesThe4KSwitchFree(t *testing.T) {
 		t.Fatalf("unmark under Advanced: err = %v, want an is_4k field error", err)
 	}
 }
+
+// validateRoute reads the servers before the save; the save checks the tier
+// again with the servers locked, so a 4K switch changed in between is caught.
+func TestSaveRouteRechecksTierDatabase(t *testing.T) {
+	ctx := t.Context()
+	repo, pool := routingModeRepository(t)
+	for _, in := range []Integration{arrServer("radarr", kindRadarr, nil), arrServer("radarr-4k", kindRadarr, map[string]any{"is_4k": true})} {
+		in.APIKeyRef = ""
+		if _, err := repo.SaveIntegrationWithDefaults(ctx, in, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// radarr was marked 4K after the editor validated the route.
+	if _, err := pool.Exec(ctx, `UPDATE request_integrations SET plugin_config = plugin_config || '{"is_4k": true}' WHERE id = 'radarr'`); err != nil {
+		t.Fatal(err)
+	}
+	route := Route{ID: "anime", MediaType: MediaTypeMovie, Name: "Anime", Enabled: true,
+		Conditions: RouteConditions{Anime: boolPtr(true)},
+		HD:         RouteDestination{IntegrationID: "radarr"}, UHD: RouteDestination{IntegrationID: "radarr-4k"}}
+	_, err := repo.SaveRouteConditional(ctx, route, 0)
+	fields := fieldErrors(t, err)
+	if !strings.Contains(fields["hd.integration_id"], "marked 4K") || fields["uhd.integration_id"] != "" {
+		t.Fatalf("fields = %v, want only the HD server refused", fields)
+	}
+	route.HD.IntegrationID = ""
+	if _, err := repo.SaveRouteConditional(ctx, route, 0); err != nil {
+		t.Fatalf("4K only: %v", err)
+	}
+}

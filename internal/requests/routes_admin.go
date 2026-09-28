@@ -723,6 +723,11 @@ func (r *Repository) SaveRouteConditional(ctx context.Context, route Route, expe
 	// Only a create (expected 0) or the fallback's first save may find no
 	// row; a rule deleted under an editor must not come back.
 	allowMissing := expected == 0 || route.IsFallback
+	// Servers before the route row, the order a server save that turns
+	// Advanced on takes them in.
+	if err := ensureDestinationTiers(ctx, tx, route); err != nil {
+		return nil, err
+	}
 	if err := lockRevision(ctx, tx, `SELECT revision FROM request_routes WHERE id = $1 FOR UPDATE`, []any{route.ID}, expected, allowMissing); err != nil {
 		return nil, err
 	}
@@ -748,6 +753,58 @@ func (r *Repository) SaveRouteConditional(ctx context.Context, route Route, expe
 		return nil, fmt.Errorf("save request route: %w", err)
 	}
 	return &saved, tx.Commit(ctx)
+}
+
+// ensureDestinationTiers checks the route's servers against the tier rule
+// again inside the save, holding their rows FOR SHARE: a 4K switch change
+// committed since validateRoute is seen here, and one still in flight waits
+// for this save and then finds the route (ensureTierKeptUnderAdvanced).
+func ensureDestinationTiers(ctx context.Context, tx pgx.Tx, route Route) error {
+	ids := make([]string, 0, 2)
+	for _, id := range []string{route.HD.IntegrationID, route.UHD.IntegrationID} {
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT id, name, plugin_config FROM request_integrations WHERE id = ANY($1) ORDER BY id FOR SHARE`, ids)
+	if err != nil {
+		return fmt.Errorf("lock route servers: %w", err)
+	}
+	defer rows.Close()
+	fields := map[string]string{}
+	for rows.Next() {
+		var in Integration
+		var raw []byte
+		if err := rows.Scan(&in.ID, &in.Name, &raw); err != nil {
+			return fmt.Errorf("scan route server: %w", err)
+		}
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &in.PluginConfig); err != nil {
+				return fmt.Errorf("decode route server %s config: %w", in.ID, err)
+			}
+		}
+		for field, uhd := range map[string]bool{"hd": false, "uhd": true} {
+			dest := route.HD
+			if uhd {
+				dest = route.UHD
+			}
+			if dest.IntegrationID == in.ID {
+				if msg := tierMismatch(in, uhd); msg != "" {
+					fields[field+".integration_id"] = msg
+				}
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(fields) > 0 {
+		return &ValidationError{FieldErrors: fields}
+	}
+	return nil
 }
 
 func nonNilOverrides(overrides map[string]any) map[string]any {
