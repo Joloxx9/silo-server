@@ -11,7 +11,11 @@ const routeColumns = `id, media_type, position, name, enabled, is_fallback, cond
 	skip_uhd, revision`
 
 func (r *Repository) ListRoutes(ctx context.Context) ([]Route, error) {
-	rows, err := r.pool.Query(ctx, `SELECT `+routeColumns+` FROM request_routes ORDER BY media_type, is_fallback, position, id`)
+	return listRoutes(ctx, r.pool)
+}
+
+func listRoutes(ctx context.Context, exec requestExecutor) ([]Route, error) {
+	rows, err := exec.Query(ctx, `SELECT `+routeColumns+` FROM request_routes ORDER BY media_type, is_fallback, position, id`)
 	if err != nil {
 		return nil, fmt.Errorf("list request routes: %w", err)
 	}

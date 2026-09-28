@@ -776,3 +776,50 @@ func TestAdvancedClearsDestinationsThatChangedTierDatabase(t *testing.T) {
 		}
 	})
 }
+
+// The service checks a 4K switch change against the routes before the save,
+// reading the mode then; the save checks again under the routing-mode lock, so
+// Advanced turned on in between cannot leave a route sending a server the other
+// version. A route saved before the rule does not block other edits.
+func TestSaveRechecksTierUnderAdvancedDatabase(t *testing.T) {
+	ctx := t.Context()
+	repo, pool := routingModeRepository(t)
+	for _, in := range []Integration{arrServer("radarr", kindRadarr, nil), arrServer("radarr-4k", kindRadarr, map[string]any{"is_4k": true})} {
+		in.APIKeyRef = ""
+		if _, err := repo.SaveIntegrationWithDefaults(ctx, in, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := repo.UpdateRoutingModeConditional(ctx, RoutingAdvanced, -1); err != nil {
+		t.Fatal(err)
+	}
+	// An older rule sending HD versions to the 4K server.
+	if _, err := pool.Exec(ctx, `INSERT INTO request_routes (id, media_type, position, name, enabled, conditions, hd_integration_id)
+		VALUES ('anime', 'movie', 0, 'Anime', true, '{"anime":true}', 'radarr-4k')`); err != nil {
+		t.Fatal(err)
+	}
+	get := func(id string) Integration {
+		t.Helper()
+		in, err := repo.GetIntegration(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return *in
+	}
+
+	flipped := get("radarr")
+	flipped.PluginConfig["is_4k"] = true
+	_, err := repo.UpdateIntegrationConditional(ctx, flipped, flipped.Revision)
+	if msg := fieldErrors(t, err)["plugin_config.is_4k"]; !strings.Contains(msg, "Everything else") {
+		t.Fatalf("conditional save marking radarr 4K: %q, want the is_4k error naming Everything else", msg)
+	}
+	if _, err := repo.SaveIntegrationWithDefaults(ctx, flipped, false); !strings.Contains(fieldErrors(t, err)["plugin_config.is_4k"], "can't be marked 4K") {
+		t.Fatalf("save marking radarr 4K: %v, want an is_4k field error", err)
+	}
+
+	renamed := get("radarr-4k")
+	renamed.Name = "Radarr UHD"
+	if _, err := repo.UpdateIntegrationConditional(ctx, renamed, renamed.Revision); err != nil {
+		t.Fatalf("rename the 4K server an older rule sends HD to: %v", err)
+	}
+}

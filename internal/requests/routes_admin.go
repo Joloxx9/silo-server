@@ -391,14 +391,10 @@ func (s *Service) ensureRoutesKeepServerKind(ctx context.Context, in Integration
 		}
 		checkTier = settings.Mode != RoutingStandard
 	}
-	var wrongKind, unsupported, wrongTier []string
+	var wrongKind, unsupported []string
 	for _, r := range routes {
 		if r.HD.IntegrationID != in.ID && r.UHD.IntegrationID != in.ID {
 			continue
-		}
-		if checkTier && ((r.HD.IntegrationID == in.ID && tierMismatch(in, false) != "") ||
-			(r.UHD.IntegrationID == in.ID && tierMismatch(in, true) != "")) {
-			wrongTier = append(wrongTier, r.Name)
 		}
 		if serverKindMismatch(in, r.MediaType) != "" {
 			wrongKind = append(wrongKind, r.Name)
@@ -416,19 +412,46 @@ func (s *Service) ensureRoutesKeepServerKind(ctx context.Context, in Integration
 		fields["supported_media_types"] = "Routing sends a media type this server would no longer take to it (" +
 			strings.Join(unsupported, ", ") + "); change those routes first."
 	}
-	if len(wrongTier) > 0 {
-		msg := "Routing sends 4K versions to this server (" + strings.Join(wrongTier, ", ") +
-			`), so "4K server" has to stay on; change those routes first.`
-		if is4KServer(in) {
-			msg = "Routing sends HD versions to this server (" + strings.Join(wrongTier, ", ") +
-				`), so it can't be marked 4K; change those routes first.`
+	if checkTier {
+		current, err := s.store.GetIntegration(ctx, in.ID)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return err
 		}
-		fields["plugin_config."+configIs4K] = msg
+		if current == nil || is4KServer(*current) != is4KServer(in) {
+			if msg := tierConflict(in, routes); msg != "" {
+				fields["plugin_config."+configIs4K] = msg
+			}
+		}
 	}
 	if len(fields) == 0 {
 		return nil
 	}
 	return &ValidationError{FieldErrors: fields}
+}
+
+// tierConflict explains why routes keep a server's 4K switch where it is: they
+// send it the version the server would no longer take. It is empty when none
+// do. It is checked only when the switch changes, so a route saved before the
+// rule existed does not block unrelated edits to its server. The repository
+// checks again under the routing-mode lock, since a switch to Advanced can
+// commit between this check and the save.
+func tierConflict(in Integration, routes []Route) string {
+	var names []string
+	for _, r := range routes {
+		if (r.HD.IntegrationID == in.ID && tierMismatch(in, false) != "") ||
+			(r.UHD.IntegrationID == in.ID && tierMismatch(in, true) != "") {
+			names = append(names, r.Name)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	if is4KServer(in) {
+		return "Routing sends HD versions to this server (" + strings.Join(names, ", ") +
+			`), so it can't be marked 4K; change those routes first.`
+	}
+	return "Routing sends 4K versions to this server (" + strings.Join(names, ", ") +
+		`), so "4K server" has to stay on; change those routes first.`
 }
 
 // validateRoute normalizes a route and checks it against the configured

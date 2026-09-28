@@ -2,6 +2,7 @@ package requests
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -439,6 +440,38 @@ func (r *Repository) standardBeforeSave(ctx context.Context, tx pgx.Tx) (layout 
 	}
 	layout, _ = standardLayout(integrations)
 	return layout, true, nil
+}
+
+// ensureTierKeptUnderAdvanced refuses, under the routing-mode lock taken by
+// standardBeforeSave, a server update whose 4K switch leaves an active route
+// sending it the other version. The service checks the same before the save;
+// this catches Advanced turned on in between.
+func ensureTierKeptUnderAdvanced(ctx context.Context, tx pgx.Tx, in Integration) error {
+	var raw []byte
+	err := tx.QueryRow(ctx, `SELECT plugin_config FROM request_integrations WHERE id = $1`, in.ID).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read request integration %s: %w", in.ID, err)
+	}
+	stored := Integration{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &stored.PluginConfig); err != nil {
+			return fmt.Errorf("decode request integration %s config: %w", in.ID, err)
+		}
+	}
+	if is4KServer(stored) == is4KServer(in) {
+		return nil
+	}
+	routes, err := listRoutes(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if msg := tierConflict(in, routes); msg != "" {
+		return &ValidationError{FieldErrors: map[string]string{"plugin_config." + configIs4K: msg}}
+	}
+	return nil
 }
 
 // advanceIfStandardBroken turns Advanced on when a saved server leaves a media
