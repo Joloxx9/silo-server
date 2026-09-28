@@ -69,6 +69,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/intromarkers"
 	"github.com/Silo-Server/silo-server/internal/jellycompat"
 	"github.com/Silo-Server/silo-server/internal/libraryingest"
+	"github.com/Silo-Server/silo-server/internal/librarymonitor"
 	"github.com/Silo-Server/silo-server/internal/literaryworks"
 	"github.com/Silo-Server/silo-server/internal/logfilter"
 	"github.com/Silo-Server/silo-server/internal/logredact"
@@ -1303,16 +1304,16 @@ func main() {
 	deps.AdminJobCancelRegistry = adminJobCancelRegistry
 	if needsWorkers && deps.DB != nil {
 		deps.IntroRepository = intromarkers.NewRepository(deps.DB)
-		deps.IntroAnalyzer = intromarkers.NewAnalyzer(
-			deps.IntroRepository,
-			intromarkers.DefaultConfig(cfg.Playback.FFmpegPath),
-			slog.Default(),
-		)
-		// markers.detection_workers applies without a restart.
+		introConfig := intromarkers.DefaultConfig(cfg.Playback.FFmpegPath)
+		introConfig.HWAccel, introConfig.HWDevice = cfg.Playback.HWAccel, cfg.Playback.HWDevice
+		deps.IntroAnalyzer = intromarkers.NewAnalyzer(deps.IntroRepository, introConfig, slog.Default())
+		// markers.detection_workers, and the playback hardware settings that
+		// credits tail passes decode on, apply without a restart.
 		introAnalyzer := deps.IntroAnalyzer
 		introAnalyzer.SetWorkers(cfg.Markers.DetectionWorkers)
 		configWatcher.OnChange(func(_, updated *config.Config) {
 			introAnalyzer.SetWorkers(updated.Markers.DetectionWorkers)
+			introAnalyzer.SetHardwareDecode(updated.Playback.HWAccel, updated.Playback.HWDevice)
 		})
 	}
 	if deps.DB != nil {
@@ -2318,6 +2319,47 @@ func main() {
 		defer libraryScanQueue.Stop()
 	}
 
+	// Real-time library monitoring. The status read serves every node's
+	// reports; the monitor itself runs wherever this process can scan, watches
+	// the library folders this node can see, and queues scans for changes. Its
+	// folder walks run in the background, so startup never waits on them.
+	if needsScanner && deps.DB != nil && deps.FolderRepo != nil {
+		monitorStatus := librarymonitor.NewStatusStore(deps.DB)
+		deps.LibraryMonitoring = &librarymonitor.StatusReader{
+			Store:         monitorStatus,
+			Folders:       deps.FolderRepo,
+			ServerEnabled: func() bool { return configWatcher.Config().Scanner.RealtimeMonitoring },
+		}
+		if libraryScanQueue != nil {
+			serverEnabled := configWatcher.Config().Scanner.RealtimeMonitoring
+			libraryMonitor, monitorErr := librarymonitor.New(librarymonitor.Config{
+				NodeID:        nodeID,
+				Folders:       deps.FolderRepo,
+				Queue:         libraryScanQueue,
+				Status:        monitorStatus,
+				Logger:        slog.Default(),
+				ServerEnabled: serverEnabled,
+			})
+			if monitorErr != nil {
+				slog.Error("real-time library monitoring disabled", "error", monitorErr)
+			} else {
+				configWatcher.OnChange(func(old, updated *config.Config) {
+					if old == nil || old.Scanner.RealtimeMonitoring != updated.Scanner.RealtimeMonitoring {
+						libraryMonitor.SetServerEnabled(updated.Scanner.RealtimeMonitoring)
+					}
+				})
+				// A reload between reading the switch and registering the hook
+				// would otherwise be missed.
+				if live := configWatcher.Config().Scanner.RealtimeMonitoring; live != serverEnabled {
+					libraryMonitor.SetServerEnabled(live)
+				}
+				libraryMonitor.Start(appCtx)
+				defer libraryMonitor.Stop()
+				deps.LibraryMonitor = libraryMonitor
+			}
+		}
+	}
+
 	if userStoreProvider != nil && pluginService != nil {
 		deps.PluginUserConfig = plugins.NewUserConfigStore(userStoreProvider, pluginService)
 	}
@@ -2420,12 +2462,7 @@ func main() {
 	var heartbeatWriter *worker.HeartbeatWriter
 	if needsWorkers && deps.DB != nil {
 		sessionProvider := func() []worker.SessionSync {
-			sessions := sessionMgr.AllSessions()
-			syncs := make([]worker.SessionSync, len(sessions))
-			for i, s := range sessions {
-				syncs[i] = buildLiveSessionSync(s, nodeIdentity)
-			}
-			return syncs
+			return buildLiveSessionSyncs(sessionMgr.AllSessions(), nodeIdentity)
 		}
 		reconciler = worker.NewReconciler(deps.DB, nodeIdentity, sessionProvider)
 		reconciler.EventBus = deps.EventBus
@@ -2738,7 +2775,7 @@ func main() {
 		taskMgr.Register(tasks.NewRebuildCatalogSearchIndexTask(catalogSearchIndexer))
 		maintenanceSteps = append(maintenanceSteps, tasks.NewCatalogSearchEventRetentionTask(catalog.NewSearchIndexEventRepository(deps.DB)))
 		if deps.IntroAnalyzer != nil {
-			taskMgr.Register(tasks.NewDetectIntroMarkersTask(deps.IntroAnalyzer, settingsRepo))
+			taskMgr.Register(tasks.NewDetectIntroMarkersTask(deps.DB, deps.IntroAnalyzer, settingsRepo))
 		}
 		if deps.MarkerPopulation != nil {
 			taskMgr.Register(tasks.NewSyncMarkersTask(deps.MarkerPopulation))
@@ -2908,7 +2945,9 @@ func main() {
 			taskMgr.Register(tasks.NewSyncWatchProvidersTask(watchProviderService))
 		}
 		// The reconcile pass routes requests, which reads TMDB for requests
-		// whose routing facts were never captured.
+		// whose routing facts were never captured. The TMDB client also lets a
+		// submission started here pick up a TVDB ID added on TMDB after the
+		// request was created.
 		requestReconcileSvc := mediarequests.NewService(
 			mediarequests.NewRepository(deps.DB, deps.SecretCipher),
 			tmdb.NewClient(cfg.TMDBAPIKey, 40),
@@ -2919,6 +2958,9 @@ func main() {
 		)
 		requestReconcileSvc.SetAnimeIndex(animeids.NewStore(deps.DB))
 		requestReconcileSvc.SetRequesterIdentityResolver(plugins.RequesterIdentityFromLookup(plugins.NewPgUserIdentityLookup(deps.DB)))
+		if metadataService != nil {
+			requestReconcileSvc.SetTVDBIDResolver(metadataService)
+		}
 		api.AttachRequestRouter(requestReconcileSvc, pluginService)
 		requestReconcileSvc.SetGroupPolicyProvider(accessGroupStore)
 		if userStoreProvider != nil {
@@ -3352,6 +3394,8 @@ func main() {
 			SecretCipher:         dataCipher,
 			ClientIPResolver:     ipResolver,
 			IngressTokens:        networkAccess.Registry,
+			ActivityLogWriter:    deps.ActivityLogWriter,
+			NodeID:               deps.NodeID,
 			StreamTelemetry:      streamTelemetryRegistry,
 			NodePlanner:          deps.NodePlanner,
 			JWTSecret:            cfg.Auth.JWTSecret,
@@ -3378,14 +3422,7 @@ func main() {
 				fileFetcher = deps.FileRepo
 			}
 
-			detailSvc := catalog.NewDetailService(itemRepo, episodeRepo, seasonRepo, personRepo, fileFetcher)
-			detailSvc.SetFolderRepository(folderRepo)
-			detailSvc.SetGroupClaimRepository(catalog.NewGroupClaimRepository(deps.DB))
-			detailSvc.SetProbeEnsurer(deps.ProbeEnsurer)
-			detailSvc.SetChapterThumbnailQueuer(deps.ChapterThumbnailQueuer)
-			if deps.ImageResolver != nil {
-				detailSvc.SetImageResolver(deps.ImageResolver)
-			}
+			detailSvc := newCompatDetailService(&deps, itemRepo, episodeRepo, seasonRepo, personRepo, fileFetcher, userStoreProvider)
 
 			compatDeps.BrowseRepo = browseRepo
 			compatDeps.ItemRepo = itemRepo

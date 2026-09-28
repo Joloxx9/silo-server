@@ -91,6 +91,10 @@ type Store interface {
 	// SetRoutingFacts stores facts fetched after the request was created (and
 	// the anime flag they imply).
 	SetRoutingFacts(ctx context.Context, id string, facts RoutingFacts) (*Request, error)
+	// SetExternalIDs records a TVDB ID resolved after the request was created,
+	// and fills the IMDb ID when the row has none. An existing positive TVDB ID
+	// is kept; the TVDB ID the row holds afterwards is returned.
+	SetExternalIDs(ctx context.Context, id string, tvdbID int, imdbID string) (int, error)
 	ListTargets(ctx context.Context, requestID string) ([]Target, error)
 	ListTargetsForRequests(ctx context.Context, requestIDs []string) (map[string][]Target, error)
 	CreateTarget(ctx context.Context, target Target) (Target, error)

@@ -359,6 +359,8 @@ export const adminKeys = {
   deviceDetail: (userId: number, deviceId: string) =>
     ["admin", "devices", userId, deviceId] as const,
   libraries: () => ["admin", "libraries"] as const,
+  libraryRealtimeMonitoring: () => ["admin", "libraries", "realtimeMonitoring"] as const,
+  libraryCapabilities: () => ["admin", "libraries", "capabilities"] as const,
   libraryRoots: (libraryId?: number, state?: string, search?: string) =>
     ["admin", "libraries", "roots", libraryId ?? "all", state ?? "all", search ?? ""] as const,
   libraryMatchQueueStatuses: () => ["admin", "libraries", "metadataMatchQueue"] as const,
@@ -493,6 +495,7 @@ export const adminKeys = {
   task: (key: string) => ["admin", "tasks", key] as const,
   taskHistory: (key: string) => ["admin", "tasks", key, "history"] as const,
   taskMetrics: (key: string) => ["admin", "tasks", key, "metrics"] as const,
+  markerCapabilities: () => ["admin", "markerCapabilities"] as const,
   markerProviders: () => ["admin", "markerProviders"] as const,
   markerProvider: (provider: string) => ["admin", "markerProviders", provider] as const,
   markerProviderValidation: (provider: string) =>
