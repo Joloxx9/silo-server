@@ -73,6 +73,16 @@ type RouterClient interface {
 
 type pluginRouterProvider struct{ resolver RouterClientResolver }
 
+// RouterFeatures reads the capability's declared features when the resolver
+// can; otherwise the capability declares none.
+func (p *pluginRouterProvider) RouterFeatures(ctx context.Context, installationID int, capabilityID string) (RouterFeatures, error) {
+	reader, ok := p.resolver.(RouterFeatureReader)
+	if !ok {
+		return RouterFeatures{}, nil
+	}
+	return reader.RouterFeatures(ctx, installationID, capabilityID)
+}
+
 func NewPluginRouterProvider(r RouterClientResolver) RequestRouterProvider {
 	return &pluginRouterProvider{resolver: r}
 }
@@ -92,6 +102,14 @@ func routerDescriptor(req Request) *pluginv1.RequestDescriptor {
 	if req.Year != nil {
 		year = *req.Year
 	}
+	// Seasons name the series seasons requested; none means the whole
+	// series. A plugin without supports_seasons ignores them.
+	var seasons []int32
+	if req.MediaType == MediaTypeSeries {
+		for _, season := range req.Seasons {
+			seasons = append(seasons, int32(season))
+		}
+	}
 	return &pluginv1.RequestDescriptor{
 		MediaType:          string(req.MediaType),
 		Title:              req.Title,
@@ -102,6 +120,7 @@ func routerDescriptor(req Request) *pluginv1.RequestDescriptor {
 		RequesterProfileId: req.RequestedByProfileID,
 		RequesterEmail:     req.RequesterEmail,
 		RequesterUsername:  req.RequesterUsername,
+		Seasons:            seasons,
 	}
 }
 

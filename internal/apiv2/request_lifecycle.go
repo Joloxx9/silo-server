@@ -45,7 +45,7 @@ type FeatureStatus struct {
 	SeasonRequestsSupported bool `json:"season_requests_supported"`
 	// MissingSeasonsRequestable reports whether a series already in the
 	// library can be requested for its missing seasons.
-	MissingSeasonsRequestable bool `json:"missing_seasons_requestable" doc:"Whether a series already in the library can be requested for the seasons it is missing. False while a download server takes series: router plugins cannot receive seasons yet, so such a series stays already_available."`
+	MissingSeasonsRequestable bool `json:"missing_seasons_requestable" doc:"Whether a series already in the library can be requested for the seasons it is missing. False while a download server that takes series uses a request plugin that cannot fetch individual seasons, so such a series stays already_available."`
 }
 type RequestFeatureStatusOutput struct {
 	Status       int
