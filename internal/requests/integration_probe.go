@@ -83,8 +83,15 @@ func normalizeIntegrationBaseURL(raw string) (string, error) {
 	return parsed.Scheme + "://" + parsed.Host + strings.TrimRight(parsed.EscapedPath(), "/"), nil
 }
 
-func invalidBaseURLError() *ValidationError {
-	return &ValidationError{FieldErrors: map[string]string{fieldBaseURL: integrationAddressMessage}}
+// NormalizeIntegrationBaseURL is normalizeIntegrationBaseURL for a v2 save,
+// so the saved address is the one the options probe used. A refused address
+// is a field error on base_url. The frozen v1 save path does not call it.
+func NormalizeIntegrationBaseURL(raw string) (string, error) {
+	baseURL, err := normalizeIntegrationBaseURL(raw)
+	if err != nil {
+		return "", &ValidationError{FieldErrors: map[string]string{fieldBaseURL: integrationAddressMessage}}
+	}
+	return baseURL, nil
 }
 
 // sameIntegrationBaseURL reports whether two addresses name the same server,

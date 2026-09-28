@@ -9,6 +9,7 @@ import {
   calls,
   choose,
   conflict,
+  deferred,
   fallback,
   group,
   invalid,
@@ -382,6 +383,33 @@ describe("Requests settings: servers", () => {
     fireEvent.change(url, { target: { value: "http://10.0.0.6:8989" } });
     expect(await within(dialog).findByText("Detected Sonarr 4.0.14.")).toBeInTheDocument();
     expect(name.value).toBe("Movies");
+  });
+
+  it("drops a Test answer for an address the admin has since changed", async () => {
+    const slow = deferred<unknown>();
+    let hold = false;
+    serve({
+      handlers: {
+        "POST /api/v2/admin/request-integrations/{id}/options": (options) =>
+          hold ? slow.promise : reply(options, { options: serverOptions }),
+      },
+    });
+    const dialog = await openServer("Radarr");
+    await waitFor(() =>
+      expect(calls("POST /api/v2/admin/request-integrations/{id}/options").length).toBeGreaterThan(
+        0,
+      ),
+    );
+    hold = true;
+    fireEvent.click(within(dialog).getByRole("button", { name: "Test" }));
+    fireEvent.change(within(dialog).getByLabelText("URL"), {
+      target: { value: "http://radarr-2:7878" },
+    });
+    await act(async () => {
+      slow.resolve({ options: serverOptions });
+      await slow.promise;
+    });
+    expect(within(dialog).queryByText(/^Connected/)).toBeNull();
   });
 
   it("only warns when routing pins a type the detected service does not match", async () => {

@@ -1567,15 +1567,6 @@ func validateInstance(in *Integration) error {
 	if in.InstallationID == nil {
 		return fmt.Errorf("%w: installation_id is required", ErrInvalidInput)
 	}
-	// A blank URL on update keeps the saved one (validateViaPlugin backfills
-	// it); anything typed is saved in the form the options probe used.
-	if strings.TrimSpace(in.BaseURL) != "" {
-		baseURL, err := normalizeIntegrationBaseURL(in.BaseURL)
-		if err != nil {
-			return invalidBaseURLError()
-		}
-		in.BaseURL = baseURL
-	}
 	// The is_default/is_4k/is_default_4k cross-field consistency check is owned by
 	// the request_router plugin's Validate RPC, which surfaces it as an inline
 	// field error (better UX than a generic host 400). See validateViaPlugin.

@@ -133,10 +133,11 @@ func TestNormalizeIntegrationBaseURL(t *testing.T) {
 	}
 }
 
-// A server saved from a scheme-less address keeps the address the probe
-// used, on create and on update, and a normalized form of the saved address
-// still counts as unchanged for keeping the stored key.
-func TestSaveIntegrationNormalizesBaseURL(t *testing.T) {
+// The service saves the address as given: the v2 adapter normalizes it with
+// NormalizeIntegrationBaseURL, and the frozen v1 save path stays unchanged.
+// A normalized form of the saved address still counts as unchanged for
+// keeping the stored key.
+func TestSaveIntegrationLeavesBaseURLToTheCaller(t *testing.T) {
 	store := newFakeStore()
 	router := &fakeRouterProvider{}
 	service := newTestService(store)
@@ -150,29 +151,28 @@ func TestSaveIntegrationNormalizesBaseURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateIntegration: %v", err)
 	}
-	if created.BaseURL != "http://10.0.0.5:8989" {
-		t.Fatalf("created base_url = %q, want http://10.0.0.5:8989", created.BaseURL)
+	if created.BaseURL != "10.0.0.5:8989/" {
+		t.Fatalf("created base_url = %q, want it as given", created.BaseURL)
 	}
 
 	stored := routerInst("router-1")
 	stored.BaseURL = "http://router-1.local/"
 	store.integrations = append(store.integrations, stored)
-	updated, err := service.UpdateIntegration(context.Background(), admin, Integration{
-		ID: "router-1", Name: "router-1", CapabilityID: "arr", InstallationID: &install, BaseURL: "router-1.local",
-	})
-	if err != nil {
-		t.Fatalf("UpdateIntegration: %v", err)
-	}
-	if updated.BaseURL != "http://router-1.local" {
-		t.Fatalf("updated base_url = %q, want http://router-1.local", updated.BaseURL)
+	if _, err := service.UpdateIntegration(context.Background(), admin, Integration{
+		ID: "router-1", Name: "router-1", CapabilityID: "arr", InstallationID: &install, BaseURL: "http://router-1.local",
+	}); err != nil {
+		t.Fatalf("UpdateIntegration with the normalized saved address: %v", err)
 	}
 	if router.validateCalls != 2 {
 		t.Fatalf("plugin Validate calls = %d, want 2", router.validateCalls)
 	}
+}
 
-	_, err = service.CreateIntegration(context.Background(), admin, Integration{
-		Name: "Bad", CapabilityID: "arr", InstallationID: &install, BaseURL: "ftp://10.0.0.5", APIKeyRef: "key",
-	})
+func TestNormalizeIntegrationBaseURLRefusesAsFieldError(t *testing.T) {
+	if got, err := NormalizeIntegrationBaseURL("10.0.0.5:8989/"); err != nil || got != "http://10.0.0.5:8989" {
+		t.Fatalf("NormalizeIntegrationBaseURL = %q, %v", got, err)
+	}
+	_, err := NormalizeIntegrationBaseURL("ftp://10.0.0.5")
 	var ve *ValidationError
 	if !errors.As(err, &ve) || ve.FieldErrors["base_url"] != integrationAddressMessage {
 		t.Fatalf("err = %v, want base_url field error", err)

@@ -243,6 +243,27 @@ func TestAdminRequestIntegrationSecretsAndGuard(t *testing.T) {
 		t.Fatal(created.Code, created.Body.String())
 	}
 }
+
+// A v2 save stores the address the options probe used, and refuses one it
+// could never probe as a field error.
+func TestAdminRequestIntegrationSaveNormalizesBaseURL(t *testing.T) {
+	f := fixtureAdminRequests()
+	h := adminRequestsHandler(f)
+	body := strings.Replace(requestIntegrationBody, `"https://router.example.test"`, `"10.0.0.5:8989/"`, 1)
+	created := do(t, h, http.MethodPost, Prefix+"/admin/request-integrations", body, actingRequestAdmin)
+	if created.Code != 201 || !strings.Contains(created.Body.String(), `"base_url":"http://10.0.0.5:8989"`) {
+		t.Fatal(created.Code, created.Body.String())
+	}
+	bad := strings.Replace(requestIntegrationBody, `"https://router.example.test"`, `"ftp://10.0.0.5"`, 1)
+	refused := do(t, h, http.MethodPost, Prefix+"/admin/request-integrations", bad, actingRequestAdmin)
+	requireProblem(t, refused, TypeValidationFailed)
+	if !strings.Contains(refused.Body.String(), `"body.base_url"`) {
+		t.Fatal(refused.Body.String())
+	}
+	if f.writes != 1 {
+		t.Fatalf("writes = %d, want only the valid create", f.writes)
+	}
+}
 func TestAdminRequestLimitsModerationAndOptions(t *testing.T) {
 	f := fixtureAdminRequests()
 	h := adminRequestsHandler(f)

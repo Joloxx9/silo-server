@@ -396,23 +396,26 @@ function useServerOptions(
     };
   }
 
-  async function probe(): Promise<RequestIntegrationOptions> {
+  /**
+   * Probes the connection now. Resolves to null, whatever the answer, when
+   * the connection changed while the probe ran: that answer is for an
+   * address or key no longer in the form.
+   */
+  async function probe(): Promise<RequestIntegrationOptions | null> {
     const gen = ++genRef.current;
     setStatus("loading");
     try {
       const loaded = await load.mutateAsync({ id: connectionID || "new", body: body() });
-      if (gen === genRef.current) {
-        setOptions(loaded);
-        setStatus("idle");
-        setProblem(null);
-      }
+      if (gen !== genRef.current) return null;
+      setOptions(loaded);
+      setStatus("idle");
+      setProblem(null);
       return loaded;
     } catch (error) {
-      if (gen === genRef.current) {
-        setOptions({});
-        setStatus("error");
-        setProblem(probeProblem(error));
-      }
+      if (gen !== genRef.current) return null;
+      setOptions({});
+      setStatus("error");
+      setProblem(probeProblem(error));
       throw error;
     }
   }
@@ -651,7 +654,8 @@ export function RequestServerEditor({
     setTesting(true);
     try {
       const loaded = await probe();
-      setTest({ ok: true, message: connectedMessage(loaded) });
+      // A stale answer says nothing about the connection now in the form.
+      if (loaded) setTest({ ok: true, message: connectedMessage(loaded) });
     } catch (error) {
       const problem = probeProblem(error);
       setTest({

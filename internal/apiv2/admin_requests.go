@@ -436,7 +436,17 @@ func (b AdminRequestIntegrationBody) domain() (mediarequests.Integration, *Probl
 	if err != nil || id <= 0 {
 		return mediarequests.Integration{}, NewProblem(TypeValidationFailed, "Invalid installation ID.")
 	}
-	return mediarequests.Integration{Name: b.Name, CapabilityID: b.CapabilityID, InstallationID: &id, SupportedMediaTypes: b.SupportedMediaTypes, PluginConfig: b.PluginConfig, Enabled: b.Enabled, BaseURL: b.BaseURL, APIKeyRef: b.APIKey}, nil
+	// A blank URL on update keeps the saved one; anything typed is saved in
+	// the form the options probe used (http:// assumed, no trailing slash).
+	baseURL := b.BaseURL
+	if strings.TrimSpace(baseURL) != "" {
+		normalized, err := mediarequests.NormalizeIntegrationBaseURL(baseURL)
+		if err != nil {
+			return mediarequests.Integration{}, requestProblem(err)
+		}
+		baseURL = normalized
+	}
+	return mediarequests.Integration{Name: b.Name, CapabilityID: b.CapabilityID, InstallationID: &id, SupportedMediaTypes: b.SupportedMediaTypes, PluginConfig: b.PluginConfig, Enabled: b.Enabled, BaseURL: baseURL, APIKeyRef: b.APIKey}, nil
 }
 func (reg *Registry) listAdminRequestIntegrations(ctx context.Context, cursors *Cursors, in *CursorListInput) (*AdminRequestIntegrationCollectionOutput, error) {
 	s, p := reg.adminRequestService()
