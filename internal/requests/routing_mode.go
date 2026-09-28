@@ -363,7 +363,31 @@ func setRoutingMode(ctx context.Context, tx pgx.Tx, mode RoutingMode) (RoutingSe
 // ensureSelfRoutedOwnerKept).
 // Each tier is carried on its own, so a server that no longer fits one tier
 // does not drop the other tier's server.
+//
+// A Radarr or Sonarr whose 4K switch changed under Standard can still be a
+// paused route's destination for the other version (see
+// ensureRoutesKeepServerKind). Those destinations are cleared first, so that
+// version falls through to Everything else, which then gets Standard's server.
 func seedAdvancedFromStandard(ctx context.Context, tx pgx.Tx, layout []StandardDestination, integrations []Integration) error {
+	marked, unmarked := []string{}, []string{}
+	for _, in := range integrations {
+		switch {
+		case selfRouted(in):
+		case is4KServer(in):
+			marked = append(marked, in.ID)
+		default:
+			unmarked = append(unmarked, in.ID)
+		}
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE request_routes SET
+			hd_integration_id = CASE WHEN hd_integration_id = ANY($1) THEN NULL ELSE hd_integration_id END,
+			hd_overrides = CASE WHEN hd_integration_id = ANY($1) THEN '{}'::jsonb ELSE hd_overrides END,
+			uhd_integration_id = CASE WHEN uhd_integration_id = ANY($2) THEN NULL ELSE uhd_integration_id END,
+			uhd_overrides = CASE WHEN uhd_integration_id = ANY($2) THEN '{}'::jsonb ELSE uhd_overrides END
+		WHERE hd_integration_id = ANY($1) OR uhd_integration_id = ANY($2)`, marked, unmarked); err != nil {
+		return fmt.Errorf("clear routes to servers that changed tier: %w", err)
+	}
 	usable := func(id string, mediaType MediaType, fourK bool) *string {
 		for _, in := range integrations {
 			if in.ID != id {

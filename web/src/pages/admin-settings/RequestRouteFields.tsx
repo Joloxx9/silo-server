@@ -23,6 +23,7 @@ import {
 } from "./requestRoutingModel";
 import {
   serverConfigSchema,
+  serverFitsTier,
   serverInstallation,
   serverIs4K,
   type RequestRouterInstallation,
@@ -501,7 +502,7 @@ export function RouteDestinationEditor({
     ? allServers.find((candidate) => candidate.id === dest.integration_id)
     : undefined;
   const serverChoices: Choice[] = servers
-    .filter((candidate) => serverIs4K(candidate) === (tier === "uhd"))
+    .filter((candidate) => serverFitsTier(candidate, tier))
     .map((candidate) => ({
       value: candidate.id,
       label: candidate.enabled ? candidate.name : `${candidate.name} (turned off)`,
@@ -524,7 +525,8 @@ export function RouteDestinationEditor({
       label: server ? `${server.name}${why}` : "Missing server",
     });
   }
-  const no4KServers = tier === "uhd" && !servers.some((candidate) => serverIs4K(candidate));
+  const no4KServers =
+    tier === "uhd" && !servers.some((candidate) => serverFitsTier(candidate, "uhd"));
   const selected = skip ? DEST_SKIP : dest.integration_id || (passLabel ? DEST_PASS : "");
   const error = errors[tier] ?? errors[`${tier}.integration_id`];
   const label = tier === "hd" ? "HD version" : "4K version";

@@ -385,6 +385,21 @@ describe("Where requests go: Everything else", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Everything else saved"));
   });
 
+  it("offers only HD servers for a never-saved Everything else", async () => {
+    const radarr4K = server("radarr-4k", "Radarr 4K", "radarr", {
+      plugin_config: { service_kind: "radarr", quality_profile_id: 1, is_4k: true },
+    });
+    serve({ servers: [radarr, radarr4K, sonarr] });
+    mount();
+    const movies = await section();
+    await user().click(
+      await within(movies).findByRole("combobox", { name: "Everything else server" }),
+    );
+    expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual([
+      "Radarr",
+    ]);
+  });
+
   it("offers only HD servers for the HD version and only 4K servers for the 4K version", async () => {
     const radarr4K = server("radarr-4k", "Radarr 4K", "radarr", {
       plugin_config: { service_kind: "radarr", quality_profile_id: 1, is_4k: true },
@@ -424,6 +439,43 @@ describe("Where requests go: Everything else", () => {
       `${radarrAnime.name} (not marked 4K)`,
       "Don't send a 4K version",
     ]);
+  });
+
+  it("offers a server of another plugin for both versions", async () => {
+    // Seerr has no 4K switch of ours and handles both versions itself.
+    const seerr = {
+      ...server("seerr-1", "Seerr", "radarr"),
+      capability_id: "seerr",
+      plugin_config: {},
+      supported_media_types: ["movie"],
+    } as unknown as ReturnType<typeof server>;
+    const stored = fallback("movie", "radarr-1");
+    serve({
+      servers: [radarr, seerr, sonarr],
+      routes: [stored, fallback("series", "sonarr-1")],
+      handlers: {
+        "GET /api/v2/admin/request-routes/{id}": (options) =>
+          reply(
+            options,
+            options.path?.id === "fallback-movie" ? stored : fallback("series", "sonarr-1"),
+            '"v1"',
+          ),
+      },
+    });
+    mount();
+    const movies = await section();
+    fireEvent.click(
+      within(await within(movies).findByRole("group", { name: "Everything else" })).getByRole(
+        "button",
+      ),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await user().click(await within(dialog).findByRole("combobox", { name: "4K version Send to" }));
+    expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual([
+      "Seerr",
+      "Don't send a 4K version",
+    ]);
+    expect(within(dialog).queryByText(/No server is marked 4K/)).toBeNull();
   });
 
   it("stops making 4K copies from its editor, and reloads after a 412", async () => {

@@ -45,6 +45,7 @@ import {
   SERVER_NAMED_OVERRIDES,
   serverOverrideFields,
 } from "./requestRoutingModel";
+import { serverFitsTier } from "./requestServerModel";
 import {
   animeSeriesTypeTiers,
   fixLabel,
@@ -350,11 +351,13 @@ function FallbackRow({
                 <SelectValue placeholder="Choose a server" />
               </SelectTrigger>
               <SelectContent>
-                {scope.servers.map((server) => (
-                  <SelectItem key={server.id} value={server.id}>
-                    {server.name}
-                  </SelectItem>
-                ))}
+                {scope.servers
+                  .filter((server) => serverFitsTier(server, "hd"))
+                  .map((server) => (
+                    <SelectItem key={server.id} value={server.id}>
+                      {server.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

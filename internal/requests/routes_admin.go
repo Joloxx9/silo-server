@@ -376,7 +376,8 @@ func serverKindMismatch(in Integration, mediaType MediaType) string {
 // sent. Under Advanced it also refuses a 4K switch change that would leave a
 // route sending the wrong version to the server. Standard pauses the stored
 // routes, which the admin cannot edit there, and places servers by their 4K
-// switch itself, so the switch stays free under Standard.
+// switch itself, so the switch stays free under Standard; turning Advanced on
+// clears the destinations that no longer fit (seedAdvancedFromStandard).
 func (s *Service) ensureRoutesKeepServerKind(ctx context.Context, in Integration) error {
 	routes, err := s.store.ListRoutes(ctx)
 	if err != nil {
@@ -487,10 +488,15 @@ func (s *Service) validateRoute(ctx context.Context, route *Route) error {
 	return nil
 }
 
-// tierMismatch explains why a server can't take the HD or 4K version: 4K
-// versions go only to servers marked 4K, and HD versions only to the others.
-// It is empty when the server fits.
+// tierMismatch explains why a Radarr or Sonarr can't take the HD or 4K
+// version: 4K versions go only to servers marked 4K, and HD versions only to
+// the others. It is empty when the server fits. A server of another plugin
+// (Seerr) has no 4K switch of ours and handles both versions itself, so it
+// fits either.
 func tierMismatch(in Integration, uhd bool) string {
+	if selfRouted(in) {
+		return ""
+	}
 	switch marked := is4KServer(in); {
 	case uhd && !marked:
 		return in.Name + ` isn't marked 4K. Turn on "4K server" in its settings to send 4K versions to it.`

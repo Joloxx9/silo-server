@@ -5,6 +5,7 @@ import type {
   RequestIntegration,
 } from "@/api/types";
 import type { RequestRoute, RequestRouteMediaType, RequestRouting } from "@/api/v2/adminRequests";
+import type { Tier } from "./requestRoutingModel";
 
 /** Every request server is fulfilled by a plugin exposing this capability. */
 export const REQUEST_ROUTER_CAPABILITY = "request_router.v1";
@@ -145,6 +146,18 @@ export function serverIs4K(server: Pick<RequestIntegration, "plugin_config">): b
     const flag = server.plugin_config?.[key];
     return flag === true || flag === "true";
   });
+}
+
+/**
+ * Whether routing may send the HD or 4K version to the server, as the server
+ * enforces: a Radarr or Sonarr takes 4K versions only when marked 4K and HD
+ * versions only when not. A server of another plugin (Seerr) takes either.
+ */
+export function serverFitsTier(
+  server: Pick<RequestIntegration, "plugin_config">,
+  tier: Tier,
+): boolean {
+  return serverKind(server) === "" || serverIs4K(server) === (tier === "uhd");
 }
 
 /**
