@@ -1,4 +1,10 @@
-import { useMutation, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type Query,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import { V2ProblemError } from "@/api/v2/request";
 import { v2 } from "@/api/v2/request";
@@ -21,12 +27,14 @@ import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import type {
   CreateMediaRequestInput,
   DiscoverBrowseKind,
+  DiscoverBrowseResponse,
   RequestDiscoverySection,
   RequestListParams,
   RequestMediaPage,
   RequestSearchMediaType,
   RequestMediaType,
 } from "@/api/types";
+import { tmdbPageCount } from "@/lib/mediaRequests";
 import { adminKeys, requestKeys } from "./keys";
 
 export const REQUESTS_STALE_TIME = 30_000;
@@ -74,18 +82,36 @@ export function useRequestFeatureStatus(
   });
 }
 
-export function useRequestDiscoverySection(section: string, page = 1) {
-  return useQuery<RequestDiscoverySection>({
-    queryKey: requestKeys.discoverySection(section, page),
-    queryFn: () => getDiscoverSectionV2(section, page),
+/**
+ * Every title of one Discover row, read page by page as the viewer scrolls.
+ * See nextDiscoverySectionPage for how the next page is chosen.
+ */
+export function useRequestDiscoverySection(section: string) {
+  return useInfiniteQuery({
+    queryKey: requestKeys.discoverySection(section),
+    queryFn: ({ pageParam }) => getDiscoverSectionV2(section, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: nextDiscoverySectionPage,
     enabled: section.trim().length > 0,
     staleTime: REQUESTS_STALE_TIME,
-    // Paging keeps the current grid on screen; another row starts empty.
-    placeholderData: (
-      previous: RequestDiscoverySection | undefined,
-      previousQuery?: Query<RequestDiscoverySection>,
-    ) => (previousQuery?.queryKey[2] === section ? previous : undefined),
   });
+}
+
+/**
+ * The page after lastPage in a Discover row. For a rating-restricted profile
+ * the server may read several TMDB pages to fill one and answers with
+ * next_page; page + 1 would repeat titles. Once the row has answered with a
+ * cursor, a page without one is the last. Otherwise pages are numbered, up
+ * to TMDB's cap.
+ */
+export function nextDiscoverySectionPage(
+  lastPage: RequestDiscoverySection,
+  allPages: RequestDiscoverySection[],
+  lastPageParam: number,
+): number | undefined {
+  if (lastPage.next_page && lastPage.next_page > lastPageParam) return lastPage.next_page;
+  if (allPages.some((page) => page.next_page)) return undefined;
+  return lastPageParam < tmdbPageCount(lastPage.total_pages) ? lastPageParam + 1 : undefined;
 }
 
 export interface DiscoverBrandQueryOptions {
@@ -128,16 +154,31 @@ export interface UseRequestBrowseArgs {
   slug: string;
   mediaType?: RequestMediaType;
   sort: "popularity" | "vote_average" | "release_date";
-  page: number;
 }
 
-export function useRequestBrowse({ kind, slug, mediaType, sort, page }: UseRequestBrowseArgs) {
-  return useQuery({
-    queryKey: requestKeys.discoverBrowse(kind, slug, mediaType, sort, page),
-    queryFn: () => browseDiscoverV2({ kind, slug, mediaType, sort, page }),
+/** A studio, network, or genre, read page by page as the viewer scrolls. */
+export function useRequestBrowse({ kind, slug, mediaType, sort }: UseRequestBrowseArgs) {
+  return useInfiniteQuery({
+    queryKey: requestKeys.discoverBrowse(kind, slug, mediaType, sort),
+    queryFn: ({ pageParam }) => browseDiscoverV2({ kind, slug, mediaType, sort, page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: nextBrowsePage,
     enabled: slug.trim().length > 0 && (kind !== "genre" || Boolean(mediaType)),
     staleTime: BROWSE_STALE_TIME,
   });
+}
+
+/**
+ * The page after lastPage of a studio, network, or genre. Browse pages read
+ * TMDB one page at a time (the server does no rating backfill here), so
+ * page + 1 is the next page, up to TMDB's cap.
+ */
+export function nextBrowsePage(
+  lastPage: DiscoverBrowseResponse,
+  _allPages: DiscoverBrowseResponse[],
+  lastPageParam: number,
+): number | undefined {
+  return lastPageParam < tmdbPageCount(lastPage.total_pages) ? lastPageParam + 1 : undefined;
 }
 
 export function useRequestMediaDetail(
