@@ -60,11 +60,14 @@ export function SubtitleAppearancePanelView({
 }: SubtitleAppearancePanelViewProps) {
   const previewStyles = useMemo(() => computeSubtitleStyles(value), [value]);
 
-  // Close on Escape.
+  // Close on Escape. Blur first: the panel unmounts on close, and React does
+  // not dispatch blur for a removed input, so a typed opacity would be lost.
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      onClose();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);

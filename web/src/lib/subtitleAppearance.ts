@@ -126,7 +126,10 @@ export function parseSubtitleAppearance(value: unknown): SubtitleAppearance {
           ? p.fontColor
           : DEFAULT_SUBTITLE_APPEARANCE.fontColor,
       textOpacity:
-        typeof p.textOpacity === "number" && p.textOpacity >= 1 && p.textOpacity <= 100
+        typeof p.textOpacity === "number" &&
+        Number.isInteger(p.textOpacity) &&
+        p.textOpacity >= 1 &&
+        p.textOpacity <= 100
           ? p.textOpacity
           : DEFAULT_SUBTITLE_APPEARANCE.textOpacity,
       backgroundColor:
