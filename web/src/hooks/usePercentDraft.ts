@@ -21,7 +21,12 @@ export function usePercentDraft(value: number, min: number, onChange: (v: number
     const trimmed = raw.trim();
     const parsed = trimmed === "" ? NaN : Math.round(Number(trimmed));
     if (Number.isFinite(parsed)) {
-      onChange(Math.min(100, Math.max(min, parsed)));
+      const clamped = Math.min(100, Math.max(min, parsed));
+      // Set the draft even when the clamped value equals the current value:
+      // typing "999" at 100 must snap the field back to "100", but if the
+      // value prop doesn't change, the effect above never re-fires to do it.
+      setDraft(String(clamped));
+      onChange(clamped);
     } else {
       setDraft(String(value));
     }
