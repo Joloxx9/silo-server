@@ -128,6 +128,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/watchstate"
 	"github.com/Silo-Server/silo-server/internal/watchsync"
 	watchmdblist "github.com/Silo-Server/silo-server/internal/watchsync/providers/mdblist"
+	"github.com/Silo-Server/silo-server/internal/watchsync/providers/scrob"
 	"github.com/Silo-Server/silo-server/internal/watchsync/providers/simkl"
 	"github.com/Silo-Server/silo-server/internal/watchsync/providers/trakt"
 	"github.com/Silo-Server/silo-server/internal/worker"
@@ -1358,6 +1359,9 @@ func main() {
 			log.Fatalf("register watch provider: %v", err)
 		}
 		if err := watchProviderRegistry.Register(watchmdblist.NewProvider(nil, "")); err != nil {
+			log.Fatalf("register watch provider: %v", err)
+		}
+		if err := watchProviderRegistry.Register(scrob.NewProvider(nil)); err != nil {
 			log.Fatalf("register watch provider: %v", err)
 		}
 		watchProviderRepo = watchsync.NewPostgresRepository(deps.DB, deps.SecretCipher)
