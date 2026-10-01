@@ -50,7 +50,8 @@ func TestNormalizeServerURL(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "adds scheme", in: "scrob.example.com", want: "https://scrob.example.com"},
+		{name: "adds http scheme by default", in: "scrob.example.com", want: "http://scrob.example.com"},
+		{name: "adds http scheme to a bare ip:port", in: "192.168.1.50:7330", want: "http://192.168.1.50:7330"},
 		{name: "trims trailing slash", in: "https://scrob.example.com/", want: "https://scrob.example.com"},
 		{name: "drops path and query", in: "https://scrob.example.com/foo?x=1", want: "https://scrob.example.com"},
 		{name: "keeps port", in: "http://localhost:8787", want: "http://localhost:8787"},
