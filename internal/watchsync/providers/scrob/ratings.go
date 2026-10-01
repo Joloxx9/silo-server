@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 
 	"github.com/Silo-Server/silo-server/internal/historyimport"
 	"github.com/Silo-Server/silo-server/internal/watchsync"
@@ -21,7 +20,7 @@ import (
 type scrobRatingEntry struct {
 	Media   scrobMedia `json:"media"`
 	Rating  float64    `json:"rating"`
-	RatedAt time.Time  `json:"rated_at"`
+	RatedAt scrobTime  `json:"rated_at"`
 }
 
 type scrobRatingsResponse struct {
@@ -72,7 +71,7 @@ func (p *Provider) FetchRatings(ctx context.Context, _ watchsync.ServerConfig, c
 				TMDBID:          intString(entry.Media.TMDBID),
 			},
 			Rating:  value,
-			RatedAt: entry.RatedAt,
+			RatedAt: entry.RatedAt.Time(),
 		})
 	}
 

@@ -203,6 +203,46 @@ func (p *Provider) connectionServerURL(conn watchsync.Connection) (string, error
 
 // --- watched history ---
 
+// scrobTime decodes a Scrob timestamp. Scrob stores timestamps naive (no
+// timezone) and serializes them with Python's datetime.isoformat(), which
+// omits the offset entirely (e.g. "2026-10-01T12:06:08") rather than the
+// "Z"-suffixed RFC 3339 encoding/json's default time.Time unmarshaler
+// requires - every non-null timestamp failed to decode without this. Scrob
+// writes these with datetime.utcnow(), so a naive value is treated as UTC.
+type scrobTime time.Time
+
+const scrobNaiveTimeLayout = "2006-01-02T15:04:05"
+
+func (t *scrobTime) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw == "" {
+		*t = scrobTime(time.Time{})
+		return nil
+	}
+	if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
+		*t = scrobTime(parsed)
+		return nil
+	}
+	parsed, err := time.ParseInLocation(scrobNaiveTimeLayout, raw, time.UTC)
+	if err != nil {
+		return fmt.Errorf("parse scrob timestamp %q: %w", raw, err)
+	}
+	*t = scrobTime(parsed)
+	return nil
+}
+
+func (t scrobTime) Time() time.Time { return time.Time(t) }
+
+// MarshalJSON exists so scrobTime round-trips in tests against a fake Scrob
+// server; Silo never sends this type back to Scrob itself (outbound
+// timestamps go through RFC 3339 strings built directly, see watchEventBody).
+func (t scrobTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Time(t).UTC().Format(scrobNaiveTimeLayout))
+}
+
 type scrobMedia struct {
 	ID            int    `json:"id"`
 	TMDBID        int    `json:"tmdb_id"`
@@ -219,7 +259,7 @@ type scrobMedia struct {
 
 type scrobHistoryEvent struct {
 	Media     scrobMedia `json:"media"`
-	WatchedAt *time.Time `json:"watched_at"`
+	WatchedAt *scrobTime `json:"watched_at"`
 }
 
 type scrobHistoryResponse struct {
@@ -328,7 +368,7 @@ func historyPlayFromEvent(providerKey string, event scrobHistoryEvent) (watchsyn
 			IMDbID:          media.IMDbID,
 			TMDBID:          intString(media.TMDBID),
 			TVDBID:          intString(media.TVDBID),
-			WatchedAt:       *event.WatchedAt,
+			WatchedAt:       event.WatchedAt.Time(),
 		}, true
 	case "episode":
 		if media.SeasonNumber == nil || media.EpisodeNumber == nil {
@@ -351,7 +391,7 @@ func historyPlayFromEvent(providerKey string, event scrobHistoryEvent) (watchsyn
 			SeriesTVDBID:    intString(media.ShowTVDBID),
 			SeasonNumber:    *media.SeasonNumber,
 			EpisodeNumber:   *media.EpisodeNumber,
-			WatchedAt:       *event.WatchedAt,
+			WatchedAt:       event.WatchedAt.Time(),
 		}, true
 	default:
 		return watchsync.RemotePlay{}, false
