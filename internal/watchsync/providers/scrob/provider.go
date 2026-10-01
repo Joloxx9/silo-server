@@ -487,6 +487,16 @@ func unwatchItemPath(kind, tmdbID, tvdbID string) (string, bool) {
 
 // --- HTTP plumbing ---
 
+// apiProxyPrefix routes every call through Scrob's frontend (the only port a
+// standard deployment publishes - see docker-compose.yaml). The backend's own
+// routes live under no prefix at all, but the frontend only forwards to it
+// under /api/proxy/*; anything else falls through to the frontend's own page
+// routing, which has no session cookie to show and redirects to /login. See
+// frontend/src/pages/api/proxy/[...path].ts and frontend/src/middleware.ts in
+// the Scrob repo, which documents this as the sanctioned path for an API-key
+// client with no browser session.
+const apiProxyPrefix = "/api/proxy"
+
 // do issues one request against a connection's Scrob server. The API key
 // travels as the X-Api-Key header, never in the URL or query string, so
 // unlike providers authenticated by URL parameter there is no credential to
@@ -495,7 +505,7 @@ func (p *Provider) do(ctx context.Context, method, serverURL, apiKey, path strin
 	if strings.TrimSpace(apiKey) == "" {
 		return errors.New("scrob api key is missing")
 	}
-	req, err := http.NewRequestWithContext(ctx, method, serverURL+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, serverURL+apiProxyPrefix+path, body)
 	if err != nil {
 		return fmt.Errorf("create scrob request: %w", logredact.SanitizeURLError(err))
 	}
