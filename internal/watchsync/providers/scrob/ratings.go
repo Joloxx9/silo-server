@@ -18,9 +18,10 @@ import (
 // rounded to an integer, so ratings pass through with simple rounding.
 
 type scrobRatingEntry struct {
-	Media   scrobMedia `json:"media"`
-	Rating  float64    `json:"rating"`
-	RatedAt scrobTime  `json:"rated_at"`
+	Media        scrobMedia `json:"media"`
+	Rating       float64    `json:"rating"`
+	RatedAt      scrobTime  `json:"rated_at"`
+	SeasonNumber *int       `json:"season_number"`
 }
 
 type scrobRatingsResponse struct {
@@ -50,7 +51,17 @@ func (p *Provider) FetchRatings(ctx context.Context, _ watchsync.ServerConfig, c
 	for _, entry := range payload.Results {
 		kind := entry.Media.Type
 		if kind != historyimport.KindMovie && kind != historyimport.KindSeries {
-			// Season and episode ratings: Silo only rates movies and series.
+			// Episode ratings: Silo only rates movies and series.
+			continue
+		}
+		if kind == historyimport.KindSeries && entry.SeasonNumber != nil {
+			// A season rating is stored against the same series Media row as
+			// a whole-series rating, distinguished only by this top-level
+			// season_number (see ratings.py's format_rating in the Scrob
+			// repo) - media carries no season identity of its own. Importing
+			// it under the series' ProviderItemKey would collide with and
+			// potentially overwrite a real whole-series rating; Silo rates
+			// movies and series, not seasons, so skip it.
 			continue
 		}
 		value := providerRating(entry.Rating)
