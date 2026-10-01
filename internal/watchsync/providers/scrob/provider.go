@@ -3,7 +3,9 @@
 // watch providers there is no fixed API host: each connection supplies its
 // own server URL alongside the API key, both captured on connect through
 // ConnectionConfigSchema/ConnectWithAPIKeyConfig and persisted on the
-// connection (the URL in SecretAttributes, the key as AccessToken).
+// connection. The URL lives in RefreshToken (the one credential column every
+// built-in provider's connection persists unconditionally - see the
+// connectionServerURL comment below), the key in AccessToken.
 package scrob
 
 import (
@@ -127,10 +129,7 @@ func (p *Provider) ConnectWithAPIKeyConfig(ctx context.Context, apiKey string, c
 		return watchsync.TokenSet{}, watchsync.ProviderAccount{}, err
 	}
 	account := watchsync.ProviderAccount{ID: serverURL, Username: accountLabel(serverURL)}
-	return watchsync.TokenSet{
-		AccessToken:      apiKey,
-		SecretAttributes: map[string]string{serverURLFieldKey: serverURL},
-	}, account, nil
+	return watchsync.TokenSet{AccessToken: apiKey, RefreshToken: serverURL}, account, nil
 }
 
 func (p *Provider) LookupAccount(ctx context.Context, _ watchsync.ServerConfig, conn watchsync.Connection) (watchsync.ProviderAccount, error) {
@@ -144,9 +143,12 @@ func (p *Provider) LookupAccount(ctx context.Context, _ watchsync.ServerConfig, 
 	return watchsync.ProviderAccount{ID: serverURL, Username: accountLabel(serverURL)}, nil
 }
 
-// RefreshToken is a no-op: Scrob API keys don't expire on their own.
+// RefreshToken is a no-op: Scrob API keys don't expire on their own. Never
+// actually invoked in practice (the service only calls it when
+// TokenExpiresAt is set, which ConnectWithAPIKeyConfig never sets), but keep
+// it faithful to the stored connection regardless.
 func (p *Provider) RefreshToken(_ context.Context, _ watchsync.ServerConfig, conn watchsync.Connection) (watchsync.TokenSet, error) {
-	return watchsync.TokenSet{AccessToken: conn.AccessToken, SecretAttributes: conn.SecretAttributes}, nil
+	return watchsync.TokenSet{AccessToken: conn.AccessToken, RefreshToken: conn.RefreshToken}, nil
 }
 
 // verify confirms the server URL and API key work together by hitting the
@@ -198,8 +200,18 @@ func normalizeServerURL(raw string) (string, error) {
 	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
+// connectionServerURL reads the server URL back from RefreshToken rather
+// than SecretAttributes. The repository only ever persists SecretAttributes
+// for a "plugin:"-prefixed provider key (internal/watchsync/repository.go,
+// pluginCredentialsForConnection): a built-in provider's SecretAttributes
+// survive the in-memory round trip right after connecting - long enough to
+// look correct - but silently vanish on the very next read from the
+// database, which is what every scheduled sync does. RefreshToken is a real,
+// always-written column for every provider, and Scrob has no actual refresh
+// token to put there (see RefreshToken above), so it carries the URL
+// instead.
 func (p *Provider) connectionServerURL(conn watchsync.Connection) (string, error) {
-	raw := conn.SecretAttributes[serverURLFieldKey]
+	raw := conn.RefreshToken
 	if strings.TrimSpace(raw) == "" {
 		return "", errors.New("scrob connection is missing its server URL; reconnect to set one")
 	}

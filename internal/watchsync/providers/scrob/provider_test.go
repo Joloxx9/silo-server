@@ -204,8 +204,8 @@ func TestRequestsGoThroughTheAPIProxyPrefix(t *testing.T) {
 
 	p := NewProvider(server.Client())
 	conn := watchsync.Connection{
-		AccessToken:      "secret",
-		SecretAttributes: map[string]string{serverURLFieldKey: server.URL},
+		AccessToken:  "secret",
+		RefreshToken: server.URL,
 	}
 	if _, err := p.FetchRatings(context.Background(), watchsync.ServerConfig{}, conn); err != nil {
 		t.Fatalf("FetchRatings() error: %v", err)
@@ -235,8 +235,8 @@ func TestFetchWatchedAggregatesByItem(t *testing.T) {
 
 	p := NewProvider(server.Client())
 	conn := watchsync.Connection{
-		AccessToken:      "secret",
-		SecretAttributes: map[string]string{serverURLFieldKey: server.URL},
+		AccessToken:  "secret",
+		RefreshToken: server.URL,
 	}
 	rows, err := p.FetchWatched(context.Background(), watchsync.ServerConfig{}, conn)
 	if err != nil {
@@ -265,6 +265,46 @@ func TestConnectWithAPIKeyConfigRejectsInvalidKey(t *testing.T) {
 	}
 	if _, _, err := p.ConnectWithAPIKeyConfig(context.Background(), "bad-key", config); err == nil {
 		t.Fatalf("ConnectWithAPIKeyConfig() error = nil, want an error for a rejected key")
+	}
+}
+
+func TestConnectWithAPIKeyConfigPutsServerURLInRefreshToken(t *testing.T) {
+	// Regression test: the repository only persists SecretAttributes for a
+	// "plugin:"-prefixed provider key. A built-in provider (this one) that
+	// put the server URL there would connect successfully - the value is
+	// still in memory on the response path - and then lose it on the very
+	// next read from the database, which every scheduled sync does.
+	// RefreshToken is a real, always-written column, so the URL has to live
+	// there instead.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(scrobRatingsResponse{})
+	}))
+	defer server.Close()
+
+	p := NewProvider(server.Client())
+	config := watchsync.ConnectionConfigValues{
+		connectionConfigKey: map[string]any{serverURLFieldKey: server.URL},
+	}
+	tokens, _, err := p.ConnectWithAPIKeyConfig(context.Background(), "a-key", config)
+	if err != nil {
+		t.Fatalf("ConnectWithAPIKeyConfig() error: %v", err)
+	}
+	if tokens.RefreshToken != server.URL {
+		t.Fatalf("TokenSet.RefreshToken = %q, want %q", tokens.RefreshToken, server.URL)
+	}
+	if len(tokens.SecretAttributes) != 0 {
+		t.Fatalf("TokenSet.SecretAttributes = %v, want empty: it does not survive persistence for a built-in provider", tokens.SecretAttributes)
+	}
+
+	// connectionServerURL (what every sync call actually reads) must resolve
+	// from exactly the field a reloaded Connection carries: RefreshToken.
+	conn := watchsync.Connection{AccessToken: tokens.AccessToken, RefreshToken: tokens.RefreshToken}
+	got, err := p.connectionServerURL(conn)
+	if err != nil {
+		t.Fatalf("connectionServerURL() error: %v", err)
+	}
+	if got != server.URL {
+		t.Fatalf("connectionServerURL() = %q, want %q", got, server.URL)
 	}
 }
 
