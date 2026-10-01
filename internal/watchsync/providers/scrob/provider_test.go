@@ -253,6 +253,38 @@ func TestFetchWatchedAggregatesByItem(t *testing.T) {
 	}
 }
 
+func TestFetchRatingsSkipsSeasonRatings(t *testing.T) {
+	// Regression test: a season rating is stored against the same series
+	// Media row as a whole-series rating, distinguished only by a top-level
+	// season_number next to (not inside) "media" - media.type stays "series"
+	// either way. Importing both under the series' ProviderItemKey would have
+	// the season rating silently clobber the real whole-series one.
+	season := 2
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := scrobRatingsResponse{
+			Results: []scrobRatingEntry{
+				{Media: scrobMedia{Type: "series", TMDBID: 100, Title: "Show"}, Rating: 9, RatedAt: scrobTime(time.Unix(100, 0))},
+				{Media: scrobMedia{Type: "series", TMDBID: 100, Title: "Show"}, Rating: 6, RatedAt: scrobTime(time.Unix(200, 0)), SeasonNumber: &season},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	p := NewProvider(server.Client())
+	conn := watchsync.Connection{AccessToken: "secret", RefreshToken: server.URL}
+	batch, err := p.FetchRatings(context.Background(), watchsync.ServerConfig{}, conn)
+	if err != nil {
+		t.Fatalf("FetchRatings() error: %v", err)
+	}
+	if len(batch.Rows) != 1 {
+		t.Fatalf("FetchRatings() = %d rows, want 1 (the season rating must be skipped)", len(batch.Rows))
+	}
+	if batch.Rows[0].Rating != 9 {
+		t.Fatalf("Rows[0].Rating = %d, want 9 (the whole-series rating, not the season's)", batch.Rows[0].Rating)
+	}
+}
+
 func TestConnectWithAPIKeyConfigRejectsInvalidKey(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
