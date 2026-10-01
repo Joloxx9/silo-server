@@ -95,9 +95,9 @@ func (p *Provider) ConnectionConfigSchema() []plugins.ConfigSchemaView {
 					{
 						Key:         serverURLFieldKey,
 						Label:       "Server URL",
-						Description: "The base URL of your Scrob instance, e.g. https://scrob.example.com.",
+						Description: "The base URL of your Scrob instance, e.g. http://192.168.1.50:7330 on a LAN or https://scrob.example.com behind a reverse proxy.",
 						Control:     "TEXT",
-						Placeholder: "https://scrob.example.com",
+						Placeholder: "http://192.168.1.50:7330",
 						Required:    true,
 					},
 				},
@@ -181,7 +181,12 @@ func normalizeServerURL(raw string) (string, error) {
 		return "", errors.New("scrob server URL is required")
 	}
 	if !strings.Contains(raw, "://") {
-		raw = "https://" + raw
+		// Unlike Silo's other watch providers (public SaaS, always HTTPS),
+		// Scrob is self-hosted: a bare host:port is overwhelmingly a LAN
+		// address served over plain HTTP, not TLS. Defaulting to https://
+		// here silently turned a correct "ip:port" entry into a TLS
+		// handshake failure against an http-only server.
+		raw = "http://" + raw
 	}
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
