@@ -3,7 +3,6 @@ package apiv2
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
@@ -415,11 +414,6 @@ func watchProviderProblem(err error) *Problem {
 	if watchsync.IsRetryableProviderError(err) {
 		return NewProblem(TypeDependencyUnavailable, "The watch provider is temporarily unavailable.")
 	}
-	// Every classified case above returns a problem whose message is safe to
-	// show a client. Anything reaching here is unclassified, and the generic
-	// message below is all the client ever sees of it - log the real cause so
-	// an operator isn't left guessing from "operation failed" alone.
-	slog.Error("watch provider operation failed", "error", err)
 	return NewProblem(TypeInternalError, "Watch-provider operation failed.")
 }
 
