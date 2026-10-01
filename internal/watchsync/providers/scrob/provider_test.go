@@ -155,6 +155,34 @@ func TestHistoryPlayFromEventSkipsIncompleteOrUnidentified(t *testing.T) {
 	}
 }
 
+func TestRequestsGoThroughTheAPIProxyPrefix(t *testing.T) {
+	// Regression test: a standard Scrob deployment only publishes the
+	// frontend's port. The frontend serves its own pages at the bare paths
+	// (e.g. /ratings isn't a route it knows, so unauthenticated requests
+	// there 302 to /login) and only forwards to the backend under
+	// /api/proxy/*. Hitting a bare backend path here used to silently "work"
+	// against a fake server that didn't care about the path, while actually
+	// hitting Scrob's login redirect in production.
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_ = json.NewEncoder(w).Encode(scrobRatingsResponse{})
+	}))
+	defer server.Close()
+
+	p := NewProvider(server.Client())
+	conn := watchsync.Connection{
+		AccessToken:      "secret",
+		SecretAttributes: map[string]string{serverURLFieldKey: server.URL},
+	}
+	if _, err := p.FetchRatings(context.Background(), watchsync.ServerConfig{}, conn); err != nil {
+		t.Fatalf("FetchRatings() error: %v", err)
+	}
+	if gotPath != "/api/proxy/ratings" {
+		t.Fatalf("request path = %q, want /api/proxy/ratings", gotPath)
+	}
+}
+
 func TestFetchWatchedAggregatesByItem(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Api-Key") != "secret" {
