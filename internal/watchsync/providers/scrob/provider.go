@@ -372,7 +372,7 @@ func historyPlayFromEvent(providerKey string, event scrobHistoryEvent) (watchsyn
 	}
 	media := event.Media
 	switch media.Type {
-	case "movie":
+	case historyimport.KindMovie:
 		key := movieKey(media.TMDBID, media.TVDBID, media.IMDbID)
 		if key == "" {
 			return watchsync.RemotePlay{}, false
@@ -387,7 +387,7 @@ func historyPlayFromEvent(providerKey string, event scrobHistoryEvent) (watchsyn
 			TVDBID:          intString(media.TVDBID),
 			WatchedAt:       event.WatchedAt.Time(),
 		}, true
-	case "episode":
+	case historyimport.KindEpisode:
 		if media.SeasonNumber == nil || media.EpisodeNumber == nil {
 			return watchsync.RemotePlay{}, false
 		}
