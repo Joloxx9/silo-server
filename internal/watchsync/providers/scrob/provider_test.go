@@ -12,6 +12,37 @@ import (
 	"github.com/Silo-Server/silo-server/internal/watchsync"
 )
 
+func TestScrobTimeUnmarshalsNaiveTimestamps(t *testing.T) {
+	// Regression test: Scrob serializes timestamps with Python's naive
+	// datetime.isoformat(), no timezone suffix - encoding/json's default
+	// time.Time unmarshaler rejects that outright.
+	var got scrobTime
+	if err := json.Unmarshal([]byte(`"2026-10-01T12:06:08"`), &got); err != nil {
+		t.Fatalf("UnmarshalJSON() error: %v", err)
+	}
+	want := time.Date(2026, 10, 1, 12, 6, 8, 0, time.UTC)
+	if !got.Time().Equal(want) {
+		t.Fatalf("Time() = %v, want %v", got.Time(), want)
+	}
+
+	// A future, tz-aware response (RFC 3339) must still decode.
+	var tzAware scrobTime
+	if err := json.Unmarshal([]byte(`"2026-10-01T12:06:08Z"`), &tzAware); err != nil {
+		t.Fatalf("UnmarshalJSON() error on RFC3339 input: %v", err)
+	}
+	if !tzAware.Time().Equal(want) {
+		t.Fatalf("Time() = %v, want %v", tzAware.Time(), want)
+	}
+
+	var empty scrobTime
+	if err := json.Unmarshal([]byte(`""`), &empty); err != nil {
+		t.Fatalf("UnmarshalJSON() error on empty input: %v", err)
+	}
+	if !empty.Time().IsZero() {
+		t.Fatalf("Time() = %v, want zero", empty.Time())
+	}
+}
+
 func TestNormalizeServerURL(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -142,13 +173,13 @@ func TestHistoryPlayFromEventSkipsIncompleteOrUnidentified(t *testing.T) {
 	if _, ok := historyPlayFromEvent("scrob", scrobHistoryEvent{Media: scrobMedia{Type: "movie", TMDBID: 1}}); ok {
 		t.Fatalf("expected no row for an event with no watched_at")
 	}
-	watchedAt := time.Now()
-	if _, ok := historyPlayFromEvent("scrob", scrobHistoryEvent{Media: scrobMedia{Type: "movie"}, WatchedAt: &watchedAt}); ok {
+	watchedAt := scrobTimePtr(time.Now())
+	if _, ok := historyPlayFromEvent("scrob", scrobHistoryEvent{Media: scrobMedia{Type: "movie"}, WatchedAt: watchedAt}); ok {
 		t.Fatalf("expected no row for a movie with no external id")
 	}
 	row, ok := historyPlayFromEvent("scrob", scrobHistoryEvent{
 		Media:     scrobMedia{Type: "episode", TMDBID: 1, ShowTMDBID: 9},
-		WatchedAt: &watchedAt,
+		WatchedAt: watchedAt,
 	})
 	if ok {
 		t.Fatalf("expected no row for an episode missing season/episode numbers, got %+v", row)
@@ -193,8 +224,8 @@ func TestFetchWatchedAggregatesByItem(t *testing.T) {
 			Page:       1,
 			TotalPages: 1,
 			Results: []scrobHistoryEvent{
-				{Media: scrobMedia{Type: "movie", TMDBID: 1, Title: "A"}, WatchedAt: timePtr(time.Unix(100, 0))},
-				{Media: scrobMedia{Type: "movie", TMDBID: 1, Title: "A"}, WatchedAt: timePtr(time.Unix(200, 0))},
+				{Media: scrobMedia{Type: "movie", TMDBID: 1, Title: "A"}, WatchedAt: scrobTimePtr(time.Unix(100, 0))},
+				{Media: scrobMedia{Type: "movie", TMDBID: 1, Title: "A"}, WatchedAt: scrobTimePtr(time.Unix(200, 0))},
 			},
 		}
 		_ = json.NewEncoder(w).Encode(resp)
@@ -236,4 +267,7 @@ func TestConnectWithAPIKeyConfigRejectsInvalidKey(t *testing.T) {
 	}
 }
 
-func timePtr(t time.Time) *time.Time { return &t }
+func scrobTimePtr(t time.Time) *scrobTime {
+	st := scrobTime(t)
+	return &st
+}
