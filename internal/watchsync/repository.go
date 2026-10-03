@@ -36,7 +36,7 @@ type Repository interface {
 	ListLocalWatchEventConnections(ctx context.Context, userID int, profileID string, kind LocalWatchEventKind) ([]Connection, error)
 	ListListEventConnections(ctx context.Context, userID int, profileID string, list ListKind) ([]Connection, error)
 	UpsertHistoryExports(ctx context.Context, exports []HistoryExport) error
-	ListPendingHistoryExports(ctx context.Context, connectionID string, limit int) ([]HistoryExport, error)
+	ListPendingHistoryExports(ctx context.Context, connectionID string, limit int, excludeIDs []string) ([]HistoryExport, error)
 	ListPendingHistoryExportsByHistoryIDs(ctx context.Context, connectionID string, historyIDs []string, limit int) ([]HistoryExport, error)
 	MarkHistoryExportStatus(ctx context.Context, id string, status string, lastError string) error
 	MarkHistoryExportSatisfiedByScrobble(ctx context.Context, connectionID string, historyID string) error
@@ -1269,7 +1269,12 @@ func (r *PostgresRepository) UpsertHistoryExports(ctx context.Context, exports [
 	return nil
 }
 
-func (r *PostgresRepository) ListPendingHistoryExports(ctx context.Context, connectionID string, limit int) ([]HistoryExport, error) {
+// ListPendingHistoryExports returns the oldest exports still worth sending.
+// A failed export keeps its place until it runs out of attempts, so excludeIDs
+// drops the ones the caller has already attempted: without it a page full of
+// failures would be all a repeated read ever returns, hiding the rest of the
+// backlog behind them.
+func (r *PostgresRepository) ListPendingHistoryExports(ctx context.Context, connectionID string, limit int, excludeIDs []string) ([]HistoryExport, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 100
 	}
@@ -1280,9 +1285,10 @@ func (r *PostgresRepository) ListPendingHistoryExports(ctx context.Context, conn
 		WHERE connection_id = $1::uuid
 		  AND status IN ('pending', 'failed')
 		  AND attempt_count < 5
+		  AND NOT (id = ANY(COALESCE($3::uuid[], '{}'::uuid[])))
 		ORDER BY watched_at ASC
 		LIMIT $2
-	`, connectionID, limit)
+	`, connectionID, limit, excludeIDs)
 	if err != nil {
 		return nil, fmt.Errorf("list pending history exports: %w", err)
 	}

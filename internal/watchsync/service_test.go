@@ -379,9 +379,16 @@ func (r *serviceFakeRepo) UpsertHistoryExports(_ context.Context, exports []Hist
 	return nil
 }
 
-func (r *serviceFakeRepo) ListPendingHistoryExports(_ context.Context, connectionID string, limit int) ([]HistoryExport, error) {
+func (r *serviceFakeRepo) ListPendingHistoryExports(_ context.Context, connectionID string, limit int, excludeIDs []string) ([]HistoryExport, error) {
+	excluded := make(map[string]struct{}, len(excludeIDs))
+	for _, id := range excludeIDs {
+		excluded[id] = struct{}{}
+	}
 	var exports []HistoryExport
 	for _, export := range r.historyExports {
+		if _, skip := excluded[export.ID]; skip {
+			continue
+		}
 		if export.ConnectionID == connectionID &&
 			(export.Status == historyExportStatusPending || export.Status == historyExportStatusFailed) && export.AttemptCount < 5 {
 			exports = append(exports, export)
@@ -2593,8 +2600,8 @@ func TestServiceExportWatchedDrainsBacklogInBatchedCalls(t *testing.T) {
 type rejectingWatchedExportStub struct {
 	watchedImportExportStub
 	batchSize int
-	rejectID  string
-	attempts  *int
+	reject    map[string]struct{}
+	attempts  map[string]int
 }
 
 func (p rejectingWatchedExportStub) ExportBatchSize() int { return p.batchSize }
@@ -2602,14 +2609,38 @@ func (p rejectingWatchedExportStub) ExportBatchSize() int { return p.batchSize }
 func (p rejectingWatchedExportStub) ExportHistory(_ context.Context, _ ServerConfig, _ Connection, plays []LocalPlay) (ExportResult, error) {
 	result := ExportResult{Sent: make([]string, 0, len(plays)), Failed: map[string]string{}}
 	for _, play := range plays {
-		if play.HistoryID == p.rejectID {
-			*p.attempts++
+		if _, rejected := p.reject[play.HistoryID]; rejected {
+			p.attempts[play.HistoryID]++
 			result.Failed[play.HistoryID] = "provider rejected the play"
 			continue
 		}
 		result.Sent = append(result.Sent, play.HistoryID)
 	}
 	return result, nil
+}
+
+// addTestCompletedHistory adds count completed movie plays a watched export can
+// pick up, named history-0 upward.
+func addTestCompletedHistory(t *testing.T, db *sql.DB, count int, tmdbPrefix string) {
+	t.Helper()
+	for i := range count {
+		id := strconv.Itoa(i)
+		if err := userdb.AddHistory(db, userstore.WatchHistoryEntry{
+			ID:              "history-" + id,
+			ProfileID:       "profile-1",
+			MediaItemID:     "movie-" + id,
+			WatchedAt:       "2026-05-04T12:00:00Z",
+			DurationSeconds: 7200,
+			Completed:       true,
+			Source:          userstore.WatchHistorySourcePlayback,
+			Identity: userstore.WatchIdentity{
+				StableType:  "movie",
+				ProviderIDs: map[string]string{"tmdb": tmdbPrefix + id},
+			},
+		}); err != nil {
+			t.Fatalf("AddHistory %d: %v", i, err)
+		}
+	}
 }
 
 // A failed export keeps its remaining attempts for later runs: draining the
@@ -2623,26 +2654,9 @@ func TestServiceExportWatchedRetriesAFailedExportOncePerRun(t *testing.T) {
 	if err := userdb.InitSchema(db); err != nil {
 		t.Fatalf("InitSchema: %v", err)
 	}
-	for i := range 25 {
-		id := strconv.Itoa(i)
-		if err := userdb.AddHistory(db, userstore.WatchHistoryEntry{
-			ID:              "history-" + id,
-			ProfileID:       "profile-1",
-			MediaItemID:     "movie-" + id,
-			WatchedAt:       "2026-05-04T12:00:00Z",
-			DurationSeconds: 7200,
-			Completed:       true,
-			Source:          userstore.WatchHistorySourcePlayback,
-			Identity: userstore.WatchIdentity{
-				StableType:  "movie",
-				ProviderIDs: map[string]string{"tmdb": "60" + id},
-			},
-		}); err != nil {
-			t.Fatalf("AddHistory %d: %v", i, err)
-		}
-	}
+	addTestCompletedHistory(t, db, 25, "60")
 
-	attempts := 0
+	attempts := map[string]int{}
 	repo := newServiceFakeRepo()
 	service := NewService(repo, NewRegistry()).WithUserStoreProvider(staticStoreProvider{
 		store: userdb.NewSQLiteUserStore(db),
@@ -2655,17 +2669,65 @@ func TestServiceExportWatchedRetriesAFailedExportOncePerRun(t *testing.T) {
 	}), ServerConfig{}, rejectingWatchedExportStub{
 		watchedImportExportStub: watchedImportExportStub{key: "simkl", source: userstore.WatchHistorySourceSimkl},
 		batchSize:               10,
-		rejectID:                "history-0",
-		attempts:                &attempts,
+		reject:                  map[string]struct{}{"history-0": {}},
+		attempts:                attempts,
 	})
 	if err != nil {
 		t.Fatalf("ExportWatched: %v", err)
 	}
-	if attempts != 1 {
-		t.Fatalf("rejected export attempted %d times in one run, want 1", attempts)
+	if attempts["history-0"] != 1 {
+		t.Fatalf("rejected export attempted %d times in one run, want 1", attempts["history-0"])
 	}
 	if result.Sent != 24 {
 		t.Fatalf("sent = %d, want 24 (result=%+v)", result.Sent, result)
+	}
+}
+
+// Held-back failures are excluded from the pending query, so a whole page of
+// them cannot stand in front of the rest of the backlog.
+func TestServiceExportWatchedDrainsPastAFullPageOfFailures(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := userdb.InitSchema(db); err != nil {
+		t.Fatalf("InitSchema: %v", err)
+	}
+	const total = 120
+	addTestCompletedHistory(t, db, total, "80")
+
+	// The provider rejects a full pending page's worth of plays.
+	reject := make(map[string]struct{}, 100)
+	for i := range 100 {
+		reject["history-"+strconv.Itoa(i)] = struct{}{}
+	}
+	attempts := map[string]int{}
+	repo := newServiceFakeRepo()
+	service := NewService(repo, NewRegistry()).WithUserStoreProvider(staticStoreProvider{
+		store: userdb.NewSQLiteUserStore(db),
+	})
+	result, err := service.ExportWatched(context.Background(), seedTestConnection(t, repo, Connection{
+		ID:        "conn-1",
+		Provider:  "simkl",
+		UserID:    7,
+		ProfileID: "profile-1",
+	}), ServerConfig{}, rejectingWatchedExportStub{
+		watchedImportExportStub: watchedImportExportStub{key: "simkl", source: userstore.WatchHistorySourceSimkl},
+		batchSize:               10,
+		reject:                  reject,
+		attempts:                attempts,
+	})
+	if err != nil {
+		t.Fatalf("ExportWatched: %v", err)
+	}
+	if result.Sent != total-len(reject) {
+		t.Fatalf("sent = %d, want %d (result=%+v)", result.Sent, total-len(reject), result)
+	}
+	for id, count := range attempts {
+		if count != 1 {
+			t.Fatalf("%s attempted %d times in one run, want 1", id, count)
+		}
 	}
 }
 
