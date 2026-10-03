@@ -2495,6 +2495,88 @@ func TestServiceExportWatchedDrainsPendingBatches(t *testing.T) {
 	}
 }
 
+// batchedWatchedExportStub reports a per-call batch size, as a plugin provider
+// does, and records the size of every ExportHistory call it receives.
+type batchedWatchedExportStub struct {
+	watchedImportExportStub
+	batchSize int
+	calls     *[]int
+}
+
+func (p batchedWatchedExportStub) ExportBatchSize() int { return p.batchSize }
+
+func (p batchedWatchedExportStub) ExportHistory(ctx context.Context, cfg ServerConfig, conn Connection, plays []LocalPlay) (ExportResult, error) {
+	*p.calls = append(*p.calls, len(plays))
+	return p.watchedImportExportStub.ExportHistory(ctx, cfg, conn, plays)
+}
+
+// A provider that bounds one call to a batch, which every plugin provider
+// does, still has its whole backlog exported by one run: the batch bounds the
+// call, not the run.
+func TestServiceExportWatchedDrainsBacklogInBatchedCalls(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := userdb.InitSchema(db); err != nil {
+		t.Fatalf("InitSchema: %v", err)
+	}
+	for i := range 25 {
+		id := strconv.Itoa(i)
+		if err := userdb.AddHistory(db, userstore.WatchHistoryEntry{
+			ID:              "history-" + id,
+			ProfileID:       "profile-1",
+			MediaItemID:     "movie-" + id,
+			WatchedAt:       "2026-05-04T12:00:00Z",
+			DurationSeconds: 7200,
+			Completed:       true,
+			Source:          userstore.WatchHistorySourcePlayback,
+			Identity: userstore.WatchIdentity{
+				StableType:  "movie",
+				ProviderIDs: map[string]string{"tmdb": "60" + id},
+			},
+		}); err != nil {
+			t.Fatalf("AddHistory %d: %v", i, err)
+		}
+	}
+
+	var calls []int
+	repo := newServiceFakeRepo()
+	service := NewService(repo, NewRegistry()).WithUserStoreProvider(staticStoreProvider{
+		store: userdb.NewSQLiteUserStore(db),
+	})
+	result, err := service.ExportWatched(context.Background(), Connection{
+		ID:        "conn-1",
+		Provider:  "simkl",
+		UserID:    7,
+		ProfileID: "profile-1",
+	}, ServerConfig{}, batchedWatchedExportStub{
+		watchedImportExportStub: watchedImportExportStub{key: "simkl", source: userstore.WatchHistorySourceSimkl},
+		batchSize:               10,
+		calls:                   &calls,
+	})
+	if err != nil {
+		t.Fatalf("ExportWatched: %v", err)
+	}
+	if result.Sent != 25 {
+		t.Fatalf("sent = %d, want 25 (result=%+v)", result.Sent, result)
+	}
+	if len(calls) < 3 {
+		t.Fatalf("ExportHistory calls = %v, want the backlog split across at least 3 calls", calls)
+	}
+	for _, size := range calls {
+		if size > 10 {
+			t.Fatalf("ExportHistory calls = %v, want every call bounded to the batch size", calls)
+		}
+	}
+	for _, export := range repo.historyExports {
+		if export.Status != historyExportStatusSent {
+			t.Fatalf("history exports = %+v, want all sent", repo.historyExports)
+		}
+	}
+}
+
 // A provider that stores watch times to the minute (Trakt) returns :00 for a
 // local play that kept its seconds; one that keeps seconds must not match a
 // different time in the same minute.

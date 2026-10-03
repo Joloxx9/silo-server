@@ -1640,7 +1640,7 @@ func (s *Service) ExportWatched(
 		if len(pendingPlays) == 0 {
 			continue
 		}
-		pendingPlays, singleBatch := limitWatchedExportBatch(exporter, pendingPlays)
+		pendingPlays, _ = limitWatchedExportBatch(exporter, pendingPlays)
 		exportResult, err := exporter.ExportHistory(ctx, cfg, conn, pendingPlays)
 		_, limited := AsRateLimited(err)
 		retryable := isRetryableProviderError(err)
@@ -1699,7 +1699,13 @@ func (s *Service) ExportWatched(
 			// Leave unmentioned events pending for a later retry.
 			return result, err
 		}
-		if !progressed || singleBatch {
+		// Keep draining while the provider accepts work. One batch is bounded
+		// by limitWatchedExportBatch above, and for a plugin provider every
+		// batch is its own RPC with its own deadline, so a backlog costs more
+		// calls rather than one longer one. The run's own deadline, not a
+		// one-batch cap, is what bounds the whole export: a canceled run
+		// leaves the rest pending for the next one.
+		if !progressed {
 			break
 		}
 	}
