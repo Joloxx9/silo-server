@@ -1724,6 +1724,15 @@ func (s *Service) ExportWatched(
 		if !progressed {
 			break
 		}
+		// A plugin can rotate its credentials in a batch's response, which the
+		// provider persists but cannot write back into this snapshot. Re-read
+		// the connection so the next batch authenticates with what was stored,
+		// and so the write below does not restore the superseded token.
+		fresh, err := s.reloadConnection(ctx, conn)
+		if err != nil {
+			return result, err
+		}
+		conn = fresh
 	}
 
 	now := s.now()
