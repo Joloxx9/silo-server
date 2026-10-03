@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -379,25 +380,41 @@ func (r *serviceFakeRepo) UpsertHistoryExports(_ context.Context, exports []Hist
 	return nil
 }
 
-func (r *serviceFakeRepo) ListPendingHistoryExports(_ context.Context, connectionID string, limit int, excludeIDs []string) ([]HistoryExport, error) {
-	excluded := make(map[string]struct{}, len(excludeIDs))
-	for _, id := range excludeIDs {
-		excluded[id] = struct{}{}
-	}
-	var exports []HistoryExport
+func (r *serviceFakeRepo) ListPendingHistoryExports(_ context.Context, connectionID string, limit int, after HistoryExportCursor) ([]HistoryExport, error) {
+	selectable := make([]HistoryExport, 0, len(r.historyExports))
 	for _, export := range r.historyExports {
-		if _, skip := excluded[export.ID]; skip {
+		if export.ConnectionID != connectionID ||
+			(export.Status != historyExportStatusPending && export.Status != historyExportStatusFailed) ||
+			export.AttemptCount >= 5 {
 			continue
 		}
-		if export.ConnectionID == connectionID &&
-			(export.Status == historyExportStatusPending || export.Status == historyExportStatusFailed) && export.AttemptCount < 5 {
-			exports = append(exports, export)
-			if limit > 0 && len(exports) >= limit {
-				break
-			}
+		selectable = append(selectable, export)
+	}
+	// The query orders by (watched_at, id) so a cursor can page through it.
+	sort.Slice(selectable, func(i, j int) bool {
+		if !selectable[i].WatchedAt.Equal(selectable[j].WatchedAt) {
+			return selectable[i].WatchedAt.Before(selectable[j].WatchedAt)
+		}
+		return selectable[i].ID < selectable[j].ID
+	})
+	var exports []HistoryExport
+	for _, export := range selectable {
+		if after.ID != "" && !afterHistoryExportCursor(export, after) {
+			continue
+		}
+		exports = append(exports, export)
+		if limit > 0 && len(exports) >= limit {
+			break
 		}
 	}
 	return exports, nil
+}
+
+func afterHistoryExportCursor(export HistoryExport, after HistoryExportCursor) bool {
+	if export.WatchedAt.Equal(after.WatchedAt) {
+		return export.ID > after.ID
+	}
+	return export.WatchedAt.After(after.WatchedAt)
 }
 
 func (r *serviceFakeRepo) ListPendingHistoryExportsByHistoryIDs(_ context.Context, connectionID string, historyIDs []string, limit int) ([]HistoryExport, error) {

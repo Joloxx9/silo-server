@@ -1615,14 +1615,15 @@ func (s *Service) ExportWatched(
 		localByHistoryID[play.HistoryID] = play
 	}
 	// An export the provider rejected stays selectable until it runs out of
-	// attempts, so a run that keeps draining would otherwise spend every
-	// attempt of a failing export within seconds of the first one. Hold each
-	// one back for the rest of this run, which is what gives a provider that is
-	// only briefly unhappy a chance to accept it, and exclude the held-back
-	// ones from the query so a page of them cannot hide the backlog behind it.
-	var failedThisRun []string
+	// attempts, so a run that re-read the backlog from the start would spend
+	// every attempt of a failing export within seconds of the first one, and a
+	// page full of rejected ones would hide the rest of the backlog behind it.
+	// Page forward with a cursor instead: a rejection is left for a later run,
+	// which is what gives a provider that is only briefly unhappy a chance to
+	// accept it.
+	var cursor HistoryExportCursor
 	for {
-		pending, err := s.repo.ListPendingHistoryExports(ctx, conn.ID, 100, failedThisRun)
+		pending, err := s.repo.ListPendingHistoryExports(ctx, conn.ID, 100, cursor)
 		if err != nil {
 			return result, err
 		}
@@ -1630,6 +1631,7 @@ func (s *Service) ExportWatched(
 			break
 		}
 		pendingPlays := make([]LocalPlay, 0, len(pending))
+		pendingExports := make([]HistoryExport, 0, len(pending))
 		exportByHistoryID := make(map[string]HistoryExport, len(pending))
 		progressed := false
 		for _, export := range pending {
@@ -1642,12 +1644,22 @@ func (s *Service) ExportWatched(
 				continue
 			}
 			pendingPlays = append(pendingPlays, play)
+			pendingExports = append(pendingExports, export)
 			exportByHistoryID[export.HistoryID] = export
 		}
 		if len(pendingPlays) == 0 {
+			// Every row on this page was resolved locally, so the next read
+			// returns different rows without the cursor having to move.
 			continue
 		}
 		pendingPlays, _ = limitWatchedExportBatch(exporter, pendingPlays)
+		// One batch can be smaller than one page, so the cursor stops at the
+		// last play actually sent: the rest of the page is still unattempted
+		// and the next read has to return it.
+		cursor = HistoryExportCursor{
+			WatchedAt: pendingExports[len(pendingPlays)-1].WatchedAt,
+			ID:        pendingExports[len(pendingPlays)-1].ID,
+		}
 		exportResult, err := exporter.ExportHistory(ctx, cfg, conn, pendingPlays)
 		_, limited := AsRateLimited(err)
 		retryable := isRetryableProviderError(err)
@@ -1699,7 +1711,6 @@ func (s *Service) ExportWatched(
 			if markErr := s.repo.MarkHistoryExportStatus(ctx, export.ID, historyExportStatusFailed, message); markErr != nil {
 				return result, markErr
 			}
-			failedThisRun = append(failedThisRun, export.ID)
 			result.Failed++
 			progressed = true
 		}
