@@ -2577,6 +2577,87 @@ func TestServiceExportWatchedDrainsBacklogInBatchedCalls(t *testing.T) {
 	}
 }
 
+// rejectingWatchedExportStub reports a batch size, as a plugin provider does,
+// and rejects one history ID on every call while accepting the rest.
+type rejectingWatchedExportStub struct {
+	watchedImportExportStub
+	batchSize int
+	rejectID  string
+	attempts  *int
+}
+
+func (p rejectingWatchedExportStub) ExportBatchSize() int { return p.batchSize }
+
+func (p rejectingWatchedExportStub) ExportHistory(_ context.Context, _ ServerConfig, _ Connection, plays []LocalPlay) (ExportResult, error) {
+	result := ExportResult{Sent: make([]string, 0, len(plays)), Failed: map[string]string{}}
+	for _, play := range plays {
+		if play.HistoryID == p.rejectID {
+			*p.attempts++
+			result.Failed[play.HistoryID] = "provider rejected the play"
+			continue
+		}
+		result.Sent = append(result.Sent, play.HistoryID)
+	}
+	return result, nil
+}
+
+// A failed export keeps its remaining attempts for later runs: draining the
+// backlog must not spend them all in the run that first saw the failure.
+func TestServiceExportWatchedRetriesAFailedExportOncePerRun(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := userdb.InitSchema(db); err != nil {
+		t.Fatalf("InitSchema: %v", err)
+	}
+	for i := range 25 {
+		id := strconv.Itoa(i)
+		if err := userdb.AddHistory(db, userstore.WatchHistoryEntry{
+			ID:              "history-" + id,
+			ProfileID:       "profile-1",
+			MediaItemID:     "movie-" + id,
+			WatchedAt:       "2026-05-04T12:00:00Z",
+			DurationSeconds: 7200,
+			Completed:       true,
+			Source:          userstore.WatchHistorySourcePlayback,
+			Identity: userstore.WatchIdentity{
+				StableType:  "movie",
+				ProviderIDs: map[string]string{"tmdb": "60" + id},
+			},
+		}); err != nil {
+			t.Fatalf("AddHistory %d: %v", i, err)
+		}
+	}
+
+	attempts := 0
+	repo := newServiceFakeRepo()
+	service := NewService(repo, NewRegistry()).WithUserStoreProvider(staticStoreProvider{
+		store: userdb.NewSQLiteUserStore(db),
+	})
+	result, err := service.ExportWatched(context.Background(), Connection{
+		ID:        "conn-1",
+		Provider:  "simkl",
+		UserID:    7,
+		ProfileID: "profile-1",
+	}, ServerConfig{}, rejectingWatchedExportStub{
+		watchedImportExportStub: watchedImportExportStub{key: "simkl", source: userstore.WatchHistorySourceSimkl},
+		batchSize:               10,
+		rejectID:                "history-0",
+		attempts:                &attempts,
+	})
+	if err != nil {
+		t.Fatalf("ExportWatched: %v", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("rejected export attempted %d times in one run, want 1", attempts)
+	}
+	if result.Sent != 24 {
+		t.Fatalf("sent = %d, want 24 (result=%+v)", result.Sent, result)
+	}
+}
+
 // A provider that stores watch times to the minute (Trakt) returns :00 for a
 // local play that kept its seconds; one that keeps seconds must not match a
 // different time in the same minute.

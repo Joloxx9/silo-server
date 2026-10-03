@@ -1614,6 +1614,12 @@ func (s *Service) ExportWatched(
 	for _, play := range local {
 		localByHistoryID[play.HistoryID] = play
 	}
+	// An export the provider rejected stays selectable until it runs out of
+	// attempts, so a run that keeps draining would otherwise spend every
+	// attempt of a failing export within seconds of the first one. Hold each
+	// one back for a later run, which is what gives a provider that is only
+	// briefly unhappy a chance to accept it.
+	failedThisRun := make(map[string]struct{})
 	for {
 		pending, err := s.repo.ListPendingHistoryExports(ctx, conn.ID, 100)
 		if err != nil {
@@ -1625,7 +1631,12 @@ func (s *Service) ExportWatched(
 		pendingPlays := make([]LocalPlay, 0, len(pending))
 		exportByHistoryID := make(map[string]HistoryExport, len(pending))
 		progressed := false
+		heldBack := 0
 		for _, export := range pending {
+			if _, failed := failedThisRun[export.ID]; failed {
+				heldBack++
+				continue
+			}
 			play, ok := localByHistoryID[export.HistoryID]
 			if !ok {
 				if err := s.repo.MarkHistoryExportStatus(ctx, export.ID, historyExportStatusNotFound, "local history entry not found"); err != nil {
@@ -1638,6 +1649,10 @@ func (s *Service) ExportWatched(
 			exportByHistoryID[export.HistoryID] = export
 		}
 		if len(pendingPlays) == 0 {
+			if heldBack > 0 {
+				// Everything this page still offers already failed here.
+				break
+			}
 			continue
 		}
 		pendingPlays, _ = limitWatchedExportBatch(exporter, pendingPlays)
@@ -1692,6 +1707,7 @@ func (s *Service) ExportWatched(
 			if markErr := s.repo.MarkHistoryExportStatus(ctx, export.ID, historyExportStatusFailed, message); markErr != nil {
 				return result, markErr
 			}
+			failedThisRun[export.ID] = struct{}{}
 			result.Failed++
 			progressed = true
 		}
