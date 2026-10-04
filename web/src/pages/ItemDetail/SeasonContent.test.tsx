@@ -243,37 +243,19 @@ describe("SeasonContent", () => {
     );
   });
 
-  it("rates a season from the same place as a movie", () => {
+  it("does not offer a season rating", () => {
     renderToStaticMarkup(
       <MemoryRouter initialEntries={["/item/season-1"]}>
         <SeasonContent item={makeSeasonItem({ user_rating: 4 })} />
       </MemoryRouter>,
     );
 
-    expect(mocks.capturedActionBarProps.value).toMatchObject({ rating: 4 });
-
-    const onRatingChange = mocks.capturedActionBarProps.value?.onRatingChange as
-      | ((rating: number | null) => void)
-      | undefined;
-    expect(onRatingChange).toBeTypeOf("function");
-
-    onRatingChange?.(5);
-    onRatingChange?.(null);
-
-    expect(mocks.setRatingMutate).toHaveBeenCalledWith(5);
-    expect(mocks.deleteRatingMutate).toHaveBeenCalledTimes(1);
-  });
-
-  it("reports an unrated season as having no rating", () => {
-    renderToStaticMarkup(
-      <MemoryRouter initialEntries={["/item/season-1"]}>
-        <SeasonContent item={makeSeasonItem()} />
-      </MemoryRouter>,
-    );
-
-    // null, not undefined or zero: the star picker shows "no rating" only for
-    // null, and zero would read as a real score.
-    expect(mocks.capturedActionBarProps.value?.rating).toBeNull();
+    // Silo rates movies, series and episodes. That is also everything the
+    // watch-provider contract can carry, so a season rating would never leave
+    // this server, and the page does not invite one even when a stored rating
+    // exists.
+    expect(mocks.capturedActionBarProps.value).not.toHaveProperty("rating");
+    expect(mocks.capturedActionBarProps.value).not.toHaveProperty("onRatingChange");
   });
 
   it("passes partial-progress restart eligibility to episode menus", () => {

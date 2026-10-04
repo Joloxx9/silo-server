@@ -23,11 +23,11 @@ type ratingsRepository interface {
 }
 
 // ratingItemRepository is the access check the ratings endpoints need. It is
-// narrower than personalDataItemRepository on purpose: rating accepts a season
-// or an episode as a target in its own right, which favorites and history do
-// not, and both need their parent series resolved before the library check.
+// narrower than personalDataItemRepository on purpose: rating accepts an
+// episode as a target in its own right, which favorites and history do not,
+// and an episode needs its parent series resolved before the library check.
 type ratingItemRepository interface {
-	EnsureAccessibleAllowingSeriesChildren(ctx context.Context, contentID string, filter catalog.AccessFilter) error
+	EnsureAccessibleAllowingEpisodes(ctx context.Context, contentID string, filter catalog.AccessFilter) error
 }
 
 // LocalRatingEventDispatcher sends a profile's rating changes to its watch
@@ -138,7 +138,7 @@ func (h *RatingsHandler) HandleSetRating(w http.ResponseWriter, r *http.Request)
 // caller validates the range; an item outside the viewer's access is 404.
 // Setting the same rating twice converges, so a retried set is safe.
 func (h *RatingsHandler) SetRating(ctx context.Context, userID int, profileID, itemID string, access catalog.AccessFilter, rating int) error {
-	if err := h.itemRepo.EnsureAccessibleAllowingSeriesChildren(ctx, itemID, access); err != nil {
+	if err := h.itemRepo.EnsureAccessibleAllowingEpisodes(ctx, itemID, access); err != nil {
 		return apiError(http.StatusNotFound, "not_found", "Item not found")
 	}
 	if err := h.ratingsRepo.Set(ctx, userID, profileID, itemID, rating); err != nil {

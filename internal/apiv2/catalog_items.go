@@ -489,7 +489,6 @@ type Season struct {
 	PosterURL       string       `json:"poster_url,omitempty" doc:"Presigned, short-lived"`
 	PosterThumbhash string       `json:"poster_thumbhash,omitempty"`
 	UserData        *WatchRollup `json:"user_data,omitempty"`
-	UserRating      *int         `json:"user_rating,omitempty" doc:"The acting profile's own rating of this season, 1 to 5 stars" example:"4"`
 }
 
 // SeasonCollection is the seasons of a series.
@@ -1296,5 +1295,5 @@ func episodesOf(views []handlers.EpisodeView) []Episode {
 func seasonOf(s handlers.SeasonView) Season {
 	return Season{ContentID: s.ContentID, PlayContentID: s.PlayContentID, SeasonNumber: s.SeasonNumber, IsSpecials: s.IsSpecials, Title: s.Title,
 		Overview: s.Overview, AirDate: datePtr(s.AirDate), EpisodeCount: s.EpisodeCount, PosterURL: s.PosterURL, PosterThumbhash: s.PosterThumbhash,
-		UserData: watchRollupOf(s.UserData), UserRating: s.UserRating}
+		UserData: watchRollupOf(s.UserData)}
 }

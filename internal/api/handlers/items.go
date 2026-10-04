@@ -389,7 +389,6 @@ type seasonResponse struct {
 	PosterURL       string                  `json:"poster_url,omitempty"`
 	PosterThumbhash string                  `json:"poster_thumbhash,omitempty"`
 	UserData        *catalog.SeasonUserData `json:"user_data,omitempty"`
-	UserRating      *int                    `json:"user_rating,omitempty"`
 }
 
 // seasonsResponse wraps the seasons list for JSON serialization.
@@ -1836,28 +1835,6 @@ func (h *ItemsHandler) listItemRatings(ctx context.Context, v ItemViewer, conten
 		return nil
 	}
 	return ratings
-}
-
-// enrichSeasonRatings fills each season's own rating. Seasons are catalog items
-// in their own right, so a viewer can rate a season independently of its series
-// and of its episodes.
-func (h *ItemsHandler) enrichSeasonRatings(ctx context.Context, v ItemViewer, seasons []seasonResponse) {
-	ids := make([]string, 0, len(seasons))
-	for _, season := range seasons {
-		if season.ContentID != "" {
-			ids = append(ids, season.ContentID)
-		}
-	}
-	ratings := h.listItemRatings(ctx, v, ids)
-	if len(ratings) == 0 {
-		return
-	}
-	for i := range seasons {
-		if rating, rated := ratings[seasons[i].ContentID]; rated {
-			value := rating
-			seasons[i].UserRating = &value
-		}
-	}
 }
 
 func leafUserDataFromProgress(progress *userstore.WatchProgress) *catalog.SeasonUserData {

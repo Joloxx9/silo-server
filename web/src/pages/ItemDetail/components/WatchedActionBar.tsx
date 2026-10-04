@@ -15,17 +15,20 @@ type WatchedActionProps =
 
 interface WatchedActionBarProps extends Omit<ActionBarProps, WatchedActionProps> {
   item: ItemDetail;
+  /**
+   * Shows the star picker. An episode is rateable and a season is not: Silo
+   * rates movies, series and episodes, which is also the full set the watch
+   * providers can carry, so a season rating would stay on this server alone.
+   */
+  rateable?: boolean;
 }
 
-/**
- * Keeps mutation lifecycle renders inside the season and episode action bar.
- *
- * A season and an episode are rated in the same place as a movie, because a
- * viewer who has just finished one looks for the stars where the other title
- * kinds put them. Favorites and the watchlist stay out: those lists hold
- * whole titles, so they remain on the movie and series bar.
- */
-export default function WatchedActionBar({ item, ...props }: WatchedActionBarProps) {
+/** Keeps mutation lifecycle renders inside the season and episode action bar. */
+export default function WatchedActionBar({
+  item,
+  rateable = false,
+  ...props
+}: WatchedActionBarProps) {
   const { mutate: toggleWatched, isPending: isUpdatingWatched } = useWatchedStateMutation(item);
   const handleRatingChange = useRatingChange(item.content_id);
   const handleToggleWatched = useCallback(
@@ -40,8 +43,9 @@ export default function WatchedActionBar({ item, ...props }: WatchedActionBarPro
       isWatched={item.user_data?.played ?? false}
       onToggleWatched={handleToggleWatched}
       isUpdatingWatched={isUpdatingWatched}
-      rating={item.user_rating ?? null}
-      onRatingChange={handleRatingChange}
+      {...(rateable
+        ? { rating: item.user_rating ?? null, onRatingChange: handleRatingChange }
+        : {})}
     />
   );
 }

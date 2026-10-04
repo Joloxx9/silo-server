@@ -24934,12 +24934,6 @@ export interface components {
       /** @example Season 1 */
       title: string;
       user_data?: components["schemas"]["WatchRollup"];
-      /**
-       * Format: int64
-       * @description The acting profile's own rating of this season, 1 to 5 stars
-       * @example 4
-       */
-      user_rating?: number;
     };
     SeasonCollection: {
       /** @description The page's items; empty, never null */
