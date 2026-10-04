@@ -1239,7 +1239,8 @@ func (r *PostgresRepository) GetRatingMediaItems(ctx context.Context, mediaItemI
 	rows, err := r.pool.Query(ctx, `
 		SELECT e.content_id, COALESCE(e.title, ''), COALESCE(series.year, 0),
 		       e.imdb_id, e.tmdb_id, e.tvdb_id,
-		       COALESCE(series.imdb_id, ''), COALESCE(series.tmdb_id, ''), COALESCE(series.tvdb_id, '')
+		       COALESCE(series.imdb_id, ''), COALESCE(series.tmdb_id, ''), COALESCE(series.tvdb_id, ''),
+		       e.season_number, e.episode_number
 		FROM episodes e
 		LEFT JOIN media_items series ON series.content_id = e.series_id
 		WHERE e.content_id = ANY($1)
@@ -1252,7 +1253,8 @@ func (r *PostgresRepository) GetRatingMediaItems(ctx context.Context, mediaItemI
 		fav := LocalFavorite{Kind: historyimport.KindEpisode}
 		if err := rows.Scan(&fav.MediaItemID, &fav.Title, &fav.Year,
 			&fav.IMDbID, &fav.TMDBID, &fav.TVDBID,
-			&fav.SeriesIMDbID, &fav.SeriesTMDBID, &fav.SeriesTVDBID); err != nil {
+			&fav.SeriesIMDbID, &fav.SeriesTMDBID, &fav.SeriesTVDBID,
+			&fav.SeasonNumber, &fav.EpisodeNumber); err != nil {
 			return nil, fmt.Errorf("scan rating episode: %w", err)
 		}
 		fav.ProviderItemKey = providerItemKeyForLocalFavorite(fav)

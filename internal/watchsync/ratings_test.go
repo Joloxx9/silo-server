@@ -386,6 +386,11 @@ func TestSyncRatingsExportsAnEpisodeRating(t *testing.T) {
 	if sent.MediaItemID != ratingTestEpisode || sent.Kind != historyimport.KindEpisode || sent.Rating != 8 {
 		t.Fatalf("exported = %#v, want the episode at 8", sent)
 	}
+	// A provider that addresses an episode through its show needs the numbers,
+	// so losing them here is a silent failure for that provider alone.
+	if sent.SeasonNumber != 2 || sent.EpisodeNumber != 7 {
+		t.Fatalf("exported identity = %#v, want season 2 episode 7", sent.LocalFavorite)
+	}
 	if s := h.state(ratingTestEpisode); s == nil || s.SyncedRating != 4 {
 		t.Fatalf("an exported episode rating must be recorded as agreed: %#v", s)
 	}
@@ -942,10 +947,11 @@ func newRatingHarness(t *testing.T) *ratingHarness {
 			ratingTestMovieA: {MediaItemID: ratingTestMovieA, Kind: historyimport.KindMovie, IMDbID: "tt0101", TMDBID: "101", ProviderItemKey: "tmdb:101"},
 			ratingTestMovieB: {MediaItemID: ratingTestMovieB, Kind: historyimport.KindMovie, TMDBID: "102", ProviderItemKey: "tmdb:102"},
 			ratingTestSeries: {MediaItemID: ratingTestSeries, Kind: historyimport.KindSeries, TMDBID: "101", ProviderItemKey: "tmdb:101"},
-			// An episode carries its own ids and its series' ids, so a provider
-			// can match it either way.
+			// An episode carries its own ids, its series' ids, and its position
+			// in the series, so a provider can match it by whichever of the
+			// three it addresses an episode with.
 			ratingTestEpisode: {MediaItemID: ratingTestEpisode, Kind: historyimport.KindEpisode, TMDBID: "201",
-				SeriesTMDBID: "101", ProviderItemKey: "tmdb:201"},
+				SeriesTMDBID: "101", SeasonNumber: 2, EpisodeNumber: 7, ProviderItemKey: "tmdb:201"},
 		},
 	}
 	h.repo.listMedia = h.media
