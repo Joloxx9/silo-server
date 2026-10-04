@@ -743,6 +743,12 @@ func (r *serviceFakeRepo) GetListMediaItems(_ context.Context, mediaItemIDs []st
 	return result, nil
 }
 
+// The fake keeps one identity map. Production reads episodes from their own
+// table, which is the only difference between the two resolvers.
+func (r *serviceFakeRepo) GetRatingMediaItems(ctx context.Context, mediaItemIDs []string) (map[string]LocalFavorite, error) {
+	return r.GetListMediaItems(ctx, mediaItemIDs)
+}
+
 func (r *serviceFakeRepo) ListScrobbleConnections(_ context.Context, _ int, _ string) ([]Connection, error) {
 	conns := make([]Connection, 0, len(r.scrobbleConnections))
 	for _, conn := range r.scrobbleConnections {

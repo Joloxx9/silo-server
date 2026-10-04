@@ -21,6 +21,7 @@ const (
 	ratingTestMovieA    = "movie-a"
 	ratingTestMovieB    = "movie-b"
 	ratingTestSeries    = "series-a"
+	ratingTestEpisode   = "episode-a"
 )
 
 func TestRatingScaleConversion(t *testing.T) {
@@ -365,6 +366,47 @@ func TestSyncRatingsSkipsKindsTheProviderDoesNotRate(t *testing.T) {
 	}
 	if result.LocalFound != 1 {
 		t.Fatalf("local found = %d, want only the movie", result.LocalFound)
+	}
+}
+
+// An episode is one of the three kinds the plugin contract carries, so its
+// rating travels like a movie's. Only a season cannot, which is why Silo does
+// not offer one.
+func TestSyncRatingsExportsAnEpisodeRating(t *testing.T) {
+	h := newRatingHarness(t)
+	h.store.set(ratingTestEpisode, 4)
+
+	result := h.sync()
+
+	if len(h.provider.exported) != 1 {
+		t.Fatalf("an episode rating must reach the provider: exported=%#v warnings=%v", h.provider.exported, result.Warnings)
+	}
+	sent := h.provider.exported[0]
+	// 4 stars is 8 on the provider's 1 to 10 scale.
+	if sent.MediaItemID != ratingTestEpisode || sent.Kind != historyimport.KindEpisode || sent.Rating != 8 {
+		t.Fatalf("exported = %#v, want the episode at 8", sent)
+	}
+	if s := h.state(ratingTestEpisode); s == nil || s.SyncedRating != 4 {
+		t.Fatalf("an exported episode rating must be recorded as agreed: %#v", s)
+	}
+}
+
+// An episode rating a provider holds is imported like any other kind.
+func TestSyncRatingsImportsAnEpisodeRating(t *testing.T) {
+	h := newRatingHarness(t)
+	h.provider.batch = RatingImportBatch{
+		Rows:          []RemoteRating{h.remoteRow(ratingTestEpisode, 9)},
+		SnapshotKinds: []string{historyimport.KindMovie, historyimport.KindSeries, historyimport.KindEpisode},
+	}
+
+	result := h.sync()
+
+	if result.Imported != 1 {
+		t.Fatalf("imported = %d, want the episode rating: %#v", result.Imported, result)
+	}
+	// 9 on the provider scale is 5 stars.
+	if got := h.store.stars(ratingTestEpisode); got != 5 {
+		t.Fatalf("local episode rating = %d, want 5", got)
 	}
 }
 
@@ -900,6 +942,10 @@ func newRatingHarness(t *testing.T) *ratingHarness {
 			ratingTestMovieA: {MediaItemID: ratingTestMovieA, Kind: historyimport.KindMovie, IMDbID: "tt0101", TMDBID: "101", ProviderItemKey: "tmdb:101"},
 			ratingTestMovieB: {MediaItemID: ratingTestMovieB, Kind: historyimport.KindMovie, TMDBID: "102", ProviderItemKey: "tmdb:102"},
 			ratingTestSeries: {MediaItemID: ratingTestSeries, Kind: historyimport.KindSeries, TMDBID: "101", ProviderItemKey: "tmdb:101"},
+			// An episode carries its own ids and its series' ids, so a provider
+			// can match it either way.
+			ratingTestEpisode: {MediaItemID: ratingTestEpisode, Kind: historyimport.KindEpisode, TMDBID: "201",
+				SeriesTMDBID: "101", ProviderItemKey: "tmdb:201"},
 		},
 	}
 	h.repo.listMedia = h.media
