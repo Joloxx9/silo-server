@@ -415,6 +415,29 @@ func TestSyncRatingsImportsAnEpisodeRating(t *testing.T) {
 	}
 }
 
+// An episode rated only on the provider is the one case where the item is
+// reached from the provider's side rather than from a local rating, so it needs
+// the episode-aware resolver too. Resolving it through the list resolver drops
+// it, which imports zero episode ratings while reporting a successful read.
+func TestSyncRatingsImportsAnEpisodeRatedOnlyOnTheProvider(t *testing.T) {
+	h := newRatingHarness(t)
+	// Nothing local and nothing agreed: the episode exists for this sync only
+	// because the provider reported a rating for it.
+	h.provider.batch = RatingImportBatch{
+		Rows:          []RemoteRating{h.remoteRow(ratingTestEpisode, 9)},
+		SnapshotKinds: []string{historyimport.KindMovie, historyimport.KindSeries, historyimport.KindEpisode},
+	}
+
+	result := h.sync()
+
+	if result.Imported != 1 {
+		t.Fatalf("imported = %d, want the provider-only episode rating: %#v", result.Imported, result)
+	}
+	if got := h.store.stars(ratingTestEpisode); got != 5 {
+		t.Fatalf("local episode rating = %d stars, want 5", got)
+	}
+}
+
 func TestSyncRatingsConcurrentLocalEditWins(t *testing.T) {
 	h := newRatingHarness(t)
 	h.store.set(ratingTestMovieA, 4)
@@ -922,15 +945,16 @@ func TestSyncRatingsLeavesRatingsToARunHoldingTheLock(t *testing.T) {
 // --- harness ---
 
 type ratingHarness struct {
-	t        *testing.T
-	repo     *serviceFakeRepo
-	store    *fakeRatingStore
-	provider *ratingProviderStub
-	service  *Service
-	conn     Connection
-	media    map[string]LocalFavorite
-	watched  map[string]bool
-	stale    bool
+	t            *testing.T
+	repo         *serviceFakeRepo
+	store        *fakeRatingStore
+	provider     *ratingProviderStub
+	service      *Service
+	conn         Connection
+	media        map[string]LocalFavorite
+	episodeMedia map[string]LocalFavorite
+	watched      map[string]bool
+	stale        bool
 	// staleCtx, when set, sees the context the stale mark ran with.
 	staleCtx func(context.Context)
 }
@@ -947,14 +971,26 @@ func newRatingHarness(t *testing.T) *ratingHarness {
 			ratingTestMovieA: {MediaItemID: ratingTestMovieA, Kind: historyimport.KindMovie, IMDbID: "tt0101", TMDBID: "101", ProviderItemKey: "tmdb:101"},
 			ratingTestMovieB: {MediaItemID: ratingTestMovieB, Kind: historyimport.KindMovie, TMDBID: "102", ProviderItemKey: "tmdb:102"},
 			ratingTestSeries: {MediaItemID: ratingTestSeries, Kind: historyimport.KindSeries, TMDBID: "101", ProviderItemKey: "tmdb:101"},
-			// An episode carries its own ids, its series' ids, and its position
-			// in the series, so a provider can match it by whichever of the
-			// three it addresses an episode with.
-			ratingTestEpisode: {MediaItemID: ratingTestEpisode, Kind: historyimport.KindEpisode, TMDBID: "201",
-				SeriesTMDBID: "101", SeasonNumber: 2, EpisodeNumber: 7, ProviderItemKey: "tmdb:201"},
 		},
 	}
-	h.repo.listMedia = h.media
+	// An episode carries its own ids, its series' ids, and its position in the
+	// series, so a provider can match it by whichever of the three it uses. It
+	// is registered as an episode, not a media item, so a resolver that only
+	// reads media items cannot find it.
+	h.episodeMedia = map[string]LocalFavorite{
+		ratingTestEpisode: {MediaItemID: ratingTestEpisode, Kind: historyimport.KindEpisode, TMDBID: "201",
+			SeriesTMDBID: "101", SeasonNumber: 2, EpisodeNumber: 7, ProviderItemKey: "tmdb:201"},
+	}
+	for id, item := range h.episodeMedia {
+		h.media[id] = item
+	}
+	h.repo.listMedia = map[string]LocalFavorite{}
+	for id, item := range h.media {
+		if item.Kind != historyimport.KindEpisode {
+			h.repo.listMedia[id] = item
+		}
+	}
+	h.repo.episodeMedia = h.episodeMedia
 	h.conn = Connection{
 		ID: ratingTestConnID, Provider: h.provider.Key(), UserID: ratingTestUserID, ProfileID: ratingTestProfileID,
 		AccessToken: "token", ProviderAccountID: "acct", ImportRatingsEnabled: true, ExportRatingsEnabled: true,

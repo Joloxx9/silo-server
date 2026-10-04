@@ -53,6 +53,7 @@ type serviceFakeRepo struct {
 	ratingStates           []RatingSyncState
 	droppedStates          []DroppedSyncState
 	listMedia              map[string]LocalFavorite
+	episodeMedia           map[string]LocalFavorite
 	scrobbleConnections    []Connection
 	scrobbleSessions       []ScrobbleSession
 	pendingReconciliations []ScrobbleSession
@@ -743,10 +744,20 @@ func (r *serviceFakeRepo) GetListMediaItems(_ context.Context, mediaItemIDs []st
 	return result, nil
 }
 
-// The fake keeps one identity map. Production reads episodes from their own
-// table, which is the only difference between the two resolvers.
+// Episodes live in a map of their own, as they live in a table of their own.
+// Keeping them out of listMedia is what makes a caller that reaches for the
+// list resolver fail here the way it fails in production.
 func (r *serviceFakeRepo) GetRatingMediaItems(ctx context.Context, mediaItemIDs []string) (map[string]LocalFavorite, error) {
-	return r.GetListMediaItems(ctx, mediaItemIDs)
+	result, err := r.GetListMediaItems(ctx, mediaItemIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range mediaItemIDs {
+		if item, ok := r.episodeMedia[id]; ok {
+			result[id] = item
+		}
+	}
+	return result, nil
 }
 
 func (r *serviceFakeRepo) ListScrobbleConnections(_ context.Context, _ int, _ string) ([]Connection, error) {

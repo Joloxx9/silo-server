@@ -626,8 +626,11 @@ func (s *Service) resolveRemoteRatings(ctx context.Context, items map[string]*ra
 	}
 
 	// Remote-only ratings become items with no local rating and no agreement.
+	// This resolves episodes too: a rating only the provider holds is the one
+	// case where the item is reached from the provider's side, so the list
+	// resolver would drop every episode rating the provider sent.
 	if len(unresolved) > 0 {
-		resolved, err := s.resolveListMediaItems(ctx, unresolved)
+		resolved, err := s.resolveRatingMediaItems(ctx, unresolved)
 		if err != nil {
 			return warnings, err
 		}
