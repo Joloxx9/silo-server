@@ -461,6 +461,7 @@ type Episode struct {
 	StillURL       string              `json:"still_url,omitempty" doc:"Presigned, short-lived"`
 	StillThumbhash string              `json:"still_thumbhash,omitempty"`
 	UserData       *WatchRollup        `json:"user_data,omitempty"`
+	UserRating     *int                `json:"user_rating,omitempty" doc:"The acting profile's own rating of this episode, 1 to 5 stars" example:"4"`
 	Files          []EpisodeFile       `json:"files,omitempty"`
 	OverlaySummary *CatalogItemOverlay `json:"overlay_summary,omitempty"`
 }
@@ -488,6 +489,7 @@ type Season struct {
 	PosterURL       string       `json:"poster_url,omitempty" doc:"Presigned, short-lived"`
 	PosterThumbhash string       `json:"poster_thumbhash,omitempty"`
 	UserData        *WatchRollup `json:"user_data,omitempty"`
+	UserRating      *int         `json:"user_rating,omitempty" doc:"The acting profile's own rating of this season, 1 to 5 stars" example:"4"`
 }
 
 // SeasonCollection is the seasons of a series.
@@ -1281,7 +1283,7 @@ func episodesOf(views []handlers.EpisodeView) []Episode {
 	for _, e := range views {
 		ep := Episode{ContentID: e.ContentID, SeasonNumber: e.SeasonNumber, EpisodeNumber: e.EpisodeNumber, Title: e.Title, Overview: e.Overview,
 			AirDate: datePtr(e.AirDate), Runtime: e.Runtime, ImdbID: e.ImdbID, TmdbID: e.TmdbID, TvdbID: e.TvdbID, StillURL: e.StillURL, StillThumbhash: e.StillThumbhash,
-			UserData: watchRollupOf(e.UserData), OverlaySummary: catalogOverlayOf(e.OverlaySummary)}
+			UserData: watchRollupOf(e.UserData), UserRating: e.UserRating, OverlaySummary: catalogOverlayOf(e.OverlaySummary)}
 		for _, f := range e.Files {
 			ep.Files = append(ep.Files, EpisodeFile{FileID: IDFromInt(int64(f.FileID)), Resolution: f.Resolution, CodecVideo: f.CodecVideo, HDR: f.HDR,
 				AudioChannels: f.AudioChannels, Container: f.Container, FileSize: f.FileSize})
@@ -1294,5 +1296,5 @@ func episodesOf(views []handlers.EpisodeView) []Episode {
 func seasonOf(s handlers.SeasonView) Season {
 	return Season{ContentID: s.ContentID, PlayContentID: s.PlayContentID, SeasonNumber: s.SeasonNumber, IsSpecials: s.IsSpecials, Title: s.Title,
 		Overview: s.Overview, AirDate: datePtr(s.AirDate), EpisodeCount: s.EpisodeCount, PosterURL: s.PosterURL, PosterThumbhash: s.PosterThumbhash,
-		UserData: watchRollupOf(s.UserData)}
+		UserData: watchRollupOf(s.UserData), UserRating: s.UserRating}
 }
