@@ -1286,6 +1286,7 @@ export interface EpisodeListItem {
   still_url: string;
   still_thumbhash: string;
   user_data?: LeafItemUserData;
+  user_rating?: number | null;
   files: EpisodeFile[];
   overlay_summary?: OverlaySummary | null;
 }

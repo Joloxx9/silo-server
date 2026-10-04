@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => {
     useRating: vi.fn(),
     useSetRating: vi.fn(),
     useDeleteRating: vi.fn(),
+    setRatingMutate: vi.fn(),
+    deleteRatingMutate: vi.fn(),
     useAuth: vi.fn(),
     useDetailWatchTogether: vi.fn(() => ({ menu: undefined, sheet: null })),
   };
@@ -56,6 +58,10 @@ vi.mock("@/hooks/queries/ratings", () => ({
   useRating: mocks.useRating,
   useSetRating: mocks.useSetRating,
   useDeleteRating: mocks.useDeleteRating,
+  // The real hook is a thin dispatcher over these two mutations; the mock keeps
+  // that shape so a test can still assert which one a star press ran.
+  useRatingChange: () => (rating: number | null) =>
+    rating === null ? mocks.deleteRatingMutate() : mocks.setRatingMutate(rating),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -237,15 +243,37 @@ describe("SeasonContent", () => {
     );
   });
 
-  it("does not pass rating props to ActionBar", () => {
+  it("rates a season from the same place as a movie", () => {
+    renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/item/season-1"]}>
+        <SeasonContent item={makeSeasonItem({ user_rating: 4 })} />
+      </MemoryRouter>,
+    );
+
+    expect(mocks.capturedActionBarProps.value).toMatchObject({ rating: 4 });
+
+    const onRatingChange = mocks.capturedActionBarProps.value?.onRatingChange as
+      | ((rating: number | null) => void)
+      | undefined;
+    expect(onRatingChange).toBeTypeOf("function");
+
+    onRatingChange?.(5);
+    onRatingChange?.(null);
+
+    expect(mocks.setRatingMutate).toHaveBeenCalledWith(5);
+    expect(mocks.deleteRatingMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports an unrated season as having no rating", () => {
     renderToStaticMarkup(
       <MemoryRouter initialEntries={["/item/season-1"]}>
         <SeasonContent item={makeSeasonItem()} />
       </MemoryRouter>,
     );
 
-    expect(mocks.capturedActionBarProps.value).not.toHaveProperty("rating");
-    expect(mocks.capturedActionBarProps.value).not.toHaveProperty("onRatingChange");
+    // null, not undefined or zero: the star picker shows "no rating" only for
+    // null, and zero would read as a real score.
+    expect(mocks.capturedActionBarProps.value?.rating).toBeNull();
   });
 
   it("passes partial-progress restart eligibility to episode menus", () => {
