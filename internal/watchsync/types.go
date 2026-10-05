@@ -566,6 +566,11 @@ type LocalFavorite struct {
 	SeriesIMDbID    string
 	SeriesTMDBID    string
 	SeriesTVDBID    string
+	// SeriesYear is the parent series' year for an episode. An episode has no
+	// year of its own, so Year stays zero for one: a provider that identifies
+	// an episode by its series' year reads this field, and putting the value in
+	// Year would offer it as the episode's own.
+	SeriesYear int
 	// SeasonNumber and EpisodeNumber place an episode in its series. A
 	// provider that addresses an episode as "this show, this season, this
 	// number" cannot act on it without them, and not every provider accepts
