@@ -1214,10 +1214,13 @@ func (p *PluginProvider) RatingExportRequiresWatched(kind string) bool {
 
 // mediaFromLocalFavorite builds list and rating media. A series item carries
 // its own ids, so its SERIES media has them in external_ids and no series_*.
+// An episode also carries its season and episode number, which a provider that
+// addresses an episode through its show needs instead of the episode's own id.
 func mediaFromLocalFavorite(item LocalFavorite) *pluginv1.WatchSyncMedia {
 	return mediaFromIdentity(item.MediaItemID, item.Kind, item.Title, item.Year,
 		item.IMDbID, item.TMDBID, item.TVDBID, "", 0,
-		item.SeriesIMDbID, item.SeriesTMDBID, item.SeriesTVDBID, 0, 0)
+		item.SeriesIMDbID, item.SeriesTMDBID, item.SeriesTVDBID,
+		item.SeasonNumber, item.EpisodeNumber)
 }
 
 func watchSyncMediaType(kind string) pluginv1.WatchSyncMediaType {
