@@ -2239,16 +2239,20 @@ func TestPluginProviderRatingExportWatchGateFollowsDescriptor(t *testing.T) {
 	episode := pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_EPISODE
 	series := pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_SERIES
 	for _, tc := range []struct {
-		name          string
-		gated         []pluginv1.WatchSyncMediaType
-		movie, series bool
+		name                   string
+		gated                  []pluginv1.WatchSyncMediaType
+		movie, series, episode bool
 	}{
 		{name: "none"},
 		{name: "movies", gated: []pluginv1.WatchSyncMediaType{movie}, movie: true},
 		{name: "series", gated: []pluginv1.WatchSyncMediaType{series}, series: true},
 		{name: "both", gated: []pluginv1.WatchSyncMediaType{movie, series}, movie: true, series: true},
-		// Only movie and series ratings sync, so an episode entry gates nothing.
-		{name: "episodes", gated: []pluginv1.WatchSyncMediaType{episode}},
+		// Episode ratings sync, so an episode entry gates episodes. Without
+		// this the plugin receives ratings for unwatched episodes and marks
+		// them watched upstream.
+		{name: "episodes", gated: []pluginv1.WatchSyncMediaType{episode}, episode: true},
+		{name: "every kind", gated: []pluginv1.WatchSyncMediaType{movie, series, episode},
+			movie: true, series: true, episode: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			descriptor := ratingTestDescriptor(movie, episode, series)
@@ -2260,8 +2264,11 @@ func TestPluginProviderRatingExportWatchGateFollowsDescriptor(t *testing.T) {
 			if got := provider.RatingExportRequiresWatched(historyimport.KindSeries); got != tc.series {
 				t.Fatalf("series gated = %v, want %v", got, tc.series)
 			}
-			if provider.RatingExportRequiresWatched(historyimport.KindEpisode) || provider.RatingExportRequiresWatched("") {
-				t.Fatal("only movie and series ratings can be gated")
+			if got := provider.RatingExportRequiresWatched(historyimport.KindEpisode); got != tc.episode {
+				t.Fatalf("episode gated = %v, want %v", got, tc.episode)
+			}
+			if provider.RatingExportRequiresWatched("") {
+				t.Fatal("a kind the contract cannot carry must never be gated")
 			}
 		})
 	}

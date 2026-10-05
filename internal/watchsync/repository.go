@@ -1243,9 +1243,9 @@ func (r *PostgresRepository) GetListMediaItems(ctx context.Context, mediaItemIDs
 //
 // An episode is not a row in media_items, so it needs its own read. It carries
 // its own external ids, and the providers match a rated episode by them; the
-// parent series ids ride along for a provider that addresses an episode as
-// "this show, this season, this episode" instead. The year comes from the
-// series, because an episode row has none.
+// parent series ids and numbers ride along for a provider that addresses an
+// episode as "this show, this season, this episode" instead. The year is the
+// series' and is reported as such, because an episode row has none of its own.
 func (r *PostgresRepository) GetRatingMediaItems(ctx context.Context, mediaItemIDs []string) (map[string]LocalFavorite, error) {
 	result, err := r.GetListMediaItems(ctx, mediaItemIDs)
 	if err != nil {
@@ -1275,7 +1275,7 @@ func (r *PostgresRepository) GetRatingMediaItems(ctx context.Context, mediaItemI
 	defer rows.Close()
 	for rows.Next() {
 		fav := LocalFavorite{Kind: historyimport.KindEpisode}
-		if err := rows.Scan(&fav.MediaItemID, &fav.Title, &fav.Year,
+		if err := rows.Scan(&fav.MediaItemID, &fav.Title, &fav.SeriesYear,
 			&fav.IMDbID, &fav.TMDBID, &fav.TVDBID,
 			&fav.SeriesIMDbID, &fav.SeriesTMDBID, &fav.SeriesTVDBID,
 			&fav.SeasonNumber, &fav.EpisodeNumber); err != nil {

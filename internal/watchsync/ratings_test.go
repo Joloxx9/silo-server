@@ -393,6 +393,11 @@ func TestSyncRatingsExportsAnEpisodeRating(t *testing.T) {
 	if sent.SeasonNumber != 2 || sent.EpisodeNumber != 7 {
 		t.Fatalf("exported identity = %#v, want season 2 episode 7", sent.LocalFavorite)
 	}
+	// The year belongs to the series. Offering it as the episode's own would
+	// hand a provider that matches on year the wrong identity.
+	if sent.SeriesYear != 2008 || sent.Year != 0 {
+		t.Fatalf("exported years = (year %d, series %d), want (0, 2008)", sent.Year, sent.SeriesYear)
+	}
 	if s := h.state(ratingTestEpisode); s == nil || s.SyncedRating != 4 {
 		t.Fatalf("an exported episode rating must be recorded as agreed: %#v", s)
 	}
@@ -1003,7 +1008,8 @@ func newRatingHarness(t *testing.T) *ratingHarness {
 	// reads media items cannot find it.
 	h.episodeMedia = map[string]LocalFavorite{
 		ratingTestEpisode: {MediaItemID: ratingTestEpisode, Kind: historyimport.KindEpisode, TMDBID: "201",
-			SeriesTMDBID: "101", SeasonNumber: 2, EpisodeNumber: 7, ProviderItemKey: "tmdb:201"},
+			SeriesTMDBID: "101", SeriesYear: 2008, SeasonNumber: 2, EpisodeNumber: 7,
+			ProviderItemKey: "tmdb:201"},
 	}
 	for id, item := range h.episodeMedia {
 		h.media[id] = item
