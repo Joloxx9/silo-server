@@ -566,7 +566,13 @@ type LocalFavorite struct {
 	SeriesIMDbID    string
 	SeriesTMDBID    string
 	SeriesTVDBID    string
-	FavoritedAt     time.Time
+	// SeasonNumber and EpisodeNumber place an episode in its series. A
+	// provider that addresses an episode as "this show, this season, this
+	// number" cannot act on it without them, and not every provider accepts
+	// an episode's own id instead. Zero for a movie or a series.
+	SeasonNumber  int
+	EpisodeNumber int
+	FavoritedAt   time.Time
 }
 
 // RemoteRating is one rated movie or series reported by a provider. The
