@@ -137,6 +137,8 @@ func TestExtractImagePickerLookupProviderIDs(t *testing.T) {
 		{`{"image_picker_lookup_provider_ids":["tvdb"],"metadata":{"image_picker_lookup_provider_ids":["tmdb"]}}`, []string{"tvdb"}},
 		{`{"lookup_provider_ids":["tmdb"]}`, nil},
 		{`{"image_picker_lookup_provider_ids":["tmdb",123]}`, nil},
+		{`{"image_picker_lookup_provider_ids":["metadb"]}`, nil},
+		{`{"image_picker_lookup_provider_ids":["metadb","tmdb"]}`, []string{"tmdb"}},
 	} {
 		got := extractImagePickerLookupProviderIDs([]byte(tc.metadata))
 		if !slices.Equal(got, tc.want) {

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Silo-Server/silo-server/internal/contentid"
 	"github.com/Silo-Server/silo-server/internal/models"
 	"github.com/Silo-Server/silo-server/internal/ratingsources"
 	"github.com/jackc/pgx/v5"
@@ -532,7 +533,9 @@ func extractLookupProviderIDs(metadataJSON []byte) []string {
 }
 
 func extractImagePickerLookupProviderIDs(metadataJSON []byte) []string {
-	return extractProviderIDKeys(metadataJSON, "image_picker_lookup_provider_ids")
+	return slices.DeleteFunc(extractProviderIDKeys(metadataJSON, "image_picker_lookup_provider_ids"), func(key string) bool {
+		return key != contentid.ProviderTMDB && key != contentid.ProviderTVDB && key != contentid.ProviderIMDB
+	})
 }
 
 func extractProviderIDKeys(metadataJSON []byte, field string) []string {

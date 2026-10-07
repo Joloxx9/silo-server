@@ -84,7 +84,7 @@ func NewAdminImageHandler(
 
 type itemImageEntry struct {
 	ProviderID  string  `json:"provider_id"`
-	Creator     string  `json:"creator,omitempty"`
+	Creator     string  `json:"-"`
 	URL         string  `json:"url"`
 	OriginalURL string  `json:"original_url"`
 	Type        string  `json:"type"`

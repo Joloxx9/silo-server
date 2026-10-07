@@ -21,7 +21,8 @@ the top level or inside the SDK's `metadata` envelope; the top level wins.
 ## Manual artwork lookup
 
 An artwork-only capability may declare `image_picker_lookup_provider_ids`, a
-list of external provider-ID keys such as `["tmdb"]`.
+list of supported external provider-ID keys: `tmdb`, `tvdb` and `imdb`.
+Other keys are ignored because the manual picker loads these legacy item IDs.
 Manual item and season galleries call `GetImages` when an item carries any
 declared key, even without an ID assigned by the artwork provider.
 The request's `provider_id` is empty in that case; the plugin reads `provider_ids`.
@@ -32,7 +33,8 @@ manual artwork provider does not select its images automatically.
 Providers without this declaration keep their existing image lookup behavior.
 
 Plugins may supply an artwork creator or uploader in `ImageRecord.metadata.creator`.
-The host carries this optional string into image choices as `creator`.
+The host carries this optional string into v2 image choices as `creator`.
+The frozen v1 response omits it.
 The web picker shows it alongside the provider badge; missing attribution keeps the provider badge alone.
 
 ## Error contract for bulk providers

@@ -78,7 +78,7 @@ func registerAdminCatalogImages(reg *Registry) {
 		}
 		choices := make([]choice, 0, len(result.Images))
 		for _, row := range result.Images {
-			identity := row
+			identity := ItemImageEntry(row)
 			identity.URL = ""
 			raw, err := json.Marshal(identity)
 			if err != nil {

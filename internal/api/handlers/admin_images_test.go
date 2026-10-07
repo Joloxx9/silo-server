@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -153,11 +154,18 @@ func TestHandleGetItemImagesUsesSeasonSpecificFetch(t *testing.T) {
 			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 				t.Fatalf("decode response: %v", err)
 			}
-			if len(response.Images) != 1 || response.Images[0].OriginalURL != "tmdb://requested-season.jpg" || response.Images[0].Creator != "poster-maker" {
+			if bytes.Contains(recorder.Body.Bytes(), []byte(`"creator"`)) {
+				t.Fatalf("frozen v1 response includes creator: %s", recorder.Body.String())
+			}
+			if len(response.Images) != 1 || response.Images[0].OriginalURL != "tmdb://requested-season.jpg" {
 				t.Fatalf("images = %#v", response.Images)
 			}
 			if response.Current.PosterURL != tt.currentPoster {
 				t.Fatalf("current poster = %q, want season poster %q", response.Current.PosterURL, tt.currentPoster)
+			}
+			view, err := handler.GetAdminItemImages(t.Context(), tt.contentID)
+			if err != nil || len(view.Images) != 1 || view.Images[0].Creator != "poster-maker" {
+				t.Fatalf("service attribution = %#v, error = %v", view.Images, err)
 			}
 		})
 	}
