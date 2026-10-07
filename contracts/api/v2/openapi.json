@@ -26984,6 +26984,8 @@
               4
             ],
             "format": "int64",
+            "maximum": 5,
+            "minimum": 1,
             "type": "integer"
           }
         },

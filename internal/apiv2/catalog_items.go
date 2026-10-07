@@ -508,7 +508,7 @@ type Episode struct {
 	StillURL       string              `json:"still_url,omitempty" doc:"Presigned, short-lived"`
 	StillThumbhash string              `json:"still_thumbhash,omitempty"`
 	UserData       *WatchRollup        `json:"user_data,omitempty"`
-	UserRating     *int                `json:"user_rating,omitempty" doc:"The acting profile's own rating of this episode, 1 to 5 stars" example:"4"`
+	UserRating     *int                `json:"user_rating,omitempty" minimum:"1" maximum:"5" doc:"The acting profile's own rating of this episode, 1 to 5 stars" example:"4"`
 	Files          []EpisodeFile       `json:"files,omitempty"`
 	OverlaySummary *CatalogItemOverlay `json:"overlay_summary,omitempty"`
 }
