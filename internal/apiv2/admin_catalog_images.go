@@ -138,6 +138,7 @@ func registerAdminCatalogImages(reg *Registry) {
 // ItemImageEntry is the native transport projection, independent of handler views.
 type ItemImageEntry struct {
 	ProviderID  string  `json:"provider_id"`
+	Creator     string  `json:"creator,omitempty" doc:"Artwork creator or uploader, when supplied by the provider."`
 	URL         string  `json:"url"`
 	OriginalURL string  `json:"original_url"`
 	Type        string  `json:"type"`

@@ -202,6 +202,11 @@ export default function ImageSelectorTab({
                 <button
                   key={`${img.provider_id}-${img.original_url}-${index}`}
                   type="button"
+                  aria-label={
+                    img.creator
+                      ? `${img.provider_id.toUpperCase()} By ${img.creator}${isCurrent ? " (Current)" : ""}`
+                      : undefined
+                  }
                   onClick={() => setSelectedImage(isSelected ? null : img)}
                   className={cn(
                     "group relative overflow-hidden rounded-lg border transition-all",
@@ -240,13 +245,22 @@ export default function ImageSelectorTab({
                   )}
 
                   {/* Provider badge */}
-                  <div className="absolute right-1 bottom-1">
+                  <div className="absolute right-1 bottom-1 left-1 flex flex-col items-end gap-0.5">
                     <Badge
                       variant="secondary"
                       className="bg-black/60 px-1 py-0 text-[9px] text-white backdrop-blur-sm"
                     >
                       {img.provider_id.toUpperCase()}
                     </Badge>
+                    {img.creator && (
+                      <Badge
+                        variant="secondary"
+                        className="max-w-full bg-black/60 px-1 py-0 text-[9px] text-white backdrop-blur-sm"
+                        title={`By ${img.creator}`}
+                      >
+                        <span className="truncate">By {img.creator}</span>
+                      </Badge>
+                    )}
                   </div>
                 </button>
               );

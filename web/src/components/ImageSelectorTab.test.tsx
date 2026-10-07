@@ -23,6 +23,30 @@ function item(type: ItemDetail["type"]): ItemDetail {
 }
 
 describe("ImageSelectorTab", () => {
+  it("shows the creator alongside the artwork provider", () => {
+    mocks.useItemImages.mockReturnValue({
+      data: {
+        images: [
+          {
+            type: "poster",
+            provider_id: "aura",
+            creator: "poster-maker",
+            original_url: "source",
+            url: "/poster",
+          },
+        ],
+        current: {},
+      },
+      isLoading: false,
+      isError: false,
+    });
+    mocks.useApplyItemImage.mockReturnValue({ mutate: vi.fn(), isPending: false });
+    render(<ImageSelectorTab item={item("movie")} enabled />);
+    expect(screen.getByText("AURA")).toBeInTheDocument();
+    expect(screen.getByText("By poster-maker")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AURA By poster-maker" })).toBeInTheDocument();
+  });
+
   it.each([
     ["series", "poster"],
     ["series", "backdrop"],

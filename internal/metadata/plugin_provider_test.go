@@ -409,6 +409,7 @@ func TestPluginProviderAssetRequests_ForwardProviderContext(t *testing.T) {
 
 func TestPluginProviderGetImages_MapsIncludesTextMetadata(t *testing.T) {
 	metadata, err := structpb.NewStruct(map[string]any{
+		"creator":       " poster-maker ",
 		"rating":        8.5,
 		"includes_text": false,
 	})
@@ -450,6 +451,9 @@ func TestPluginProviderGetImages_MapsIncludesTextMetadata(t *testing.T) {
 	}
 	if images[0].Rating != 8.5 {
 		t.Fatalf("Rating = %v, want 8.5", images[0].Rating)
+	}
+	if images[0].Creator != "poster-maker" {
+		t.Fatalf("Creator = %q, want poster-maker", images[0].Creator)
 	}
 	if images[0].IncludesText == nil || *images[0].IncludesText {
 		t.Fatalf("IncludesText = %v, want explicit false", images[0].IncludesText)
@@ -592,5 +596,55 @@ func TestPersonKindFromStringMapsCreator(t *testing.T) {
 		if got := personKindFromString(value); got != models.PersonKindCreator {
 			t.Errorf("personKindFromString(%q) = %v, want PersonKindCreator", value, got)
 		}
+	}
+}
+
+func TestPluginProviderGetImages_PickerLookup(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		forPicker bool
+		ids       map[string]string
+		wantCall  bool
+	}{
+		{"picker with TMDB", true, map[string]string{"tmdb": "603"}, true},
+		{"refresh with TMDB", false, map[string]string{"tmdb": "603"}, false},
+		{"picker with no supported ID", true, map[string]string{"imdb": "tt0133093"}, false},
+		{"picker with empty ID", true, map[string]string{"tmdb": ""}, false},
+		{"existing own ID", false, map[string]string{"aura": "603"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fakePluginMetadataClient{imagesResponse: &pluginv1.GetImagesResponse{
+				Images: []*pluginv1.ImageRecord{{Kind: "poster", Url: "aura://image/asset?modified_date=2026-01-01T00%3A00%3A00Z", SeasonNumber: new(int32(0))}},
+			}}
+			provider, err := NewPluginProviderWithClientFactory(map[string]string{
+				pluginInstallationIDSetting: "1", capabilityIDSetting: "aura",
+			}, func(context.Context, int, string) (pluginMetadataClient, error) { return client, nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			provider.imagePickerLookupProviderIDs = []string{"tmdb"}
+			images, err := provider.GetImages(context.Background(), ImageRequest{
+				ProviderIDs: tc.ids, ContentType: "series", ForPicker: tc.forPicker, SeasonNumber: new(0),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (client.getImagesReq != nil) != tc.wantCall {
+				t.Fatalf("image call = %v, want %v", client.getImagesReq != nil, tc.wantCall)
+			}
+			if !tc.wantCall {
+				return
+			}
+			if len(images) != 1 || images[0].ProviderID != "aura" || images[0].SeasonNumber == nil || *images[0].SeasonNumber != 0 {
+				t.Fatalf("images = %#v", images)
+			}
+			if client.getImagesReq.SeasonNumber == nil || *client.getImagesReq.SeasonNumber != 0 {
+				t.Fatal("Specials scope was lost")
+			}
+			assertStructStringMap(t, client.getImagesReq.ProviderIds, tc.ids)
+			if client.getImagesReq.ProviderId != tc.ids["aura"] {
+				t.Fatal("plugin-specific provider ID changed")
+			}
+		})
 	}
 }

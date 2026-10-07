@@ -24,6 +24,28 @@ type itemImageProvider struct {
 	images []RemoteImage
 }
 
+func TestManualImageRequestsOptIntoPickerLookup(t *testing.T) {
+	provider := &seasonImageProvider{slug: "aura"}
+	service := &MetadataService{chainCache: map[string]chainCacheEntry{
+		"11:series": {providers: []Provider{provider}, expiresAt: time.Now().Add(time.Hour)},
+		"11:season": {providers: []Provider{provider}, expiresAt: time.Now().Add(time.Hour)},
+	}}
+	if _, _, err := service.FetchItemImages(context.Background(), map[string]string{"tmdb": "123"}, "series", "en", 11); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := service.FetchSeasonImages(context.Background(), map[string]string{"tmdb": "123"}, "en", 11, 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.imageRequests) != 3 {
+		t.Fatalf("requests = %d, want item, Specials and show fallback", len(provider.imageRequests))
+	}
+	for _, req := range provider.imageRequests {
+		if !req.ForPicker || req.ProviderIDs["tmdb"] != "123" {
+			t.Fatalf("manual image request did not opt into external-ID lookup: %+v", req)
+		}
+	}
+}
+
 func (p *itemImageProvider) Slug() string       { return p.slug }
 func (p *itemImageProvider) Name() string       { return p.slug }
 func (p *itemImageProvider) ForTypes() []string { return []string{"series"} }

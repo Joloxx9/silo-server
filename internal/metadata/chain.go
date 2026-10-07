@@ -341,6 +341,8 @@ type CapabilityInfo struct {
 	// capability declares it can look an item up by, from its manifest's
 	// lookup_provider_ids. See extractLookupProviderIDs.
 	LookupProviderIDs []string
+	// ImagePickerLookupProviderIDs opt into manual artwork lookup by external IDs.
+	ImagePickerLookupProviderIDs []string
 	// BulkLookupLimit is how many concurrent lookups the capability can combine
 	// into one upstream request (bulk_lookup_limit), or 0 when it did not opt
 	// into the bulk enrichment pass. See extractBulkLookupLimit.
@@ -526,7 +528,15 @@ func extractDefaultEnabled(metadataJSON []byte) bool {
 // deduplicated. Anything other than a JSON array of strings yields nil, which
 // leaves the provider gated on its own ID as before.
 func extractLookupProviderIDs(metadataJSON []byte) []string {
-	raw, ok := capabilityMetadataField(metadataJSON, "lookup_provider_ids")
+	return extractProviderIDKeys(metadataJSON, "lookup_provider_ids")
+}
+
+func extractImagePickerLookupProviderIDs(metadataJSON []byte) []string {
+	return extractProviderIDKeys(metadataJSON, "image_picker_lookup_provider_ids")
+}
+
+func extractProviderIDKeys(metadataJSON []byte, field string) []string {
+	raw, ok := capabilityMetadataField(metadataJSON, field)
 	if !ok {
 		return nil
 	}
@@ -754,6 +764,7 @@ func ListEnabledMetadataCapabilities(ctx context.Context, pool *pgxpool.Pool) ([
 			return nil, fmt.Errorf("scanning capability: %w", err)
 		}
 		c.LookupProviderIDs = extractLookupProviderIDs(metadataJSON)
+		c.ImagePickerLookupProviderIDs = extractImagePickerLookupProviderIDs(metadataJSON)
 		c.BulkLookupLimit = extractBulkLookupLimit(metadataJSON)
 		c.RatingSources = extractRatingSources(metadataJSON)
 		if builtin && len(c.RatingSources) == 0 {
@@ -860,6 +871,7 @@ func buildProviders(
 			)
 			continue
 		}
+		provider.imagePickerLookupProviderIDs = c.ImagePickerLookupProviderIDs
 		providers = append(providers, provider)
 	}
 	return providers
@@ -922,6 +934,7 @@ func lookupCapabilityInfo(ctx context.Context, pool *pgxpool.Pool, installationI
 		return info
 	}
 	info.LookupProviderIDs = extractLookupProviderIDs(metadataJSON)
+	info.ImagePickerLookupProviderIDs = extractImagePickerLookupProviderIDs(metadataJSON)
 	info.BulkLookupLimit = extractBulkLookupLimit(metadataJSON)
 	info.RatingSources = extractRatingSources(metadataJSON)
 	return info

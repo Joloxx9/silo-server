@@ -63,7 +63,8 @@ type PluginProvider struct {
 	// lookupProviderIDs are the provider-ID keys the capability declared it can
 	// look an item up by (lookup_provider_ids). GetMetadata runs when the item
 	// carries any of them, even without an ID of the provider's own.
-	lookupProviderIDs []string
+	lookupProviderIDs            []string
+	imagePickerLookupProviderIDs []string
 	// declaredRatingSources are the rating sources of its own the capability
 	// declared (rating_sources); GetMetadata keeps them alongside Silo's
 	// built-in sources.
@@ -323,7 +324,11 @@ func (p *PluginProvider) GetMetadata(ctx context.Context, req MetadataRequest) (
 // hasLookupProviderID reports whether ids holds a non-empty value for any of
 // the provider's declared lookup keys.
 func (p *PluginProvider) hasLookupProviderID(ids map[string]string) bool {
-	for _, key := range p.lookupProviderIDs {
+	return hasAnyProviderID(ids, p.lookupProviderIDs)
+}
+
+func hasAnyProviderID(ids map[string]string, keys []string) bool {
+	for _, key := range keys {
 		if ids[key] != "" {
 			return true
 		}
@@ -385,7 +390,7 @@ func (p *PluginProvider) GetPersonDetail(ctx context.Context, req PersonDetailRe
 
 func (p *PluginProvider) GetImages(ctx context.Context, req ImageRequest) ([]RemoteImage, error) {
 	providerID := req.ProviderIDs[p.capabilityID]
-	if providerID == "" {
+	if providerID == "" && (!req.ForPicker || !hasAnyProviderID(req.ProviderIDs, p.imagePickerLookupProviderIDs)) {
 		return nil, nil
 	}
 
@@ -431,6 +436,7 @@ func (p *PluginProvider) GetImages(ctx context.Context, req ImageRequest) ([]Rem
 		}
 		// Extract rating from the metadata struct if the plugin provided it.
 		if md := image.GetMetadata(); md != nil {
+			ri.Creator = strings.TrimSpace(md.GetFields()["creator"].GetStringValue())
 			if v, ok := md.GetFields()["rating"]; ok {
 				ri.Rating = v.GetNumberValue()
 			}

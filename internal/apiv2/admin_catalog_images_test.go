@@ -26,7 +26,7 @@ func (f *fakeAdminImages) ApplyAdminItemImage(_ context.Context, id string, r ha
 }
 func TestAdminImagePagesAndApply(t *testing.T) {
 	deps := pilotDeps(nil, nil)
-	f := &fakeAdminImages{rows: []handlers.AdminImageEntryView{{ProviderID: "p", OriginalURL: "b", URL: "display-b", Type: "poster", Rating: 9}, {ProviderID: "p", OriginalURL: "a", URL: "display-a", Type: "poster", Rating: 1}}}
+	f := &fakeAdminImages{rows: []handlers.AdminImageEntryView{{ProviderID: "p", Creator: "poster-maker", OriginalURL: "b", URL: "display-b", Type: "poster", Rating: 9}, {ProviderID: "p", OriginalURL: "a", URL: "display-a", Type: "poster", Rating: 1}}}
 	deps.AdminCatalogImages = f
 	h := newTestHandler(t, deps)
 	path := Prefix + "/admin/items/item-1/images"
@@ -35,7 +35,7 @@ func TestAdminImagePagesAndApply(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
 		t.Fatal(err)
 	}
-	if rec.Code != 200 || len(page.Items) != 1 || !page.Page.HasMore || page.Items[0].OriginalURL != "b" || strings.Contains(rec.Body.String(), "private upstream") {
+	if rec.Code != 200 || len(page.Items) != 1 || !page.Page.HasMore || page.Items[0].OriginalURL != "b" || page.Items[0].Creator != "poster-maker" || strings.Contains(rec.Body.String(), "private upstream") {
 		t.Fatalf("first %d %s", rec.Code, rec.Body)
 	}
 	if f.rows[0].OriginalURL != "b" {

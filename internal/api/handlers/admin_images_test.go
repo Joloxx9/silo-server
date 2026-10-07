@@ -99,6 +99,7 @@ func TestHandleGetItemImagesUsesSeasonSpecificFetch(t *testing.T) {
 			const seriesID = "series-1"
 			imageSvc := &imageServiceFake{seasonImages: []metadata.RemoteImage{{
 				ProviderID: "tmdb",
+				Creator:    "poster-maker",
 				URL:        "tmdb://requested-season.jpg",
 				Type:       metadata.ImagePoster,
 			}}}
@@ -152,7 +153,7 @@ func TestHandleGetItemImagesUsesSeasonSpecificFetch(t *testing.T) {
 			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 				t.Fatalf("decode response: %v", err)
 			}
-			if len(response.Images) != 1 || response.Images[0].OriginalURL != "tmdb://requested-season.jpg" {
+			if len(response.Images) != 1 || response.Images[0].OriginalURL != "tmdb://requested-season.jpg" || response.Images[0].Creator != "poster-maker" {
 				t.Fatalf("images = %#v", response.Images)
 			}
 			if response.Current.PosterURL != tt.currentPoster {

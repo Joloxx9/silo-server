@@ -84,6 +84,7 @@ func NewAdminImageHandler(
 
 type itemImageEntry struct {
 	ProviderID  string  `json:"provider_id"`
+	Creator     string  `json:"creator,omitempty"`
 	URL         string  `json:"url"`
 	OriginalURL string  `json:"original_url"`
 	Type        string  `json:"type"`
@@ -269,6 +270,7 @@ func (h *AdminImageHandler) GetAdminItemImages(ctx context.Context, contentID st
 		}
 		entries = append(entries, itemImageEntry{
 			ProviderID:  img.ProviderID,
+			Creator:     img.Creator,
 			URL:         displayURL,
 			OriginalURL: img.URL,
 			Type:        metadata.ImageTypeToString(img.Type),

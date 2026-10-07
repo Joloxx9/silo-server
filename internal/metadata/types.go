@@ -363,6 +363,8 @@ type ImageRequest struct {
 	ProviderIDs map[string]string
 	ContentType string
 	Language    string
+	// ForPicker permits explicit artwork lookup without changing refresh behavior.
+	ForPicker bool
 	// SeasonNumber is present only for an exact season artwork gallery. A
 	// pointer distinguishes Specials (0) from an item-level request.
 	SeasonNumber *int
@@ -379,6 +381,7 @@ type ImageRequest struct {
 // RemoteImage describes an available image from a provider.
 type RemoteImage struct {
 	ProviderID   string // Slug of the provider that returned this image
+	Creator      string // Artwork creator or uploader, when reported by the provider
 	URL          string
 	Type         ImageType
 	Language     string

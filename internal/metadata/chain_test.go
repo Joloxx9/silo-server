@@ -128,6 +128,23 @@ func TestExtractLookupProviderIDs(t *testing.T) {
 	}
 }
 
+func TestExtractImagePickerLookupProviderIDs(t *testing.T) {
+	for _, tc := range []struct {
+		metadata string
+		want     []string
+	}{
+		{`{"metadata":{"image_picker_lookup_provider_ids":[" TMDB ","tmdb","","IMDB"]}}`, []string{"tmdb", "imdb"}},
+		{`{"image_picker_lookup_provider_ids":["tvdb"],"metadata":{"image_picker_lookup_provider_ids":["tmdb"]}}`, []string{"tvdb"}},
+		{`{"lookup_provider_ids":["tmdb"]}`, nil},
+		{`{"image_picker_lookup_provider_ids":["tmdb",123]}`, nil},
+	} {
+		got := extractImagePickerLookupProviderIDs([]byte(tc.metadata))
+		if !slices.Equal(got, tc.want) {
+			t.Fatalf("extractImagePickerLookupProviderIDs(%s) = %v, want %v", tc.metadata, got, tc.want)
+		}
+	}
+}
+
 func TestExtractBulkLookupLimit(t *testing.T) {
 	cases := []struct {
 		name         string

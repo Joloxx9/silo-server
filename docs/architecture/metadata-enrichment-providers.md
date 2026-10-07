@@ -18,6 +18,23 @@ the top level or inside the SDK's `metadata` envelope; the top level wins.
   provider into the bulk enrichment pass below. Values above 200 are capped at
   200; anything that is not a positive integer opts out.
 
+## Manual artwork lookup
+
+An artwork-only capability may declare `image_picker_lookup_provider_ids`, a
+list of external provider-ID keys such as `["tmdb"]`.
+Manual item and season galleries call `GetImages` when an item carries any
+declared key, even without an ID assigned by the artwork provider.
+The request's `provider_id` is empty in that case; the plugin reads `provider_ids`.
+The keys use the same normalization and metadata-envelope precedence as
+`lookup_provider_ids`, but the two declarations are independent.
+Metadata refreshes still require the image provider's own ID, so enabling a
+manual artwork provider does not select its images automatically.
+Providers without this declaration keep their existing image lookup behavior.
+
+Plugins may supply an artwork creator or uploader in `ImageRecord.metadata.creator`.
+The host carries this optional string into image choices as `creator`.
+The web picker shows it alongside the provider badge; missing attribution keeps the provider badge alone.
+
 ## Error contract for bulk providers
 
 Declaring `bulk_lookup_limit` also promises this: a provider returns an item
