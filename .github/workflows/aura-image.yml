@@ -1,0 +1,93 @@
+# Personal image build for this fork. Upstream's publisher
+# (.github/workflows/docker.yml -> trusted-linux-build.yml) is gated on
+# github.repository == 'Silo-Server/silo-server', so it never runs here.
+# This builds the single architecture Unraid needs and pushes it to the
+# fork's own GHCR namespace.
+name: Fork image
+
+on:
+  push:
+    branches: [aura-image-picker]
+  workflow_dispatch:
+
+concurrency:
+  group: fork-image-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  GOPROXY: https://proxy.golang.org,direct
+  GOPRIVATE: github.com/Silo-Server/*
+  GONOSUMDB: github.com/Silo-Server/*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # The runtime stage pulls jellyfin-ffmpeg, libvips and the Intel compute
+      # runtime, so the hosted runner's default free space is tight.
+      - name: Reclaim runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /usr/share/swift /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Resolve build identity
+        run: |
+          {
+            echo "IMAGE_LC=${GITHUB_REPOSITORY,,}"
+            echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:aura-picker
+            ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:${{ github.sha }}
+          build-args: |
+            BUILD_REVISION=${{ github.sha }}
+            BUILD_DIRTY=false
+            BUILD_NUMBER=${{ github.run_number }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+          labels: |
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=aura-picker
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=fork-image-amd64
+          cache-to: type=gha,scope=fork-image-amd64,mode=max
+
+      - name: Report the image
+        run: |
+          {
+            echo "### Image"
+            echo
+            echo '```'
+            echo "${REGISTRY}/${IMAGE_LC}:aura-picker"
+            echo "${REGISTRY}/${IMAGE_LC}:${GITHUB_SHA}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
