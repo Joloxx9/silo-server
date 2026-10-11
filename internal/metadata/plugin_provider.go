@@ -465,9 +465,13 @@ func (p *PluginProvider) GetImages(ctx context.Context, req ImageRequest) ([]Rem
 }
 
 func imageRequestPurposeContext(ctx context.Context, forPicker bool) context.Context {
-	purpose := "automatic"
+	const (
+		automaticPurpose = "automatic"
+		galleryPurpose   = "gallery"
+	)
+	purpose := automaticPurpose
 	if forPicker {
-		purpose = "gallery"
+		purpose = galleryPurpose
 	}
 
 	metadata, _ := grpcmetadata.FromOutgoingContext(ctx)
