@@ -72,6 +72,7 @@ func TestPluginProviderGetImages_RequestPurposeHeader(t *testing.T) {
 		{name: "gallery own ID", providerIDs: map[string]string{"mediux": "m-1"}, forPicker: true, wantPurpose: "gallery"},
 		{name: "automatic external ID", providerIDs: map[string]string{"tmdb": "550"}, imageLookupIDs: []string{"tmdb"}, wantPurpose: "automatic"},
 		{name: "gallery external ID", providerIDs: map[string]string{"tmdb": "550"}, imageLookupIDs: []string{"tmdb"}, forPicker: true, wantPurpose: "gallery"},
+		{name: "gallery custom external ID", providerIDs: map[string]string{"custom": "custom-1"}, imageLookupIDs: []string{"custom"}, forPicker: true, wantPurpose: "gallery"},
 	}
 
 	for _, tc := range cases {

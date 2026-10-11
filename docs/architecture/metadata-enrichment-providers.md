@@ -32,6 +32,11 @@ image callbacks. The declaration applies to both artwork galleries and the
 image phase of metadata refresh; it does not opt a provider into metadata or
 child lookups. The existing image gallery API contracts remain unchanged.
 
+Galleries include durable provider IDs stored for the item, or for the owning
+series when browsing season artwork. Populated TMDB, TVDB, and IMDb columns
+take precedence over conflicting durable rows; durable rows can fill missing
+canonical IDs and supply custom provider IDs.
+
 For every `GetImages` RPC, the host sends the advisory gRPC metadata header
 `silo-image-request-purpose`. Its value is `gallery` for an artwork picker and
 `automatic` for metadata refresh. Plugins may use it to choose how broadly to
