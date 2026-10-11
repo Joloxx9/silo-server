@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -230,15 +231,9 @@ func TestHandleGetItemImagesMergesSavedProviderIDsWithoutOverridingCanonicalIDs(
 		t.Fatalf("item calls = %d, provider IDs = %#v", imageSvc.itemCalls, imageSvc.itemProviderIDs)
 	}
 	got := imageSvc.itemProviderIDs[0]
-	for provider, want := range map[string]string{"tmdb": "123", "tvdb": "456", "imdb": "tt123", "custom": "saved-id", "mediux": "show-art", "durable": "fallback"} {
-		if got[provider] != want {
-			t.Errorf("provider ID %q = %q, want %q (all: %#v)", provider, got[provider], want, got)
-		}
-	}
-	for _, provider := range []string{"ignored", "metadb", "_filepath", "oshash", "manga_series"} {
-		if _, ok := got[provider]; ok {
-			t.Errorf("non-durable provider ID %q was passed to provider: %#v", provider, got)
-		}
+	want := map[string]string{"tmdb": "123", "tvdb": "456", "imdb": "tt123", "custom": "saved-id", "mediux": "show-art", "durable": "fallback"}
+	if !maps.Equal(got, want) {
+		t.Errorf("provider IDs = %#v, want %#v", got, want)
 	}
 }
 
