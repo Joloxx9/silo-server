@@ -7,6 +7,12 @@
 # The Dockerfile's `frontend_dist` stage falls back to its in-container
 # `frontend` stage when no named build context is supplied, so this build is
 # self-contained and needs no prebuilt bundle from CI.
+#
+# The package is deliberately NOT named after the repository. An older,
+# now-orphaned ghcr.io/joloxx9/silo-server package still holds the tags an
+# earlier fork pushed (including `latest`); it is not linked to this repo, so
+# GITHUB_TOKEN is denied write_package against it. Publishing under a distinct
+# name leaves those images, and anything still pulling them, untouched.
 name: Fork image
 
 on:
@@ -20,6 +26,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
+  PACKAGE: silo-server-pr2259
   GOPROXY: https://proxy.golang.org,direct
   GOPRIVATE: github.com/Silo-Server/*
   GONOSUMDB: github.com/Silo-Server/*
@@ -49,7 +56,7 @@ jobs:
       - name: Resolve build identity
         run: |
           {
-            echo "IMAGE_LC=${GITHUB_REPOSITORY,,}"
+            echo "IMAGE_LC=${GITHUB_REPOSITORY_OWNER,,}/${PACKAGE}"
             echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           } >> "$GITHUB_ENV"
 
