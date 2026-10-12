@@ -208,6 +208,9 @@ type fakeSheets struct {
 	editLog     func([]string) []string
 	calls       [][]string
 	packetEnd   float64
+	// keyPackets are keyframe packet times the timing log reports before
+	// its last packet, whether or not frames decoded them.
+	keyPackets []float64
 }
 
 func (f *fakeSheets) exec(_ context.Context, _ string, args []string, _ io.Reader, stdout, stderr io.Writer) error {
@@ -229,7 +232,12 @@ func (f *fakeSheets) exec(_ context.Context, _ string, args []string, _ io.Reade
 		var timing string
 		if f.packetEnd > 0 {
 			end := int64(math.Round(f.packetEnd * 1000))
-			timing = fmt.Sprintf("#tb 0: 1/1000\n0, %d, %d, 1, 1, 0x00000000\n", end-1, end-1)
+			timing = "#tb 0: 1/1000\n"
+			for _, key := range f.keyPackets {
+				at := int64(math.Round(key * 1000))
+				timing += fmt.Sprintf("0, %d, %d, 1, 1, 0x00000000\n0, %d, %d, 1, 1, 0x00000000, F=0x0\n", at, at, at+1, at+1)
+			}
+			timing += fmt.Sprintf("0, %d, %d, 1, 1, 0x00000000\n", end-1, end-1)
 		}
 		if err := os.WriteFile(args[i+1], []byte(timing), 0o600); err != nil {
 			return err
@@ -381,9 +389,9 @@ func TestRunSheetsFillsMissingSamples(t *testing.T) {
 // it does for open-GOP keyframes after each jump, the attempt reads the
 // samples again as a keyframes-only window; otherwise, including for pictures
 // dropped as merely undecodable, the list's failure stands. A window whose
-// keyframes collide too is read once more decoding every reference picture,
-// keeping only keyframes, and fails rather than repeat the last keyframe it
-// kept if that read collides as well.
+// keyframes collide too counts each sample after a dropped keyframe as
+// filled: a few still publish, and more than the filled share allows send
+// the samples to a read decoding every reference picture.
 func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 	logDuplicates := func(log []string) []string {
 		return append(log, "[hevc @ 0x55d0] Duplicate POC in a sequence: 48.", "[hevc @ 0x55d0] Skipping invalid undecodable NALU: 21")
@@ -396,21 +404,25 @@ func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 		editLog       func([]string) []string
 		window        []fakeSheetFrame
 		windowEditLog func([]string) []string
+		windowKeys    []float64
+		reference     []fakeSheetFrame
 		refEditLog    func([]string) []string
 		runs          int
+		filled        int
 		want          Reason
 	}{
 		"duplicate keyframes":   {editLog: logDuplicates, window: keyframes, runs: 3},
 		"no drops logged":       {window: keyframes, runs: 2, want: ReasonEmpty},
 		"damaged pictures":      {editLog: logUndecodable, window: keyframes, runs: 2, want: ReasonEmpty},
 		"window empty too":      {editLog: logDuplicates, runs: 3, want: ReasonEmpty},
-		"window duplicates too": {editLog: logDuplicates, window: keyframes, windowEditLog: logDuplicates, runs: 4},
-		"reference duplicates":  {editLog: logDuplicates, window: keyframes, windowEditLog: logDuplicates, refEditLog: logDuplicates, runs: 4, want: ReasonEmpty},
+		"window drops a few":    {editLog: logDuplicates, window: keyframes[:3], windowEditLog: logDuplicates, windowKeys: []float64{4, 14, 24, 34}, runs: 3, filled: 1},
+		"window drops too many": {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: []float64{4, 14, 24, 34}, reference: keyframes, runs: 4},
+		"reference fails too":   {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: []float64{4, 14, 24, 34}, reference: keyframes[:1], refEditLog: logDuplicates, runs: 4, want: ReasonEmpty},
 	}
 	for name, tt := range tests {
 		list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5)}, editLog: tt.editLog}
-		window := &fakeSheets{format: "matroska,webm", frames: tt.window, packetEnd: 36, editLog: tt.windowEditLog}
-		reference := &fakeSheets{format: "matroska,webm", frames: tt.window, packetEnd: 36, editLog: tt.refEditLog}
+		window := &fakeSheets{format: "matroska,webm", frames: tt.window, packetEnd: 36, editLog: tt.windowEditLog, keyPackets: tt.windowKeys}
+		reference := &fakeSheets{format: "matroska,webm", frames: tt.reference, packetEnd: 36, editLog: tt.refEditLog, keyPackets: tt.windowKeys}
 		var calls [][]string
 		runner := Runner{Exec: func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			calls = append(calls, args)
@@ -437,8 +449,12 @@ func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if got := sheetLumas(t, result, 2, 2); !near(got[0], []int{10, 20, 30, 40}) || result.SheetFrames != (SheetFrames{Decoded: 4}) {
-			t.Fatalf("%s: cells %v, frames %+v; want every sample from the window", name, got, result.SheetFrames)
+		want := []int{10, 20, 30, 40}
+		if tt.filled > 0 {
+			want[3] = 30
+		}
+		if got := sheetLumas(t, result, 2, 2); !near(got[0], want) || result.SheetFrames != (SheetFrames{Decoded: 4 - tt.filled, Filled: tt.filled}) {
+			t.Fatalf("%s: cells %v, frames %+v; want cells %v with %d filled", name, got, result.SheetFrames, want, tt.filled)
 		}
 	}
 }
@@ -632,5 +648,19 @@ func TestRunSheetsHardwareFallsBack(t *testing.T) {
 	}
 	if result.Decoder != "software" || !near(sheetLumas(t, result, 2, 2)[0], []int{10, 20, 30, 40}) {
 		t.Fatalf("decoder %s, want the software attempt after a sparse hardware one", result.Decoder)
+	}
+}
+
+func TestSheetPacketIsKey(t *testing.T) {
+	for rest, want := range map[string]bool{
+		" 0x00000000":         true,
+		" 0x00000000, F=0x0":  false,
+		" 0x00000000, F=0x3":  true,
+		" 0x00000000, F=0x2":  false,
+		" 0x00000000, F=0xzz": false,
+	} {
+		if got := packetIsKey(rest); got != want {
+			t.Errorf("packetIsKey(%q) = %t, want %t", rest, got, want)
+		}
 	}
 }

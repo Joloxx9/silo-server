@@ -56,6 +56,10 @@ import (
 // has stopped keeping up at all.
 const maxQueuedFrameBytes = 64 << 20
 
+// keyframeMatchSeconds absorbs the rounding between a keyframe packet's
+// time and its decoded frame's, which keyframes seconds apart never reach.
+const keyframeMatchSeconds = 0.01
+
 // sheetFramePattern matches the frame line of the sheets metadata filter:
 // "frame:12   pts:1550   pts_time:1.55". pts_time is "NOPTS" for a frame
 // without a time.
@@ -102,6 +106,13 @@ type sheetAssembler struct {
 	packetTimeBase float64
 	packetEnd      float64
 	hasPacketTime  bool
+	// A window whose decoder dropped keyframes as duplicates gives the
+	// samples after each dropped keyframe an earlier one. The times of the
+	// frames decoded and of the keyframe packets read find those samples,
+	// which then count as filled.
+	droppedKeyframes bool
+	frameTimes       []float64
+	keyTimes         []float64
 
 	open      map[int]*sheetCanvas
 	furthest  int
@@ -175,6 +186,12 @@ func (a *sheetAssembler) Write(p []byte) (int, error) {
 
 // line takes one log line, keeping those of the sheets metadata filter.
 func (a *sheetAssembler) line(line string) {
+	if strings.Contains(line, duplicatePOCMessage) {
+		a.mu.Lock()
+		a.droppedKeyframes = true
+		a.mu.Unlock()
+		return
+	}
 	message, ok := filterMessage(line, a.logContext)
 	if !ok {
 		return
@@ -274,6 +291,46 @@ func (a *sheetAssembler) packetLine(line string) {
 			a.hasPacketTime = true
 		}
 	}
+	if hasPTS && packetIsKey(fields[5]) {
+		if at := a.offset + float64(pts)*a.packetTimeBase; finite(at) {
+			a.keyTimes = append(a.keyTimes, at)
+		}
+	}
+}
+
+// packetIsKey reads the flags framecrc appends after the checksum. It
+// prints them only when they differ from a plain keyframe's.
+func packetIsKey(rest string) bool {
+	_, raw, ok := strings.Cut(rest, "F=0x")
+	if !ok {
+		return true
+	}
+	flags, err := strconv.ParseUint(strings.TrimSpace(raw), 16, 64)
+	return err == nil && flags&1 != 0
+}
+
+// staleSamples counts the samples whose own keyframe, the last keyframe
+// packet at or before the sample, was not among the decoded frames.
+func (a *sheetAssembler) staleSamples() int {
+	keys := slices.Clone(a.keyTimes)
+	slices.Sort(keys)
+	frames := slices.Clone(a.frameTimes)
+	slices.Sort(frames)
+	stale, next := 0, 0
+	for _, at := range a.times {
+		for next < len(keys) && keys[next] <= at+sampleMatchSeconds {
+			next++
+		}
+		if next == 0 {
+			continue
+		}
+		key := keys[next-1]
+		i, _ := slices.BinarySearch(frames, key-keyframeMatchSeconds)
+		if i == len(frames) || frames[i] > key+keyframeMatchSeconds {
+			stale++
+		}
+	}
+	return stale
 }
 
 // packetTimestamp parses a framecrc DTS or PTS field. framecrc prints
@@ -308,6 +365,7 @@ func (a *sheetAssembler) place(meta sheetFrameMeta, frame []byte) {
 		return
 	}
 	at := a.offset + meta.seconds
+	a.frameTimes = append(a.frameTimes, at)
 	a.assignWindow(at - sampleMatchSeconds)
 	a.recycle(a.prev)
 	a.prev = frame
@@ -420,6 +478,9 @@ func (a *sheetAssembler) finish() ([]Sheet, SheetFrames, *AttemptError) {
 			return fail(ReasonOutput, errors.New("ffmpeg reported no usable packet timing for the sampled window"))
 		}
 		a.assignWindow(a.packetEnd + sampleMatchSeconds)
+		if a.droppedKeyframes {
+			a.filled += a.staleSamples()
+		}
 	}
 	if a.decoded == 0 {
 		return fail(ReasonEmpty, errors.New("ffmpeg decoded no frame for any sample"))

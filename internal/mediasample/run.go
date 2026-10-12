@@ -274,25 +274,23 @@ func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 	if req.Sheets != nil {
 		duplicates := false
 		result, failure := a.sheets(windowReq, req.Samples.Seconds, 0, watchDuplicatePOC(&duplicates))
-		if listFailure == nil {
-			return result, failure
-		}
 		// Keyframes a whole picture order count cycle apart collide in a
-		// window too, since skipped pictures do not advance the count. The
-		// window would then give later samples the last keyframe it kept and
-		// count them as decoded, so the window is read once more decoding
-		// every reference picture, which keeps the count right at several
-		// times the cost. A read that still drops keyframes fails.
-		if failure == nil && duplicates {
+		// window too, since skipped pictures do not advance the count. Each
+		// sample after a dropped keyframe shows the keyframe before it and
+		// counts as filled, so a window that dropped a few still publishes,
+		// as a sequential keyframe read would. One that dropped more than
+		// the filled share allows is read once more decoding every
+		// reference picture, which keeps the count right at several times
+		// the cost.
+		if failure != nil && failure.Reason == ReasonEmpty && duplicates {
 			referenceReq := windowReq
 			referenceWindow := window
 			referenceWindow.referencePictures = true
 			referenceReq.Window = &referenceWindow
-			duplicates = false
-			result, failure = a.sheets(referenceReq, req.Samples.Seconds, 0, watchDuplicatePOC(&duplicates))
-			if failure == nil && duplicates {
-				result, failure = Result{}, &AttemptError{Decoder: a.decoder, Reason: ReasonEmpty, Err: errors.New("ffmpeg dropped keyframes as duplicates in the window too")}
-			}
+			result, failure = a.sheets(referenceReq, req.Samples.Seconds, 0)
+		}
+		if listFailure == nil {
+			return result, failure
 		}
 		// A window that fails too reports its own failure, whose reason and
 		// log describe the latest read, and names the list's in its error.
