@@ -60,6 +60,11 @@ const maxQueuedFrameBytes = 64 << 20
 // time and its decoded frame's, which keyframes seconds apart never reach.
 const keyframeMatchSeconds = 0.01
 
+// maxDroppedKeyframeShare replaces maxFilledShare for a run whose decoder
+// dropped keyframes as duplicates: such a file is whole, and a sample
+// showing the keyframe a few seconds before its own is a usable preview.
+const maxDroppedKeyframeShare = 0.15
+
 // sheetFramePattern matches the frame line of the sheets metadata filter:
 // "frame:12   pts:1550   pts_time:1.55". pts_time is "NOPTS" for a frame
 // without a time.
@@ -490,7 +495,11 @@ func (a *sheetAssembler) finish() ([]Sheet, SheetFrames, *AttemptError) {
 	if a.err != nil {
 		return fail(ReasonOutput, a.err)
 	}
-	if limit := max(1, int(maxFilledShare*float64(len(a.times)))); a.filled > limit {
+	share := maxFilledShare
+	if a.droppedKeyframes {
+		share = maxDroppedKeyframeShare
+	}
+	if limit := max(1, int(share*float64(len(a.times)))); a.filled > limit {
 		return fail(ReasonEmpty, fmt.Errorf("ffmpeg decoded frames for only %d of %d samples", len(a.times)-a.filled, len(a.times)))
 	}
 	return a.sheets, SheetFrames{Decoded: len(a.times) - a.filled, Filled: a.filled}, nil
