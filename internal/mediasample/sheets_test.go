@@ -165,6 +165,15 @@ func TestBuildSheetsArgs(t *testing.T) {
 	if !slices.Equal(args, want) || list != nil {
 		t.Errorf("window args:\n got %q\nwant %q (list %q)", args, want, list)
 	}
+
+	window.Window.referencePictures = true
+	args, _, err = buildSheetsArgs(window, Attempt{}, hardwareDecode{}, 0, "GRAPH", "packets.framecrc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i := slices.Index(args, "-skip_frame:v"); i < 0 || args[i+1] != "noref" || !slices.Contains(args, "select=key,GRAPH") {
+		t.Errorf("reference window args: %q, want noref and a keyframe select ahead of the graph", args)
+	}
 }
 
 // fakeSheetFrame is one frame a fake Sheets run writes: its luma, the sample
@@ -372,7 +381,9 @@ func TestRunSheetsFillsMissingSamples(t *testing.T) {
 // it does for open-GOP keyframes after each jump, the attempt reads the
 // samples again as a keyframes-only window; otherwise, including for pictures
 // dropped as merely undecodable, the list's failure stands. A window whose
-// keyframes collide too fails rather than repeat the last one it kept.
+// keyframes collide too is read once more decoding every reference picture,
+// keeping only keyframes, and fails rather than repeat the last keyframe it
+// kept if that read collides as well.
 func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 	logDuplicates := func(log []string) []string {
 		return append(log, "[hevc @ 0x55d0] Duplicate POC in a sequence: 48.", "[hevc @ 0x55d0] Skipping invalid undecodable NALU: 21")
@@ -385,6 +396,7 @@ func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 		editLog       func([]string) []string
 		window        []fakeSheetFrame
 		windowEditLog func([]string) []string
+		refEditLog    func([]string) []string
 		runs          int
 		want          Reason
 	}{
@@ -392,26 +404,32 @@ func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 		"no drops logged":       {window: keyframes, runs: 2, want: ReasonEmpty},
 		"damaged pictures":      {editLog: logUndecodable, window: keyframes, runs: 2, want: ReasonEmpty},
 		"window empty too":      {editLog: logDuplicates, runs: 3, want: ReasonEmpty},
-		"window duplicates too": {editLog: logDuplicates, window: keyframes, windowEditLog: logDuplicates, runs: 3, want: ReasonEmpty},
+		"window duplicates too": {editLog: logDuplicates, window: keyframes, windowEditLog: logDuplicates, runs: 4},
+		"reference duplicates":  {editLog: logDuplicates, window: keyframes, windowEditLog: logDuplicates, refEditLog: logDuplicates, runs: 4, want: ReasonEmpty},
 	}
 	for name, tt := range tests {
 		list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5)}, editLog: tt.editLog}
 		window := &fakeSheets{format: "matroska,webm", frames: tt.window, packetEnd: 36, editLog: tt.windowEditLog}
+		reference := &fakeSheets{format: "matroska,webm", frames: tt.window, packetEnd: 36, editLog: tt.refEditLog}
 		var calls [][]string
 		runner := Runner{Exec: func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			calls = append(calls, args)
 			if slices.Contains(args, "concat") {
 				return list.exec(ctx, name, args, stdin, stdout, stderr)
 			}
+			if slices.Contains(args, "noref") {
+				return reference.exec(ctx, name, args, stdin, stdout, stderr)
+			}
 			return window.exec(ctx, name, args, stdin, stdout, stderr)
 		}}
 		result, err := runner.Run(t.Context(), sheetsRequest(secondsFrom(5, 10, 4), 2, 2))
-		if len(calls) != tt.runs || !slices.Contains(calls[1], "concat") || (tt.runs == 3 && !slices.Contains(calls[2], "framecrc")) {
+		if len(calls) != tt.runs || !slices.Contains(calls[1], "concat") || (tt.runs >= 3 && !slices.Contains(calls[2], "framecrc")) ||
+			(tt.runs == 4 && !slices.ContainsFunc(calls[3], func(arg string) bool { return strings.HasPrefix(arg, "select=key,") })) {
 			t.Fatalf("%s: runs %q, want a probe, a list run, and %d more", name, calls, tt.runs-2)
 		}
 		if tt.want != "" {
 			failure, ok := errors.AsType[*Error](err)
-			if !ok || failure.Reason != tt.want || (tt.runs == 3 && !strings.Contains(err.Error(), "after the list run")) {
+			if !ok || failure.Reason != tt.want || (tt.runs >= 3 && !strings.Contains(err.Error(), "after the list run")) {
 				t.Fatalf("%s: error %v, want %s naming the list run", name, err, tt.want)
 			}
 			continue

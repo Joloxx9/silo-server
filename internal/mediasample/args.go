@@ -190,7 +190,13 @@ func buildSheetsArgs(req Request, attempt Attempt, hw hardwareDecode, inputStart
 	// The window's duration bounds the input, not the output: an output -t
 	// drops frames after the filters logged them, and the log would no
 	// longer count the frames on stdout.
-	args = append(args, "-skip_frame:v", "nokey")
+	skipFrame := "nokey"
+	if req.Window.referencePictures {
+		// Non-keyframes are decoded only to keep the count; the graph
+		// still sees just the keyframes a keyframes-only read would give.
+		skipFrame, graph = "noref", "select=key,"+graph
+	}
+	args = append(args, "-skip_frame:v", skipFrame)
 	args = append(args, decode...)
 	args = append(args,
 		"-ss", formatSeconds(req.Window.StartSeconds),

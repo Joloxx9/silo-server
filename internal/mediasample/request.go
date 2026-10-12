@@ -57,6 +57,11 @@ type Window struct {
 	// KeyframesOnly decodes only video keyframes. It needs a video output
 	// (Stats); audio outputs still read every audio frame.
 	KeyframesOnly bool `json:"keyframes_only,omitempty"`
+	// referencePictures makes a Sheets window decode every reference
+	// picture and keep only the keyframes, so HEVC picture order counts stay
+	// consistent where a keyframes-only read drops keyframes as duplicates.
+	// It is set only by the samples fallback, never sent to another node.
+	referencePictures bool
 }
 
 // Samples decodes, for each time, the video keyframe at or before it, and
