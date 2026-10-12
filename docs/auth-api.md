@@ -64,8 +64,13 @@ Already issued stream grants are not withdrawn by these operations.
 The Web Settings screen and admin user Sign-in tab use these operations. Native
 Apple and Android management screens are outside the 1.0 acceptance scope; their
 existing native authentication requests use the same session validity checks.
-Jellyfin-compatible sessions live in their own store and are not listed here; only
-account-wide revocation ends them.
+A Jellyfin-compatible sign-in, by password or Quick Connect, opens a login session that
+these lists show under the client's name (its User-Agent, or the device name a Quick Connect
+request sent). The Jellyfin-compatible session lives
+only as long as that login session: revoking it, from the account's own list or by an admin,
+or its expiry ends that one Jellyfin client on every node at its next request, including
+streams and the socket, and leaves the account's other Jellyfin clients signed in.
+Account-wide revocation ends them all.
 
 ## Account passwords
 
@@ -188,7 +193,8 @@ opens `/reset-password/{token}` in the web client, which uses two public operati
   password and returns 200.
 
 Every unusable link returns the same `404 not_found`, whether it is unknown, expired,
-used, replaced, or outdated by another password change, or its account is disabled.
+used, replaced, or outdated by a password or recovery email change, or its account
+is disabled. Changing only the email's letter case preserves the link.
 Invalid passwords return `422 validation_failed` at `body.password` and leave the link
 unspent. Both operations spend the `password_reset` rate-limit budget, 20 requests per
 minute per client IP by default.
@@ -279,8 +285,8 @@ The login-session step of the `database_maintenance` scheduled task deletes expi
 login-session rows daily at 05:00 by default. Revoked sessions remain stored until their
 expiry passes. The v1
 session-list response shape and query remain unchanged, but expired rows disappear from that
-listing once cleanup deletes them. Jellyfin-compatible clients continue to use the shared login
-session validity checks; cleanup removes only sessions that have already expired.
+listing once cleanup deletes them. Jellyfin-compatible clients check their login session on
+every request too; cleanup removes only sessions that have already expired.
 
 ### Access tokens after a role change
 
@@ -313,13 +319,15 @@ to resolve viewer access is still `500`. The proxy's header-authenticated `/stre
 too. The Jellyfin surface keeps its session and answers `503` when its session check or
 its stream and HLS authorization cannot read the session from the database, when a due
 token refresh cannot reach the database, and when that refresh meets an unreachable
-sign-in provider under the `fail_closed` outage policy.
+sign-in provider under the `fail_closed` outage policy. Its `/socket` answers a new
+connection `503` the same way, and keeps an open socket open when a periodic re-check
+cannot run.
 
 Routes that check credentials outside the shared auth gate, refresh, the proxy media grant
-and the Jellyfin session and stream checks may still treat a failed lookup as no session and
+and the Jellyfin session, stream and socket checks may still treat a failed lookup as no session and
 answer 401 or refuse the request. Examples are plugin content routes, theme-song grants,
-Jellyfin admin API keys, Jellyfin image routes (which fall back to anonymous access), the
-Jellyfin websocket, and the v2 socket-ticket check used by the events, playback-control,
+Jellyfin admin API keys, Jellyfin image routes (which fall back to anonymous access), and
+the v2 socket-ticket check used by the events, playback-control,
 watch-together and admin-logs sockets (a watch-together re-check that fails closes the
 room). None of them is a token refresh, so a client that signs out only on a refresh 401
 stays signed in and retries.
@@ -357,6 +365,19 @@ per-profile budget. A locked profile fails there the way a wrong PIN does (401
 `InvalidUsernameOrPassword`), and only the message names the lockout. PIN guesses
 are counted only after the account password matched.
 
+Audiobookshelf-compatible sign-ins (beta) use the same conventions:
+`username#profile` names the profile and `password#PIN` carries its PIN. A bare
+username names the profile called like the account when there is one, and otherwise
+signs in to the primary profile only when that profile has no PIN. PIN
+guesses count against the same per-profile budget, again only after the account
+password matched, and a locked profile answers 401 like a wrong PIN, with a message
+naming the lockout. Audiobookshelf access and refresh tokens carry the profile's PIN
+revision. Once the profile has a PIN at another revision, because one was set or
+changed, or once the profile is deleted, its tokens answer 401 and refresh is refused,
+so the app signs in again. A token that names no profile works only while the account
+has no profiles. The Socket.io connection checks the token the same way when it
+authenticates.
+
 The count lives in Redis whenever the server has Redis configured, so every node
 shares it, independent of `ratelimit.backend` and of whether request rate limiting
 is enabled. Only a server without Redis keeps it in process memory, which is correct
@@ -377,13 +398,18 @@ it where they are signed in. Rules for codes, links and lifetimes are in
 | `POST /auth/device/start` (`startDeviceLogin`) | none | `user_code` is eight digits (`4821-7730`); `verification_uri_complete` is `<base>/activate?code=48217730`, where `<base>` is `server.public_url` when configured; `expires_in` is 900. |
 | `POST /auth/device/poll` (`pollDeviceLogin`) | device code | `opened: true` once an approver has looked a pending request up. A pending answer carries the current `expires_at`, which lookups can move later; the device moves its local deadline there. `approved` carries the token pair exactly once. |
 | `POST /auth/device/cancel` (`cancelDeviceLogin`) | device code | Withdraws a live pending, or approved but uncollected, request and answers `canceled`; any other request answers its unchanged state (`denied`, `consumed`, `canceled`) or `expired`. Repeating converges. |
-| `GET /auth/device?code=` or `?token=` (`getDeviceLogin`) | none | Adds `requested_at`, `server_name` and, when known, `server_id`. A lookup of a pending request marks it opened and holds its code for at least five more minutes, never past 30 minutes after start. |
-| `POST /auth/device/approve`, `/approve-handoff`, `/deny` | the account's own login session | A canceled request is refused with 409. An API key or an impersonation session is refused with 403 `permission_denied` (v1: 403 `forbidden`), because an approval gives the device a login session. |
-| `GET /auth/device/capability` | none | `cancel` and `opened_signal` report the two additions. |
+| `GET /auth/device?code=` or `?token=` (`getDeviceLogin`) | none; a login session's bearer token when sent | Adds `requested_at`, `server_name` and, when known, `server_id`. A lookup of a pending request marks it opened and holds its code for at least five more minutes, never past 30 minutes after start. A six-digit Jellyfin Quick Connect code is looked up only with the account's own login session: without a valid token it answers 401 and from an impersonation session 403, for every six-digit code. |
+| `POST /auth/device/approve`, `/approve-handoff`, `/deny` | the account's own login session | A canceled request is refused with 409. An API key or an impersonation session is refused with 403 `permission_denied` (v1: 403 `forbidden`), because an approval gives the device a login session. `approve-handoff` approves a remote-playback or Jellyfin Quick Connect request for the verified profile in `X-Profile-Id` (with `X-Profile-Token` for a PIN profile); `approve` refuses both with 409. |
+| `GET /auth/device/capability` | none | `cancel` and `opened_signal` report the two additions; `jellyfin_quick_connect` reports Quick Connect approval. |
 
 `status` gains `canceled` on lookup and poll. Start, poll and cancel spend the
 device rate-limit buckets; the lookup and all three decisions take a user code
-and share the `device_lookup` bucket. The frozen v1 routes have no cancel
+and share the `device_lookup` bucket. A lookup or decision with a six-digit
+Quick Connect code also spends the account's Quick Connect code budget, 20
+attempts per 15 minutes, and answers 429 `rate_limited` with `Retry-After` once
+it is spent; see
+[device-login.md](architecture/device-login.md#jellyfin-quick-connect). The
+frozen v1 routes never see a Quick Connect request, have no cancel
 operation, report a canceled request as `denied`, keep the 10-minute
 `?token=` start answer, and never mark a request opened.
 
