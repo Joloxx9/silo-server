@@ -274,6 +274,9 @@ func (a *sheetAssembler) readPacketTiming(path string) error {
 // packetLine reads the framecrc stream-copy output: "#tb 0: 1/1000",
 // followed by "0, DTS, PTS, duration, size, checksum[, flags]". PTS and
 // duration count in that time base and are relative to the window start.
+// A packet without a PTS falls back to its DTS: packed-bitstream XviD in AVI
+// carries no PTS on any packet, and a DTS never runs ahead of the PTS it
+// stands in for, so the fallback cannot stretch a reordered stream's extent.
 func (a *sheetAssembler) packetLine(line string) {
 	if raw, ok := strings.CutPrefix(line, "#tb 0: "); ok {
 		numerator, denominator, ok := strings.Cut(raw, "/")
@@ -294,16 +297,25 @@ func (a *sheetAssembler) packetLine(line string) {
 		a.err = errors.New("ffmpeg reported packet timing without a time base")
 		return
 	}
-	pts, errPTS := strconv.ParseInt(strings.TrimSpace(fields[2]), 10, 64)
+	pts, hasPTS := packetTimestamp(fields[2])
+	if !hasPTS {
+		pts, hasPTS = packetTimestamp(fields[1])
+	}
 	duration, errDuration := strconv.ParseInt(strings.TrimSpace(fields[3]), 10, 64)
-	// framecrc prints AV_NOPTS_VALUE as the minimum int64, rather than NOPTS.
-	if errPTS == nil && pts != math.MinInt64 && errDuration == nil && duration >= 0 {
+	if hasPTS && errDuration == nil && duration >= 0 {
 		end := a.offset + (float64(pts)+float64(duration))*a.packetTimeBase
 		if finite(end) {
 			a.packetEnd = max(a.packetEnd, end)
 			a.hasPacketTime = true
 		}
 	}
+}
+
+// packetTimestamp parses a framecrc DTS or PTS field. framecrc prints
+// AV_NOPTS_VALUE as the minimum int64, rather than NOPTS.
+func packetTimestamp(field string) (int64, bool) {
+	ts, err := strconv.ParseInt(strings.TrimSpace(field), 10, 64)
+	return ts, err == nil && ts != math.MinInt64
 }
 
 // drain places every frame whose log lines are in.
