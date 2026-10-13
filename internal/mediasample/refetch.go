@@ -16,7 +16,7 @@ import (
 
 // maxRefetchInputs bounds the inputs, and so the open demuxers and
 // decoders, of one refetch run.
-const maxRefetchInputs = 32
+const maxRefetchInputs = 16
 
 // refetchSeconds bounds how much of the input each refetch input reads
 // after its keyframe.
@@ -32,12 +32,23 @@ func (a *sheetAssembler) missingCells() []int {
 	}
 	var missing []int
 	for cell := range a.times {
-		canvas := a.open[cell/a.perSheet]
-		if canvas == nil || !canvas.set[cell%a.perSheet] {
+		if !a.cellSet(cell) {
 			missing = append(missing, cell)
 		}
 	}
 	return missing
+}
+
+// stillMissing returns the cells of cells no frame has landed in yet.
+func (a *sheetAssembler) stillMissing(cells []int) []int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return slices.DeleteFunc(slices.Clone(cells), a.cellSet)
+}
+
+func (a *sheetAssembler) cellSet(cell int) bool {
+	canvas := a.open[cell/a.perSheet]
+	return canvas != nil && canvas.set[cell%a.perSheet]
 }
 
 // beginRun readies the assembler for another ffmpeg run, whose frame
@@ -63,29 +74,43 @@ func (a *sheetAssembler) abandonRun(prior error) {
 
 // refetch fetches the missing cells of a sampled sheets run into the
 // assembler. inpoints are the list entries' container times. A run that
-// fails leaves its samples empty; only the attempt's timeout or the
-// caller's cancellation stops the refetch with a failure.
+// fails is tried once more for the cells it left empty, as a busy host can
+// fail one; cells still empty after that stay empty. Only the attempt's
+// timeout or the caller's cancellation stops the refetch with a failure.
 func (a attemptRun) refetch(req Request, assembler *sheetAssembler, inpoints []float64) *AttemptError {
 	chain, ok := sheetChain(a.sheetsGraph)
 	if !ok {
 		return nil
 	}
-	missing := assembler.missingCells()
-	for batch := range slices.Chunk(missing, maxRefetchInputs) {
-		args, err := buildRefetchArgs(req, a.attempt, a.hw, chain, assembler.times, inpoints, batch)
-		if err != nil {
-			return nil
-		}
-		assembler.beginRun()
-		prior := assembler.err
-		if failure := a.exec(req, args, nil, assembler, assembler.line); failure != nil {
+	for batch := range slices.Chunk(assembler.missingCells(), maxRefetchInputs) {
+		for try := 0; try < 2 && len(batch) > 0; try++ {
+			failure := a.refetchRun(req, assembler, chain, inpoints, batch)
+			if failure == nil {
+				break
+			}
 			if failure.Reason == ReasonTimeout || failure.Reason == ReasonCanceled {
 				return failure
 			}
-			assembler.abandonRun(prior)
+			batch = assembler.stillMissing(batch)
 		}
 	}
 	return nil
+}
+
+// refetchRun fetches cells in one ffmpeg run, dropping what a failed run
+// left half joined.
+func (a attemptRun) refetchRun(req Request, assembler *sheetAssembler, chain string, inpoints []float64, cells []int) *AttemptError {
+	args, err := buildRefetchArgs(req, a.attempt, a.hw, chain, assembler.times, inpoints, cells)
+	if err != nil {
+		return &AttemptError{Reason: ReasonArgs, Err: err}
+	}
+	assembler.beginRun()
+	prior := assembler.err
+	failure := a.exec(req, args, nil, assembler, assembler.line)
+	if failure != nil && failure.Reason != ReasonTimeout && failure.Reason != ReasonCanceled {
+		assembler.abandonRun(prior)
+	}
+	return failure
 }
 
 // buildRefetchArgs returns the ffmpeg arguments fetching cells, each from
