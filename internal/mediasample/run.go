@@ -19,6 +19,11 @@ import (
 // Runner runs sampling requests with one ffmpeg binary.
 type Runner struct {
 	FFmpegPath string
+	// FFprobePath, when set, starts each entry of a Sheets list at the
+	// keyframe it decodes, found by one seek-only ffprobe pass, so the list
+	// reads no packets between that keyframe and the sample. Empty keeps
+	// entries at the sample times.
+	FFprobePath string
 	// HWAccel and HWDevice configure hardware attempts. HWAccel is a resolved
 	// backend (see SupportsHardwareDecode), never "auto". HWDevice is the
 	// configured device value, which may list several render devices; each
@@ -259,8 +264,14 @@ func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 			if req.Sheets == nil {
 				return a.decode(req, header.info.StartSeconds)
 			}
+			listReq := req
+			if inpoints := a.keyframeInpoints(req, header.info.StartSeconds); inpoints != nil {
+				samples := *req.Samples
+				samples.inpoints = inpoints
+				listReq.Samples = &samples
+			}
 			duplicates := false
-			result, failure := a.sheets(req, req.Samples.Seconds, header.info.StartSeconds, watchDuplicatePOC(&duplicates))
+			result, failure := a.sheets(listReq, req.Samples.Seconds, header.info.StartSeconds, watchDuplicatePOC(&duplicates))
 			if failure == nil || failure.Reason != ReasonEmpty || !duplicates {
 				return result, failure
 			}
@@ -416,6 +427,11 @@ func (a attemptRun) sheets(req Request, times []float64, inputStart float64, log
 // when that is not nil, writing its stdout to stdout when that is not nil,
 // and routing its log to handlers.
 func (a attemptRun) exec(req Request, args []string, stdinBytes []byte, stdoutWriter io.Writer, handlers ...func(string)) *AttemptError {
+	return a.execBinary(req, a.runner.FFmpegPath, args, stdinBytes, stdoutWriter, handlers...)
+}
+
+// execBinary runs one process of the attempt, as exec does, from binary.
+func (a attemptRun) execBinary(req Request, binary string, args []string, stdinBytes []byte, stdoutWriter io.Writer, handlers ...func(string)) *AttemptError {
 	var stdin io.Reader
 	if stdinBytes != nil {
 		stdin = bytes.NewReader(stdinBytes)
@@ -427,9 +443,9 @@ func (a attemptRun) exec(req Request, args []string, stdinBytes []byte, stdoutWr
 	var err error
 	replaced := a.runner.Exec != nil
 	if replaced {
-		err = a.runner.Exec(a.attemptCtx, a.runner.FFmpegPath, args, stdin, stdoutWriter, stderr)
+		err = a.runner.Exec(a.attemptCtx, binary, args, stdin, stdoutWriter, stderr)
 	} else {
-		state, err = execFFmpeg(a.attemptCtx, req.Background, a.runner.FFmpegPath, args, stdin, stdoutWriter, stderr)
+		state, err = execFFmpeg(a.attemptCtx, req.Background, binary, args, stdin, stdoutWriter, stderr)
 	}
 	_ = stderr.Close()
 	waitStderr()
