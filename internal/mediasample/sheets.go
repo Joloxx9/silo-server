@@ -139,10 +139,17 @@ func buildSheetsGraph(out SheetsOutput, accel, softwareToneMap string) (string, 
 	default:
 		filters = append(filters, scale+":"+sheetFullRange, convert)
 	}
-	filters = append(filters,
-		"metadata=mode=add:key="+sampleMetadataKey+":value=-1",
-		filterMetadata+"@"+sheetMetadataID+"=print")
+	filters = append(filters, sheetGraphTail)
 	return strings.Join(filters, ","), nil
+}
+
+// sheetGraphTail ends every sheets graph: it tags untagged frames with
+// sample -1 and logs each frame's metadata for the assembler.
+const sheetGraphTail = "metadata=mode=add:key=" + sampleMetadataKey + ":value=-1," + filterMetadata + "@" + sheetMetadataID + "=print"
+
+// sheetChain returns a sheets graph's video chain without its tail.
+func sheetChain(graph string) (string, bool) {
+	return strings.CutSuffix(graph, ","+sheetGraphTail)
 }
 
 // prepareSheets settles the video chain of a sheet attempt before ffmpeg

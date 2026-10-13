@@ -118,6 +118,9 @@ type sheetAssembler struct {
 	droppedKeyframes bool
 	frameTimes       []float64
 	keyTimes         []float64
+	// deferEncode holds every sheet until finish, so samples a list left
+	// empty can still be fetched into their cells (see refetch.go).
+	deferEncode bool
 
 	open      map[int]*sheetCanvas
 	furthest  int
@@ -402,7 +405,9 @@ func (a *sheetAssembler) setCell(cell int, frame []byte) bool {
 	canvas.set[slot] = true
 	if sheet > a.furthest {
 		a.furthest = sheet
-		a.finalizeThrough(sheet - 1)
+		if !a.deferEncode {
+			a.finalizeThrough(sheet - 1)
+		}
 	}
 	return true
 }

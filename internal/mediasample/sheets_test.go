@@ -386,8 +386,9 @@ func TestRunSheetsFillsMissingSamples(t *testing.T) {
 
 // TestRunSheetsRereadsSparseListAsWindow decodes one of four samples through
 // the list. When the HEVC decoder logged dropping keyframes as duplicates, as
-// it does for open-GOP keyframes after each jump, the attempt reads the
-// samples again as a keyframes-only window; otherwise, including for pictures
+// it does for open-GOP keyframes after each jump, the empty samples are
+// fetched again from inputs of their own; samples still empty after that send
+// the attempt to a keyframes-only window. Otherwise, including for pictures
 // dropped as merely undecodable, the list's failure stands. A window whose
 // keyframes collide too counts each sample after a dropped keyframe as
 // filled: a few still publish, and more than the filled share allows send
@@ -400,48 +401,62 @@ func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 		return append(log, "[hevc @ 0x55d0] Skipping invalid undecodable NALU: 21")
 	}
 	keyframes := []fakeSheetFrame{timed(10, "4"), timed(20, "14"), timed(30, "24"), timed(40, "34")}
+	refetched := []fakeSheetFrame{tagged(20, 15), tagged(30, 25), tagged(40, 35)}
+	keys := []float64{4, 14, 24, 34}
 	tests := map[string]struct {
 		editLog       func([]string) []string
+		refetch       []fakeSheetFrame
 		window        []fakeSheetFrame
 		windowEditLog func([]string) []string
 		windowKeys    []float64
 		reference     []fakeSheetFrame
 		refEditLog    func([]string) []string
-		runs          int
-		filled        int
-		want          Reason
+		// runs after the probe and the list, in order.
+		runs   []string
+		filled int
+		want   Reason
 	}{
-		"duplicate keyframes":   {editLog: logDuplicates, window: keyframes, runs: 3},
-		"no drops logged":       {window: keyframes, runs: 2, want: ReasonEmpty},
-		"damaged pictures":      {editLog: logUndecodable, window: keyframes, runs: 2, want: ReasonEmpty},
-		"window empty too":      {editLog: logDuplicates, runs: 3, want: ReasonEmpty},
-		"window drops a few":    {editLog: logDuplicates, window: keyframes[:3], windowEditLog: logDuplicates, windowKeys: []float64{4, 14, 24, 34}, runs: 3, filled: 1},
-		"window drops too many": {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: []float64{4, 14, 24, 34}, reference: keyframes, runs: 4},
-		"reference fails too":   {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: []float64{4, 14, 24, 34}, reference: keyframes[:1], refEditLog: logDuplicates, runs: 4, want: ReasonEmpty},
+		"refetch recovers":      {editLog: logDuplicates, refetch: refetched, runs: []string{"refetch"}},
+		"refetch recovers some": {editLog: logDuplicates, refetch: refetched[:2], runs: []string{"refetch"}, filled: 1},
+		"duplicate keyframes":   {editLog: logDuplicates, window: keyframes, runs: []string{"refetch", "window"}},
+		"no drops logged":       {window: keyframes, want: ReasonEmpty},
+		"damaged pictures":      {editLog: logUndecodable, window: keyframes, want: ReasonEmpty},
+		"window empty too":      {editLog: logDuplicates, runs: []string{"refetch", "window"}, want: ReasonEmpty},
+		"window drops a few":    {editLog: logDuplicates, window: keyframes[:3], windowEditLog: logDuplicates, windowKeys: keys, runs: []string{"refetch", "window"}, filled: 1},
+		"window drops too many": {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: keys, reference: keyframes, runs: []string{"refetch", "window", "reference"}},
+		"reference fails too":   {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: keys, reference: keyframes[:1], refEditLog: logDuplicates, runs: []string{"refetch", "window", "reference"}, want: ReasonEmpty},
 	}
 	for name, tt := range tests {
 		list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5)}, editLog: tt.editLog}
+		refetch := &fakeSheets{frames: tt.refetch}
 		window := &fakeSheets{format: "matroska,webm", frames: tt.window, packetEnd: 36, editLog: tt.windowEditLog, keyPackets: tt.windowKeys}
 		reference := &fakeSheets{format: "matroska,webm", frames: tt.reference, packetEnd: 36, editLog: tt.refEditLog, keyPackets: tt.windowKeys}
-		var calls [][]string
+		var runs []string
+		calls := 0
 		runner := Runner{Exec: func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-			calls = append(calls, args)
-			if slices.Contains(args, "concat") {
+			calls++
+			switch {
+			case calls == 1:
 				return list.exec(ctx, name, args, stdin, stdout, stderr)
-			}
-			if slices.Contains(args, "noref") {
+			case slices.Contains(args, "concat"):
+				return list.exec(ctx, name, args, stdin, stdout, stderr)
+			case slices.Contains(args, "-filter_complex"):
+				runs = append(runs, "refetch")
+				return refetch.exec(ctx, name, args, stdin, stdout, stderr)
+			case slices.Contains(args, "noref"):
+				runs = append(runs, "reference")
 				return reference.exec(ctx, name, args, stdin, stdout, stderr)
 			}
+			runs = append(runs, "window")
 			return window.exec(ctx, name, args, stdin, stdout, stderr)
 		}}
 		result, err := runner.Run(t.Context(), sheetsRequest(secondsFrom(5, 10, 4), 2, 2))
-		if len(calls) != tt.runs || !slices.Contains(calls[1], "concat") || (tt.runs >= 3 && !slices.Contains(calls[2], "framecrc")) ||
-			(tt.runs == 4 && !slices.ContainsFunc(calls[3], func(arg string) bool { return strings.HasPrefix(arg, "select=key,") })) {
-			t.Fatalf("%s: runs %q, want a probe, a list run, and %d more", name, calls, tt.runs-2)
+		if !slices.Equal(runs, tt.runs) {
+			t.Fatalf("%s: runs after the list %q, want %q", name, runs, tt.runs)
 		}
 		if tt.want != "" {
 			failure, ok := errors.AsType[*Error](err)
-			if !ok || failure.Reason != tt.want || (tt.runs >= 3 && !strings.Contains(err.Error(), "after the list run")) {
+			if !ok || failure.Reason != tt.want || (slices.Contains(tt.runs, "window") && !strings.Contains(err.Error(), "after the list run")) {
 				t.Fatalf("%s: error %v, want %s naming the list run", name, err, tt.want)
 			}
 			continue
@@ -455,6 +470,25 @@ func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 		}
 		if got := sheetLumas(t, result, 2, 2); !near(got[0], want) || result.SheetFrames != (SheetFrames{Decoded: 4 - tt.filled, Filled: tt.filled}) {
 			t.Fatalf("%s: cells %v, frames %+v; want cells %v with %d filled", name, got, result.SheetFrames, want, tt.filled)
+		}
+	}
+}
+
+func TestBuildRefetchArgsSplitsHardwareOptions(t *testing.T) {
+	req := Request{Input: "/media/a.mkv", Threads: 2}
+	hw := hardwareDecode{Accel: hwAccelVAAPI, Device: "/dev/dri/renderD128"}
+	args, err := buildRefetchArgs(req, Attempt{Hardware: true}, hw, "CHAIN", []float64{5, 15, 25}, []float64{4, 14.5, 24}, []int{0, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(args, " ")
+	if strings.Count(joined, "-init_hw_device") != 1 || strings.Count(joined, "-hwaccel vaapi") != 2 || strings.Count(joined, "-i /media/a.mkv") != 2 {
+		t.Fatalf("args %q: want one device setup and hwaccel per input", args)
+	}
+	for _, want := range []string{"-ss 4 -t 1 -i", "-ss 24 -t 1 -i",
+		"[0:V:0]trim=end_frame=1,CHAIN,metadata=mode=add:key=sample:value=5[s0];[1:V:0]trim=end_frame=1,CHAIN,metadata=mode=add:key=sample:value=25[s1];[s0][s1]concat=n=2:v=1:a=0,metadata@sheets=print[out]"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("args %q: missing %q", args, want)
 		}
 	}
 }

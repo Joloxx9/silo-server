@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -407,8 +408,22 @@ func (a attemptRun) sheets(req Request, times []float64, inputStart float64, log
 		offset = req.Window.StartSeconds
 	}
 	assembler := newSheetAssembler(*req.Sheets, times, req.Samples != nil, offset)
+	assembler.deferEncode = req.Samples != nil
 	if failure := a.exec(req, args, stdinBytes, assembler, append(logHandlers, assembler.line)...); failure != nil {
 		return Result{}, failure
+	}
+	if req.Samples != nil {
+		inpoints := req.Samples.inpoints
+		if inpoints == nil {
+			inpoints = make([]float64, len(times))
+			for i, at := range times {
+				inpoints[i] = math.Max(0, at+inputStart)
+			}
+		}
+		if failure := a.refetch(req, assembler, inpoints); failure != nil {
+			failure.Decoder = a.decoder
+			return Result{}, failure
+		}
 	}
 	if packetTimingPath != "" {
 		if err := assembler.readPacketTiming(packetTimingPath); err != nil {
