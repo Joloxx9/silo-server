@@ -160,7 +160,8 @@ func buildRefetchArgs(req Request, attempt Attempt, hw hardwareDecode, chain str
 	var graph, joined strings.Builder
 	for i, cell := range cells {
 		args = append(args, perInput...)
-		args = append(args, "-skip_frame:v", "nokey", "-noaccurate_seek",
+		args = append(args, req.keyframeInputArgs(req.keyframeSkip())...)
+		args = append(args, "-noaccurate_seek",
 			"-ss", formatSampleSeconds(inpoints[cell]), "-t", fmt.Sprint(refetchSeconds), "-i", req.Input)
 		fmt.Fprintf(&graph, "[%d:V:0]trim=end_frame=1,%s,metadata=mode=add:key=%s:value=%s[s%d];",
 			i, chain, sampleMetadataKey, formatSampleSeconds(times[cell]), i)

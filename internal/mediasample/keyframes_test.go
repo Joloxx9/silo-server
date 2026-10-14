@@ -171,3 +171,50 @@ func TestRunSheetsLeavesSamplesPastAGapFilled(t *testing.T) {
 		t.Fatalf("refetched %t, frames %+v; want the sample 31.5s past its keyframe left filled", refetched, result.SheetFrames)
 	}
 }
+
+func TestKeyframeSkipFollowsProbedCodec(t *testing.T) {
+	for line, want := range map[string]string{
+		"  Stream #0:0: Video: mpeg2video (Main), yuv420p(tv, top first), 720x576 [SAR 64:45 DAR 16:9], 25 fps": "nointra",
+		"  Stream #0:0: Video: h264, yuv420p, 1920x1080 [SAR 1:1 DAR 16:9]":                                     "",
+		"  Stream #0:0(eng): Video: hevc (Main 10), yuv420p10le(tv, bt2020nc/bt2020/smpte2084), 3840x2160":      "",
+	} {
+		header := &inputHeaderParser{}
+		header.line("Input #0, matroska,webm, from '/media/a.mkv':")
+		header.line(line)
+		if got := keyframeSkipFor(header.info.VideoCodec); got != want {
+			t.Errorf("%q: codec %q, skip %q, want %q", line, header.info.VideoCodec, got, want)
+		}
+	}
+	req := sheetsRequest(secondsFrom(5, 10, 4), 2, 2)
+	req.skipFrame = "nointra"
+	list, _, err := buildSheetsArgs(req, Attempt{}, hardwareDecode{}, 0, "GRAPH", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	window := req
+	window.Samples = nil
+	window.Window = &Window{StartSeconds: 0, DurationSeconds: 40}
+	windowArgs, _, err := buildSheetsArgs(window, Attempt{}, hardwareDecode{}, 0, "GRAPH", "packets.framecrc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, args := range map[string][]string{"list": list, "window": windowArgs} {
+		if i := slices.Index(args, "-skip_frame:v"); i < 0 || args[i+1] != "nointra" {
+			t.Errorf("%s args %q: want -skip_frame:v nointra", name, args)
+		}
+	}
+	if !keyframeLowDelayFor("mpeg4") || !keyframeLowDelayFor("msmpeg4v3") || keyframeLowDelayFor("h264") || keyframeLowDelayFor("hevc") {
+		t.Fatal("low delay should cover MPEG-4 Part 2 only")
+	}
+	req.lowDelay = true
+	list, _, err = buildSheetsArgs(req, Attempt{}, hardwareDecode{}, 0, "GRAPH", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(list, " "), "-skip_frame:v nointra -flags:v +low_delay -protocol_whitelist") {
+		t.Fatalf("list args %q: want low delay before the input", list)
+	}
+	if concatInputArgs[1] != "nokey" {
+		t.Fatalf("concatInputArgs changed to %q", concatInputArgs)
+	}
+}

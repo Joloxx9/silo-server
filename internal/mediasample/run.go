@@ -249,6 +249,10 @@ func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 		if failure := a.exec(req, probeArgs(req.Input), nil, nil, header.line); failure != nil {
 			return Result{}, failure
 		}
+		if req.Sheets != nil {
+			req.skipFrame = keyframeSkipFor(header.info.VideoCodec)
+			req.lowDelay = keyframeLowDelayFor(header.info.VideoCodec)
+		}
 		if req.Sheets != nil && req.Sheets.UseInputAspect {
 			out := req.Sheets.forDisplayAspect(header.info.displayAspect())
 			if err := out.validate(); err != nil {
