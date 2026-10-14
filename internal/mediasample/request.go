@@ -76,6 +76,12 @@ type Samples struct {
 	// once, front to back, which can cost less than a seek per sample when
 	// samples lie closer together than the keyframes do.
 	ReadThrough bool `json:"read_through,omitempty"`
+	// inpoints are the list entries' container start times, one per second,
+	// set by the keyframe lookup; nil starts each entry at its sample time.
+	// keyframes are each sample's keyframe, the last at or before it, as a
+	// container time, or NaN where the lookup found none; nil without one.
+	inpoints  []float64
+	keyframes []float64
 }
 
 // At decodes the first video frame at or after a media time, decoding from

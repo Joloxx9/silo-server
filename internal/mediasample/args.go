@@ -182,7 +182,7 @@ func buildSheetsArgs(req Request, attempt Attempt, hw hardwareDecode, inputStart
 		args = append(args, "-threads", threads, "-filter_threads", threads)
 	}
 	if req.Samples != nil {
-		concat, err := buildConcatListSpan(req.Input, req.Samples.Seconds, inputStart, list.span)
+		concat, err := buildConcatListInpoints(req.Input, req.Samples.Seconds, req.Samples.inpoints, inputStart, list.span)
 		if err != nil {
 			return nil, nil, err
 		}

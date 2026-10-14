@@ -3,6 +3,7 @@ package mediasample
 import (
 	"context"
 	"math"
+	"slices"
 	"time"
 )
 
@@ -143,6 +144,7 @@ func (a *sheetAssembler) adopt(cells []int, repair *sheetAssembler) {
 // time box and the attempt's.
 func (a attemptRun) repairSheets(req Request, run *sheetAssembler, inputStart float64) {
 	missing, repeated := run.repairs()
+	missing = slices.DeleteFunc(missing, func(cell int) bool { return run.pastGap(cell, inputStart) })
 	if len(missing) == 0 && len(repeated) == 0 {
 		return
 	}
@@ -207,4 +209,27 @@ func missingRepairSpan(times []float64) float64 {
 		return 1
 	}
 	return math.Max(span, sheetSampleSpanSeconds)
+}
+
+// maxRepairKeyframeGap is how far before its sample a keyframe may lie and
+// still be repaired for it, or three sample intervals when that is longer.
+// Keyframes lie seconds apart; a sample whose last keyframe is further back
+// sits in a stretch of the file with no pictures, as a damaged or cut file
+// has, and stays filled so the run can tell: a repair would show the frame
+// before the stretch, or the first after it.
+const maxRepairKeyframeGap = 30.0
+
+// pastGap reports whether the keyframe lookup put cell's keyframe further
+// before it than a keyframe interval can explain. A sample the lookup found
+// no keyframe for, as before a container's first keyframe, is not past a
+// gap, and neither is any sample without a lookup.
+func (a *sheetAssembler) pastGap(cell int, inputStart float64) bool {
+	if a.keyframes == nil || math.IsNaN(a.keyframes[cell]) {
+		return false
+	}
+	limit := maxRepairKeyframeGap
+	if len(a.times) > 1 {
+		limit = max(limit, 3*(a.times[len(a.times)-1]-a.times[0])/float64(len(a.times)-1))
+	}
+	return math.Max(0, a.times[cell]+inputStart)-a.keyframes[cell] > limit
 }

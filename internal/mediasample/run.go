@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,6 +20,11 @@ import (
 // Runner runs sampling requests with one ffmpeg binary.
 type Runner struct {
 	FFmpegPath string
+	// FFprobePath, when set, starts each entry of a Matroska Sheets list at
+	// the keyframe it decodes, found by one seek-only ffprobe pass, so the
+	// list reads no packets between that keyframe and the sample; see
+	// keyframes.go. Empty keeps entries at the sample times.
+	FFprobePath string
 	// HWAccel and HWDevice configure hardware attempts. HWAccel is a resolved
 	// backend (see SupportsHardwareDecode), never "auto". HWDevice is the
 	// configured device value, which may list several render devices; each
@@ -52,6 +58,9 @@ type ExecFunc func(ctx context.Context, name string, args []string, stdin io.Rea
 
 // waitDelay bounds how long a killed ffmpeg's pipes may stay open.
 const waitDelay = 5 * time.Second
+
+// ffmpegProcessName names an ffmpeg run in its errors.
+const ffmpegProcessName = "ffmpeg"
 
 // execFFmpeg runs a real process and returns its exited state (nil when it
 // never started). Background processes start at lowered priority where the
@@ -263,8 +272,17 @@ func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 			if req.Sheets == nil {
 				return a.decode(req, header.info.StartSeconds)
 			}
+			listReq := req
+			if inpoints, keyframes := a.keyframeInpoints(req, header.info.StartSeconds); inpoints != nil {
+				samples := *req.Samples
+				samples.keyframes = keyframes
+				if slices.Contains(header.info.Formats, "matroska") {
+					samples.inpoints = inpoints
+				}
+				listReq.Samples = &samples
+			}
 			duplicates := false
-			result, failure := a.sheets(req, req.Samples.Seconds, header.info.StartSeconds, watchDuplicatePOC(&duplicates))
+			result, failure := a.sheets(listReq, req.Samples.Seconds, header.info.StartSeconds, watchDuplicatePOC(&duplicates))
 			if failure == nil || failure.Reason != ReasonEmpty || !duplicates {
 				return result, failure
 			}
@@ -394,6 +412,9 @@ func (a attemptRun) sheets(req Request, times []float64, inputStart float64, log
 	}
 	assembler := newSheetAssembler(*req.Sheets, times, req.Samples != nil, offset, sampledSheetsList.span)
 	assembler.inputStart = inputStart
+	if req.Samples != nil {
+		assembler.inpoints, assembler.keyframes = req.Samples.inpoints, req.Samples.keyframes
+	}
 	if failure := a.exec(req, args, stdinBytes, assembler, append(logHandlers, assembler.line)...); failure != nil {
 		return Result{}, failure
 	}
@@ -424,6 +445,11 @@ func (a attemptRun) sheets(req Request, times []float64, inputStart float64, log
 // when that is not nil, writing its stdout to stdout when that is not nil,
 // and routing its log to handlers.
 func (a attemptRun) exec(req Request, args []string, stdinBytes []byte, stdoutWriter io.Writer, handlers ...func(string)) *AttemptError {
+	return a.execBinary(req, a.runner.FFmpegPath, args, stdinBytes, stdoutWriter, handlers...)
+}
+
+// execBinary runs one process of the attempt, as exec does, from binary.
+func (a attemptRun) execBinary(req Request, binary string, args []string, stdinBytes []byte, stdoutWriter io.Writer, handlers ...func(string)) *AttemptError {
 	var stdin io.Reader
 	if stdinBytes != nil {
 		stdin = bytes.NewReader(stdinBytes)
@@ -435,20 +461,23 @@ func (a attemptRun) exec(req Request, args []string, stdinBytes []byte, stdoutWr
 	var err error
 	replaced := a.runner.Exec != nil
 	if replaced {
-		err = a.runner.Exec(a.attemptCtx, a.runner.FFmpegPath, args, stdin, stdoutWriter, stderr)
+		err = a.runner.Exec(a.attemptCtx, binary, args, stdin, stdoutWriter, stderr)
 	} else {
-		state, err = execFFmpeg(a.attemptCtx, req.Background, a.runner.FFmpegPath, args, stdin, stdoutWriter, stderr)
+		state, err = execFFmpeg(a.attemptCtx, req.Background, binary, args, stdin, stdoutWriter, stderr)
 	}
 	_ = stderr.Close()
 	waitStderr()
 	if !replaced {
-		workload := a.runner.Workload
+		workload, name := a.runner.Workload, ffmpegProcessName
 		if workload == processmetrics.Transcode {
 			workload = processmetrics.Analysis
 		}
+		if binary != a.runner.FFmpegPath {
+			workload, name = processmetrics.Probe, filepath.Base(binary)
+		}
 		processmetrics.Record(workload, state, err, a.attemptCtx.Err())
 		if err == nil && state != nil && !state.Success() {
-			err = fmt.Errorf("ffmpeg %s", state)
+			err = fmt.Errorf("%s %s", name, state)
 		}
 	}
 	if err != nil {
