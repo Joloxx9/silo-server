@@ -264,7 +264,8 @@ type fakeSheets struct {
 	calls       [][]string
 	packetEnd   float64
 	// keyPackets are keyframe packet times the timing log reports before
-	// its last packet, whether or not frames decoded them.
+	// its last packet, whether or not frames decoded them. NaN is a
+	// keyframe packet without a time.
 	keyPackets []float64
 	// listStart is the start time a list run's input header reports, and
 	// lists the ffconcat lists the runs read.
@@ -300,6 +301,10 @@ func (f *fakeSheets) exec(_ context.Context, _ string, args []string, stdin io.R
 			end := int64(math.Round(f.packetEnd * 1000))
 			timing = "#tb 0: 1/1000\n"
 			for _, key := range f.keyPackets {
+				if math.IsNaN(key) {
+					timing += fmt.Sprintf("0, %d, %d, 1, 1, 0x00000000\n", int64(math.MinInt64), int64(math.MinInt64))
+					continue
+				}
 				at := int64(math.Round(key * 1000))
 				timing += fmt.Sprintf("0, %d, %d, 1, 1, 0x00000000\n0, %d, %d, 1, 1, 0x00000000, F=0x0\n", at, at, at+1, at+1)
 			}
@@ -488,6 +493,7 @@ func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 		"window drops a few":    {editLog: logDuplicates, window: keyframes[:3], windowEditLog: logDuplicates, windowKeys: keys, runs: []string{"window"}, filled: 1},
 		"window drops too many": {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: keys, reference: keyframes, runs: []string{"window", "reference"}},
 		"h264 illegal state":    {editLog: logIllegal, window: keyframes[:1], windowEditLog: logIllegal, windowKeys: keys, reference: keyframes, runs: []string{"reference"}},
+		"untimed key dropped":   {editLog: logDuplicates, window: keyframes[:3], windowEditLog: logDuplicates, windowKeys: []float64{4, 14, 24, math.NaN()}, reference: keyframes, runs: []string{"window", "reference"}},
 		"reference fails too":   {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: keys, reference: keyframes[:1], refEditLog: logDuplicates, runs: []string{"window", "reference"}, want: ReasonEmpty},
 	}
 	for name, tt := range tests {

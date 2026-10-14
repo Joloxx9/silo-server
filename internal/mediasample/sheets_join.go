@@ -142,8 +142,10 @@ type sheetAssembler struct {
 	// A window whose decoder dropped keyframes (see droppedKeyframe) gives
 	// the samples after each dropped keyframe an earlier one. The times of
 	// the frames decoded and of the keyframe packets read find those
-	// samples, which then count as filled.
+	// samples, which then count as filled. A keyframe packet without a time
+	// leaves them unknown (untimedKey).
 	droppedKeyframes bool
+	untimedKey       bool
 	frameTimes       []float64
 	keyTimes         []float64
 
@@ -342,9 +344,11 @@ func (a *sheetAssembler) packetLine(line string) {
 			a.hasPacketTime = true
 		}
 	}
-	if hasPTS && packetIsKey(fields[5]) {
-		if at := a.offset + float64(pts)*a.packetTimeBase; finite(at) {
+	if packetIsKey(fields[5]) {
+		if at := a.offset + float64(pts)*a.packetTimeBase; hasPTS && finite(at) {
 			a.keyTimes = append(a.keyTimes, at)
+		} else {
+			a.untimedKey = true
 		}
 	}
 }
@@ -563,6 +567,9 @@ func (a *sheetAssembler) finish() ([]Sheet, SheetFrames, *AttemptError) {
 	}
 	if a.decoded == 0 {
 		return fail(ReasonEmpty, errors.New("ffmpeg decoded no frame for any sample"))
+	}
+	if a.droppedKeyframes && a.untimedKey && !a.sampled {
+		return fail(ReasonEmpty, errors.New("ffmpeg dropped keyframes in a window with an untimed keyframe packet"))
 	}
 	sheets := (len(a.times) + a.perSheet - 1) / a.perSheet
 	a.finalizeThrough(sheets)

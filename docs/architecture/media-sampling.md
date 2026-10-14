@@ -437,13 +437,15 @@ must use the returned height and reject chunks whose geometry differs.
   counts as filled. Such a window may fill up to 15 % of its cells instead
   of 10 %, since the file is whole and a preview a keyframe early is still
   usable; a list keeps 10 %, so too many drops still send it to the window.
-  A window that fills more is read once more with `-skip_frame:v noref` and
-  `select=key` ahead of the sheets chain: the decoder sees every reference
-  picture, so its state stays whole, and the chain still gets only the
-  keyframes. That read costs several keyframes-only reads and runs only for
-  files that fail without it. If the window fails for any reason, the
-  attempt reports the window's failure, whose reason and log describe the
-  latest read, and after a list fallback its error names the list run's.
+  A window that fills more, or that logged a drop and has a keyframe packet
+  without a time, which leaves the stale samples unknown, is read once more
+  with `-skip_frame:v noref` and `select=key` ahead of the sheets chain:
+  the decoder sees every reference picture, so its state stays whole, and
+  the chain still gets only the keyframes. That read costs several
+  keyframes-only reads and runs only for files that fail without it. If the
+  window fails for any reason, the attempt reports the window's failure,
+  whose reason and log describe the latest read, and after a list fallback
+  its error names the list run's.
 - Sheets are JPEG-encoded in-process (`image/jpeg`, `Quality`) once the run
   and its repairs are done, since a repair may replace any cell. A run holds
   its tiles until then, so a request whose sheets exceed 64 million tile
