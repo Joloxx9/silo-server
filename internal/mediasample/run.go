@@ -241,10 +241,16 @@ type attemptRun struct {
 // still fails.
 func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 	var listFailure *AttemptError
-	if !req.Samples.ReadThrough || (req.Sheets != nil && req.Sheets.UseInputAspect) {
+	// Sheets always probe: the codec decides how keyframes are read (see
+	// keyframeSkipFor), even for a read-through window.
+	if !req.Samples.ReadThrough || req.Sheets != nil {
 		header := &inputHeaderParser{}
 		if failure := a.exec(req, probeArgs(req.Input), nil, nil, header.line); failure != nil {
 			return Result{}, failure
+		}
+		if req.Sheets != nil {
+			req.skipFrame = keyframeSkipFor(header.info.VideoCodec)
+			req.lowDelay = keyframeLowDelayFor(header.info.VideoCodec)
 		}
 		if req.Sheets != nil && req.Sheets.UseInputAspect {
 			out := req.Sheets.forDisplayAspect(header.info.displayAspect())

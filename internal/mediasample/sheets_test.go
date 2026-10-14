@@ -519,8 +519,9 @@ func TestRunSheetsReadsWindowsByTime(t *testing.T) {
 		if got := sheetLumas(t, result, 2, 2); !near(got[0], []int{10, 10, 60, 70}) {
 			t.Fatalf("%s: cells %v", name, got[0])
 		}
+		// Both probe first: sheets pick their keyframe options from the codec.
 		runs := len(fake.calls)
-		if (name == "read through") != (runs == 1) || slices.Contains(fake.calls[runs-1], "concat") {
+		if runs != 2 || slices.Contains(fake.calls[runs-1], "concat") {
 			t.Fatalf("%s: runs %q", name, fake.calls)
 		}
 	}
@@ -595,6 +596,10 @@ func TestRunSheetsRemovesPacketTimingAfterAttempt(t *testing.T) {
 			fake := &fakeSheets{frames: []fakeSheetFrame{timed(10, "0")}, packetEnd: 8}
 			var path string
 			runner := Runner{Exec: func(ctx context.Context, binary string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+				if !slices.Contains(args, "framecrc") {
+					// The probe that picks the codec's keyframe options.
+					return fake.exec(ctx, binary, args, stdin, stdout, stderr)
+				}
 				path = args[slices.Index(args, "framecrc")+1]
 				dir, err := os.Stat(filepath.Dir(path))
 				if err != nil || dir.Mode().Perm() != 0o700 {

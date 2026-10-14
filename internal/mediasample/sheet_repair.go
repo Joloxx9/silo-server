@@ -45,6 +45,9 @@ const (
 	exactSkipFrame = "noref"
 	// keyframeSkipFrame decodes only keyframes, as every list does.
 	keyframeSkipFrame = "nokey"
+	// intraSkipFrame decodes every picture with an intra field, which keeps
+	// the keyframes of interlaced MPEG-1/2 (see keyframeSkipFor).
+	intraSkipFrame = "nointra"
 )
 
 // sheetsList is how a Sheets list reads its samples: each entry lasts span
