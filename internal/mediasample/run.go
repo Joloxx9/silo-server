@@ -272,14 +272,16 @@ func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 			if req.Sheets == nil {
 				return a.decode(req, header.info.StartSeconds)
 			}
+			// A Matroska list starts its entries at the keyframes, so it looks
+			// them up first. Other containers keep sample-time entries and
+			// look keyframes up only if a repair needs them (see repairSheets).
 			listReq := req
-			if inpoints, keyframes := a.keyframeInpoints(req, header.info.StartSeconds); inpoints != nil {
-				samples := *req.Samples
-				samples.keyframes = keyframes
-				if slices.Contains(header.info.Formats, "matroska") {
-					samples.inpoints = inpoints
+			if slices.Contains(header.info.Formats, "matroska") {
+				if inpoints, keyframes := a.keyframeInpoints(req, header.info.StartSeconds); inpoints != nil {
+					samples := *req.Samples
+					samples.inpoints, samples.keyframes = inpoints, keyframes
+					listReq.Samples = &samples
 				}
-				listReq.Samples = &samples
 			}
 			duplicates := false
 			result, failure := a.sheets(listReq, req.Samples.Seconds, header.info.StartSeconds, watchDuplicatePOC(&duplicates))
