@@ -26,6 +26,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/httpstream"
 	"github.com/Silo-Server/silo-server/internal/models"
 	"github.com/Silo-Server/silo-server/internal/netaccess"
+	"github.com/Silo-Server/silo-server/internal/nodeauth"
 	"github.com/Silo-Server/silo-server/internal/nodepool"
 	"github.com/Silo-Server/silo-server/internal/noderouting"
 	"github.com/Silo-Server/silo-server/internal/playback"
@@ -381,6 +382,7 @@ func compatRecipeMatchesSource(recipe *playback.RecipeCard, source PlaybackMedia
 		recipe.AudioTrackIndex == compatAudioTrackIndexOrDefault(source) &&
 		recipe.SourceAudioChannels == compatHLSRecipeSourceAudioChannels(source) &&
 		recipe.CopyVideoMPEGTS == source.HLSRemuxMPEGTS &&
+		(!compatHLSCopiesVideo(source) || recipe.KeyframePlaylist == source.KeyframePlaylist) &&
 		recipe.SubtitleBurnIn == source.SubtitleBurnIn && (!source.SubtitleBurnIn || (recipe.SubtitleTrackIndex == source.SubtitleTrackIndex && recipe.SubtitleCodec == source.SubtitleCodec)) &&
 		(source.TargetBitrateKbps == 0 || recipe.TargetBitrateKbps == source.TargetBitrateKbps) &&
 		(source.TargetResolution == "" || recipe.TargetResolution == source.TargetResolution)
@@ -1349,7 +1351,9 @@ func (h *PlaybackHandler) fetchRemoteCompatManifest(ctx context.Context, nodeURL
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+h.JWTSecret)
+	if err := nodeauth.Sign(req, nodeURL, h.JWTSecret); err != nil {
+		return nil, err
+	}
 	resp, err := telemetry.DoTrustedNode(transcodeproxy.NodeClient(), req, "stream")
 	if err != nil {
 		nodepool.ReportConnectFailure(h.NodePlanner, nodeURL, err)
@@ -1371,7 +1375,10 @@ func (h *PlaybackHandler) proxyRemoteCompatSegment(w http.ResponseWriter, r *htt
 		writeError(w, http.StatusInternalServerError, "ServerError", "Failed to build remote segment request")
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+h.JWTSecret)
+	if err := nodeauth.Sign(req, nodeURL, h.JWTSecret); err != nil {
+		writeError(w, http.StatusInternalServerError, "ServerError", "Failed to build remote segment request")
+		return
+	}
 	transcodeproxy.PrepareRequest(req, r)
 	resp, err := telemetry.DoTrustedNode(transcodeproxy.NodeClient(), req, "stream")
 	if err != nil {
@@ -1388,7 +1395,7 @@ func (h *PlaybackHandler) proxyRemoteCompatSegment(w http.ResponseWriter, r *htt
 		return
 	}
 	if generation != "" && r.Method == http.MethodGet && sw.CompletedFullResponse(transcodeproxy.FullRepresentationSize(resp)) {
-		if err := transcodeproxy.Acknowledge(r.Context(), transcodeproxy.NodeClient(), nodepool.NodeEndpoint(nodeURL, path), h.JWTSecret, generation); err != nil {
+		if err := transcodeproxy.Acknowledge(r.Context(), transcodeproxy.NodeClient(), nodepool.NodeEndpoint(nodeURL, ""), path, h.JWTSecret, generation); err != nil {
 			slog.WarnContext(r.Context(), "acknowledge Jellyfin-compatible transcode segment", "component", "jellycompat", "error", err, "playback_session_id", upstreamSessionID)
 		}
 	}
@@ -2895,6 +2902,7 @@ func (h *PlaybackHandler) ensureTranscodeSessionWithToneMapMode(
 		opts.TargetCodecVideo = compatCopyCodec
 		opts.VideoSampleEntry, opts.VideoBitstreamFilter = compatCopyVideoRecipe(source, file.PrimaryDVProfile())
 		opts.CopyVideoMPEGTS = source.HLSRemuxMPEGTS
+		opts.KeyframePlaylist = source.KeyframePlaylist
 	}
 	if !compatHLSTranscodesAudio(source) {
 		opts.TargetCodecAudio = compatCopyCodec
@@ -3170,6 +3178,7 @@ func compatLiveTranscodeMatchesAudioSource(transcodeSession *playback.TranscodeS
 	return opts.AudioTrackIndex == compatAudioTrackIndexOrDefault(source) &&
 		opts.SourceAudioChannels == compatHLSRecipeSourceAudioChannels(source) &&
 		opts.CopyVideoMPEGTS == source.HLSRemuxMPEGTS &&
+		(!compatHLSCopiesVideo(source) || opts.KeyframePlaylist == source.KeyframePlaylist) &&
 		opts.SubtitleBurnIn == source.SubtitleBurnIn && (!source.SubtitleBurnIn || (opts.SubtitleTrackIndex == source.SubtitleTrackIndex && opts.SubtitleCodec == source.SubtitleCodec)) &&
 		(source.TargetBitrateKbps == 0 || opts.TargetBitrateKbps == source.TargetBitrateKbps) &&
 		(source.TargetResolution == "" || opts.TargetResolution == source.TargetResolution)

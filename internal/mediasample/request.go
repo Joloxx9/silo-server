@@ -48,57 +48,6 @@ type Request struct {
 	// the lowest CPU priority (nice 19) and in the idle I/O class; elsewhere it
 	// runs like any other request.
 	Background bool `json:"background,omitempty"`
-	// skipFrame overrides "nokey" for a Sheets run once the input is
-	// probed; see keyframeSkip. lowDelay adds the decoder's low-delay mode;
-	// see keyframeLowDelayFor.
-	skipFrame string
-	lowDelay  bool
-}
-
-// keyframeSkip is the -skip_frame value a Sheets run reads keyframes with:
-// "nokey", or the probed codec's own choice (see keyframeSkipFor).
-func (r Request) keyframeSkip() string {
-	if r.skipFrame != "" {
-		return r.skipFrame
-	}
-	return "nokey"
-}
-
-// keyframeInputArgs are the input options a Sheets run decodes with skip
-// under, before -i.
-func (r Request) keyframeInputArgs(skip string) []string {
-	args := []string{"-skip_frame:v", skip}
-	if r.lowDelay {
-		args = append(args, "-flags:v", "+low_delay")
-	}
-	return args
-}
-
-// keyframeLowDelayFor reports whether codec's keyframes need the decoder's
-// low-delay mode. An MPEG-4 Part 2 decoder (XviD, DivX) holds each picture
-// back for B-frames that a keyframes-only read never sends, and releases it
-// with the next keyframe's time: every sample of a packed-bitstream AVI
-// showed the keyframe a whole GOP before its own, and the first had none.
-// Without B-frames to reorder, low delay hands each keyframe out at once.
-func keyframeLowDelayFor(codec string) bool {
-	switch codec {
-	case "mpeg4", "msmpeg4v1", "msmpeg4v2", "msmpeg4v3", "msmpeg4":
-		return true
-	}
-	return false
-}
-
-// keyframeSkipFor returns the -skip_frame value that keeps codec's
-// keyframes. Interlaced MPEG-1/2 often codes a keyframe as an I field
-// paired with a P field, which the decoder reports as a P frame and
-// "nokey" discards (one of 80 samples of a DVD-sourced episode decoded);
-// "nointra" keeps every picture with an intra field.
-func keyframeSkipFor(codec string) string {
-	switch codec {
-	case "mpeg2video", "mpeg1video":
-		return "nointra"
-	}
-	return ""
 }
 
 // Window is a contiguous span of the input, in media seconds.
@@ -108,11 +57,6 @@ type Window struct {
 	// KeyframesOnly decodes only video keyframes. It needs a video output
 	// (Stats); audio outputs still read every audio frame.
 	KeyframesOnly bool `json:"keyframes_only,omitempty"`
-	// referencePictures makes a Sheets window decode every reference
-	// picture and keep only the keyframes, so HEVC picture order counts stay
-	// consistent where a keyframes-only read drops keyframes as duplicates.
-	// It is set only by the samples fallback, never sent to another node.
-	referencePictures bool
 }
 
 // Samples decodes, for each time, the video keyframe at or before it, and
@@ -132,12 +76,6 @@ type Samples struct {
 	// once, front to back, which can cost less than a seek per sample when
 	// samples lie closer together than the keyframes do.
 	ReadThrough bool `json:"read_through,omitempty"`
-	// inpoints are the list entries' container start times, one per second,
-	// set by the keyframe lookup; nil starts each entry at its sample time.
-	inpoints []float64
-	// keyframes are each sample's keyframe, the last at or before it, as a
-	// container time, or NaN where the lookup found none; nil without one.
-	keyframes []float64
 }
 
 // At decodes the first video frame at or after a media time, decoding from
@@ -260,12 +198,25 @@ func (r Request) Validate() error {
 		if err := r.Images.validate(); err != nil {
 			return err
 		}
+		if r.Images.ToneMap != nil && r.Images.ToneMap.Source != "" {
+			return errors.New("images keep their tone-map chains and take no source signal")
+		}
 	}
 	if r.Sheets != nil {
 		if r.Samples == nil || r.Stats != nil {
 			return errors.New("sheets need samples and no other output")
 		}
 		if err := r.Sheets.validate(); err != nil {
+			return err
+		}
+		run := *r.Sheets
+		if run.UseInputAspect {
+			// The probe sets the tile height, and samples checks the run
+			// again with it before any tile is decoded. Until then, only a
+			// run too large at any height is refused.
+			run.TileHeight = minSheetTile
+		}
+		if err := run.validateRun(len(r.Samples.Seconds)); err != nil {
 			return err
 		}
 	}

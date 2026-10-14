@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
+	"github.com/Silo-Server/silo-server/internal/nodeauth"
 	"github.com/Silo-Server/silo-server/internal/nodepool"
 	"github.com/Silo-Server/silo-server/internal/tonemap"
 )
@@ -65,7 +66,8 @@ type TranscodeManager struct {
 	Config func() TranscodeRuntimeConfig
 	// LogSinkFn returns the ffmpeg log sink for reconstructed processes.
 	LogSinkFn func() FFmpegLogSink
-	// JWTSecretFn returns the bearer used for remote transcode-node DELETEs.
+	// JWTSecretFn returns the shared secret that signs remote transcode-node
+	// DELETEs.
 	JWTSecretFn func() string
 	// OnFFmpegCrash is invoked when a reconstructed/local ffmpeg exits with an
 	// error so the embedding handler can tear down the playback session (keeping
@@ -895,6 +897,7 @@ func (m *TranscodeManager) doReconstructTranscode(ctx context.Context, sessionID
 	cfg := m.runtimeConfig()
 	outputDir := reconstructionOutputDir(cfg.TranscodeDir, sessionID, card.OutputSubdir)
 	opts := card.TranscodeOpts(outputDir, cfg.FFmpegPath, m.logSink())
+	opts.Reconstructed = true
 	// Recipe cards preserve the original launch tuning, but a reconstruction is
 	// not a fresh generation: restore the conservative manifest lead so recovery
 	// never exposes a hardware encoder after only one fragment.
@@ -1173,7 +1176,9 @@ func (m *TranscodeManager) deleteRemoteTranscode(ctx context.Context, sessionID,
 	if err != nil {
 		return fmt.Errorf("build remote transcode delete request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+m.jwtSecret())
+	if err := nodeauth.Sign(req, transcodeNodeURL, m.jwtSecret()); err != nil {
+		return fmt.Errorf("sign remote transcode delete: %w", err)
+	}
 
 	resp, err := remoteTranscodeControlClient.Do(req)
 	if err != nil {

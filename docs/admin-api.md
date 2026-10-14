@@ -418,7 +418,7 @@ Each entry in `disks`:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `path` | string | Where the mount is. Absent from a node's `last_stats`: the node reports it on its own bearer-authed `/status`, and the API host reports its own on `GET /admin/system/resources`, but a node's `/health` takes no credential and withholds it. Use `role`. |
+| `path` | string | Where the mount is. Absent from a node's `last_stats`: the node reports it on its own `/status`, which needs a [signed request](architecture/worker-http-protocol.md#authentication), and the API host reports its own on `GET /admin/system/resources`, but a node's `/health` takes no credential and withholds it. Use `role`. |
 | `role` | string | What the mount is for: `scratch`, or `library-N` positionally per media root. Assigned when the sample is built, so it names the same mount on `/health`, `/status`, `/admin/system/resources` and the `streamapp_node_disk_*` series, and it stays with the mount even when a probe cannot measure it. |
 | `used_gb`, `total_gb` | float | Capacity in GiB. `used_gb` counts filesystem-reserved blocks, as `df` does. `total_gb` is the capacity usable by the node process — used plus still-available — so it reads lower than the device's nameplate size on a volume that reserves blocks for root, and `used_gb`/`total_gb` is the ratio `df` prints as Use%. |
 | `stale` | bool | The numbers are real but carried over from an earlier pass because the current probe has not returned — the normal reading for a network mount whose server went away. Omitted when false. |
@@ -763,7 +763,7 @@ this route can legitimately outlive the API listener's ordinary 120-second
 as a hung request. This re-probes only — it does not reload configuration or tear
 anything down.
 
-Under the hood this is a bearer-authenticated `POST
+Under the hood this is a [signed](architecture/worker-http-protocol.md#authentication) `POST
 /admin/reprobe-capabilities` on the node's own listener, which both transcode
 nodes and proxy nodes serve. That route is internal to the cluster and is not
 part of any client contract.
@@ -1041,6 +1041,7 @@ client tells "this deployment is older than my build" from "the request failed".
 | `log_level_list` | `GET /admin/logs/app` accepts a multi-level filter. |
 | `watch_providers` | `GET /admin/stats` carries the per-provider `watch_providers` array. |
 | `downloads_stats` | `GET /admin/stats/downloads` serves the offline-download aggregate, and timeseries points carry the additive `download_egress_kbps` split. |
+| `egress_totals` | `GET /admin/stats/timeseries` carries the window's additive `egress_bytes` and `download_egress_bytes` totals. |
 
 ```json
 {
@@ -1051,7 +1052,8 @@ client tells "this deployment is older than my build" from "the request failed".
   "health": true,
   "log_level_list": true,
   "watch_providers": true,
-  "downloads_stats": true
+  "downloads_stats": true,
+  "egress_totals": true
 }
 ```
 
@@ -1186,6 +1188,12 @@ an average: these charts are read to answer "how bad did it get", and a mean
 would erase exactly that. Stream counts and egress are maxed independently, so
 a bucket's columns may come from different minutes within it.
 
+`egress_bytes` and `download_egress_bytes` are the data served over the whole
+window, integrated from every sampled minute rather than from `points` — summing
+the peak-per-bucket points would count a one-minute spike as if it lasted the
+whole bucket. Unsampled minutes contribute nothing and node egress is a rolling
+average, so treat the totals as a close estimate, not byte-exact accounting.
+
 Each minute holds up to two kinds of row. The `shared` row is the cluster-wide
 snapshot: stream counts by play method, plus the egress reported by enabled,
 healthy stream nodes. Every replica tries to write it and the first one to land
@@ -1228,6 +1236,8 @@ fresh install renders "collecting data" instead of an empty chart.
   "from": "2026-08-25T12:00:00Z",
   "to": "2026-08-26T12:00:00Z",
   "oldest_sample_at": "2026-08-24T09:31:00Z",
+  "egress_bytes": 412500000000,
+  "download_egress_bytes": 37800000000,
   "points": [
     {
       "t": "2026-08-26T11:55:00Z",
@@ -2211,12 +2221,12 @@ invalidates the exact compatibility status scope only for the active authority.
 
 ### Dashboard capability discovery in v2
 
-`GET /api/v2/admin/dashboard/capabilities` returns the eight dashboard support
+`GET /api/v2/admin/dashboard/capabilities` returns the nine dashboard support
 flags to an acting administrator. These describe the v2 surface in the API build;
 they do not promise that a database or other runtime dependency is healthy.
 
-`timeseries`, `playback_activity`, `top_activity`, `health`, `watch_providers` and
-`downloads_stats` are true for the existing v2 dashboard operations.
+`timeseries`, `playback_activity`, `top_activity`, `health`, `watch_providers`,
+`downloads_stats` and `egress_totals` are true for the existing v2 dashboard operations.
 `server_layouts` remains false while the v2 layout lifecycle is unavailable.
 `log_level_list` is true for the accepted multi-level application-log reader. Clients
 must not infer v2 support from the bridge's independently retained capabilities.

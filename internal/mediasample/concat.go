@@ -37,8 +37,15 @@ const sampleSpanSeconds = 0.04
 // sampleMetadataKey is the packet metadata entry naming a sample's time.
 const sampleMetadataKey = "sample"
 
-// concatInputArgs are the input options of a Samples request, before -i.
-var concatInputArgs = []string{"-skip_frame:v", "nokey", "-protocol_whitelist", "file,pipe", "-f", "concat", "-safe", "0"}
+// skipFrameOption sets which video frames the decoder skips.
+const skipFrameOption = "-skip_frame:v"
+
+// concatDemuxerArgs open a list input; concatInputArgs are the input options
+// of a Samples request, before -i.
+var (
+	concatDemuxerArgs = []string{"-protocol_whitelist", "file,pipe", "-f", "concat", "-safe", "0"}
+	concatInputArgs   = append([]string{skipFrameOption, keyframeSkipFrame}, concatDemuxerArgs...)
+)
 
 // concatListInput is the input a Samples request reads its list from.
 const concatListInput = "pipe:0"
@@ -61,28 +68,16 @@ func buildConcatList(input string, seconds []float64, inputStart float64) ([]byt
 
 // buildConcatListSpan is buildConcatList with entries lasting span seconds.
 func buildConcatListSpan(input string, seconds []float64, inputStart, span float64) ([]byte, error) {
-	return buildConcatListInpoints(input, seconds, nil, inputStart, span)
-}
-
-// buildConcatListInpoints is buildConcatListSpan with each entry starting at
-// its container time in inpoints, when inpoints holds one per second.
-func buildConcatListInpoints(input string, seconds, inpoints []float64, inputStart, span float64) ([]byte, error) {
-	if inpoints != nil && len(inpoints) != len(seconds) {
-		return nil, errors.New("concat list needs one inpoint per sample")
-	}
 	quoted, err := concatPath(input)
 	if err != nil {
 		return nil, err
 	}
 	var list bytes.Buffer
 	list.WriteString("ffconcat version 1.0\n")
-	for i, at := range seconds {
+	for _, at := range seconds {
 		// A slightly negative start, as some MP4 edit lists give, would put
 		// the first inpoints before the file; they seek to its start anyway.
 		inpoint := math.Max(0, at+inputStart)
-		if inpoints != nil {
-			inpoint = inpoints[i]
-		}
 		list.WriteString("file " + quoted + "\n")
 		list.WriteString("file_packet_meta " + sampleMetadataKey + " " + formatSampleSeconds(at) + "\n")
 		list.WriteString("inpoint " + formatSampleSeconds(inpoint) + "\n")

@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -21,11 +19,6 @@ import (
 // Runner runs sampling requests with one ffmpeg binary.
 type Runner struct {
 	FFmpegPath string
-	// FFprobePath, when set, starts each entry of a Sheets list at the
-	// keyframe it decodes, found by one seek-only ffprobe pass, so the list
-	// reads no packets between that keyframe and the sample. Empty keeps
-	// entries at the sample times.
-	FFprobePath string
 	// HWAccel and HWDevice configure hardware attempts. HWAccel is a resolved
 	// backend (see SupportsHardwareDecode), never "auto". HWDevice is the
 	// configured device value, which may list several render devices; each
@@ -41,7 +34,7 @@ type Runner struct {
 	// starts ffmpeg.
 	Exec ExecFunc
 	// Capabilities returns the binary's inventory when a run needs it, which
-	// only software tone mapping of images does so far. Nil means
+	// only software tone mapping of images and sheets does so far. Nil means
 	// LoadCapabilities; tests replace it.
 	Capabilities func(ctx context.Context, ffmpegPath string) (Capabilities, error)
 	// Fallback reports whether a run moves on to its next attempt after
@@ -147,7 +140,7 @@ func (r Runner) runAttempt(ctx context.Context, req Request, attempt Attempt, to
 	// A hardware attempt reserves its device, and an image or sheet attempt
 	// settles its filters, before its timeout starts, so neither eats into
 	// the decode's time.
-	hw, release, failure := r.reserveHardware(attempt)
+	hw, release, failure := r.reserveHardware(req, attempt)
 	if failure != nil {
 		failure.Decoder = decoder
 		return Result{}, failure
@@ -188,19 +181,23 @@ func (r Runner) runAttempt(ctx context.Context, req Request, attempt Attempt, to
 }
 
 // reserveHardware returns the hardware attempt decodes on. A hardware
-// attempt reserves one render device through playback.AcquireHWDevice,
-// falling back to playback.PickRenderDevice, until release is called. A
-// multi-device HWDevice therefore resolves to one device per attempt, and the
-// reservation spans only this attempt. A hardware attempt the host cannot
-// run, such as VAAPI without a render device, fails as unsupported without
+// attempt reserves one device through playback.AcquireHWDevice, falling back
+// to playback.PickRenderDevice for an accelerator that opens a render device,
+// until release is called. A multi-device HWDevice therefore resolves to one
+// device per attempt, and the reservation spans only this attempt. A hardware
+// attempt the host cannot run, such as VAAPI without a render device, or req's
+// outputs cannot run on, such as stats on CUDA, fails as unsupported without
 // starting ffmpeg: that is no fault of the request or the file.
-func (r Runner) reserveHardware(attempt Attempt) (hardwareDecode, func(), *AttemptError) {
+func (r Runner) reserveHardware(req Request, attempt Attempt) (hardwareDecode, func(), *AttemptError) {
 	hw := hardwareDecode{Accel: r.HWAccel}
 	if !attempt.Hardware {
 		return hw, func() {}, nil
 	}
+	if !req.supportsHardware(r.HWAccel) {
+		return hardwareDecode{}, nil, &AttemptError{Reason: ReasonUnsupported, Err: fmt.Errorf("hardware decode does not support %q for this output", r.HWAccel)}
+	}
 	device, release := playback.AcquireHWDevice(r.HWDevice, r.HWAccel)
-	if device == "" {
+	if device == "" && usesRenderDevice(r.HWAccel) {
 		device = playback.PickRenderDevice("")
 	}
 	hw.Device = device
@@ -249,13 +246,9 @@ func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 		if failure := a.exec(req, probeArgs(req.Input), nil, nil, header.line); failure != nil {
 			return Result{}, failure
 		}
-		if req.Sheets != nil {
-			req.skipFrame = keyframeSkipFor(header.info.VideoCodec)
-			req.lowDelay = keyframeLowDelayFor(header.info.VideoCodec)
-		}
 		if req.Sheets != nil && req.Sheets.UseInputAspect {
 			out := req.Sheets.forDisplayAspect(header.info.displayAspect())
-			if err := out.validate(); err != nil {
+			if err := errors.Join(out.validate(), out.validateRun(len(req.Samples.Seconds))); err != nil {
 				return Result{}, &AttemptError{Decoder: a.decoder, Reason: ReasonArgs, Err: err}
 			}
 			req.Sheets = &out
@@ -270,17 +263,8 @@ func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 			if req.Sheets == nil {
 				return a.decode(req, header.info.StartSeconds)
 			}
-			listReq := req
-			if inpoints, keyframes := a.keyframeInpoints(req, header.info.StartSeconds); inpoints != nil {
-				samples := *req.Samples
-				samples.keyframes = keyframes
-				if slices.Contains(header.info.Formats, "matroska") {
-					samples.inpoints = inpoints
-				}
-				listReq.Samples = &samples
-			}
 			duplicates := false
-			result, failure := a.sheets(listReq, req.Samples.Seconds, header.info.StartSeconds, watchDuplicatePOC(&duplicates))
+			result, failure := a.sheets(req, req.Samples.Seconds, header.info.StartSeconds, watchDuplicatePOC(&duplicates))
 			if failure == nil || failure.Reason != ReasonEmpty || !duplicates {
 				return result, failure
 			}
@@ -294,23 +278,15 @@ func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 	if req.Sheets != nil {
 		duplicates := false
 		result, failure := a.sheets(windowReq, req.Samples.Seconds, 0, watchDuplicatePOC(&duplicates))
-		// Keyframes a whole picture order count cycle apart collide in a
-		// window too, since skipped pictures do not advance the count. Each
-		// sample after a dropped keyframe shows the keyframe before it and
-		// counts as filled, so a window that dropped a few still publishes,
-		// as a sequential keyframe read would. One that dropped more than
-		// the filled share allows is read once more decoding every
-		// reference picture, which keeps the count right at several times
-		// the cost.
-		if failure != nil && failure.Reason == ReasonEmpty && duplicates {
-			referenceReq := windowReq
-			referenceWindow := window
-			referenceWindow.referencePictures = true
-			referenceReq.Window = &referenceWindow
-			result, failure = a.sheets(referenceReq, req.Samples.Seconds, 0)
-		}
 		if listFailure == nil {
 			return result, failure
+		}
+		// Keyframes a whole picture order count cycle apart collide in a
+		// window too, since skipped pictures do not advance the count. The
+		// window would then give later samples the last keyframe it kept and
+		// count them as decoded, so it fails instead.
+		if failure == nil && duplicates {
+			result, failure = Result{}, &AttemptError{Decoder: a.decoder, Reason: ReasonEmpty, Err: errors.New("ffmpeg dropped keyframes as duplicates in the window too")}
 		}
 		// A window that fails too reports its own failure, whose reason and
 		// log describe the latest read, and names the list's in its error.
@@ -386,30 +362,18 @@ func (a attemptRun) decode(req Request, inputStart float64) (Result, *AttemptErr
 // "Skipping invalid undecodable NALU" and do not send a list to the window.
 const duplicatePOCMessage = "Duplicate POC in a sequence"
 
-// illegalShortTermMessage is what ffmpeg's H.264 decoder logs when a
-// keyframe's reference marking names pictures a keyframes-only read skipped,
-// and it discards the keyframe. A keyframes-only window fails the same way;
-// decoding the reference pictures too keeps the marking whole.
-const illegalShortTermMessage = "illegal short term buffer state"
-
-// droppedKeyframe reports whether line is a decoder dropping a keyframe
-// over state a keyframes-only read did not keep: duplicatePOCMessage or
-// illegalShortTermMessage.
-func droppedKeyframe(line string) bool {
-	return strings.Contains(line, duplicatePOCMessage) || strings.Contains(line, illegalShortTermMessage)
-}
-
 // watchDuplicatePOC returns a log handler that sets *seen once ffmpeg logs
-// a dropped keyframe (see droppedKeyframe).
+// duplicatePOCMessage.
 func watchDuplicatePOC(seen *bool) func(string) {
 	return func(line string) {
-		*seen = *seen || droppedKeyframe(line)
+		*seen = *seen || strings.Contains(line, duplicatePOCMessage)
 	}
 }
 
 // sheets runs a Sheets request for the sample times, reading req's list
-// (with inpoints offset by inputStart) or window, and tiles the frames.
-// logHandlers also read ffmpeg's log.
+// (with inpoints offset by inputStart) or window, repairs a list's weak cells
+// (see sheet_repair.go), and tiles the frames. logHandlers also read
+// ffmpeg's log.
 func (a attemptRun) sheets(req Request, times []float64, inputStart float64, logHandlers ...func(string)) (Result, *AttemptError) {
 	var packetTimingPath string
 	if req.Window != nil {
@@ -420,7 +384,7 @@ func (a attemptRun) sheets(req Request, times []float64, inputStart float64, log
 		defer func() { _ = os.RemoveAll(dir) }()
 		packetTimingPath = filepath.Join(dir, "packets.framecrc")
 	}
-	args, stdinBytes, err := buildSheetsArgs(req, a.attempt, a.hw, inputStart, a.sheetsGraph, packetTimingPath)
+	args, stdinBytes, err := buildSheetsArgs(req, a.attempt, a.hw, inputStart, a.sheetsGraph, packetTimingPath, sampledSheetsList)
 	if err != nil {
 		return Result{}, &AttemptError{Decoder: a.decoder, Reason: ReasonArgs, Err: err}
 	}
@@ -428,34 +392,24 @@ func (a attemptRun) sheets(req Request, times []float64, inputStart float64, log
 	if req.Window != nil {
 		offset = req.Window.StartSeconds
 	}
-	assembler := newSheetAssembler(*req.Sheets, times, req.Samples != nil, offset)
-	assembler.deferEncode = req.Samples != nil
+	assembler := newSheetAssembler(*req.Sheets, times, req.Samples != nil, offset, sampledSheetsList.span)
+	assembler.inputStart = inputStart
 	if failure := a.exec(req, args, stdinBytes, assembler, append(logHandlers, assembler.line)...); failure != nil {
 		return Result{}, failure
-	}
-	if req.Samples != nil {
-		inpoints := req.Samples.inpoints
-		if inpoints == nil {
-			inpoints = make([]float64, len(times))
-			for i, at := range times {
-				inpoints[i] = math.Max(0, at+inputStart)
-			}
-		}
-		var stale []bool
-		if keyframes := req.Samples.keyframes; keyframes != nil {
-			stale = make([]bool, len(times))
-			for i, at := range times {
-				stale[i] = !(math.Max(0, at+inputStart)-keyframes[i] <= maxRefetchKeyframeGap)
-			}
-		}
-		if failure := a.refetch(req, assembler, inpoints, stale); failure != nil {
-			failure.Decoder = a.decoder
-			return Result{}, failure
-		}
 	}
 	if packetTimingPath != "" {
 		if err := assembler.readPacketTiming(packetTimingPath); err != nil {
 			return Result{}, &AttemptError{Decoder: a.decoder, Reason: ReasonOutput, Err: fmt.Errorf("read packet timing: %w", err)}
+		}
+	}
+	if failure := assembler.close(); failure != nil {
+		failure.Decoder = a.decoder
+		return Result{}, failure
+	}
+	if req.Samples != nil {
+		a.repairSheets(req, assembler, inputStart)
+		if err := a.ctx.Err(); err != nil {
+			return Result{}, &AttemptError{Decoder: a.decoder, Reason: ReasonCanceled, Err: err}
 		}
 	}
 	sheets, frames, failure := assembler.finish()
@@ -470,11 +424,6 @@ func (a attemptRun) sheets(req Request, times []float64, inputStart float64, log
 // when that is not nil, writing its stdout to stdout when that is not nil,
 // and routing its log to handlers.
 func (a attemptRun) exec(req Request, args []string, stdinBytes []byte, stdoutWriter io.Writer, handlers ...func(string)) *AttemptError {
-	return a.execBinary(req, a.runner.FFmpegPath, args, stdinBytes, stdoutWriter, handlers...)
-}
-
-// execBinary runs one process of the attempt, as exec does, from binary.
-func (a attemptRun) execBinary(req Request, binary string, args []string, stdinBytes []byte, stdoutWriter io.Writer, handlers ...func(string)) *AttemptError {
 	var stdin io.Reader
 	if stdinBytes != nil {
 		stdin = bytes.NewReader(stdinBytes)
@@ -486,9 +435,9 @@ func (a attemptRun) execBinary(req Request, binary string, args []string, stdinB
 	var err error
 	replaced := a.runner.Exec != nil
 	if replaced {
-		err = a.runner.Exec(a.attemptCtx, binary, args, stdin, stdoutWriter, stderr)
+		err = a.runner.Exec(a.attemptCtx, a.runner.FFmpegPath, args, stdin, stdoutWriter, stderr)
 	} else {
-		state, err = execFFmpeg(a.attemptCtx, req.Background, binary, args, stdin, stdoutWriter, stderr)
+		state, err = execFFmpeg(a.attemptCtx, req.Background, a.runner.FFmpegPath, args, stdin, stdoutWriter, stderr)
 	}
 	_ = stderr.Close()
 	waitStderr()

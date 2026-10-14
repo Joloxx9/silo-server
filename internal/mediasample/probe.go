@@ -33,9 +33,6 @@ type inputInfo struct {
 	// geometry before ffmpeg applies its display matrix.
 	AspectRatio float64
 	Rotation    float64
-	// VideoCodec is the decoder's name for the first playable video, such
-	// as "h264" or "mpeg2video".
-	VideoCodec string
 }
 
 func (i inputInfo) displayAspect() float64 {
@@ -122,10 +119,6 @@ func (p *inputHeaderParser) videoGeometry(line string) {
 			return
 		}
 		p.videoSeen, p.videoSideData = true, true
-		if _, rest, ok := strings.Cut(trimmed, ": Video: "); ok {
-			p.info.VideoCodec, _, _ = strings.Cut(rest, " ")
-			p.info.VideoCodec = strings.TrimRight(p.info.VideoCodec, ",")
-		}
 		if size := videoSizePattern.FindStringSubmatch(trimmed); size != nil {
 			w, _ := strconv.ParseFloat(size[1], 64)
 			h, _ := strconv.ParseFloat(size[2], 64)
