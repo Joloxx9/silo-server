@@ -80,11 +80,8 @@ type Samples struct {
 	// set by the keyframe lookup; nil starts each entry at its sample time.
 	// keyframes are each sample's keyframe, the last at or before it, as a
 	// container time, or NaN where the lookup found none; nil without one.
-	// keyframesLooked records that the lookup ran, so a lookup that found
-	// nothing is not run again for a repair.
-	inpoints        []float64
-	keyframes       []float64
-	keyframesLooked bool
+	inpoints  []float64
+	keyframes []float64
 }
 
 // At decodes the first video frame at or after a media time, decoding from

@@ -86,42 +86,9 @@ func TestRunSheetsStartsListEntriesAtKeyframes(t *testing.T) {
 	}
 }
 
-// TestRunSheetsLeavesSamplesPastAGapFilled does not repair a sample whose
-// keyframe lies far before it, a stretch with no pictures, so it stays
-// filled and a damaged file still shows as one.
-func TestRunSheetsLeavesSamplesPastAGapFilled(t *testing.T) {
-	list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5), tagged(20, 15), tagged(30, 25)}}
-	var repaired [][]string
-	lists := 0
-	runner := Runner{FFprobePath: "ffprobe", Exec: func(ctx context.Context, binary string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-		if binary == "ffprobe" {
-			_, _ = io.WriteString(stdout, "3.500000,K__\n")
-			return nil
-		}
-		if slices.Contains(args, "concat") {
-			if lists++; lists > 1 {
-				repaired = append(repaired, listInpoints(stdin))
-			}
-		}
-		return list.exec(ctx, binary, args, stdin, stdout, stderr)
-	}}
-	result, err := runner.Run(t.Context(), sheetsRequest(secondsFrom(5, 10, 4), 2, 2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, inpoints := range repaired {
-		if slices.Contains(inpoints, "35") {
-			t.Fatalf("repaired the sample 31.5s past its keyframe: %v", repaired)
-		}
-	}
-	if result.SheetFrames.Filled != 1 {
-		t.Fatalf("frames %+v, want the sample past the gap filled", result.SheetFrames)
-	}
-}
-
 // TestRunSheetsRepairsSamplesTheLookupFoundNoKeyframeFor repairs a missing
 // sample the lookup found no keyframe for, as before a container's first
-// keyframe: a missed lookup is not a stretch without pictures.
+// keyframe.
 func TestRunSheetsRepairsSamplesTheLookupFoundNoKeyframeFor(t *testing.T) {
 	list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(20, 15), tagged(30, 25), tagged(40, 35)}}
 	var repaired [][]string
@@ -146,59 +113,37 @@ func TestRunSheetsRepairsSamplesTheLookupFoundNoKeyframeFor(t *testing.T) {
 	}
 }
 
-// TestRunSheetsLooksUpMP4KeyframesOnlyForRepairs looks keyframes up for an
-// MP4 list only once a cell is missing, for the gap check.
-func TestRunSheetsLooksUpMP4KeyframesOnlyForRepairs(t *testing.T) {
-	list := &fakeSheets{format: "mov,mp4,m4a,3gp,3g2,mj2", frames: []fakeSheetFrame{tagged(10, 5), tagged(20, 15), tagged(30, 25)}}
-	var repaired [][]string
-	probes, lists := 0, 0
-	runner := Runner{FFprobePath: "ffprobe", Exec: func(ctx context.Context, binary string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-		if binary == "ffprobe" {
-			probes++
-			_, _ = io.WriteString(stdout, "3.500000,K__\n")
-			return nil
-		}
-		if slices.Contains(args, "concat") {
-			if lists++; lists > 1 {
-				repaired = append(repaired, listInpoints(stdin))
+// TestRunSheetsRepairsSamplesFarPastTheirKeyframe repairs a missing sample
+// whatever the distance to its keyframe: a long GOP in a healthy file puts
+// keyframes a minute apart, so distance alone does not mark a damaged stretch.
+// An MP4 list looks no keyframes up.
+func TestRunSheetsRepairsSamplesFarPastTheirKeyframe(t *testing.T) {
+	for _, format := range []string{"matroska,webm", "mov,mp4,m4a,3gp,3g2,mj2"} {
+		list := &fakeSheets{format: format, frames: []fakeSheetFrame{tagged(10, 5), tagged(20, 15), tagged(30, 25)}}
+		var repaired [][]string
+		probes, lists := 0, 0
+		runner := Runner{FFprobePath: "ffprobe", Exec: func(ctx context.Context, binary string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+			if binary == "ffprobe" {
+				probes++
+				_, _ = io.WriteString(stdout, "3.500000,K__\n")
+				return nil
 			}
+			if slices.Contains(args, "concat") {
+				if lists++; lists > 1 {
+					repaired = append(repaired, listInpoints(stdin))
+				}
+			}
+			return list.exec(ctx, binary, args, stdin, stdout, stderr)
+		}}
+		if _, err := runner.Run(t.Context(), sheetsRequest(secondsFrom(5, 10, 4), 2, 2)); err != nil {
+			t.Fatal(err)
 		}
-		return list.exec(ctx, binary, args, stdin, stdout, stderr)
-	}}
-	result, err := runner.Run(t.Context(), sheetsRequest(secondsFrom(5, 10, 4), 2, 2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if probes != 1 {
-		t.Fatalf("ffprobe ran %d times, want once, for the missing cell", probes)
-	}
-	for _, inpoints := range repaired {
-		if slices.Contains(inpoints, "35") {
-			t.Fatalf("repaired the sample 31.5s past its keyframe: %v", repaired)
+		if wantProbes := map[bool]int{true: 1, false: 0}[format == "matroska,webm"]; probes != wantProbes {
+			t.Fatalf("%s: ffprobe ran %d times, want %d", format, probes, wantProbes)
 		}
-	}
-	if result.SheetFrames.Filled != 1 {
-		t.Fatalf("frames %+v, want the sample past the gap filled", result.SheetFrames)
-	}
-}
-
-// TestRunSheetsLooksUpMatroskaKeyframesOnce does not look keyframes up again
-// for a repair when the list's own lookup found none.
-func TestRunSheetsLooksUpMatroskaKeyframesOnce(t *testing.T) {
-	list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5), tagged(20, 15), tagged(30, 25)}}
-	probes := 0
-	runner := Runner{FFprobePath: "ffprobe", Exec: func(ctx context.Context, binary string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-		if binary == "ffprobe" {
-			probes++
-			return nil
+		if len(repaired) == 0 || !slices.ContainsFunc(repaired, func(inpoints []string) bool { return slices.Contains(inpoints, "35") }) {
+			t.Fatalf("%s: repair lists %v, want the sample at 35 repaired", format, repaired)
 		}
-		return list.exec(ctx, binary, args, stdin, stdout, stderr)
-	}}
-	if _, err := runner.Run(t.Context(), sheetsRequest(secondsFrom(5, 10, 4), 2, 2)); err != nil {
-		t.Fatal(err)
-	}
-	if probes != 1 {
-		t.Fatalf("ffprobe ran %d times, want once", probes)
 	}
 }
 

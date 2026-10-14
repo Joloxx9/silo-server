@@ -451,14 +451,6 @@ the first run and before the sheets are encoded (`sheet_repair.go`):
   reference frame from the keyframe on, and keeps the last frame at or before
   each sample's time.
 
-A missing cell whose keyframe lies more than 30 seconds before its sample,
-or three sample intervals when that is longer, is not repaired: the sample
-sits in a stretch of the file with no pictures, as in a damaged or cut file,
-and a repair would show the frame before or after the stretch. The cell stays
-filled, so the sparse check can fail the run. Matroska has its keyframes from
-the list's lookup; other containers look them up only once a list leaves cells
-missing. A sample the lookup found no keyframe for is always repaired.
-
 Each repaired sample keeps its nearest frame: the last at or before its
 time, else the first after it. A repair that ffmpeg finishes must line up
 with its log like any run; one cut short keeps the frames it placed, which
