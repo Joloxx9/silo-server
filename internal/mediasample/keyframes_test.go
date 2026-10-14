@@ -172,3 +172,23 @@ func TestRunSheetsLooksUpMP4KeyframesOnlyForRepairs(t *testing.T) {
 		t.Fatalf("frames %+v, want the sample past the gap filled", result.SheetFrames)
 	}
 }
+
+// TestRunSheetsLooksUpMatroskaKeyframesOnce does not look keyframes up again
+// for a repair when the list's own lookup found none.
+func TestRunSheetsLooksUpMatroskaKeyframesOnce(t *testing.T) {
+	list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5), tagged(20, 15), tagged(30, 25)}}
+	probes := 0
+	runner := Runner{FFprobePath: "ffprobe", Exec: func(ctx context.Context, binary string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		if binary == "ffprobe" {
+			probes++
+			return nil
+		}
+		return list.exec(ctx, binary, args, stdin, stdout, stderr)
+	}}
+	if _, err := runner.Run(t.Context(), sheetsRequest(secondsFrom(5, 10, 4), 2, 2)); err != nil {
+		t.Fatal(err)
+	}
+	if probes != 1 {
+		t.Fatalf("ffprobe ran %d times, want once", probes)
+	}
+}

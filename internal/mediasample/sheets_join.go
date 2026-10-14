@@ -103,8 +103,10 @@ type sheetAssembler struct {
 	// inpoints and keyframes are the list's keyframe lookup (see
 	// Samples.inpoints): the entries' container start times, nil for
 	// sample times, and each sample's keyframe, nil without a lookup.
-	inpoints  []float64
-	keyframes []float64
+	// keyframesLooked is set once a lookup ran, whatever it found.
+	inpoints        []float64
+	keyframes       []float64
+	keyframesLooked bool
 	// candidates, when set, collects each sample's nearest frame for a
 	// repair instead of tiling.
 	candidates []sheetCandidate

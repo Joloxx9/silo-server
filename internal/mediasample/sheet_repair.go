@@ -144,9 +144,11 @@ func (a *sheetAssembler) adopt(cells []int, repair *sheetAssembler) {
 // time box and the attempt's.
 func (a attemptRun) repairSheets(req Request, run *sheetAssembler, inputStart float64) {
 	missing, repeated := run.repairs()
-	if len(missing) > 0 && run.keyframes == nil {
+	if len(missing) > 0 && !run.keyframesLooked {
 		// Only the gap check below needs keyframes for a list that started
-		// at sample times, so they are looked up once a cell is missing.
+		// at sample times, so they are looked up once a cell is missing. A
+		// lookup the list already ran is not repeated, even if it found none.
+		run.keyframesLooked = true
 		_, run.keyframes = a.keyframeInpoints(req, inputStart)
 	}
 	missing = slices.DeleteFunc(missing, func(cell int) bool { return run.pastGap(cell, inputStart) })
