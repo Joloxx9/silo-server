@@ -125,6 +125,9 @@ type sheetAssembler struct {
 	packetTimeBase float64
 	packetEnd      float64
 	hasPacketTime  bool
+	// dtsTiming lets a packet without a PTS count by its DTS; see
+	// packetLine.
+	dtsTiming bool
 
 	open      map[int]*sheetCanvas
 	finalized int
@@ -274,9 +277,15 @@ func (a *sheetAssembler) readPacketTiming(path string) error {
 // packetLine reads the framecrc stream-copy output: "#tb 0: 1/1000",
 // followed by "0, DTS, PTS, duration, size, checksum[, flags]". PTS and
 // duration count in that time base and are relative to the window start.
-// A packet without a PTS falls back to its DTS: packed-bitstream XviD in AVI
-// carries no PTS on any packet, and a DTS never runs ahead of the PTS it
-// stands in for, so the fallback cannot stretch a reordered stream's extent.
+// With dtsTiming, a packet without a PTS falls back to its DTS:
+// packed-bitstream XviD in AVI carries no PTS on any packet, and a DTS never
+// runs ahead of the PTS it stands in for, so the fallback cannot stretch a
+// reordered stream's extent. Without a PTS the decoder stamps each frame
+// with the DTS of the packet that released it, so the fallback is set only
+// for a decoder in low-delay mode, which releases each keyframe as it
+// arrives. A reordering decoder, such as H.264 with B-frames, releases a
+// keyframes-only read's keyframes a GOP or more late; its DTS-only windows
+// keep failing rather than publish every cell at an earlier keyframe.
 func (a *sheetAssembler) packetLine(line string) {
 	if raw, ok := strings.CutPrefix(line, "#tb 0: "); ok {
 		numerator, denominator, ok := strings.Cut(raw, "/")
@@ -298,7 +307,7 @@ func (a *sheetAssembler) packetLine(line string) {
 		return
 	}
 	pts, hasPTS := packetTimestamp(fields[2])
-	if !hasPTS {
+	if !hasPTS && a.dtsTiming {
 		pts, hasPTS = packetTimestamp(fields[1])
 	}
 	duration, errDuration := strconv.ParseInt(strings.TrimSpace(fields[3]), 10, 64)

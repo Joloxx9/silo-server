@@ -227,7 +227,9 @@ type attemptRun struct {
 // samples runs a Samples request. Unless it reads through, it probes the
 // input first (see probe.go), then reads it through a concat list when its
 // container seeks to keyframes. Otherwise it reads one keyframes-only window
-// and picks the samples from its keyframes.
+// and picks the samples from its keyframes. Sheets always probe, since the
+// codec decides how their keyframes are decoded (see keyframeSkipFor and
+// keyframeLowDelayFor).
 //
 // Sheets read through a list that comes back empty because the decoder
 // dropped keyframes as duplicates are read again as that window. One decoder serves every
@@ -400,6 +402,7 @@ func (a attemptRun) sheets(req Request, times []float64, inputStart float64, log
 	}
 	assembler := newSheetAssembler(*req.Sheets, times, req.Samples != nil, offset, sampledSheetsList.span)
 	assembler.inputStart = inputStart
+	assembler.dtsTiming = req.lowDelay
 	if failure := a.exec(req, args, stdinBytes, assembler, append(logHandlers, assembler.line)...); failure != nil {
 		return Result{}, failure
 	}
