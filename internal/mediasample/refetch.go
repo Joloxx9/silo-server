@@ -25,6 +25,12 @@ const (
 	minRefetchCells = 16
 )
 
+// maxRefetchKeyframeGap is how far before its sample a keyframe may lie and
+// still be fetched for it. Keyframes lie seconds apart; a sample whose last
+// keyframe is further back sits in a stretch of the file with no pictures,
+// as a damaged or cut file has, and stays filled so the run can tell.
+const maxRefetchKeyframeGap = 30.0
+
 // maxRefetchInputs bounds the inputs, and so the open demuxers and
 // decoders, of one refetch run.
 const maxRefetchInputs = 16
@@ -87,16 +93,18 @@ func (a *sheetAssembler) abandonRun(prior error) {
 }
 
 // refetch fetches the missing cells of a sampled sheets run into the
-// assembler. inpoints are the list entries' container times. A run that
+// assembler. inpoints are the list entries' container times; cells marked
+// in stale, whose keyframe lies too far back, are not fetched. A run that
 // fails is tried once more for the cells it left empty, as a busy host can
 // fail one; cells still empty after that stay empty. Only the attempt's
 // timeout or the caller's cancellation stops the refetch with a failure.
-func (a attemptRun) refetch(req Request, assembler *sheetAssembler, inpoints []float64) *AttemptError {
+func (a attemptRun) refetch(req Request, assembler *sheetAssembler, inpoints []float64, stale []bool) *AttemptError {
 	chain, ok := sheetChain(a.sheetsGraph)
 	if !ok {
 		return nil
 	}
-	for batch := range slices.Chunk(assembler.missingCells(), maxRefetchInputs) {
+	missing := slices.DeleteFunc(assembler.missingCells(), func(cell int) bool { return stale != nil && stale[cell] })
+	for batch := range slices.Chunk(missing, maxRefetchInputs) {
 		for try := 0; try < 2 && len(batch) > 0; try++ {
 			failure := a.refetchRun(req, assembler, chain, inpoints, batch)
 			if failure == nil {

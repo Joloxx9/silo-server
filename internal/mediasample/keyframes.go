@@ -16,14 +16,19 @@ import (
 // keyframe itself reads only the keyframe and the entry's span. The keyframe
 // times come from one ffprobe pass whose read intervals each seek to a
 // sample and read a single packet, the keyframe the seek lands on.
+//
+// Only Matroska entries start at their keyframes. An MP4 entry whose
+// inpoint is its keyframe's time often seeks past that keyframe (45 of 80
+// samples of one H.264 episode decoded nothing), so other containers keep
+// sample-time inpoints and use the keyframes only to spot gaps.
 
-// keyframeInpoints returns each sample's keyframe as a container time, or
-// nil when the runner has no ffprobe or the lookup fails, so the list falls
-// back to sample times. A sample with no keyframe found at or before it
-// keeps its own time.
-func (a attemptRun) keyframeInpoints(req Request, inputStart float64) []float64 {
+// keyframeInpoints returns each sample's list inpoint and keyframe, both
+// as container times, or nils when the runner has no ffprobe or the lookup
+// fails, so the list falls back to sample times. A sample with no keyframe
+// found at or before it keeps its own time as inpoint and NaN as keyframe.
+func (a attemptRun) keyframeInpoints(req Request, inputStart float64) (inpoints, keyframes []float64) {
 	if a.runner.FFprobePath == "" {
-		return nil
+		return nil, nil
 	}
 	seconds := req.Samples.Seconds
 	targets := make([]float64, len(seconds))
@@ -43,25 +48,30 @@ func (a attemptRun) keyframeInpoints(req Request, inputStart float64) []float64 
 	}
 	var out bytes.Buffer
 	if failure := a.execBinary(req, a.runner.FFprobePath, args, nil, &out); failure != nil {
-		return nil
+		return nil, nil
 	}
 	keys := parseKeyframeTimes(out.Bytes())
 	if len(keys) == 0 {
-		return nil
+		return nil, nil
 	}
 	// A sample sharing its keyframe with the sample before keeps its own
 	// time: the decoder drops a keyframe sent twice in a row as a duplicate,
 	// while an entry from the sample time decodes it as before.
-	inpoints := make([]float64, len(targets))
+	inpoints, keyframes = make([]float64, len(targets)), make([]float64, len(targets))
 	previous := math.NaN()
 	for i, target := range targets {
-		inpoints[i] = target
-		if n, _ := slices.BinarySearch(keys, target+sampleMatchSeconds); n > 0 && keys[n-1] != previous {
+		inpoints[i], keyframes[i] = target, math.NaN()
+		n, _ := slices.BinarySearch(keys, target+sampleMatchSeconds)
+		if n == 0 {
+			continue
+		}
+		keyframes[i] = keys[n-1]
+		if keys[n-1] != previous {
 			inpoints[i] = keys[n-1]
 			previous = keys[n-1]
 		}
 	}
-	return inpoints
+	return inpoints, keyframes
 }
 
 // parseKeyframeTimes reads ffprobe's "pts_time,flags" packet lines and

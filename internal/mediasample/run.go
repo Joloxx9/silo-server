@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -266,9 +267,12 @@ func (a attemptRun) samples(req Request) (Result, *AttemptError) {
 				return a.decode(req, header.info.StartSeconds)
 			}
 			listReq := req
-			if inpoints := a.keyframeInpoints(req, header.info.StartSeconds); inpoints != nil {
+			if inpoints, keyframes := a.keyframeInpoints(req, header.info.StartSeconds); inpoints != nil {
 				samples := *req.Samples
-				samples.inpoints = inpoints
+				samples.keyframes = keyframes
+				if slices.Contains(header.info.Formats, "matroska") {
+					samples.inpoints = inpoints
+				}
 				listReq.Samples = &samples
 			}
 			duplicates := false
@@ -433,7 +437,14 @@ func (a attemptRun) sheets(req Request, times []float64, inputStart float64, log
 				inpoints[i] = math.Max(0, at+inputStart)
 			}
 		}
-		if failure := a.refetch(req, assembler, inpoints); failure != nil {
+		var stale []bool
+		if keyframes := req.Samples.keyframes; keyframes != nil {
+			stale = make([]bool, len(times))
+			for i, at := range times {
+				stale[i] = !(math.Max(0, at+inputStart)-keyframes[i] <= maxRefetchKeyframeGap)
+			}
+		}
+		if failure := a.refetch(req, assembler, inpoints, stale); failure != nil {
 			failure.Decoder = a.decoder
 			return Result{}, failure
 		}

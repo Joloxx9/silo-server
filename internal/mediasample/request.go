@@ -84,6 +84,9 @@ type Samples struct {
 	// inpoints are the list entries' container start times, one per second,
 	// set by the keyframe lookup; nil starts each entry at its sample time.
 	inpoints []float64
+	// keyframes are each sample's keyframe, the last at or before it, as a
+	// container time, or NaN where the lookup found none; nil without one.
+	keyframes []float64
 }
 
 // At decodes the first video frame at or after a media time, decoding from

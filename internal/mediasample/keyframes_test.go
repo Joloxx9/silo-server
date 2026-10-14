@@ -17,12 +17,14 @@ func TestParseKeyframeTimes(t *testing.T) {
 	}
 }
 
-// TestRunSheetsStartsListEntriesAtKeyframes starts each list entry at the
-// keyframe ffprobe found at or before its sample, keeps a sample without one,
+// TestRunSheetsStartsListEntriesAtKeyframes starts each Matroska list entry
+// at the keyframe ffprobe found at or before its sample (an MP4 keeps sample
+// times), keeps a sample without one,
 // or sharing the previous sample's, at its own time, and falls back to sample
 // times when the lookup fails.
 func TestRunSheetsStartsListEntriesAtKeyframes(t *testing.T) {
 	for name, tt := range map[string]struct {
+		format      string
 		probe       string
 		probeErr    error
 		wantInpoint []string
@@ -30,8 +32,13 @@ func TestRunSheetsStartsListEntriesAtKeyframes(t *testing.T) {
 		"keyframes":     {probe: "3.500000,K__\n13.200000,K__\n24.000000,K__\n", wantInpoint: []string{"3.5", "13.2", "24", "35"}},
 		"none before":   {probe: "13.200000,K__\n", wantInpoint: []string{"5", "13.2", "25", "35"}},
 		"lookup failed": {probeErr: errors.New("ffprobe exited"), wantInpoint: []string{"5", "15", "25", "35"}},
+		"mp4":           {format: "mov,mp4,m4a,3gp,3g2,mj2", probe: "3.500000,K__\n13.200000,K__\n24.000000,K__\n", wantInpoint: []string{"5", "15", "25", "35"}},
 	} {
-		list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5), tagged(20, 15), tagged(30, 25), tagged(40, 35)}}
+		format := tt.format
+		if format == "" {
+			format = "matroska,webm"
+		}
+		list := &fakeSheets{format: format, frames: []fakeSheetFrame{tagged(10, 5), tagged(20, 15), tagged(30, 25), tagged(40, 35)}}
 		var probed []string
 		var inpoints []string
 		runner := Runner{FFprobePath: "ffprobe", Exec: func(ctx context.Context, binary string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -137,5 +144,30 @@ func TestRunSheetsSkipsRefetchForMostlyEmptyList(t *testing.T) {
 	}
 	if !slices.Equal(runs, []string{"window"}) || result.SheetFrames != (SheetFrames{Decoded: 20}) {
 		t.Fatalf("runs %q, frames %+v; want one window and every sample", runs, result.SheetFrames)
+	}
+}
+
+// TestRunSheetsLeavesSamplesPastAGapFilled does not fetch a sample whose
+// keyframe lies far before it, a stretch with no pictures, so it stays
+// filled and a damaged file still shows as one.
+func TestRunSheetsLeavesSamplesPastAGapFilled(t *testing.T) {
+	list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5), tagged(20, 15), tagged(30, 25)}}
+	refetched := false
+	runner := Runner{FFprobePath: "ffprobe", Exec: func(ctx context.Context, binary string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		switch {
+		case binary == "ffprobe":
+			_, _ = io.WriteString(stdout, "3.500000,K__\n")
+			return nil
+		case slices.Contains(args, "-filter_complex"):
+			refetched = true
+		}
+		return list.exec(ctx, binary, args, stdin, stdout, stderr)
+	}}
+	result, err := runner.Run(t.Context(), sheetsRequest(secondsFrom(5, 10, 4), 2, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refetched || result.SheetFrames != (SheetFrames{Decoded: 3, Filled: 1}) {
+		t.Fatalf("refetched %t, frames %+v; want the sample 31.5s past its keyframe left filled", refetched, result.SheetFrames)
 	}
 }
