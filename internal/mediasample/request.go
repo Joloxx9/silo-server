@@ -413,14 +413,16 @@ func (r Request) keyframeInputArgs(skip string) []string {
 }
 
 // keyframeSkipFor returns the -skip_frame value that keeps codec's
-// keyframes, or "" for keyframeSkipFrame. Interlaced MPEG-1/2 often codes a
+// keyframes, or "" for keyframeSkipFrame. Interlaced MPEG-2 often codes a
 // keyframe as an I field paired with a P field, which the decoder reports
 // as a P frame and "nokey" discards (one of 80 samples of a DVD-sourced
-// episode decoded); "nointra" keeps every picture with an intra field.
+// episode decoded). The MPEG-1/2 decoder honors only "noref" and "nokey"
+// ("nointra" acts as "noref"), so keeping the keyframe's P field means
+// decoding every P picture: about two and a half times the work of "nokey".
+// MPEG-1 has no field pictures, and "nokey" keeps its keyframes.
 func keyframeSkipFor(codec string) string {
-	switch codec {
-	case "mpeg2video", "mpeg1video":
-		return intraSkipFrame
+	if codec == "mpeg2video" {
+		return exactSkipFrame
 	}
 	return ""
 }
