@@ -96,7 +96,10 @@ type sheetAssembler struct {
 	logContext string
 	current    *sheetFrameMeta
 	logged     int64
-	metas      []sheetFrameMeta
+	// segment is how many frames were logged before the frame counter last
+	// started again from zero.
+	segment int64
+	metas   []sheetFrameMeta
 
 	partial     []byte
 	queued      [][]byte
@@ -194,7 +197,7 @@ func (a *sheetAssembler) Write(p []byte) (int, error) {
 
 // line takes one log line, keeping those of the sheets metadata filter.
 func (a *sheetAssembler) line(line string) {
-	if strings.Contains(line, duplicatePOCMessage) {
+	if droppedKeyframe(line) {
 		a.mu.Lock()
 		a.droppedKeyframes = true
 		a.mu.Unlock()
@@ -211,9 +214,15 @@ func (a *sheetAssembler) line(line string) {
 	}
 	if match := sheetFramePattern.FindStringSubmatch(message); match != nil {
 		index, err := strconv.ParseInt(match[1], 10, 64)
-		if err != nil || index != a.logged {
-			// A counter that skips or restarts, as after a filter graph
-			// reinit, no longer counts the frames on stdout.
+		if err == nil && index == 0 && a.logged > a.segment {
+			// ffmpeg rebuilds the filter graph when the input's video
+			// parameters change, as broadcast recordings do between
+			// programmes, and the rebuilt metadata filter counts from zero
+			// again. Every frame it logged before still reaches stdout.
+			a.segment = a.logged
+		}
+		if err != nil || index != a.logged-a.segment {
+			// A counter that skips no longer counts the frames on stdout.
 			a.err = fmt.Errorf("ffmpeg logged frame %s after %d frames", match[1], a.logged)
 			return
 		}

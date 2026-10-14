@@ -6,13 +6,24 @@ import (
 	"strings"
 )
 
-// A sampled list that dropped keyframes as duplicates (see samples) leaves
-// the samples after each dropped keyframe empty. Each of them is fetched
-// again from an input of its own: every ffmpeg input has its own decoder, so
-// no earlier keyframe is left in it to collide with. One run takes up to
+// A sampled list runs every entry through one decoder, which jumps can
+// confuse: HEVC drops open-GOP keyframes as duplicates (see samples), and
+// H.264 discards keyframes over an "illegal short term buffer state". The
+// samples a list leaves empty are fetched again, each from an input of its
+// own: every ffmpeg input has its own decoder, with nothing left in it from
+// another sample. A damaged stretch stays empty and still counts as filled. One run takes up to
 // maxRefetchInputs inputs, each seeking to the sample's keyframe and passing
 // on its first frame, tagged with the sample, and a concat filter joins
 // them into the same raw frames and log lines a list run gives.
+
+// A list that left most samples empty, as an H.264 stream whose keyframes
+// all reference skipped pictures does, is cheaper read as one window than
+// fetched a sample at a time, so the refetch takes at most maxRefetchShare
+// of the samples, or minRefetchCells if that is more.
+const (
+	maxRefetchShare = 0.5
+	minRefetchCells = 16
+)
 
 // maxRefetchInputs bounds the inputs, and so the open demuxers and
 // decoders, of one refetch run.
@@ -27,7 +38,7 @@ const refetchSeconds = 1
 func (a *sheetAssembler) missingCells() []int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if !a.deferEncode || !a.droppedKeyframes || a.err != nil {
+	if !a.deferEncode || a.err != nil {
 		return nil
 	}
 	var missing []int
@@ -35,6 +46,9 @@ func (a *sheetAssembler) missingCells() []int {
 		if !a.cellSet(cell) {
 			missing = append(missing, cell)
 		}
+	}
+	if len(missing) > max(minRefetchCells, int(maxRefetchShare*float64(len(a.times)))) {
+		return nil
 	}
 	return missing
 }
@@ -56,7 +70,7 @@ func (a *sheetAssembler) cellSet(cell int) bool {
 func (a *sheetAssembler) beginRun() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.logged, a.current = 0, nil
+	a.logged, a.segment, a.current = 0, 0, nil
 }
 
 // abandonRun drops what a failed run left half joined, keeping the frames

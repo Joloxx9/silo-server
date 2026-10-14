@@ -378,11 +378,24 @@ func (a attemptRun) decode(req Request, inputStart float64) (Result, *AttemptErr
 // "Skipping invalid undecodable NALU" and do not send a list to the window.
 const duplicatePOCMessage = "Duplicate POC in a sequence"
 
+// illegalShortTermMessage is what ffmpeg's H.264 decoder logs when a
+// keyframe's reference marking names pictures a keyframes-only read skipped,
+// and it discards the keyframe. A keyframes-only window fails the same way;
+// decoding the reference pictures too keeps the marking whole.
+const illegalShortTermMessage = "illegal short term buffer state"
+
+// droppedKeyframe reports whether line is a decoder dropping a keyframe
+// over state a keyframes-only read did not keep: duplicatePOCMessage or
+// illegalShortTermMessage.
+func droppedKeyframe(line string) bool {
+	return strings.Contains(line, duplicatePOCMessage) || strings.Contains(line, illegalShortTermMessage)
+}
+
 // watchDuplicatePOC returns a log handler that sets *seen once ffmpeg logs
-// duplicatePOCMessage.
+// a dropped keyframe (see droppedKeyframe).
 func watchDuplicatePOC(seen *bool) func(string) {
 	return func(line string) {
-		*seen = *seen || strings.Contains(line, duplicatePOCMessage)
+		*seen = *seen || droppedKeyframe(line)
 	}
 }
 

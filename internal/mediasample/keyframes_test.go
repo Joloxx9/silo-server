@@ -3,6 +3,7 @@ package mediasample
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -100,5 +101,41 @@ func TestRunSheetsRetriesFailedRefetch(t *testing.T) {
 	}
 	if got := sheetLumas(t, result, 2, 2); !near(got[0], []int{10, 20, 30, 40}) || result.SheetFrames != (SheetFrames{Decoded: 4}) {
 		t.Fatalf("cells %v, frames %+v", got, result.SheetFrames)
+	}
+}
+
+// TestRunSheetsSkipsRefetchForMostlyEmptyList reads a list that left most of
+// its samples empty as a window instead of fetching them one at a time.
+func TestRunSheetsSkipsRefetchForMostlyEmptyList(t *testing.T) {
+	logIllegal := func(log []string) []string {
+		return append(log, "[h264 @ 0x55d0] illegal short term buffer state detected")
+	}
+	seconds := secondsFrom(5, 10, 20)
+	var window []fakeSheetFrame
+	for i := range 20 {
+		window = append(window, timed(byte(10+i), fmt.Sprint(4+10*i)))
+	}
+	list := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5)}, editLog: logIllegal}
+	win := &fakeSheets{format: "matroska,webm", frames: window, packetEnd: 200}
+	var runs []string
+	calls := 0
+	runner := Runner{Exec: func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		calls++
+		switch {
+		case calls == 1 || slices.Contains(args, "concat"):
+			return list.exec(ctx, name, args, stdin, stdout, stderr)
+		case slices.Contains(args, "-filter_complex"):
+			runs = append(runs, "refetch")
+		default:
+			runs = append(runs, "window")
+		}
+		return win.exec(ctx, name, args, stdin, stdout, stderr)
+	}}
+	result, err := runner.Run(t.Context(), sheetsRequest(seconds, 5, 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(runs, []string{"window"}) || result.SheetFrames != (SheetFrames{Decoded: 20}) {
+		t.Fatalf("runs %q, frames %+v; want one window and every sample", runs, result.SheetFrames)
 	}
 }

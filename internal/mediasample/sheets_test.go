@@ -385,9 +385,9 @@ func TestRunSheetsFillsMissingSamples(t *testing.T) {
 }
 
 // TestRunSheetsRereadsSparseListAsWindow decodes one of four samples through
-// the list. When the HEVC decoder logged dropping keyframes as duplicates, as
-// it does for open-GOP keyframes after each jump, the empty samples are
-// fetched again from inputs of their own; samples still empty after that send
+// the list. The empty samples are fetched again from inputs of their own.
+// When the HEVC decoder logged dropping keyframes as duplicates, as it does
+// for open-GOP keyframes after each jump, samples still empty after that send
 // the attempt to a keyframes-only window. Otherwise, including for pictures
 // dropped as merely undecodable, the list's failure stands. A window whose
 // keyframes collide too counts each sample after a dropped keyframe as
@@ -396,6 +396,9 @@ func TestRunSheetsFillsMissingSamples(t *testing.T) {
 func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 	logDuplicates := func(log []string) []string {
 		return append(log, "[hevc @ 0x55d0] Duplicate POC in a sequence: 48.", "[hevc @ 0x55d0] Skipping invalid undecodable NALU: 21")
+	}
+	logIllegal := func(log []string) []string {
+		return append(log, "[h264 @ 0x55d0] illegal short term buffer state detected")
 	}
 	logUndecodable := func(log []string) []string {
 		return append(log, "[hevc @ 0x55d0] Skipping invalid undecodable NALU: 21")
@@ -419,11 +422,13 @@ func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 		"refetch recovers":      {editLog: logDuplicates, refetch: refetched, runs: []string{"refetch"}},
 		"refetch recovers some": {editLog: logDuplicates, refetch: refetched[:2], runs: []string{"refetch"}, filled: 1},
 		"duplicate keyframes":   {editLog: logDuplicates, window: keyframes, runs: []string{"refetch", "window"}},
-		"no drops logged":       {window: keyframes, want: ReasonEmpty},
-		"damaged pictures":      {editLog: logUndecodable, window: keyframes, want: ReasonEmpty},
+		"no drops logged":       {window: keyframes, runs: []string{"refetch"}, want: ReasonEmpty},
+		"damaged pictures":      {editLog: logUndecodable, window: keyframes, runs: []string{"refetch"}, want: ReasonEmpty},
+		"no drops, refetched":   {refetch: refetched, runs: []string{"refetch"}},
 		"window empty too":      {editLog: logDuplicates, runs: []string{"refetch", "window"}, want: ReasonEmpty},
 		"window drops a few":    {editLog: logDuplicates, window: keyframes[:3], windowEditLog: logDuplicates, windowKeys: keys, runs: []string{"refetch", "window"}, filled: 1},
 		"window drops too many": {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: keys, reference: keyframes, runs: []string{"refetch", "window", "reference"}},
+		"h264 illegal state":    {editLog: logIllegal, window: keyframes[:1], windowEditLog: logIllegal, windowKeys: keys, reference: keyframes, runs: []string{"refetch", "window", "reference"}},
 		"reference fails too":   {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: keys, reference: keyframes[:1], refEditLog: logDuplicates, runs: []string{"refetch", "window", "reference"}, want: ReasonEmpty},
 	}
 	for name, tt := range tests {
@@ -642,8 +647,8 @@ func TestRunSheetsRejectsBrokenOutput(t *testing.T) {
 		"log without frame": {&fakeSheets{frames: frames(), editLog: func(log []string) []string {
 			return append(log, "[metadata@sheets @ 0x55d0] frame:4    pts:0       pts_time:0", "[metadata@sheets @ 0x55d0] sample=5")
 		}}, ReasonOutput},
-		"counter restarts": {&fakeSheets{frames: frames(), editLog: func(log []string) []string {
-			log[6] = strings.Replace(log[6], "frame:3", "frame:0", 1)
+		"counter skips": {&fakeSheets{frames: frames(), editLog: func(log []string) []string {
+			log[6] = strings.Replace(log[6], "frame:3", "frame:5", 1)
 			return log
 		}}, ReasonOutput},
 		"no sample line": {&fakeSheets{frames: frames(), editLog: func(log []string) []string {
@@ -665,6 +670,24 @@ func TestRunSheetsRejectsBrokenOutput(t *testing.T) {
 // TestRunSheetsHardwareFallsBack decodes only one of four samples on the
 // hardware attempt, as a GPU that skips frames would; the run must reject it
 // as too sparse and use the software attempt.
+// TestRunSheetsAcceptsCounterRestart reads a run whose metadata filter
+// counted from zero again after a filter graph rebuild, as broadcast
+// recordings cause when their video parameters change mid-file.
+func TestRunSheetsAcceptsCounterRestart(t *testing.T) {
+	fake := &fakeSheets{format: "matroska,webm", frames: []fakeSheetFrame{tagged(10, 5), tagged(20, 15), tagged(30, 25), tagged(40, 35)}, editLog: func(log []string) []string {
+		log[4] = strings.Replace(log[4], "frame:2", "frame:0", 1)
+		log[6] = strings.Replace(log[6], "frame:3", "frame:1", 1)
+		return log
+	}}
+	result, err := Runner{Exec: fake.exec}.Run(t.Context(), sheetsRequest(secondsFrom(5, 10, 4), 2, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sheetLumas(t, result, 2, 2); !near(got[0], []int{10, 20, 30, 40}) || result.SheetFrames != (SheetFrames{Decoded: 4}) {
+		t.Fatalf("cells %v, frames %+v", got, result.SheetFrames)
+	}
+}
+
 func TestRunSheetsHardwareFallsBack(t *testing.T) {
 	req := sheetsRequest(secondsFrom(5, 10, 4), 2, 2)
 	req.Attempts = []Attempt{{Hardware: true}, {}}
