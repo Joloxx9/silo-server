@@ -366,8 +366,14 @@ func (a *sheetAssembler) assignWindow(limit float64) {
 // sourceSeconds is the input time, counted from the start of the file as
 // sample times are, of a sampled list's frame for cell, NaN when the frame
 // has no time. The list's entry for cell starts cell*span seconds into the
-// list and at its inpoint in the container (see buildConcatListSpan), and
-// ffmpeg shifted every frame by the list input's start time.
+// list and at its inpoint in the container (see buildConcatListInpoints),
+// and ffmpeg shifted every frame by the list input's start time.
+//
+// An entry that starts at its sample time because it shares its keyframe
+// with the entry before decodes that keyframe first, from before its
+// inpoint, where ffmpeg rewrites the list's timestamps to keep them in
+// order. Its frame's time is the keyframe's, which the lookup found, so a
+// run of samples sharing a keyframe reads as repeats and gets repaired.
 func (a *sheetAssembler) sourceSeconds(meta sheetFrameMeta, cell int) float64 {
 	if !meta.hasTime {
 		return math.NaN()
@@ -375,6 +381,9 @@ func (a *sheetAssembler) sourceSeconds(meta sheetFrameMeta, cell int) float64 {
 	inpoint := math.Max(0, a.times[cell]+a.inputStart)
 	if a.inpoints != nil {
 		inpoint = a.inpoints[cell]
+		if keyframe := a.keyframes[cell]; inpoint > keyframe {
+			return keyframe - a.inputStart
+		}
 	}
 	return meta.seconds + a.header.info.StartSeconds - float64(cell)*a.span + inpoint - a.inputStart
 }

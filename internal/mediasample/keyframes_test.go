@@ -1,12 +1,21 @@
 package mediasample
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Silo-Server/silo-server/internal/processmetrics"
 )
 
 func TestParseKeyframeTimes(t *testing.T) {
@@ -190,5 +199,58 @@ func TestRunSheetsLooksUpMatroskaKeyframesOnce(t *testing.T) {
 	}
 	if probes != 1 {
 		t.Fatalf("ffprobe ran %d times, want once", probes)
+	}
+}
+
+// TestRunSheetsRepairsSharedMatroskaKeyframesWithRealFFmpeg samples an
+// H.264 Matroska file every 10 seconds whose keyframes lie 40 seconds apart,
+// a shade per 10 seconds. The first sample's entry starts at the keyframe
+// and the three after it, sharing that keyframe, at their sample times. All
+// four decode the keyframe, so they must read as repeats and be repaired to
+// their own shades.
+func TestRunSheetsRepairsSharedMatroskaKeyframesWithRealFFmpeg(t *testing.T) {
+	ffmpeg, caps := realFFmpeg(t)
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe is not installed")
+	}
+	grays := []int{20, 60, 100, 140, 180, 220}
+	var args, inputs []string
+	for i, gray := range grays {
+		args = append(args, "-f", "lavfi", "-i", fmt.Sprintf("color=c=0x%02x%02x%02x:s=128x72:r=25:d=10", gray, gray, gray))
+		inputs = append(inputs, fmt.Sprintf("[%d:v]", i))
+	}
+	clip := filepath.Join(t.TempDir(), "long-gop.mkv")
+	args = append(append([]string{"-hide_banner", "-loglevel", "error"}, args...),
+		"-filter_complex", strings.Join(inputs, "")+"concat=n=6:v=1:a=0,format=yuv420p[v]", "-map", "[v]",
+		"-c:v", "libx264", "-preset", "ultrafast", "-g", "1000", "-keyint_min", "1000", "-sc_threshold", "0", "-bf", "2", clip)
+	if output, err := exec.Command(ffmpeg, args...).CombinedOutput(); err != nil {
+		t.Skipf("cannot encode the clip with libx264: %v: %s", err, output)
+	}
+	req := Request{
+		Input:   clip,
+		Samples: &Samples{Seconds: []float64{5, 15, 25, 35, 45, 55}},
+		Sheets:  &SheetsOutput{TileWidth: 64, TileHeight: 36, Columns: 3, Rows: 2, Quality: 90},
+		Threads: 1,
+	}
+	if err := caps.Require(req); err != nil {
+		t.Skipf("ffmpeg cannot sample sheets: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	result, err := Runner{FFmpegPath: ffmpeg, FFprobePath: ffprobe, Workload: processmetrics.Trickplay}.Run(ctx, req)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	img, err := jpeg.Decode(bytes.NewReader(result.Sheets[0].JPEG))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ycc := img.(*image.YCbCr)
+	for cell, gray := range grays {
+		x, y := (cell%3)*64+32, (cell/3)*36+18
+		if got := int(ycc.Y[ycc.YOffset(x, y)]); got < gray-8 || got > gray+8 {
+			t.Errorf("cell %d luma %d, want %d (frames %+v)", cell, got, gray, result.SheetFrames)
+		}
 	}
 }

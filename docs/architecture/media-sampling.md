@@ -366,6 +366,20 @@ must use the returned height and reject chunks whose geometry differs.
 - A sampled list places each frame by its tag; when one sample decodes two
   frames (a later keyframe within its span, or an all-intra source), the
   first, which is at or before the sample time, is kept.
+- A Matroska Sheets list starts each entry at its keyframe instead of its
+  sample time, so the demuxer reads the keyframe and the entry's span rather
+  than every packet of every stream from the keyframe up to the sample (half
+  the bytes or less on feature-length files). One ffprobe pass finds the
+  keyframes first (`keyframes.go`): its read intervals each seek to a sample
+  and read one video packet, the keyframe the concat demuxer's seek lands
+  on. A sample that shares its keyframe with the sample before keeps its
+  sample time, since the HEVC decoder drops a keyframe sent twice in a row as
+  a duplicate. That entry decodes the keyframe from before its inpoint, where
+  ffmpeg rewrites the list's timestamps, so the frame takes the keyframe's
+  time and the samples sharing it read as repeats. MP4 entries keep their
+  sample times: one starting at its keyframe's exact time often seeks past
+  it. Without ffprobe, or when the lookup fails, every entry starts at its
+  sample time.
 - Sheets list entries last half a second rather than 40 ms. With B-frames,
   the packet after a keyframe in decode order can carry a later presentation
   time that ends a 40 ms entry before the decoder releases the keyframe, and
@@ -436,6 +450,14 @@ the first run and before the sheets are encoded (`sheet_repair.go`):
   The repair lists them again with `-skip_frame:v noref`, decoding every
   reference frame from the keyframe on, and keeps the last frame at or before
   each sample's time.
+
+A missing cell whose keyframe lies more than 30 seconds before its sample,
+or three sample intervals when that is longer, is not repaired: the sample
+sits in a stretch of the file with no pictures, as in a damaged or cut file,
+and a repair would show the frame before or after the stretch. The cell stays
+filled, so the sparse check can fail the run. Matroska has its keyframes from
+the list's lookup; other containers look them up only once a list leaves cells
+missing. A sample the lookup found no keyframe for is always repaired.
 
 Each repaired sample keeps its nearest frame: the last at or before its
 time, else the first after it. A repair that ffmpeg finishes must line up
