@@ -111,6 +111,11 @@ type sheetAssembler struct {
 	inputStart float64
 	header     inputHeaderParser
 	sources    []float64
+	// inpoints and keyframes are the list's keyframe lookup (see
+	// Samples.inpoints): the entries' container start times, nil for
+	// sample times, and each sample's keyframe, nil without a lookup.
+	inpoints  []float64
+	keyframes []float64
 	// candidates, when set, collects each sample's nearest frame for a
 	// repair instead of tiling.
 	candidates []sheetCandidate
@@ -446,6 +451,9 @@ func (a *sheetAssembler) sourceSeconds(meta sheetFrameMeta, cell int) float64 {
 		return math.NaN()
 	}
 	inpoint := math.Max(0, a.times[cell]+a.inputStart)
+	if a.inpoints != nil {
+		inpoint = a.inpoints[cell]
+	}
 	return meta.seconds + a.header.info.StartSeconds - float64(cell)*a.span + inpoint - a.inputStart
 }
 

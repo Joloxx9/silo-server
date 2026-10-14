@@ -9,6 +9,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/Silo-Server/silo-server/internal/mediaprobe"
 	"github.com/Silo-Server/silo-server/internal/mediasample"
 	"github.com/Silo-Server/silo-server/internal/playback"
 	"github.com/Silo-Server/silo-server/internal/processmetrics"
@@ -91,7 +92,7 @@ func (s *Server) handleTrickplayExtract(w http.ResponseWriter, r *http.Request) 
 	hardware := s.trickplay.resolver()
 	hardware.Set(accel, cfg.Playback.HWDevice)
 	resolved, device := hardware.Backend(r.Context(), ffmpeg)
-	runner := mediasample.Runner{FFmpegPath: ffmpeg, Workload: processmetrics.Trickplay}
+	runner := mediasample.Runner{FFmpegPath: ffmpeg, FFprobePath: mediaprobe.FFprobePathFromFFmpeg(ffmpeg), Workload: processmetrics.Trickplay}
 	if mediasample.SupportsHardwareSheets(resolved) {
 		runner.HWAccel, runner.HWDevice = resolved, device
 	} else {
