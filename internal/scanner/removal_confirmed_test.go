@@ -275,3 +275,43 @@ func TestScanFolderHonorsAndClearsRemovalConfirmation(t *testing.T) {
 		t.Fatalf("unconfirmed vanished file: found=%v missing=%v, want kept as missing for the grace", found, missing)
 	}
 }
+
+// A single-file scan that finds a confirmed file unchanged on disk clears the
+// confirmation, even though the unchanged file takes no upsert.
+func TestScanFileClearsRemovalConfirmation(t *testing.T) {
+	pool := newDeadRootTestPool(t)
+	ctx := t.Context()
+	folderID := seedDeadRootTestFolder(t, pool, "movies", "Removal confirmed single file")
+	root := t.TempDir()
+	path := filepath.Join(root, "Alpha (2020)", "Alpha (2020).mkv")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("fake movie payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Beta (2021).mkv"), []byte("fake movie payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := NewFileRepository(pool)
+	s := NewScanner(repo, "", nil, 1, true, 24*time.Hour)
+	folder := &models.MediaFolder{ID: folderID, Paths: []string{root}, Type: "movies", Name: "Removal confirmed single file", Enabled: true}
+	if _, err := s.ScanFolder(ctx, folder); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if _, err := repo.ConfirmFilesRemoved(ctx, []string{path}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ScanFile(ctx, path, folder); err != nil {
+		t.Fatalf("ScanFile: %v", err)
+	}
+	var confirmed bool
+	if err := pool.QueryRow(ctx,
+		`SELECT removal_confirmed_at IS NOT NULL FROM media_files WHERE file_path = $1`, path).Scan(&confirmed); err != nil {
+		t.Fatal(err)
+	}
+	if confirmed {
+		t.Fatal("single-file scan of an unchanged file left its removal confirmation")
+	}
+}
