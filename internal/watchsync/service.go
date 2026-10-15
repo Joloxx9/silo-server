@@ -2089,22 +2089,31 @@ func parseInt(value string) int {
 	return parsed
 }
 
-const scrobbleActionStop = "stop"
+const (
+	scrobbleActionStart = "start"
+	scrobbleActionPause = "pause"
+	scrobbleActionStop  = "stop"
+)
 
 // stopsEndedSessions reports whether provider must receive a stop, not a
 // pause, when a playback session ends without a user stop. Such a provider
-// may mirror live sessions and learn one is over only from a stop.
+// may mirror live sessions and learn one is over only from a stop. The
+// first-party plugins that replaced the Simkl and MDBList built-ins
+// keep the pause, which saves progress and ends their "watching" state.
 func stopsEndedSessions(provider Provider) bool {
+	if _, firstParty := FirstPartyPluginID(provider.Key()); firstParty {
+		return false
+	}
 	_, ok := provider.(interface{ stopsEndedSessions() })
 	return ok
 }
 
 func (s *Service) ScrobbleStart(ctx context.Context, event ScrobbleEvent) error {
-	return s.scrobble(ctx, event, "start", false)
+	return s.scrobble(ctx, event, scrobbleActionStart, false)
 }
 
 func (s *Service) ScrobblePause(ctx context.Context, event ScrobbleEvent) error {
-	return s.scrobble(ctx, event, "pause", false)
+	return s.scrobble(ctx, event, scrobbleActionPause, false)
 }
 
 func (s *Service) ScrobbleStop(ctx context.Context, event ScrobbleEvent) error {
@@ -2169,10 +2178,10 @@ func (s *Service) scrobble(ctx context.Context, event ScrobbleEvent, action stri
 			continue
 		}
 		connAction := action
-		if connAction == "pause" && event.SessionEnded && stopsEndedSessions(provider) {
+		if connAction == scrobbleActionPause && event.SessionEnded && stopsEndedSessions(provider) {
 			connAction = scrobbleActionStop
 		}
-		if connAction == "start" {
+		if connAction == scrobbleActionStart {
 			if err := s.repo.UpsertScrobbleSession(ctx, event, conn.ID, connAction); err != nil {
 				return err
 			}
@@ -2352,7 +2361,7 @@ func (s *Service) enqueueOrderedScrobble(key string, dispatch func()) {
 func (s *Service) dispatchScrobble(ctx context.Context, scrobbler Scrobbler, cfg ServerConfig, conn Connection, event ScrobbleEvent, action string, confirmedClaim *time.Time) error {
 	var err error
 	switch action {
-	case "pause":
+	case scrobbleActionPause:
 		err = scrobbler.Pause(ctx, cfg, conn, event)
 	case scrobbleActionStop:
 		err = scrobbler.Stop(ctx, cfg, conn, event)
