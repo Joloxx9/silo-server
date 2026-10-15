@@ -1995,6 +1995,14 @@ func (s *Scanner) markMissingExcludingProtected(
 	now := time.Now().UTC()
 	for _, existing := range existingFiles {
 		if seenPaths[existing.FilePath] {
+			if existing.RemovalConfirmedAt != nil {
+				if err := s.fileRepo.ClearRemovalConfirmed(ctx, existing.ID); err != nil {
+					slog.WarnContext(ctx, "scanner: failed to clear removal confirmation", "component", "scanner",
+						"path", existing.FilePath,
+						"error", err,
+					)
+				}
+			}
 			continue
 		}
 		if pathWithinAnyRoot(existing.FilePath, protectedRoots) {
