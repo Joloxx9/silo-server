@@ -527,6 +527,10 @@ func (p *PluginProvider) ExportHistory(ctx context.Context, _ ServerConfig, conn
 	return result, rateLimited
 }
 
+// stopsEndedSessions marks every plugin: a plugin may mirror live sessions,
+// and the plugin contract has no other signal that one ended.
+func (p *PluginProvider) stopsEndedSessions() {}
+
 func (p *PluginProvider) Start(ctx context.Context, _ ServerConfig, conn Connection, event ScrobbleEvent) error {
 	return p.applyScrobble(ctx, conn, event, pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_SCROBBLE_START)
 }
