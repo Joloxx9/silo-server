@@ -19,6 +19,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/models"
 	"github.com/Silo-Server/silo-server/internal/userstore"
 	"github.com/Silo-Server/silo-server/internal/watchlist"
+	"github.com/Silo-Server/silo-server/internal/watchstate"
 	"github.com/Silo-Server/silo-server/internal/watchsync"
 )
 
@@ -34,17 +35,16 @@ type LocalListEventDispatcher interface {
 
 // PersonalDataHandler handles favorites, watchlist, and history endpoints.
 type PersonalDataHandler struct {
-	storeProvider           userstore.UserStoreProvider
-	itemRepo                personalDataItemRepository
-	episodeRepo             *catalog.EpisodeRepository
-	seasonRepo              *catalog.SeasonRepository
-	detailSvc               *catalog.DetailService
-	EventsHub               *evt.Hub
-	localListDispatcher     LocalListEventDispatcher
-	profileStaler           ProfileStaler
-	profileRefreshRequester ProfileRefreshRequester
-	ebookProgressStore      EbookReaderProgressLister
-	watchlistTitles         *watchlist.Titles
+	storeProvider       userstore.UserStoreProvider
+	itemRepo            personalDataItemRepository
+	episodeRepo         *catalog.EpisodeRepository
+	seasonRepo          *catalog.SeasonRepository
+	detailSvc           *catalog.DetailService
+	EventsHub           *evt.Hub
+	localListDispatcher LocalListEventDispatcher
+	signalsNotifier     SignalsChangedNotifier
+	ebookProgressStore  EbookReaderProgressLister
+	watchlistTitles     *watchlist.Titles
 }
 
 // NewPersonalDataHandler creates a new PersonalDataHandler.
@@ -64,14 +64,10 @@ func (h *PersonalDataHandler) SetEbookReaderProgressStore(store EbookReaderProgr
 	h.ebookProgressStore = store
 }
 
-// SetProfileStaler configures an optional staleness trigger for taste profiles.
-func (h *PersonalDataHandler) SetProfileStaler(ps ProfileStaler) {
-	h.profileStaler = ps
-}
-
-// SetProfileRefreshRequester configures an optional background refresh queue for taste profiles.
-func (h *PersonalDataHandler) SetProfileRefreshRequester(requester ProfileRefreshRequester) {
-	h.profileRefreshRequester = requester
+// SetSignalsChangedNotifier configures where changes to a profile's
+// recommendation signals are reported. Without it they are not reported.
+func (h *PersonalDataHandler) SetSignalsChangedNotifier(notifier SignalsChangedNotifier) {
+	h.signalsNotifier = notifier
 }
 
 func (h *PersonalDataHandler) SetEpisodeRepo(repo *catalog.EpisodeRepository) {
@@ -339,7 +335,7 @@ func (h *PersonalDataHandler) notifyListChange(ctx context.Context, list watchsy
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), listChangeNoticeTimeout)
 	defer cancel()
 	h.dispatchLocalListEvent(ctx, list, change, viewer.UserID, viewer.ProfileID, itemID)
-	triggerProfileRefresh(ctx, h.profileStaler, h.profileRefreshRequester, viewer.UserID, viewer.ProfileID)
+	notifySignalsChanged(ctx, h.signalsNotifier, viewer.UserID, viewer.ProfileID)
 	member := change == watchsync.ListChangeAdded
 	state, stateChange := userStateEventState{IsFavorite: &member}, "favorite"
 	if list == watchsync.ListKindWatchlist {
@@ -770,7 +766,7 @@ func (h *PersonalDataHandler) RemoveHistory(ctx context.Context, userID int, pro
 		addMediaItems(resolvedIDs)
 		filelessIDs = append(filelessIDs, fileless...)
 	}
-	watchedFileless, err := watchedHistoryItemIDs(ctx, store, profileID, filelessIDs)
+	watchedFileless, err := watchstate.WatchedItemIDs(ctx, store, profileID, filelessIDs)
 	if err != nil {
 		return apiError(http.StatusInternalServerError, "internal_error", "Failed to remove history")
 	}
@@ -780,7 +776,7 @@ func (h *PersonalDataHandler) RemoveHistory(ctx context.Context, userID int, pro
 		return apiError(http.StatusInternalServerError, "internal_error", "Failed to remove history")
 	}
 
-	triggerProfileRefresh(ctx, h.profileStaler, h.profileRefreshRequester, userID, profileID)
+	notifySignalsChanged(ctx, h.signalsNotifier, userID, profileID)
 	for _, mediaItemID := range mediaItemIDs {
 		publishUserStateEvent(
 			ctx,
@@ -1076,53 +1072,6 @@ func (h *PersonalDataHandler) seasonEpisodeIDs(ctx context.Context, seasonID str
 		return nil, nil, catalog.ErrItemNotFound
 	}
 	return h.episodeRepo.PartitionIDsBySeason(ctx, seasonID)
-}
-
-// watchedHistoryItemIDBatch bounds each filter read below SQLite's default
-// limit of 32,766 bound variables.
-const watchedHistoryItemIDBatch = 1000
-
-// watchedHistoryItemIDs keeps the IDs the profile has visible history or
-// resume progress for, once each, in input order.
-func watchedHistoryItemIDs(ctx context.Context, store userstore.UserStore, profileID string, ids []string) ([]string, error) {
-	ids = compactHistoryItemIDs(ids)
-	var watched []string
-	for start := 0; start < len(ids); start += watchedHistoryItemIDBatch {
-		batch := ids[start:min(start+watchedHistoryItemIDBatch, len(ids))]
-		groups := make(map[string][]string, len(batch))
-		for _, id := range batch {
-			groups[id] = []string{id}
-		}
-		withHistory, err := store.LatestHistoryIDs(ctx, profileID, groups)
-		if err != nil {
-			return nil, err
-		}
-		withProgress, err := store.ListProgressByMediaItems(ctx, profileID, batch)
-		if err != nil {
-			return nil, err
-		}
-		for _, id := range batch {
-			_, history := withHistory[id]
-			_, progress := withProgress[id]
-			if history || progress {
-				watched = append(watched, id)
-			}
-		}
-	}
-	return watched, nil
-}
-
-func compactHistoryItemIDs(ids []string) []string {
-	seen := make(map[string]struct{}, len(ids))
-	unique := make([]string, 0, len(ids))
-	for _, id := range ids {
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		unique = append(unique, id)
-	}
-	return unique
 }
 
 func (h *PersonalDataHandler) userStoreFor(ctx context.Context, userID int, profileID string) (userstore.UserStore, string, bool) {

@@ -197,7 +197,7 @@ func TestBuildSheetsArgs(t *testing.T) {
 	req.Threads = 2
 	output := []string{"-map", "0:V:0", "-an", "-sn", "-dn", "-vf", "GRAPH", "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-f", "rawvideo", "pipe:1"}
 
-	args, list, err := buildSheetsArgs(req, Attempt{Hardware: true}, hardwareDecode{Accel: "vaapi", Device: "/dev/dri/renderD128"}, 11.4, "GRAPH", "", sampledSheetsList)
+	args, list, err := buildSheetsArgs(req, Attempt{Hardware: true}, hardwareDecode{Accel: "vaapi", Device: "/dev/dri/renderD128"}, sampleEntries(req.Samples.Seconds, 11.4), "GRAPH", "", sampledSheetsList)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestBuildSheetsArgs(t *testing.T) {
 	window := req
 	window.Samples = nil
 	window.Window = &Window{StartSeconds: 0, DurationSeconds: 15.04, KeyframesOnly: true}
-	args, list, err = buildSheetsArgs(window, Attempt{}, hardwareDecode{}, 0, "GRAPH", "packets.framecrc", sampledSheetsList)
+	args, list, err = buildSheetsArgs(window, Attempt{}, hardwareDecode{}, nil, "GRAPH", "packets.framecrc", sampledSheetsList)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,8 @@ type fakeSheets struct {
 	calls       [][]string
 	packetEnd   float64
 	// keyPackets are keyframe packet times the timing log reports before
-	// its last packet, whether or not frames decoded them.
+	// its last packet, whether or not frames decoded them. NaN is a
+	// keyframe packet without a time.
 	keyPackets []float64
 	// listStart is the start time a list run's input header reports, and
 	// lists the ffconcat lists the runs read.
@@ -300,6 +301,10 @@ func (f *fakeSheets) exec(_ context.Context, _ string, args []string, stdin io.R
 			end := int64(math.Round(f.packetEnd * 1000))
 			timing = "#tb 0: 1/1000\n"
 			for _, key := range f.keyPackets {
+				if math.IsNaN(key) {
+					timing += fmt.Sprintf("0, %d, %d, 1, 1, 0x00000000\n", int64(math.MinInt64), int64(math.MinInt64))
+					continue
+				}
 				at := int64(math.Round(key * 1000))
 				timing += fmt.Sprintf("0, %d, %d, 1, 1, 0x00000000\n0, %d, %d, 1, 1, 0x00000000, F=0x0\n", at, at, at+1, at+1)
 			}
@@ -488,6 +493,7 @@ func TestRunSheetsRereadsSparseListAsWindow(t *testing.T) {
 		"window drops a few":    {editLog: logDuplicates, window: keyframes[:3], windowEditLog: logDuplicates, windowKeys: keys, runs: []string{"window"}, filled: 1},
 		"window drops too many": {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: keys, reference: keyframes, runs: []string{"window", "reference"}},
 		"h264 illegal state":    {editLog: logIllegal, window: keyframes[:1], windowEditLog: logIllegal, windowKeys: keys, reference: keyframes, runs: []string{"reference"}},
+		"untimed key dropped":   {editLog: logDuplicates, window: keyframes[:3], windowEditLog: logDuplicates, windowKeys: []float64{4, 14, 24, math.NaN()}, reference: keyframes, runs: []string{"window", "reference"}},
 		"reference fails too":   {editLog: logDuplicates, window: keyframes[:1], windowEditLog: logDuplicates, windowKeys: keys, reference: keyframes[:1], refEditLog: logDuplicates, runs: []string{"window", "reference"}, want: ReasonEmpty},
 	}
 	for name, tt := range tests {
@@ -592,20 +598,23 @@ func TestSheetPacketTimingKeepsPresentationExtent(t *testing.T) {
 		end     float64
 		hasTime bool
 		wantErr bool
+		// dts is the assembler's dtsTiming.
+		dts bool
 	}{
-		{"reordered PTS", []string{"#tb 0: 1/90000", "0, 0, 180000, 45000, 1, 0x0", "0, 45000, 45000, 45000, 1, 0x0"}, 14.5, true, false},
-		{"missing numeric PTS uses DTS", []string{"#tb 0: 1/1000", "0, 0, -9223372036854775808, 1000, 1, 0x0"}, 13, true, false},
-		{"missing text PTS uses DTS", []string{"#tb 0: 1/1000", "0, 0, NOPTS, 1000, 1, 0x0"}, 13, true, false},
-		{"packed XviD without PTS", []string{"#tb 0: 1/25", "0, 0, -9223372036854775808, 1, 23436, 0x0", "0, 1, -9223372036854775808, 1, 11203, 0x0", "0, 2, -9223372036854775808, 1, 6, 0x0"}, 12.12, true, false},
-		{"DTS does not stretch PTS extent", []string{"#tb 0: 1/90000", "0, 0, 180000, 45000, 1, 0x0", "0, 45000, NOPTS, 45000, 1, 0x0"}, 14.5, true, false},
-		{"missing PTS and DTS", []string{"#tb 0: 1/1000", "0, -9223372036854775808, -9223372036854775808, 1000, 1, 0x0"}, 0, false, false},
-		{"negative duration", []string{"#tb 0: 1/1000", "0, 0, 1000, -1, 1, 0x0"}, 0, false, false},
-		{"invalid time base", []string{"#tb 0: 1/0"}, 0, false, true},
-		{"packet before time base", []string{"0, 0, 1000, 1000, 1, 0x0"}, 0, false, true},
+		{"reordered PTS", []string{"#tb 0: 1/90000", "0, 0, 180000, 45000, 1, 0x0", "0, 45000, 45000, 45000, 1, 0x0"}, 14.5, true, false, false},
+		{"missing numeric PTS uses DTS", []string{"#tb 0: 1/1000", "0, 0, -9223372036854775808, 1000, 1, 0x0"}, 13, true, false, true},
+		{"missing text PTS uses DTS", []string{"#tb 0: 1/1000", "0, 0, NOPTS, 1000, 1, 0x0"}, 13, true, false, true},
+		{"packed XviD without PTS", []string{"#tb 0: 1/25", "0, 0, -9223372036854775808, 1, 23436, 0x0", "0, 1, -9223372036854775808, 1, 11203, 0x0", "0, 2, -9223372036854775808, 1, 6, 0x0"}, 12.12, true, false, true},
+		{"DTS does not stretch PTS extent", []string{"#tb 0: 1/90000", "0, 0, 180000, 45000, 1, 0x0", "0, 45000, NOPTS, 45000, 1, 0x0"}, 14.5, true, false, true},
+		{"missing PTS without low delay", []string{"#tb 0: 1/1000", "0, 0, -9223372036854775808, 1000, 1, 0x0", "0, 1000, NOPTS, 1000, 1, 0x0"}, 0, false, false, false},
+		{"missing PTS and DTS", []string{"#tb 0: 1/1000", "0, -9223372036854775808, -9223372036854775808, 1000, 1, 0x0"}, 0, false, false, true},
+		{"negative duration", []string{"#tb 0: 1/1000", "0, 0, 1000, -1, 1, 0x0"}, 0, false, false, false},
+		{"invalid time base", []string{"#tb 0: 1/0"}, 0, false, true, false},
+		{"packet before time base", []string{"0, 0, 1000, 1000, 1, 0x0"}, 0, false, true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := &sheetAssembler{offset: 12}
+			a := &sheetAssembler{offset: 12, dtsTiming: tt.dts}
 			for _, line := range tt.lines {
 				a.packetLine(line)
 			}

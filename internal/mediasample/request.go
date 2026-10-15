@@ -86,12 +86,6 @@ type Samples struct {
 	// once, front to back, which can cost less than a seek per sample when
 	// samples lie closer together than the keyframes do.
 	ReadThrough bool `json:"read_through,omitempty"`
-	// inpoints are the list entries' container start times, one per second,
-	// set by the keyframe lookup; nil starts each entry at its sample time.
-	// keyframes are each sample's keyframe, the last at or before it, as a
-	// container time, or NaN where the lookup found none; nil without one.
-	inpoints  []float64
-	keyframes []float64
 }
 
 // At decodes the first video frame at or after a media time, decoding from
@@ -424,14 +418,16 @@ func (r Request) keyframeInputArgs(skip string) []string {
 }
 
 // keyframeSkipFor returns the -skip_frame value that keeps codec's
-// keyframes, or "" for keyframeSkipFrame. Interlaced MPEG-1/2 often codes a
+// keyframes, or "" for keyframeSkipFrame. Interlaced MPEG-2 often codes a
 // keyframe as an I field paired with a P field, which the decoder reports
 // as a P frame and "nokey" discards (one of 80 samples of a DVD-sourced
-// episode decoded); "nointra" keeps every picture with an intra field.
+// episode decoded). The MPEG-1/2 decoder honors only "noref" and "nokey"
+// ("nointra" acts as "noref"), so keeping the keyframe's P field means
+// decoding every P picture: about two and a half times the work of "nokey".
+// MPEG-1 has no field pictures, and "nokey" keeps its keyframes.
 func keyframeSkipFor(codec string) string {
-	switch codec {
-	case "mpeg2video", "mpeg1video":
-		return "nointra"
+	if codec == "mpeg2video" {
+		return exactSkipFrame
 	}
 	return ""
 }

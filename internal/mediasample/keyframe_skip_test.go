@@ -8,7 +8,8 @@ import (
 
 func TestKeyframeSkipFollowsProbedCodec(t *testing.T) {
 	for line, want := range map[string]string{
-		"  Stream #0:0: Video: mpeg2video (Main), yuv420p(tv, top first), 720x576 [SAR 64:45 DAR 16:9], 25 fps": "nointra",
+		"  Stream #0:0: Video: mpeg2video (Main), yuv420p(tv, top first), 720x576 [SAR 64:45 DAR 16:9], 25 fps": exactSkipFrame,
+		"  Stream #0:0: Video: mpeg1video, yuv420p(tv), 352x240 [SAR 1:1 DAR 22:15], 29.97 fps":                 "",
 		"  Stream #0:0: Video: h264, yuv420p, 1920x1080 [SAR 1:1 DAR 16:9]":                                     "",
 		"  Stream #0:0(eng): Video: hevc (Main 10), yuv420p10le(tv, bt2020nc/bt2020/smpte2084), 3840x2160":      "",
 	} {
@@ -24,15 +25,15 @@ func TestKeyframeSkipFollowsProbedCodec(t *testing.T) {
 	}
 
 	req := sheetsRequest(secondsFrom(5, 10, 4), 2, 2)
-	req.skipFrame, req.lowDelay = "nointra", true
-	list, _, err := buildSheetsArgs(req, Attempt{}, hardwareDecode{}, 0, "GRAPH", "", sampledSheetsList)
+	req.skipFrame, req.lowDelay = exactSkipFrame, true
+	list, _, err := buildSheetsArgs(req, Attempt{}, hardwareDecode{}, sampleEntries(req.Samples.Seconds, 0), "GRAPH", "", sampledSheetsList)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.Join(list, " "), "-skip_frame:v nointra -flags:v +low_delay -protocol_whitelist") {
-		t.Fatalf("list args %q: want nointra and low delay before the input", list)
+	if !strings.Contains(strings.Join(list, " "), "-skip_frame:v noref -flags:v +low_delay -protocol_whitelist") {
+		t.Fatalf("list args %q: want noref and low delay before the input", list)
 	}
-	exact, _, err := buildSheetsArgs(req, Attempt{}, hardwareDecode{}, 0, "GRAPH", "", sheetsList{span: 0.5, skip: exactSkipFrame})
+	exact, _, err := buildSheetsArgs(req, Attempt{}, hardwareDecode{}, sampleEntries(req.Samples.Seconds, 0), "GRAPH", "", sheetsList{span: 0.5, skip: exactSkipFrame})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,11 +43,11 @@ func TestKeyframeSkipFollowsProbedCodec(t *testing.T) {
 	window := req
 	window.Samples = nil
 	window.Window = &Window{StartSeconds: 0, DurationSeconds: 40}
-	windowArgs, _, err := buildSheetsArgs(window, Attempt{}, hardwareDecode{}, 0, "GRAPH", "packets.framecrc", sampledSheetsList)
+	windowArgs, _, err := buildSheetsArgs(window, Attempt{}, hardwareDecode{}, nil, "GRAPH", "packets.framecrc", sampledSheetsList)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if i := slices.Index(windowArgs, skipFrameOption); i < 0 || windowArgs[i+1] != "nointra" || !slices.Contains(windowArgs, "+low_delay") {
-		t.Fatalf("window args %q: want nointra and low delay", windowArgs)
+	if i := slices.Index(windowArgs, skipFrameOption); i < 0 || windowArgs[i+1] != exactSkipFrame || !slices.Contains(windowArgs, "+low_delay") {
+		t.Fatalf("window args %q: want noref and low delay", windowArgs)
 	}
 }

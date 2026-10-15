@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/Silo-Server/silo-server/internal/mediaprobe"
 	"github.com/Silo-Server/silo-server/internal/mediasample"
 	"github.com/Silo-Server/silo-server/internal/playback"
 	"github.com/Silo-Server/silo-server/internal/processmetrics"
@@ -69,11 +68,10 @@ func (e *LocalExtractor) Extract(ctx context.Context, _ *Job, req mediasample.Re
 	hardware := mediasample.SupportsHardwareSheets(resolved)
 	req.Attempts = AttemptPlan(hardware, len(req.Samples.Seconds))
 	runner := mediasample.Runner{
-		FFmpegPath:  ffmpeg,
-		FFprobePath: mediaprobe.FFprobePathFromFFmpeg(ffmpeg),
-		Workload:    processmetrics.Trickplay,
-		Exec:        e.exec,
-		Fallback:    e.fallback(ctx, resolved),
+		FFmpegPath: ffmpeg,
+		Workload:   processmetrics.Trickplay,
+		Exec:       e.exec,
+		Fallback:   e.fallback(ctx, resolved),
 	}
 	if hardware {
 		runner.HWAccel, runner.HWDevice = resolved, device
