@@ -74,7 +74,18 @@ func TestConfirmFilesRemovedSkipsGracePostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := repo.ClearRemovalConfirmed(ctx, returned.ID); err != nil {
+	// A confirmation newer than the scan's observation survives the clear.
+	if err := repo.ClearRemovalConfirmed(ctx, returned.ID, now.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	var stillConfirmed bool
+	if err := pool.QueryRow(ctx, `SELECT removal_confirmed_at IS NOT NULL FROM media_files WHERE id = $1`, returned.ID).Scan(&stillConfirmed); err != nil {
+		t.Fatal(err)
+	}
+	if !stillConfirmed {
+		t.Fatal("clear dropped a confirmation written after the scan looked")
+	}
+	if err := repo.ClearRemovalConfirmed(ctx, returned.ID, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	if deleted := sweep(); deleted != 1 || exists(replaced.ID) {

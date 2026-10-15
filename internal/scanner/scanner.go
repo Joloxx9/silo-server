@@ -1995,8 +1995,9 @@ func (s *Scanner) markMissingExcludingProtected(
 	now := time.Now().UTC()
 	for _, existing := range existingFiles {
 		if seenPaths[existing.FilePath] {
+			// Clear only the confirmation this scan loaded before its walk.
 			if existing.RemovalConfirmedAt != nil {
-				if err := s.fileRepo.ClearRemovalConfirmed(ctx, existing.ID); err != nil {
+				if err := s.fileRepo.ClearRemovalConfirmed(ctx, existing.ID, *existing.RemovalConfirmedAt); err != nil {
 					slog.WarnContext(ctx, "scanner: failed to clear removal confirmation", "component", "scanner",
 						"path", existing.FilePath,
 						"error", err,
@@ -2720,6 +2721,9 @@ func (s *Scanner) ScanFile(ctx context.Context, filePath string, folder *models.
 		}
 		return fmt.Errorf("unrecognized video extension: %s", strings.ToLower(filepath.Ext(cleanFile)))
 	}
+	// Before the presence check: a confirmation written after it is newer
+	// than what this scan saw and must survive.
+	presenceCheckedAt := time.Now().UTC()
 	if handled, err := s.reconcileVanishedFileIfNeeded(ctx, folder, cleanFile); handled {
 		if err != nil {
 			return err
@@ -2734,7 +2738,7 @@ func (s *Scanner) ScanFile(ctx context.Context, filePath string, folder *models.
 		existingByPath[filePath] = scanStateFromMediaFile(existing)
 		// The file is on disk, so an earlier removal confirmation is stale.
 		// An unchanged file takes no upsert, which would otherwise clear it.
-		if err := s.fileRepo.ClearRemovalConfirmed(ctx, existing.ID); err != nil {
+		if err := s.fileRepo.ClearRemovalConfirmed(ctx, existing.ID, presenceCheckedAt); err != nil {
 			return err
 		}
 	}
