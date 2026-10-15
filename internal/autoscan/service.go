@@ -107,7 +107,7 @@ type Service struct {
 	// removals records files arr deleted itself; nil leaves them to the
 	// scanner's removal grace like any other missing file.
 	removals RemovalConfirmer
-	// statPath stats a reported path; tests substitute a fake filesystem.
+	// statPath lstats a reported path; tests substitute a fake filesystem.
 	statPath func(path string) (os.FileInfo, error)
 }
 
@@ -155,7 +155,7 @@ func NewService(
 		suppress: suppress,
 		lister:   lister,
 		observe:  observePathState,
-		statPath: os.Stat,
+		statPath: os.Lstat,
 	}
 }
 
@@ -816,14 +816,16 @@ func rewriteChanges(changes []Change, rewrites []PathRewrite) []Change {
 }
 
 // confirmRemovals records the files arr reported deleting that are verifiably
-// gone: the file is absent while its directory is still readable. A missing
-// directory may be a lost mount, so those paths keep the removal grace. A
-// failure only costs the shortcut; the scan still marks the files missing.
+// gone: nothing, not even a dangling symlink, is at the path while its
+// directory still exists. A missing directory may be a lost mount, so those
+// paths keep the removal grace. A failure only costs the shortcut; the scan
+// still marks the files missing.
 func (s *Service) confirmRemovals(ctx context.Context, src Source, changes []Change) {
 	if s.removals == nil {
 		return
 	}
 	var paths []string
+	dirExists := make(map[string]bool)
 	for _, change := range changes {
 		if !change.Removed || change.SourcePath == "" {
 			continue
@@ -832,7 +834,14 @@ func (s *Service) confirmRemovals(ctx context.Context, src Source, changes []Cha
 		if _, err := s.statPath(path); !errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
-		if info, err := s.statPath(filepath.Dir(path)); err != nil || !info.IsDir() {
+		dir := filepath.Dir(path)
+		exists, checked := dirExists[dir]
+		if !checked {
+			info, err := s.statPath(dir)
+			exists = err == nil && info.IsDir()
+			dirExists[dir] = exists
+		}
+		if !exists {
 			continue
 		}
 		paths = append(paths, path)

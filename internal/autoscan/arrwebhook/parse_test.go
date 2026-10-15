@@ -191,6 +191,12 @@ func TestParseFileDeleteReasons(t *testing.T) {
 			}
 		}
 	}
+	// A reason that is not a string loses only the removed mark; the path is
+	// still scanned.
+	parsed, err := Parse(ProviderAuto, []byte(`{"eventType":"EpisodeFileDelete","series":{"path":"/tv/x"},"episodeFile":{"path":"/tv/x/a.mkv"},"deleteReason":2}`))
+	if err != nil || len(parsed.Changes) != 1 || parsed.Changes[0].Removed {
+		t.Fatalf("numeric reason: parsed = %+v, err = %v; want one change not marked removed", parsed, err)
+	}
 }
 
 func TestParseRadarrRename(t *testing.T) {

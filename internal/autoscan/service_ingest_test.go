@@ -232,9 +232,9 @@ func (r *recordingRemovals) ConfirmFilesRemoved(_ context.Context, paths []strin
 	return len(paths), r.err
 }
 
-// Only files arr reported deleting that are gone from a still-readable
-// directory are confirmed. A file still on disk, or one whose directory is
-// gone too (possibly a lost mount), keeps the removal grace.
+// Only files arr reported deleting that are gone from a directory that still
+// exists are confirmed. A file or symlink still at the path, or a path whose
+// directory is gone too (possibly a lost mount), keeps the removal grace.
 func TestIngestChangesConfirmsArrRemovedFiles(t *testing.T) {
 	dir := t.TempDir()
 	present := filepath.Join(dir, "present.mkv")
@@ -243,6 +243,11 @@ func TestIngestChangesConfirmsArrRemovedFiles(t *testing.T) {
 	}
 	gone := filepath.Join(dir, "gone.mkv")
 	goneDir := filepath.Join(dir, "missing-season", "gone.mkv")
+	// A dangling symlink is still something at the path.
+	dangling := filepath.Join(dir, "dangling.mkv")
+	if err := os.Symlink(filepath.Join(dir, "target-removed.mkv"), dangling); err != nil {
+		t.Fatal(err)
+	}
 
 	removals := &recordingRemovals{}
 	svc := newService(webhookTestStore(), &fakeProvider{}, &recordingQueuer{}, allowSuppressor{})
@@ -256,6 +261,7 @@ func TestIngestChangesConfirmsArrRemovedFiles(t *testing.T) {
 			{SourcePath: gone, Scope: ChangeScopeFile, Removed: true},
 			{SourcePath: present, Scope: ChangeScopeFile, Removed: true},
 			{SourcePath: goneDir, Scope: ChangeScopeFile, Removed: true},
+			{SourcePath: dangling, Scope: ChangeScopeFile, Removed: true},
 			{SourcePath: filepath.Join(dir, "unreported.mkv"), Scope: ChangeScopeFile},
 		},
 	}); err != nil {

@@ -3088,18 +3088,18 @@ func (r *FileRepository) DeleteMissingByFolder(ctx context.Context, folderID int
 	return int(tag.RowsAffected()), nil
 }
 
-// ConfirmFilesRemoved records that the files at paths were deleted by the
-// arr that manages them and are gone from disk. It marks them missing and
-// confirmed, so the next trash sweep deletes them without waiting out the
-// removal grace. Seeing a file again clears both (see the upsert).
+// ConfirmFilesRemoved records that the arr managing the files at paths
+// deleted them. It does not mark them missing: the scan that next finds them
+// gone does, reconciles their memberships, and its trash sweep then deletes
+// them without waiting out the removal grace. A scan that still finds a file
+// clears the confirmation (ClearRemovalConfirmed, and the upsert).
 func (r *FileRepository) ConfirmFilesRemoved(ctx context.Context, paths []string) (int, error) {
 	if len(paths) == 0 {
 		return 0, nil
 	}
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE media_files
-		SET missing_since = COALESCE(missing_since, NOW()),
-		    removal_confirmed_at = NOW(),
+		SET removal_confirmed_at = NOW(),
 		    updated_at = NOW()
 		WHERE file_path = ANY($1)
 	`, paths)
@@ -3107,6 +3107,17 @@ func (r *FileRepository) ConfirmFilesRemoved(ctx context.Context, paths []string
 		return 0, fmt.Errorf("confirming removed files: %w", err)
 	}
 	return int(tag.RowsAffected()), nil
+}
+
+// ClearRemovalConfirmed drops a removal confirmation for a file a scan found
+// on disk, so a later outage cannot reuse it to skip the grace.
+func (r *FileRepository) ClearRemovalConfirmed(ctx context.Context, id int) error {
+	if _, err := r.pool.Exec(ctx,
+		"UPDATE media_files SET removal_confirmed_at = NULL WHERE id = $1 AND removal_confirmed_at IS NOT NULL", id,
+	); err != nil {
+		return fmt.Errorf("clearing removal confirmation: %w", err)
+	}
+	return nil
 }
 
 // ListRootsWithCatalogedFiles returns the subset of roots (in input order)

@@ -71,8 +71,9 @@ type payload struct {
 	DeletedFiles    []fileRef       `json:"-"`
 	DeletedFilesRaw json.RawMessage `json:"deletedFiles"`
 
-	// DeleteReason says why a file-delete event's file was removed.
-	DeleteReason string `json:"deleteReason"`
+	// DeleteReason says why a file-delete event's file was removed. Raw so an
+	// unexpected non-string value only loses the reason, not the delivery.
+	DeleteReason json.RawMessage `json:"deleteReason"`
 }
 
 // folderDeleteEventTypes send deletedFiles as a bool (whether arr deleted the
@@ -126,6 +127,16 @@ var arrDeleteReasons = map[string]bool{
 	"manualoverride": true,
 }
 
+// arrDeletedFile reports whether a file-delete reason says arr removed the
+// file itself.
+func arrDeletedFile(raw json.RawMessage) bool {
+	var reason string
+	if err := json.Unmarshal(raw, &reason); err != nil {
+		return false
+	}
+	return arrDeleteReasons[strings.ToLower(strings.TrimSpace(reason))]
+}
+
 // Parse classifies a webhook body. provider is "sonarr", "radarr", or "auto"
 // (empty means auto); in auto mode the provider is inferred from the payload's
 // series/movie shape. Inference failure is an error only for non-test events
@@ -160,8 +171,7 @@ func Parse(provider string, body []byte) (ParsedWebhook, error) {
 	case eventType == "Rename":
 		out.Changes = filePaths(p, true, false)
 	case deleteEventTypes[eventType]:
-		removed := arrDeleteReasons[strings.ToLower(strings.TrimSpace(p.DeleteReason))]
-		out.Changes = filePaths(p, false, removed)
+		out.Changes = filePaths(p, false, arrDeletedFile(p.DeleteReason))
 	default:
 		// Unsupported event type: valid delivery, nothing to do.
 		return out, nil
