@@ -2732,6 +2732,11 @@ func (s *Scanner) ScanFile(ctx context.Context, filePath string, folder *models.
 	existing, err := s.fileRepo.GetByPath(ctx, filePath)
 	if err == nil {
 		existingByPath[filePath] = scanStateFromMediaFile(existing)
+		// The file is on disk, so an earlier removal confirmation is stale.
+		// An unchanged file takes no upsert, which would otherwise clear it.
+		if err := s.fileRepo.ClearRemovalConfirmed(ctx, existing.ID); err != nil {
+			return err
+		}
 	}
 
 	// A local extra (Trailers/ dir, -trailer suffix, ...) bypasses identity
