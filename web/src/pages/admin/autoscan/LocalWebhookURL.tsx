@@ -55,18 +55,19 @@ export function LocalWebhookURL({ url }: { url: string }) {
           aria-label="Local webhook delivery URL"
           onFocus={(e) => e.currentTarget.select()}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          onClick={copy}
-          disabled={!local}
-          aria-label="Copy local webhook URL"
-        >
-          {copied ? <Check className="text-success" /> : <Copy />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={copy}
+            disabled={!local}
+            aria-label="Copy local webhook URL"
+          >
+            {copied ? <Check className="text-success" /> : <Copy />}
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        </div>
       </div>
       <p className="text-muted-foreground text-xs">
         Use this one when Sonarr/Radarr run on the same network as Silo, so deliveries skip the

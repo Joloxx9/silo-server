@@ -111,7 +111,11 @@ export function WebhookEndpointSection({ source }: { source: AutoscanSource }) {
             Already set up in your download manager? Nothing to change — the URL stays the same
             unless you rotate it.
           </p>
-          {url && <LocalWebhookURL url={url} />}
+          {url && (
+            <div className="pt-2">
+              <LocalWebhookURL url={url} />
+            </div>
+          )}
         </>
       ) : (
         <div className="space-y-1.5">
