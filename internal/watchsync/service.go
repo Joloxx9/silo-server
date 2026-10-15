@@ -2091,6 +2091,14 @@ func parseInt(value string) int {
 
 const scrobbleActionStop = "stop"
 
+// stopsEndedSessions reports whether provider must receive a stop, not a
+// pause, when a playback session ends without a user stop. Such a provider
+// may mirror live sessions and learn one is over only from a stop.
+func stopsEndedSessions(provider Provider) bool {
+	_, ok := provider.(interface{ stopsEndedSessions() })
+	return ok
+}
+
 func (s *Service) ScrobbleStart(ctx context.Context, event ScrobbleEvent) error {
 	return s.scrobble(ctx, event, "start", false)
 }
@@ -2160,12 +2168,16 @@ func (s *Service) scrobble(ctx context.Context, event ScrobbleEvent, action stri
 			}
 			continue
 		}
-		if action == "start" {
-			if err := s.repo.UpsertScrobbleSession(ctx, event, conn.ID, action); err != nil {
+		connAction := action
+		if connAction == "pause" && event.SessionEnded && stopsEndedSessions(provider) {
+			connAction = scrobbleActionStop
+		}
+		if connAction == "start" {
+			if err := s.repo.UpsertScrobbleSession(ctx, event, conn.ID, connAction); err != nil {
 				return err
 			}
 		} else if !confirm {
-			if err := s.repo.UpdateScrobbleSession(ctx, event.PlaybackSessionID, conn.ID, action, event.PositionSeconds, event.HistoryID, "", nil); err != nil {
+			if err := s.repo.UpdateScrobbleSession(ctx, event.PlaybackSessionID, conn.ID, connAction, event.PositionSeconds, event.HistoryID, "", nil); err != nil {
 				return err
 			}
 		}
@@ -2173,7 +2185,7 @@ func (s *Service) scrobble(ctx context.Context, event ScrobbleEvent, action stri
 		// remains the low-latency path; the normal history-export reconciliation
 		// retries this desired state after crashes, plugin downtime, or uncertain
 		// upstream outcomes.
-		if action == scrobbleActionStop && event.Completed && provider.Capabilities().ExportWatched {
+		if connAction == scrobbleActionStop && event.Completed && provider.Capabilities().ExportWatched {
 			if err := s.persistCompletedScrobbleExport(ctx, conn, event); err != nil {
 				if confirm {
 					dispatchErrors = append(dispatchErrors, err)
@@ -2190,15 +2202,15 @@ func (s *Service) scrobble(ctx context.Context, event ScrobbleEvent, action stri
 		}
 		cfg, err := s.serverConfig(ctx, conn.Provider)
 		if err != nil {
-			_ = s.repo.UpdateScrobbleSession(ctx, event.PlaybackSessionID, conn.ID, action, event.PositionSeconds, event.HistoryID, err.Error(), nil)
+			_ = s.repo.UpdateScrobbleSession(ctx, event.PlaybackSessionID, conn.ID, connAction, event.PositionSeconds, event.HistoryID, err.Error(), nil)
 			continue
 		}
 		conn, err = s.refreshConnectionIfNeeded(ctx, provider, cfg, conn)
 		if err != nil {
-			_ = s.repo.UpdateScrobbleSession(ctx, event.PlaybackSessionID, conn.ID, action, event.PositionSeconds, event.HistoryID, err.Error(), nil)
+			_ = s.repo.UpdateScrobbleSession(ctx, event.PlaybackSessionID, conn.ID, connAction, event.PositionSeconds, event.HistoryID, err.Error(), nil)
 			continue
 		}
-		s.dispatchScrobbleAsync(scrobbler, cfg, conn, event, startTitles(), action)
+		s.dispatchScrobbleAsync(scrobbler, cfg, conn, event, startTitles(), connAction)
 	}
 	if len(confirmedTargets) > 0 {
 		confirmedTitles := startTitles()
