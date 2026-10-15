@@ -15,8 +15,17 @@ import { loadLocalWebhookBase, localWebhookURL, saveLocalWebhookBase } from "./w
  * The server only knows its public URL, and inside a container it cannot see
  * the host's LAN address, so the base is the operator's to set. It starts as
  * the admin UI's own origin and is remembered per browser.
+ *
+ * `onCopy` routes copying through the caller's own guard, so a view bound to a
+ * captured profile authority never copies the secret after that profile changed.
  */
-export function LocalWebhookURL({ url }: { url: string }) {
+export function LocalWebhookURL({
+  url,
+  onCopy,
+}: {
+  url: string;
+  onCopy?: (text: string) => Promise<void>;
+}) {
   const id = useId();
   const [base, setBase] = useState(loadLocalWebhookBase);
   const [copied, setCopied] = useState(false);
@@ -24,6 +33,7 @@ export function LocalWebhookURL({ url }: { url: string }) {
 
   async function copy() {
     if (!local) return;
+    if (onCopy) return onCopy(local);
     try {
       await copyTextToClipboard(local);
       setCopied(true);

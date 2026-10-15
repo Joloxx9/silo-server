@@ -113,7 +113,10 @@ export function WebhookEndpointSection({ source }: { source: AutoscanSource }) {
           </p>
           {url && (
             <div className="pt-2">
-              <LocalWebhookURL url={url} />
+              <LocalWebhookURL
+                url={url}
+                onCopy={(text) => endpoint.copy("select the URL manually", text)}
+              />
             </div>
           )}
         </>

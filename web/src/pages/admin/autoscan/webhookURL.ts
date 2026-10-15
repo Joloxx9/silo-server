@@ -63,6 +63,7 @@ export function loadLocalWebhookBase(): string {
   return window.location.origin;
 }
 
+/** Remember the local base for this browser; a storage failure keeps it for this visit only. */
 export function saveLocalWebhookBase(value: string): void {
   try {
     localStorage.setItem(LOCAL_BASE_KEY, value);
