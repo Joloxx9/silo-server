@@ -3097,12 +3097,13 @@ func (r *FileRepository) ConfirmFilesRemoved(ctx context.Context, paths []string
 	if len(paths) == 0 {
 		return 0, nil
 	}
+	// The application clock, like the scans' seenAt in ClearRemovalConfirmed.
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE media_files
-		SET removal_confirmed_at = NOW(),
+		SET removal_confirmed_at = $2,
 		    updated_at = NOW()
 		WHERE file_path = ANY($1)
-	`, paths)
+	`, paths, time.Now().UTC())
 	if err != nil {
 		return 0, fmt.Errorf("confirming removed files: %w", err)
 	}
@@ -3110,10 +3111,12 @@ func (r *FileRepository) ConfirmFilesRemoved(ctx context.Context, paths []string
 }
 
 // ClearRemovalConfirmed drops a removal confirmation for a file a scan found
-// on disk, so a later outage cannot reuse it to skip the grace.
-func (r *FileRepository) ClearRemovalConfirmed(ctx context.Context, id int) error {
+// on disk, so a later outage cannot reuse it to skip the grace. Only a
+// confirmation recorded at or before seenAt is dropped: one written after the
+// scan looked describes a deletion the scan did not see.
+func (r *FileRepository) ClearRemovalConfirmed(ctx context.Context, id int, seenAt time.Time) error {
 	if _, err := r.pool.Exec(ctx,
-		"UPDATE media_files SET removal_confirmed_at = NULL WHERE id = $1 AND removal_confirmed_at IS NOT NULL", id,
+		"UPDATE media_files SET removal_confirmed_at = NULL WHERE id = $1 AND removal_confirmed_at <= $2", id, seenAt,
 	); err != nil {
 		return fmt.Errorf("clearing removal confirmation: %w", err)
 	}
