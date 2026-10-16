@@ -2447,7 +2447,6 @@ func TestStopsEndedSessionsExemptsFirstPartyPlugins(t *testing.T) {
 		key  string
 		want bool
 	}{
-		{traktProviderKey, false},
 		{simklProviderKey, false},
 		{mdblistProviderKey, false},
 		{testPluginProviderKey, true},
