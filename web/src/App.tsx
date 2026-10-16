@@ -28,6 +28,7 @@ import { queryClient } from "@/lib/query-client";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { CHANGE_PASSWORD_PATH } from "@/hooks/usePostSignInNavigation";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import { useCloseAdminNavTopicsOutsideAdmin } from "@/hooks/useAdminNavTopics";
 import { useIsActingAdmin } from "@/hooks/useIsActingAdmin";
 import { useNavigationDirection } from "@/hooks/useNavigationDirection";
 import { ThemeProvider } from "@/hooks/useTheme";
@@ -225,6 +226,12 @@ function ScrollRestorationManager() {
  */
 function NavigationDirectionManager() {
   useNavigationDirection();
+  return null;
+}
+
+/** A leaf for the same reason as `NavigationDirectionManager`. */
+function AdminNavTopicsReset() {
+  useCloseAdminNavTopicsOutsideAdmin();
   return null;
 }
 
@@ -865,6 +872,7 @@ function AppShell() {
                       <RealtimeEventChannels />
                       <ScrollRestorationManager />
                       <NavigationDirectionManager />
+                      <AdminNavTopicsReset />
                       <RouteAnnouncer />
                       <QueryCacheManager />
                       <AppChrome />

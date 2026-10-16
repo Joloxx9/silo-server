@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useLocation } from "react-router";
 
 const OPEN_TOPICS_KEY = "silo.admin-nav.open-topics";
 
@@ -6,7 +7,7 @@ type TopicChoices = Record<string, boolean>;
 
 function readChoices(): TopicChoices {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(OPEN_TOPICS_KEY) ?? "{}");
+    const parsed: unknown = JSON.parse(sessionStorage.getItem(OPEN_TOPICS_KEY) ?? "{}");
     return parsed && typeof parsed === "object" ? (parsed as TopicChoices) : {};
   } catch {
     return {};
@@ -15,10 +16,24 @@ function readChoices(): TopicChoices {
 
 function writeChoices(choices: TopicChoices) {
   try {
-    localStorage.setItem(OPEN_TOPICS_KEY, JSON.stringify(choices));
+    sessionStorage.setItem(OPEN_TOPICS_KEY, JSON.stringify(choices));
   } catch {
     // Storage full or unavailable: the choice lasts for this page load.
   }
+}
+
+function forgetChoices() {
+  try {
+    sessionStorage.removeItem(OPEN_TOPICS_KEY);
+    // Earlier builds kept the choices in localStorage for good.
+    localStorage.removeItem(OPEN_TOPICS_KEY);
+  } catch {
+    // Storage unavailable: nothing was kept.
+  }
+}
+
+function isAdminPath(pathname: string) {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
 /** The choices with `topicId` open again, if the admin had closed it. */
@@ -29,7 +44,8 @@ function withTopicOpen(choices: TopicChoices, topicId: string | null): TopicChoi
 /**
  * Which admin sidebar topics are open. The topic holding the current page opens
  * by itself, including after the admin closed it on an earlier visit; every
- * other topic stays as the admin last left it, across navigations and reloads.
+ * other topic stays as the admin last left it while they move around the admin
+ * area, reloads included. Leaving the admin area closes them all again.
  */
 export function useAdminNavTopics(activeTopicId: string | null) {
   const [choices, setChoices] = useState(() => withTopicOpen(readChoices(), activeTopicId));
@@ -60,4 +76,12 @@ export function useAdminNavTopics(activeTopicId: string | null) {
   );
 
   return { isOpen, toggle };
+}
+
+/** Closes every admin sidebar topic whenever the app is outside the admin area. */
+export function useCloseAdminNavTopicsOutsideAdmin() {
+  const outsideAdmin = !isAdminPath(useLocation().pathname);
+  useEffect(() => {
+    if (outsideAdmin) forgetChoices();
+  }, [outsideAdmin]);
 }
