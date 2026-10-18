@@ -70,9 +70,6 @@ type payload struct {
 	// upgrade" notification is not enabled in arr.
 	DeletedFiles    []fileRef       `json:"-"`
 	DeletedFilesRaw json.RawMessage `json:"deletedFiles"`
-	// FolderDeleted is the folder-delete events' deletedFiles bool: arr
-	// removed the series or movie folder from disk, not just from its list.
-	FolderDeleted bool `json:"-"`
 
 	// DeleteReason says why a file-delete event's file was removed. Raw so an
 	// unexpected non-string value only loses the reason, not the delivery.
@@ -87,25 +84,24 @@ var folderDeleteEventTypes = map[string]bool{
 }
 
 // decodeDeletedFiles reads deletedFiles once the event type is known: the bool
-// folder-delete events send reports whether arr deleted the folder, and
-// anything else that is not a list of files is malformed.
-func decodeDeletedFiles(eventType string, raw json.RawMessage) (files []fileRef, folderDeleted bool, err error) {
+// folder-delete events send names no files, and anything else that is not a
+// list of files is malformed.
+func decodeDeletedFiles(eventType string, raw json.RawMessage) ([]fileRef, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
-		return nil, false, nil
+		return nil, nil
 	}
 	if folderDeleteEventTypes[eventType] {
 		switch string(trimmed) {
-		case "true":
-			return nil, true, nil
-		case "false":
-			return nil, false, nil
+		case "true", "false":
+			return nil, nil
 		}
 	}
+	var files []fileRef
 	if err := json.Unmarshal(trimmed, &files); err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	return files, false, nil
+	return files, nil
 }
 
 // importEventTypes are the events that carry newly imported files.
@@ -114,9 +110,6 @@ var importEventTypes = map[string]bool{
 	"Import":           true,
 	"Upgrade":          true,
 	"DownloadComplete": true,
-	// Sonarr's "On Import Complete": one event per finished download, with
-	// every episode file it imported.
-	"ImportComplete": true,
 }
 
 // deleteEventTypes are the events that carry a removed file path.
@@ -157,12 +150,11 @@ func Parse(provider string, body []byte) (ParsedWebhook, error) {
 	if eventType == "" {
 		return ParsedWebhook{}, ErrMalformedPayload
 	}
-	deletedFiles, folderDeleted, err := decodeDeletedFiles(eventType, p.DeletedFilesRaw)
+	deletedFiles, err := decodeDeletedFiles(eventType, p.DeletedFilesRaw)
 	if err != nil {
 		return ParsedWebhook{}, ErrMalformedPayload
 	}
 	p.DeletedFiles = deletedFiles
-	p.FolderDeleted = folderDeleted
 
 	out := ParsedWebhook{EventType: eventType, Provider: resolveProvider(provider, p)}
 	if strings.EqualFold(eventType, "Test") {
@@ -180,13 +172,6 @@ func Parse(provider string, body []byte) (ParsedWebhook, error) {
 		out.Changes = filePaths(p, true, false)
 	case deleteEventTypes[eventType]:
 		out.Changes = filePaths(p, false, arrDeletedFile(p.DeleteReason))
-	case folderDeleteEventTypes[eventType]:
-		// Removing a series or movie without deleting its files leaves the
-		// media on disk, so there is nothing to rescan.
-		if !p.FolderDeleted {
-			return out, nil
-		}
-		out.Changes = folderPath(p, true)
 	default:
 		// Unsupported event type: valid delivery, nothing to do.
 		return out, nil
@@ -264,12 +249,6 @@ func filePaths(p payload, includePrevious, removed bool) []autoscan.Change {
 // subtreeFallback maps an import event with no file details to the series or
 // movie folder as one subtree-scope change.
 func subtreeFallback(p payload) []autoscan.Change {
-	return folderPath(p, false)
-}
-
-// folderPath maps the payload's series or movie folder to one subtree-scope
-// change. removed marks a folder arr deleted from disk itself.
-func folderPath(p payload, removed bool) []autoscan.Change {
 	path := ""
 	switch {
 	case p.Series != nil:
@@ -284,5 +263,5 @@ func folderPath(p payload, removed bool) []autoscan.Change {
 	if path == "" {
 		return nil
 	}
-	return []autoscan.Change{{SourcePath: path, Scope: autoscan.ChangeScopeSubtree, Removed: removed}}
+	return []autoscan.Change{{SourcePath: path, Scope: autoscan.ChangeScopeSubtree}}
 }

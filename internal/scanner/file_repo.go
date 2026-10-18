@@ -3110,43 +3110,6 @@ func (r *FileRepository) ConfirmFilesRemoved(ctx context.Context, paths []string
 	return int(tag.RowsAffected()), nil
 }
 
-// ConfirmFilesRemovedUnder is ConfirmFilesRemoved for every file at or
-// beneath roots: the series or movie folders arr deleted whole.
-func (r *FileRepository) ConfirmFilesRemovedUnder(ctx context.Context, roots []string) (int, error) {
-	clauses, args := pathscope.RangeCoverageClauses("file_path", roots, 2)
-	if len(clauses) == 0 {
-		return 0, nil
-	}
-	tag, err := r.pool.Exec(ctx, `
-		UPDATE media_files
-		SET removal_confirmed_at = $1,
-		    updated_at = NOW()
-		WHERE `+strings.Join(clauses, " OR "), append([]any{time.Now().UTC()}, args...)...)
-	if err != nil {
-		return 0, fmt.Errorf("confirming removed folders: %w", err)
-	}
-	return int(tag.RowsAffected()), nil
-}
-
-// RemovalConfirmedUnder reports whether root holds cataloged files of the
-// folder and arr confirmed removing every one of them.
-func (r *FileRepository) RemovalConfirmedUnder(ctx context.Context, folderID int, root string) (bool, error) {
-	clauses, args := pathscope.RangeCoverageClauses("file_path", []string{root}, 2)
-	if len(clauses) == 0 {
-		return false, nil
-	}
-	var total, unconfirmed int
-	err := r.pool.QueryRow(ctx, `
-		SELECT COUNT(*), COUNT(*) FILTER (WHERE removal_confirmed_at IS NULL)
-		FROM media_files
-		WHERE media_folder_id = $1 AND (`+strings.Join(clauses, " OR ")+`)`,
-		append([]any{folderID}, args...)...).Scan(&total, &unconfirmed)
-	if err != nil {
-		return false, fmt.Errorf("checking removal confirmations under %q: %w", root, err)
-	}
-	return total > 0 && unconfirmed == 0, nil
-}
-
 // ClearRemovalConfirmed drops a removal confirmation for a file a scan found
 // on disk, so a later outage cannot reuse it to skip the grace. Only a
 // confirmation recorded at or before seenAt is dropped: one written after the

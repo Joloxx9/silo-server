@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -801,7 +800,6 @@ func (s *Scanner) scanPaths(
 		"scope", firstScope(reconcileRoots),
 		"files", len(filePaths),
 	)
-	walkFailures = s.dropConfirmedRemovedPaths(ctx, folder.ID, walkFailures)
 	if len(walkFailures) > 0 {
 		logIncompleteWalk(ctx, folder.ID, reconcileRoots, walkFailures)
 		if err := s.setPartialWalkWarning(ctx, folder.ID, len(walkFailures), true); err != nil {
@@ -1719,7 +1717,6 @@ func (s *Scanner) scanScope(
 		"scope", firstScope(reconcileRoots),
 		"files", len(filePaths),
 	)
-	walkFailures = s.dropConfirmedRemovedPaths(ctx, folder.ID, walkFailures)
 	if len(walkFailures) > 0 {
 		logIncompleteWalk(ctx, folder.ID, reconcileRoots, walkFailures)
 	}
@@ -2130,43 +2127,6 @@ func anyPathWithinRoots(paths, roots []string) bool {
 		}
 	}
 	return false
-}
-
-// dropConfirmedRemovedPaths takes out of walkFailures the paths arr deleted
-// whole: gone from disk while their parent directory is still there, with
-// every file cataloged beneath them confirmed removed. Their files were
-// deleted, not hidden by a lost mount, so the scan reconciles them as missing
-// instead of protecting them. Anything uncertain stays a failure.
-func (s *Scanner) dropConfirmedRemovedPaths(ctx context.Context, folderID int, walkFailures []string) []string {
-	if len(walkFailures) == 0 || s.fileRepo == nil {
-		return walkFailures
-	}
-	kept := make([]string, 0, len(walkFailures))
-	for _, path := range walkFailures {
-		if pathRemovedFromLiveDir(path) {
-			confirmed, err := s.fileRepo.RemovalConfirmedUnder(ctx, folderID, path)
-			if err != nil {
-				slog.WarnContext(ctx, "scanner: checking removal confirmations failed", "component", "scanner",
-					"folder_id", folderID, "path", path, "error", err)
-			} else if confirmed {
-				slog.InfoContext(ctx, "scanner: reconciling a folder arr deleted", "component", "scanner",
-					"folder_id", folderID, "path", path)
-				continue
-			}
-		}
-		kept = append(kept, path)
-	}
-	return kept
-}
-
-// pathRemovedFromLiveDir reports whether nothing is at path while its parent
-// directory exists.
-func pathRemovedFromLiveDir(path string) bool {
-	if _, err := os.Lstat(path); !errors.Is(err, fs.ErrNotExist) {
-		return false
-	}
-	info, err := os.Stat(filepath.Dir(path))
-	return err == nil && info.IsDir()
 }
 
 // logIncompleteWalk reports that a scope's traversal could not read part of

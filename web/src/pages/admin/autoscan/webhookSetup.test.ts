@@ -39,16 +39,8 @@ describe("triggersFor", () => {
     expect(triggersFor("radarr").map((t) => t.label)).toContain("On Movie File Delete");
   });
 
-  it("names the folder delete trigger specific to each service", () => {
-    expect(triggersFor("sonarr").map((t) => t.label)).toContain("On Series Delete");
-    expect(triggersFor("radarr").map((t) => t.label)).toContain("On Movie Delete");
-  });
-
   it("never offers a Sonarr-only trigger to Radarr", () => {
-    const labels = triggersFor("radarr").map((t) => t.label);
-    expect(labels).not.toContain("On Episode File Delete");
-    expect(labels).not.toContain("On Series Delete");
-    expect(labels).not.toContain("On Import Complete");
+    expect(triggersFor("radarr").map((t) => t.label)).not.toContain("On Episode File Delete");
   });
 
   it("marks import and upgrade as required, rename as optional", () => {

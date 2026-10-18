@@ -116,9 +116,6 @@ type Service struct {
 // the file-removal grace period.
 type RemovalConfirmer interface {
 	ConfirmFilesRemoved(ctx context.Context, paths []string) (int, error)
-	// ConfirmFilesRemovedUnder confirms every cataloged file beneath roots,
-	// for a series or movie folder arr deleted whole.
-	ConfirmFilesRemovedUnder(ctx context.Context, roots []string) (int, error)
 }
 
 // SetRemovalConfirmer wires the store for provider-confirmed file removals.
@@ -818,16 +815,16 @@ func rewriteChanges(changes []Change, rewrites []PathRewrite) []Change {
 	return rewritten
 }
 
-// confirmRemovals records the files and folders arr reported deleting that
-// are verifiably gone: nothing, not even a dangling symlink, is at the path
-// while its parent directory still exists. A missing parent may be a lost
-// mount, so those paths keep the removal grace. A failure only costs the
-// shortcut; the scan still marks the files missing.
+// confirmRemovals records the files arr reported deleting that are verifiably
+// gone: nothing, not even a dangling symlink, is at the path while its
+// directory still exists. A missing directory may be a lost mount, so those
+// paths keep the removal grace. A failure only costs the shortcut; the scan
+// still marks the files missing.
 func (s *Service) confirmRemovals(ctx context.Context, src Source, changes []Change) {
 	if s.removals == nil {
 		return
 	}
-	var files, folders []string
+	var paths []string
 	dirExists := make(map[string]bool)
 	for _, change := range changes {
 		if !change.Removed || change.SourcePath == "" {
@@ -847,27 +844,19 @@ func (s *Service) confirmRemovals(ctx context.Context, src Source, changes []Cha
 		if !exists {
 			continue
 		}
-		if change.Scope == ChangeScopeSubtree {
-			folders = append(folders, path)
-		} else {
-			files = append(files, path)
-		}
+		paths = append(paths, path)
 	}
-	confirm := func(paths []string, fn func(context.Context, []string) (int, error)) {
-		if len(paths) == 0 {
-			return
-		}
-		confirmed, err := fn(ctx, paths)
-		if err != nil {
-			slog.WarnContext(ctx, "autoscan: confirm removed files failed", "component", "autoscan", "source_id", src.ID, "err", err)
-			return
-		}
-		if confirmed > 0 {
-			slog.InfoContext(ctx, "autoscan: confirmed removed files", "component", "autoscan", "source_id", src.ID, "files", confirmed)
-		}
+	if len(paths) == 0 {
+		return
 	}
-	confirm(files, s.removals.ConfirmFilesRemoved)
-	confirm(folders, s.removals.ConfirmFilesRemovedUnder)
+	confirmed, err := s.removals.ConfirmFilesRemoved(ctx, paths)
+	if err != nil {
+		slog.WarnContext(ctx, "autoscan: confirm removed files failed", "component", "autoscan", "source_id", src.ID, "err", err)
+		return
+	}
+	if confirmed > 0 {
+		slog.InfoContext(ctx, "autoscan: confirmed removed files", "component", "autoscan", "source_id", src.ID, "files", confirmed)
+	}
 }
 
 // resolveAndClaim resolves changes to scan targets and atomically claims them

@@ -58,15 +58,3 @@ protected root or while it holds first-seen data. A held row waits for the
 replacement to claim the date, so in practice the shortcut applies to
 upgrades; deleting a title's only file still takes the full grace. A scan
 that finds a confirmed file on disk clears the confirmation.
-
-Deleting a whole series or movie in arr with its files sends `SeriesDelete` or
-`MovieDelete` with `deletedFiles: true`, which the parser turns into one
-`Removed` subtree change for the folder. Autoscan confirms every cataloged file
-beneath it with `FileRepository.ConfirmFilesRemovedUnder`, under the same rule:
-nothing at the folder's path while its parent directory exists. A scan whose
-walk then fails on that folder would normally protect it as a possible lost
-mount; when every cataloged file beneath it is confirmed, the scan reconciles
-it instead, so the title leaves the library at once. Its rows hold the added
-date like any title's only file, so they still wait out the grace in the
-trash. A folder that vanished without arr's confirmation keeps the
-protection, and a delete that left the files on disk is a no-op.
