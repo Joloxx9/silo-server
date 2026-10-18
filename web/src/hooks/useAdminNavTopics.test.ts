@@ -1,10 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 
-import { createElement, type ReactNode } from "react";
-import { MemoryRouter, useNavigate } from "react-router";
-
-import { useAdminNavTopics, useCloseAdminNavTopicsOutsideAdmin } from "./useAdminNavTopics";
+import { useAdminNavTopics, useCloseAdminNavTopicsOnExit } from "./useAdminNavTopics";
 
 const KEY = "silo.admin-nav.open-topics";
 
@@ -34,44 +31,23 @@ it("opens the topic holding the current page and remembers other toggles", () =>
   expect(JSON.parse(sessionStorage.getItem(KEY) ?? "{}")).toEqual({ playback: true });
 });
 
-function renderAt(path: string) {
-  return renderHook(
-    () => {
-      useCloseAdminNavTopicsOutsideAdmin();
-      return useNavigate();
-    },
-    {
-      wrapper: ({ children }: { children: ReactNode }) =>
-        createElement(MemoryRouter, { initialEntries: [path] }, children),
-    },
-  );
-}
-
-it("keeps the open topics while the admin moves between admin pages", () => {
+it("keeps the open topics while the admin layout stays mounted, reloads included", () => {
   sessionStorage.setItem(KEY, JSON.stringify({ server: true }));
-  const app = renderAt("/admin/playback");
+  renderHook(() => useCloseAdminNavTopicsOnExit());
 
-  act(() => void app.result.current("/admin/libraries"));
-  act(() => void app.result.current("/admin"));
-
-  expect(JSON.parse(sessionStorage.getItem(KEY) ?? "{}")).toEqual({ server: true });
+  const { result } = renderHook(() => useAdminNavTopics("libraries"));
+  expect(result.current.isOpen("server")).toBe(true);
 });
 
-it("closes every topic once the app leaves the admin area", () => {
+it("closes every topic once the admin layout unmounts", () => {
   sessionStorage.setItem(KEY, JSON.stringify({ server: true }));
   localStorage.setItem(KEY, JSON.stringify({ logs: true }));
-  const app = renderAt("/admin/playback");
+  const layout = renderHook(() => useCloseAdminNavTopicsOnExit());
 
-  act(() => void app.result.current("/"));
+  layout.unmount();
 
   expect(sessionStorage.getItem(KEY)).toBeNull();
   expect(localStorage.getItem(KEY)).toBeNull();
   const { result } = renderHook(() => useAdminNavTopics(null));
   expect(result.current.isOpen("server")).toBe(false);
-});
-
-it("does not treat a path that only starts with admin as the admin area", () => {
-  sessionStorage.setItem(KEY, JSON.stringify({ server: true }));
-  renderAt("/administrators");
-  expect(sessionStorage.getItem(KEY)).toBeNull();
 });
