@@ -3175,6 +3175,9 @@ func (r *FileRepository) ClearRemovalConfirmed(ctx context.Context, id int, seen
 // A genuinely emptied root also matches, which is intended: emptying a root
 // is confirmed through the operator's one-time cleanup allowance rather than
 // inferred from a single scan.
+//
+// Rows arr confirmed removing (removal_confirmed_at) are left out: arr
+// deleting a root's last title empties the root without any mount trouble.
 func (r *FileRepository) ListRootsWithCatalogedFiles(ctx context.Context, folderID int, roots []string) ([]string, error) {
 	if len(roots) == 0 {
 		return nil, nil
@@ -3189,6 +3192,7 @@ func (r *FileRepository) ListRootsWithCatalogedFiles(ctx context.Context, folder
 		WHERE EXISTS (
 			SELECT 1 FROM media_files mf
 			WHERE mf.media_folder_id = $1
+			  AND mf.removal_confirmed_at IS NULL
 			  AND (mf.file_path = r.root OR mf.file_path LIKE r.pattern ESCAPE '\')
 		)
 		ORDER BY r.ord
