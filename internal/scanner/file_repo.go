@@ -3110,8 +3110,17 @@ func (r *FileRepository) ConfirmFilesRemoved(ctx context.Context, paths []string
 	return int(tag.RowsAffected()), nil
 }
 
+// folderRemovalSettle is how far ahead ConfirmFilesRemovedUnder dates its
+// confirmations. Arr sends a series or movie delete event while it is still
+// removing the folder, so scans can see the files for a while after the
+// confirmation; ClearRemovalConfirmed only drops confirmations no newer than
+// what the scan saw, so these survive until arr is done. A folder arr failed
+// to delete loses its confirmation at the first scan after the window.
+const folderRemovalSettle = 10 * time.Minute
+
 // ConfirmFilesRemovedUnder is ConfirmFilesRemoved for every file at or
-// beneath roots: the series or movie folders arr deleted whole.
+// beneath roots: the series or movie folders arr deleted whole. The
+// confirmations are dated folderRemovalSettle ahead.
 func (r *FileRepository) ConfirmFilesRemovedUnder(ctx context.Context, roots []string) (int, error) {
 	clauses, args := pathscope.RangeCoverageClauses("file_path", roots, 2)
 	if len(clauses) == 0 {
@@ -3121,7 +3130,7 @@ func (r *FileRepository) ConfirmFilesRemovedUnder(ctx context.Context, roots []s
 		UPDATE media_files
 		SET removal_confirmed_at = $1,
 		    updated_at = NOW()
-		WHERE `+strings.Join(clauses, " OR "), append([]any{time.Now().UTC()}, args...)...)
+		WHERE `+strings.Join(clauses, " OR "), append([]any{time.Now().UTC().Add(folderRemovalSettle)}, args...)...)
 	if err != nil {
 		return 0, fmt.Errorf("confirming removed folders: %w", err)
 	}

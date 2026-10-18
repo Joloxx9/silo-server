@@ -818,11 +818,15 @@ func rewriteChanges(changes []Change, rewrites []PathRewrite) []Change {
 	return rewritten
 }
 
-// confirmRemovals records the files and folders arr reported deleting that
-// are verifiably gone: nothing, not even a dangling symlink, is at the path
-// while its parent directory still exists. A missing parent may be a lost
-// mount, so those paths keep the removal grace. A failure only costs the
-// shortcut; the scan still marks the files missing.
+// confirmRemovals records the files and folders arr reported deleting. A file
+// is confirmed when it is verifiably gone: nothing, not even a dangling
+// symlink, is at the path while its directory still exists. A missing parent
+// may be a lost mount, so those paths keep the removal grace. A folder is
+// confirmed once its parent directory exists, even while the folder itself is
+// still there: arr sends its series and movie delete events while it is still
+// removing the folder, and the scanner reconciles the folder only once it is
+// gone. A failure only costs the shortcut; the scan still marks the files
+// missing.
 func (s *Service) confirmRemovals(ctx context.Context, src Source, changes []Change) {
 	if s.removals == nil {
 		return
@@ -834,7 +838,12 @@ func (s *Service) confirmRemovals(ctx context.Context, src Source, changes []Cha
 			continue
 		}
 		path := filepath.Clean(change.SourcePath)
-		if _, err := s.statPath(path); !errors.Is(err, fs.ErrNotExist) {
+		info, err := s.statPath(path)
+		folder := change.Scope == ChangeScopeSubtree
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+		case folder && err == nil && info.IsDir():
+		default:
 			continue
 		}
 		dir := filepath.Dir(path)
@@ -847,7 +856,7 @@ func (s *Service) confirmRemovals(ctx context.Context, src Source, changes []Cha
 		if !exists {
 			continue
 		}
-		if change.Scope == ChangeScopeSubtree {
+		if folder {
 			folders = append(folders, path)
 		} else {
 			files = append(files, path)

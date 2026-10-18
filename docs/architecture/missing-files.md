@@ -62,8 +62,11 @@ that finds a confirmed file on disk clears the confirmation.
 Deleting a whole series or movie in arr with its files sends `SeriesDelete` or
 `MovieDelete` with `deletedFiles: true`, which the parser turns into one
 `Removed` subtree change for the folder. Autoscan confirms every cataloged file
-beneath it with `FileRepository.ConfirmFilesRemovedUnder`, under the same rule:
-nothing at the folder's path while its parent directory exists. A scan whose
+beneath it with `FileRepository.ConfirmFilesRemovedUnder` once the folder's
+parent directory exists. Arr sends these events while it is still removing the
+folder, so the folder may still be on disk; the confirmations are dated a few
+minutes ahead, and scans that still find the files in that window keep them.
+A scan whose
 walk then fails on that folder would normally protect it as a possible lost
 mount; when every cataloged file beneath it is confirmed, the scan reconciles
 it instead, so the title leaves the library at once. Its rows hold the added
