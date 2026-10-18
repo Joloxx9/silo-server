@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -329,8 +330,9 @@ func TestScanFileClearsRemovalConfirmation(t *testing.T) {
 
 // A subtree scan of a movie folder that is gone from a live library root
 // protects its files as a possible lost mount, unless arr confirmed deleting
-// the folder: then the scan reconciles the files and its sweep drops them
-// without waiting out the grace.
+// the folder: then the scan reconciles the files and the movie leaves the
+// library. The row of a title's only file holds its added date, so it waits
+// out the grace in the trash like any other.
 func TestScanSubtreeReconcilesFolderArrDeleted(t *testing.T) {
 	pool := newDeadRootTestPool(t)
 	ctx := t.Context()
@@ -357,6 +359,43 @@ func TestScanSubtreeReconcilesFolderArrDeleted(t *testing.T) {
 	folder := &models.MediaFolder{ID: folderID, Paths: []string{root}, Type: "movies", Name: "Removal confirmed folder", Enabled: true}
 	if _, err := s.ScanFolder(ctx, folder); err != nil {
 		t.Fatalf("scan: %v", err)
+	}
+	// Each movie is a matched title in the library, as in a real catalog.
+	suffix := time.Now().UnixNano()
+	contentIDs := map[string]string{}
+	for _, path := range []string{deleted, vanished, kept} {
+		id := fmt.Sprintf("removal-folder-%d-%s", suffix, filepath.Base(filepath.Dir(path))[:5])
+		contentIDs[path] = id
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO media_items (content_id, type, title, status, genres, poster_path, backdrop_path, logo_path)
+			VALUES ($1, 'movie', $1, 'matched', '{}'::text[], '', '', '')`, id); err != nil {
+			t.Fatalf("seed item: %v", err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE media_files SET content_id = $1 WHERE media_folder_id = $2 AND file_path = $3`, id, folderID, path); err != nil {
+			t.Fatalf("link file: %v", err)
+		}
+	}
+	t.Cleanup(func() {
+		ids := make([]string, 0, len(contentIDs))
+		for _, id := range contentIDs {
+			ids = append(ids, id)
+		}
+		_, _ = pool.Exec(context.WithoutCancel(ctx), `DELETE FROM media_items WHERE content_id = ANY($1)`, ids)
+	})
+	if err := s.syncPresentLibraryState(ctx, folderID); err != nil {
+		t.Fatalf("seed memberships: %v", err)
+	}
+	listed := func(path string) bool {
+		t.Helper()
+		var ok bool
+		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM media_item_libraries WHERE content_id = $1 AND media_folder_id = $2)`,
+			contentIDs[path], folderID).Scan(&ok); err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	if !listed(deleted) || !listed(kept) {
+		t.Fatal("seeded movies are not in the library")
 	}
 	state := func(path string) (found, missing bool) {
 		t.Helper()
@@ -387,8 +426,14 @@ func TestScanSubtreeReconcilesFolderArrDeleted(t *testing.T) {
 		}
 	}
 
-	if found, _ := state(deleted); found {
-		t.Fatal("file of the folder arr deleted is still cataloged")
+	if found, missing := state(deleted); !found || !missing {
+		t.Fatalf("file of the folder arr deleted: found=%v missing=%v, want reconciled as missing", found, missing)
+	}
+	if listed(deleted) {
+		t.Fatal("movie arr deleted is still listed in the library")
+	}
+	if !listed(vanished) {
+		t.Fatal("movie under an unconfirmed vanished folder left the library")
 	}
 	if found, missing := state(vanished); !found || missing {
 		t.Fatalf("unconfirmed vanished folder: found=%v missing=%v, want protected and untouched", found, missing)
