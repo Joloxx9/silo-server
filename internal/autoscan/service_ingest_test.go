@@ -295,6 +295,11 @@ func TestIngestChangesConfirmsArrRemovedFolders(t *testing.T) {
 		t.Fatal(err)
 	}
 	orphaned := filepath.Join(root, "unmounted", "Orphan Movie (2022)")
+	linkedRoot := filepath.Join(root, "linked")
+	if err := os.Symlink(t.TempDir(), linkedRoot); err != nil {
+		t.Fatal(err)
+	}
+	goneLinked := filepath.Join(linkedRoot, "Linked Movie (2024)")
 
 	removals := &recordingRemovals{}
 	svc := newService(webhookTestStore(), &fakeProvider{}, &recordingQueuer{}, allowSuppressor{})
@@ -308,11 +313,12 @@ func TestIngestChangesConfirmsArrRemovedFolders(t *testing.T) {
 			{SourcePath: deleting, Scope: ChangeScopeSubtree, Removed: true},
 			{SourcePath: notFolder, Scope: ChangeScopeSubtree, Removed: true},
 			{SourcePath: orphaned, Scope: ChangeScopeSubtree, Removed: true},
+			{SourcePath: goneLinked, Scope: ChangeScopeSubtree, Removed: true},
 		},
 	}); err != nil {
 		t.Fatalf("IngestChanges: %v", err)
 	}
-	want := []string{gone, deleting}
+	want := []string{gone, deleting, goneLinked}
 	if !slices.Equal(removals.folders, want) || len(removals.paths) != 0 {
 		t.Fatalf("confirmed folders = %v, files = %v, want folders %v", removals.folders, removals.paths, want)
 	}
