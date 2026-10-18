@@ -326,3 +326,74 @@ func TestScanFileClearsRemovalConfirmation(t *testing.T) {
 		t.Fatal("single-file scan of an unchanged file left its removal confirmation")
 	}
 }
+
+// A subtree scan of a movie folder that is gone from a live library root
+// protects its files as a possible lost mount, unless arr confirmed deleting
+// the folder: then the scan reconciles the files and its sweep drops them
+// without waiting out the grace.
+func TestScanSubtreeReconcilesFolderArrDeleted(t *testing.T) {
+	pool := newDeadRootTestPool(t)
+	ctx := t.Context()
+	folderID := seedDeadRootTestFolder(t, pool, "movies", "Removal confirmed folder")
+	root := t.TempDir()
+	movie := func(name string) (dir, path string) {
+		t.Helper()
+		dir = filepath.Join(root, name)
+		path = filepath.Join(dir, name+".mkv")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("fake movie payload"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return dir, path
+	}
+	deletedDir, deleted := movie("Alpha (2020)")
+	vanishedDir, vanished := movie("Beta (2021)")
+	_, kept := movie("Gamma (2022)")
+
+	repo := NewFileRepository(pool)
+	s := NewScanner(repo, "", nil, 2, true, 24*time.Hour)
+	folder := &models.MediaFolder{ID: folderID, Paths: []string{root}, Type: "movies", Name: "Removal confirmed folder", Enabled: true}
+	if _, err := s.ScanFolder(ctx, folder); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	state := func(path string) (found, missing bool) {
+		t.Helper()
+		var missingSince *time.Time
+		err := pool.QueryRow(ctx,
+			`SELECT missing_since FROM media_files WHERE media_folder_id = $1 AND file_path = $2`,
+			folderID, path).Scan(&missingSince)
+		if err != nil {
+			if strings.Contains(err.Error(), "no rows") {
+				return false, false
+			}
+			t.Fatal(err)
+		}
+		return true, missingSince != nil
+	}
+
+	for _, dir := range []string{deletedDir, vanishedDir} {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := repo.ConfirmFilesRemovedUnder(ctx, []string{deletedDir}); err != nil || n != 1 {
+		t.Fatalf("ConfirmFilesRemovedUnder = %d, %v; want 1 file", n, err)
+	}
+	for _, dir := range []string{deletedDir, vanishedDir} {
+		if _, err := s.ScanSubtree(ctx, folder, dir); err != nil {
+			t.Fatalf("subtree scan %s: %v", dir, err)
+		}
+	}
+
+	if found, _ := state(deleted); found {
+		t.Fatal("file of the folder arr deleted is still cataloged")
+	}
+	if found, missing := state(vanished); !found || missing {
+		t.Fatalf("unconfirmed vanished folder: found=%v missing=%v, want protected and untouched", found, missing)
+	}
+	if found, missing := state(kept); !found || missing {
+		t.Fatalf("untouched movie: found=%v missing=%v, want present", found, missing)
+	}
+}
