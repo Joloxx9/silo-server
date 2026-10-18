@@ -223,13 +223,19 @@ func TestPollOnceSkipsWebhookSources(t *testing.T) {
 }
 
 type recordingRemovals struct {
-	paths []string
-	err   error
+	paths   []string
+	folders []string
+	err     error
 }
 
 func (r *recordingRemovals) ConfirmFilesRemoved(_ context.Context, paths []string) (int, error) {
 	r.paths = append(r.paths, paths...)
 	return len(paths), r.err
+}
+
+func (r *recordingRemovals) ConfirmFilesRemovedUnder(_ context.Context, roots []string) (int, error) {
+	r.folders = append(r.folders, roots...)
+	return len(roots), r.err
 }
 
 // Only files arr reported deleting that are gone from a directory that still
@@ -269,6 +275,39 @@ func TestIngestChangesConfirmsArrRemovedFiles(t *testing.T) {
 	}
 	if len(removals.paths) != 1 || removals.paths[0] != gone {
 		t.Fatalf("confirmed = %v, want only %s", removals.paths, gone)
+	}
+}
+
+// A movie or series folder arr deleted is confirmed as a folder, and only
+// when it is gone from a library directory that still exists. A folder still
+// on disk, or one whose parent is gone too (possibly a lost mount), keeps the
+// removal grace.
+func TestIngestChangesConfirmsArrRemovedFolders(t *testing.T) {
+	root := t.TempDir()
+	gone := filepath.Join(root, "Gone Movie (2020)")
+	present := filepath.Join(root, "Present Movie (2021)")
+	if err := os.Mkdir(present, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	orphaned := filepath.Join(root, "unmounted", "Orphan Movie (2022)")
+
+	removals := &recordingRemovals{}
+	svc := newService(webhookTestStore(), &fakeProvider{}, &recordingQueuer{}, allowSuppressor{})
+	svc.SetRemovalConfirmer(removals)
+
+	if _, err := svc.IngestChanges(context.Background(), ChangeIngest{
+		SourceID:          "s1",
+		ProviderEventType: "MovieDelete",
+		Changes: []Change{
+			{SourcePath: gone, Scope: ChangeScopeSubtree, Removed: true},
+			{SourcePath: present, Scope: ChangeScopeSubtree, Removed: true},
+			{SourcePath: orphaned, Scope: ChangeScopeSubtree, Removed: true},
+		},
+	}); err != nil {
+		t.Fatalf("IngestChanges: %v", err)
+	}
+	if len(removals.folders) != 1 || removals.folders[0] != gone || len(removals.paths) != 0 {
+		t.Fatalf("confirmed folders = %v, files = %v, want only folder %s", removals.folders, removals.paths, gone)
 	}
 }
 
