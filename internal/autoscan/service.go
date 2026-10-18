@@ -877,7 +877,8 @@ func (s *Service) confirmRemovals(ctx context.Context, src Source, changes []Cha
 		dir := filepath.Dir(path)
 		exists, checked := dirExists[dir]
 		if !checked {
-			info, err := s.statPath(dir)
+			// Follow symlinks here: a library root may link to its storage.
+			info, err := os.Stat(dir)
 			exists = err == nil && info.IsDir()
 			dirExists[dir] = exists
 		}
