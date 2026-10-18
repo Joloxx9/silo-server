@@ -2186,7 +2186,7 @@ func (s *Service) ScrobbleStop(ctx context.Context, event ScrobbleEvent) error {
 // or persistence failures to the caller. It is used when the caller owns a
 // durable terminal event that must not be acknowledged after a mere enqueue.
 func (s *Service) ScrobbleStopConfirmed(ctx context.Context, event ScrobbleEvent) error {
-	return s.scrobble(ctx, event, "stop", true)
+	return s.scrobble(ctx, event, scrobbleActionStop, true)
 }
 
 func (s *Service) scrobble(ctx context.Context, event ScrobbleEvent, action string, confirm bool) error {
@@ -2378,7 +2378,7 @@ func (s *Service) dispatchScrobbleConfirmed(ctx context.Context, provider Provid
 			)
 			return err
 		}
-		return s.dispatchScrobble(ctx, scrobbler, cfg, refreshedConn, titledWithin(ctx, titled, event), "stop", &claimVersion)
+		return s.dispatchScrobble(ctx, scrobbler, cfg, refreshedConn, titledWithin(ctx, titled, event), scrobbleActionStop, &claimVersion)
 	}
 	result := make(chan error, 1)
 	s.enqueueOrderedScrobble(scrobbleDispatchKey(scrobbler, conn, event), func() {

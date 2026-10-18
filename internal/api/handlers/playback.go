@@ -1328,6 +1328,29 @@ func compatPlayHistoryID(sessionID string) string {
 	return uuid.NewSHA1(compatPlayHistoryNamespace, []byte(sessionID)).String()
 }
 
+// scrobbleAbortedSession reports an aborted session to watch providers.
+// abortPlaybackSession marks the attempt stopped, so a reconnect starts a
+// new session and the pause reaches providers that mirror live sessions
+// as ended. A session that keeps no progress is not scrobbled, as on stop.
+func (h *PlaybackHandler) scrobbleAbortedSession(ctx context.Context, session *playback.Session) {
+	if h.WatchScrobbler == nil || h.fileResolver == nil || session.DisableProgressPersistence {
+		return
+	}
+	file, err := h.loadFileByPreferredID(ctx, requestedMediaFileID(session), session.MediaFileID)
+	if err != nil || file == nil {
+		return
+	}
+	targetID := playbackProgressTarget(file)
+	if targetID == "" {
+		return
+	}
+	event := h.scrobbleEventForSession(ctx, session, targetID, float64(file.Duration), session.Position)
+	event.SessionEnded = true
+	if err := h.WatchScrobbler.ScrobblePause(ctx, event); err != nil {
+		slog.WarnContext(ctx, "failed to queue watch provider abort scrobble", "component", "api", "session", session.ID, "error", err)
+	}
+}
+
 func (h *PlaybackHandler) finalizeSessionAbort(ctx context.Context, session *playback.Session, syncNow bool, syncReason string) {
 	if h == nil || session == nil || session.ID == "" {
 		return
@@ -1337,21 +1360,7 @@ func (h *PlaybackHandler) finalizeSessionAbort(ctx context.Context, session *pla
 	}
 	h.cancelPlaybackStartSideEffectsV3(ctx, session.ID)
 
-	// abortPlaybackSession marks the attempt stopped, so a reconnect starts a
-	// new session and the pause reaches providers that mirror live sessions
-	// as ended. A session that keeps no progress is not scrobbled, as on stop.
-	if h.WatchScrobbler != nil && h.fileResolver != nil && !session.DisableProgressPersistence {
-		if file, err := h.loadFileByPreferredID(ctx, requestedMediaFileID(session), session.MediaFileID); err == nil && file != nil {
-			targetID := playbackProgressTarget(file)
-			if targetID != "" {
-				event := h.scrobbleEventForSession(ctx, session, targetID, float64(file.Duration), session.Position)
-				event.SessionEnded = true
-				if err := h.WatchScrobbler.ScrobblePause(ctx, event); err != nil {
-					slog.WarnContext(ctx, "failed to queue watch provider abort scrobble", "component", "api", "session", session.ID, "error", err)
-				}
-			}
-		}
-	}
+	h.scrobbleAbortedSession(ctx, session)
 
 	if h.AdminStore != nil {
 		if err := h.AdminStore.DeleteSession(ctx, session.ID); err != nil {
