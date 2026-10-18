@@ -271,3 +271,15 @@
 # the frozen legacy bridge alike.
 ./internal/webhooksync TestProcessWebhookBoundedAppliesDefaultLimitDB
 ./internal/api/handlers TestLegacyWebhookReceiverRejectsOversizedBodyDB
+
+# Files and folders arr confirmed removing skip the grace, a scan that still
+# sees one clears its confirmation, and a folder arr deleted is reconciled
+# rather than protected as a lost mount.
+./internal/scanner TestConfirmFilesRemovedSkipsGracePostgres
+./internal/scanner TestConfirmedRemovalExceptionsPostgres
+./internal/scanner TestConfirmedReplacedEpisodeKeepsFirstSeenAndSkipsGrace
+./internal/scanner TestScanFolderHonorsAndClearsRemovalConfirmation
+./internal/scanner TestScanFileClearsRemovalConfirmation
+./internal/scanner TestScanSubtreeReconcilesFolderArrDeleted
+./internal/scanner TestScanSubtreeReconcilesLastFolderArrDeleted
+./internal/scanner TestScanSubtreeWaitsForFolderArrIsDeleting
