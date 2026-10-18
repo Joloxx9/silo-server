@@ -8,140 +8,169 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/Silo-Server/silo-server/internal/models"
 )
+
+// sweepFixture is a series folder of cataloged files with no files on disk,
+// for exercising removal confirmations against the trash sweep directly.
+type sweepFixture struct {
+	t        *testing.T
+	pool     *pgxpool.Pool
+	repo     *FileRepository
+	folderID int
+	base     string
+}
+
+func newSweepFixture(t *testing.T, name string) sweepFixture {
+	t.Helper()
+	pool := newDeadRootTestPool(t)
+	return sweepFixture{
+		t:        t,
+		pool:     pool,
+		repo:     NewFileRepository(pool),
+		folderID: seedDeadRootTestFolder(t, pool, "series", name),
+		base:     fmt.Sprintf("/removal-confirmed-%d/Show/Season 01", time.Now().UnixNano()),
+	}
+}
+
+func (fx sweepFixture) upsert(name string) *models.MediaFile {
+	fx.t.Helper()
+	row, err := fx.repo.Upsert(fx.t.Context(), models.MediaFile{
+		MediaFolderID: fx.folderID, FilePath: fx.base + "/" + name, FileSize: 1024,
+		SubtitleTracks: []models.SubtitleTrack{}, ExternalSubtitles: []models.ExternalSubtitle{},
+	})
+	if err != nil {
+		fx.t.Fatalf("upsert %s: %v", name, err)
+	}
+	return row
+}
+
+func (fx sweepFixture) exists(id int) bool {
+	fx.t.Helper()
+	var ok bool
+	if err := fx.pool.QueryRow(fx.t.Context(), `SELECT EXISTS(SELECT 1 FROM media_files WHERE id = $1)`, id).Scan(&ok); err != nil {
+		fx.t.Fatal(err)
+	}
+	return ok
+}
+
+func (fx sweepFixture) confirm(paths ...string) int {
+	fx.t.Helper()
+	confirmed, err := fx.repo.ConfirmFilesRemoved(fx.t.Context(), paths)
+	if err != nil {
+		fx.t.Fatalf("ConfirmFilesRemoved: %v", err)
+	}
+	return confirmed
+}
+
+func (fx sweepFixture) markMissing(ids ...int) {
+	fx.t.Helper()
+	for _, id := range ids {
+		if err := fx.repo.MarkMissing(fx.t.Context(), id, time.Now().UTC()); err != nil {
+			fx.t.Fatal(err)
+		}
+	}
+}
+
+func (fx sweepFixture) sweep(protected ...string) int {
+	fx.t.Helper()
+	deleted, err := fx.repo.DeleteMissingByFolder(fx.t.Context(), fx.folderID, 24*time.Hour, protected)
+	if err != nil {
+		fx.t.Fatalf("DeleteMissingByFolder: %v", err)
+	}
+	return deleted
+}
 
 // A file arr confirmed deleting skips the removal grace once a scan has marked
 // it missing, while a file that merely went missing still waits it out, and a
 // confirmed file a scan finds on disk loses its confirmation.
 func TestConfirmFilesRemovedSkipsGracePostgres(t *testing.T) {
-	pool := newDeadRootTestPool(t)
+	fx := newSweepFixture(t, "Removal confirmed sweep")
 	ctx := t.Context()
-	folderID := seedDeadRootTestFolder(t, pool, "series", "Removal confirmed sweep")
-	repo := NewFileRepository(pool)
-	base := fmt.Sprintf("/removal-confirmed-%d/Show/Season 01", time.Now().UnixNano())
 
-	upsert := func(name string) *models.MediaFile {
-		t.Helper()
-		row, err := repo.Upsert(ctx, models.MediaFile{
-			MediaFolderID: folderID, FilePath: base + "/" + name, FileSize: 1024,
-			SubtitleTracks: []models.SubtitleTrack{}, ExternalSubtitles: []models.ExternalSubtitle{},
-		})
-		if err != nil {
-			t.Fatalf("upsert %s: %v", name, err)
-		}
-		return row
-	}
-	exists := func(id int) bool {
-		t.Helper()
-		var ok bool
-		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM media_files WHERE id = $1)`, id).Scan(&ok); err != nil {
-			t.Fatal(err)
-		}
-		return ok
-	}
+	replaced := fx.upsert("S01E01 old.mkv")
+	vanished := fx.upsert("S01E02.mkv")
+	returned := fx.upsert("S01E03.mkv")
 
-	replaced := upsert("S01E01 old.mkv")
-	vanished := upsert("S01E02.mkv")
-	returned := upsert("S01E03.mkv")
-
-	confirmed, err := repo.ConfirmFilesRemoved(ctx, []string{replaced.FilePath, returned.FilePath, base + "/not-cataloged.mkv"})
-	if err != nil {
-		t.Fatalf("ConfirmFilesRemoved: %v", err)
-	}
-	if confirmed != 2 {
+	if confirmed := fx.confirm(replaced.FilePath, returned.FilePath, fx.base+"/not-cataloged.mkv"); confirmed != 2 {
 		t.Fatalf("confirmed = %d, want 2", confirmed)
-	}
-	sweep := func(protected ...string) int {
-		t.Helper()
-		deleted, err := repo.DeleteMissingByFolder(ctx, folderID, 24*time.Hour, protected)
-		if err != nil {
-			t.Fatalf("DeleteMissingByFolder: %v", err)
-		}
-		return deleted
 	}
 
 	// A confirmation alone deletes nothing: only a scan that finds the file
 	// gone marks it missing and reconciles its memberships first.
-	if deleted := sweep(); deleted != 0 {
+	if deleted := fx.sweep(); deleted != 0 {
 		t.Fatalf("sweep before any scan deleted %d rows", deleted)
 	}
 
 	// The scan finds the replaced file gone and the returned one on disk.
 	now := time.Now().UTC()
-	for _, id := range []int{replaced.ID, vanished.ID} {
-		if err := repo.MarkMissing(ctx, id, now); err != nil {
-			t.Fatal(err)
-		}
-	}
+	fx.markMissing(replaced.ID, vanished.ID)
 	// A confirmation newer than the scan's observation survives the clear.
-	if err := repo.ClearRemovalConfirmed(ctx, returned.ID, now.Add(-time.Hour)); err != nil {
+	if err := fx.repo.ClearRemovalConfirmed(ctx, returned.ID, now.Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	var stillConfirmed bool
-	if err := pool.QueryRow(ctx, `SELECT removal_confirmed_at IS NOT NULL FROM media_files WHERE id = $1`, returned.ID).Scan(&stillConfirmed); err != nil {
+	if err := fx.pool.QueryRow(ctx, `SELECT removal_confirmed_at IS NOT NULL FROM media_files WHERE id = $1`, returned.ID).Scan(&stillConfirmed); err != nil {
 		t.Fatal(err)
 	}
 	if !stillConfirmed {
 		t.Fatal("clear dropped a confirmation written after the scan looked")
 	}
-	if err := repo.ClearRemovalConfirmed(ctx, returned.ID, time.Now().UTC()); err != nil {
+	if err := fx.repo.ClearRemovalConfirmed(ctx, returned.ID, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	if deleted := sweep(); deleted != 1 || exists(replaced.ID) {
-		t.Fatalf("deleted = %d, replaced row exists = %v; want only the confirmed row deleted", deleted, exists(replaced.ID))
+	if deleted := fx.sweep(); deleted != 1 || fx.exists(replaced.ID) {
+		t.Fatalf("deleted = %d, replaced row exists = %v; want only the confirmed row deleted", deleted, fx.exists(replaced.ID))
 	}
-	if !exists(vanished.ID) {
+	if !fx.exists(vanished.ID) {
 		t.Fatal("unconfirmed missing row was deleted inside the grace period")
 	}
 
 	// A later outage marks the returned file missing; its cleared
 	// confirmation must not let it skip the grace.
-	if err := repo.MarkMissing(ctx, returned.ID, now); err != nil {
-		t.Fatal(err)
-	}
-	if deleted := sweep(); deleted != 0 {
+	fx.markMissing(returned.ID)
+	if deleted := fx.sweep(); deleted != 0 {
 		t.Fatalf("sweep after the outage deleted %d rows, want 0", deleted)
 	}
+}
+
+// A confirmation is lost when the file is upserted again, and a confirmed row
+// still waits while it holds first-seen data or sits under a protected root.
+func TestConfirmedRemovalExceptionsPostgres(t *testing.T) {
+	fx := newSweepFixture(t, "Removal confirmed exceptions")
+	ctx := t.Context()
 
 	// Seeing a confirmed file again through the upsert clears it as well.
-	reupserted := upsert("S01E06.mkv")
-	if _, err := repo.ConfirmFilesRemoved(ctx, []string{reupserted.FilePath}); err != nil {
-		t.Fatal(err)
-	}
-	upsert("S01E06.mkv")
-	if err := repo.MarkMissing(ctx, reupserted.ID, now); err != nil {
-		t.Fatal(err)
-	}
-	if deleted := sweep(); deleted != 0 {
+	reupserted := fx.upsert("S01E06.mkv")
+	fx.confirm(reupserted.FilePath)
+	fx.upsert("S01E06.mkv")
+	fx.markMissing(reupserted.ID)
+	if deleted := fx.sweep(); deleted != 0 {
 		t.Fatalf("sweep after a re-upsert deleted %d rows, want 0", deleted)
 	}
 
 	// A confirmed row holding a removed episode's first-seen date waits for
 	// the replacement file to claim it; deleting it would make the episode
 	// look newly added.
-	holding := upsert("S01E05.mkv")
-	if _, err := repo.ConfirmFilesRemoved(ctx, []string{holding.FilePath}); err != nil {
+	holding := fx.upsert("S01E05.mkv")
+	fx.confirm(holding.FilePath)
+	fx.markMissing(holding.ID)
+	if _, err := fx.pool.Exec(ctx, `UPDATE media_files SET held_episode_first_seen_at = NOW() - interval '30 days' WHERE id = $1`, holding.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.MarkMissing(ctx, holding.ID, now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `UPDATE media_files SET held_episode_first_seen_at = NOW() - interval '30 days' WHERE id = $1`, holding.ID); err != nil {
-		t.Fatal(err)
-	}
-	if deleted := sweep(); deleted != 0 {
+	if deleted := fx.sweep(); deleted != 0 {
 		t.Fatalf("holding sweep deleted %d rows, want 0", deleted)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE media_files SET held_episode_first_seen_at = NULL WHERE id = $1`, holding.ID); err != nil {
+	if _, err := fx.pool.Exec(ctx, `UPDATE media_files SET held_episode_first_seen_at = NULL WHERE id = $1`, holding.ID); err != nil {
 		t.Fatal(err)
 	}
-
 	// Protected roots still win over a confirmation.
-	if deleted := sweep(base); deleted != 0 || !exists(holding.ID) {
+	if deleted := fx.sweep(fx.base); deleted != 0 || !fx.exists(holding.ID) {
 		t.Fatalf("protected sweep deleted %d rows, want 0", deleted)
 	}
-	if deleted := sweep(); deleted != 1 || exists(holding.ID) {
+	if deleted := fx.sweep(); deleted != 1 || fx.exists(holding.ID) {
 		t.Fatalf("sweep after the hold was claimed deleted %d rows, want the row deleted", deleted)
 	}
 }
