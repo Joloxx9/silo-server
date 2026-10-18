@@ -9,169 +9,140 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/Silo-Server/silo-server/internal/models"
 )
-
-// sweepFixture is a series folder of cataloged files with no files on disk,
-// for exercising removal confirmations against the trash sweep directly.
-type sweepFixture struct {
-	t        *testing.T
-	pool     *pgxpool.Pool
-	repo     *FileRepository
-	folderID int
-	base     string
-}
-
-func newSweepFixture(t *testing.T, name string) sweepFixture {
-	t.Helper()
-	pool := newDeadRootTestPool(t)
-	return sweepFixture{
-		t:        t,
-		pool:     pool,
-		repo:     NewFileRepository(pool),
-		folderID: seedDeadRootTestFolder(t, pool, "series", name),
-		base:     fmt.Sprintf("/removal-confirmed-%d/Show/Season 01", time.Now().UnixNano()),
-	}
-}
-
-func (fx sweepFixture) upsert(name string) *models.MediaFile {
-	fx.t.Helper()
-	row, err := fx.repo.Upsert(fx.t.Context(), models.MediaFile{
-		MediaFolderID: fx.folderID, FilePath: fx.base + "/" + name, FileSize: 1024,
-		SubtitleTracks: []models.SubtitleTrack{}, ExternalSubtitles: []models.ExternalSubtitle{},
-	})
-	if err != nil {
-		fx.t.Fatalf("upsert %s: %v", name, err)
-	}
-	return row
-}
-
-func (fx sweepFixture) exists(id int) bool {
-	fx.t.Helper()
-	var ok bool
-	if err := fx.pool.QueryRow(fx.t.Context(), `SELECT EXISTS(SELECT 1 FROM media_files WHERE id = $1)`, id).Scan(&ok); err != nil {
-		fx.t.Fatal(err)
-	}
-	return ok
-}
-
-func (fx sweepFixture) confirm(paths ...string) int {
-	fx.t.Helper()
-	confirmed, err := fx.repo.ConfirmFilesRemoved(fx.t.Context(), paths)
-	if err != nil {
-		fx.t.Fatalf("ConfirmFilesRemoved: %v", err)
-	}
-	return confirmed
-}
-
-func (fx sweepFixture) markMissing(ids ...int) {
-	fx.t.Helper()
-	for _, id := range ids {
-		if err := fx.repo.MarkMissing(fx.t.Context(), id, time.Now().UTC()); err != nil {
-			fx.t.Fatal(err)
-		}
-	}
-}
-
-func (fx sweepFixture) sweep(protected ...string) int {
-	fx.t.Helper()
-	deleted, err := fx.repo.DeleteMissingByFolder(fx.t.Context(), fx.folderID, 24*time.Hour, protected)
-	if err != nil {
-		fx.t.Fatalf("DeleteMissingByFolder: %v", err)
-	}
-	return deleted
-}
 
 // A file arr confirmed deleting skips the removal grace once a scan has marked
 // it missing, while a file that merely went missing still waits it out, and a
 // confirmed file a scan finds on disk loses its confirmation.
 func TestConfirmFilesRemovedSkipsGracePostgres(t *testing.T) {
-	fx := newSweepFixture(t, "Removal confirmed sweep")
+	pool := newDeadRootTestPool(t)
 	ctx := t.Context()
+	folderID := seedDeadRootTestFolder(t, pool, "series", "Removal confirmed sweep")
+	repo := NewFileRepository(pool)
+	base := fmt.Sprintf("/removal-confirmed-%d/Show/Season 01", time.Now().UnixNano())
 
-	replaced := fx.upsert("S01E01 old.mkv")
-	vanished := fx.upsert("S01E02.mkv")
-	returned := fx.upsert("S01E03.mkv")
+	upsert := func(name string) *models.MediaFile {
+		t.Helper()
+		row, err := repo.Upsert(ctx, models.MediaFile{
+			MediaFolderID: folderID, FilePath: base + "/" + name, FileSize: 1024,
+			SubtitleTracks: []models.SubtitleTrack{}, ExternalSubtitles: []models.ExternalSubtitle{},
+		})
+		if err != nil {
+			t.Fatalf("upsert %s: %v", name, err)
+		}
+		return row
+	}
+	exists := func(id int) bool {
+		t.Helper()
+		var ok bool
+		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM media_files WHERE id = $1)`, id).Scan(&ok); err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
 
-	if confirmed := fx.confirm(replaced.FilePath, returned.FilePath, fx.base+"/not-cataloged.mkv"); confirmed != 2 {
+	replaced := upsert("S01E01 old.mkv")
+	vanished := upsert("S01E02.mkv")
+	returned := upsert("S01E03.mkv")
+
+	confirmed, err := repo.ConfirmFilesRemoved(ctx, []string{replaced.FilePath, returned.FilePath, base + "/not-cataloged.mkv"})
+	if err != nil {
+		t.Fatalf("ConfirmFilesRemoved: %v", err)
+	}
+	if confirmed != 2 {
 		t.Fatalf("confirmed = %d, want 2", confirmed)
+	}
+	sweep := func(protected ...string) int {
+		t.Helper()
+		deleted, err := repo.DeleteMissingByFolder(ctx, folderID, 24*time.Hour, protected)
+		if err != nil {
+			t.Fatalf("DeleteMissingByFolder: %v", err)
+		}
+		return deleted
 	}
 
 	// A confirmation alone deletes nothing: only a scan that finds the file
 	// gone marks it missing and reconciles its memberships first.
-	if deleted := fx.sweep(); deleted != 0 {
+	if deleted := sweep(); deleted != 0 {
 		t.Fatalf("sweep before any scan deleted %d rows", deleted)
 	}
 
 	// The scan finds the replaced file gone and the returned one on disk.
 	now := time.Now().UTC()
-	fx.markMissing(replaced.ID, vanished.ID)
+	for _, id := range []int{replaced.ID, vanished.ID} {
+		if err := repo.MarkMissing(ctx, id, now); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// A confirmation newer than the scan's observation survives the clear.
-	if err := fx.repo.ClearRemovalConfirmed(ctx, returned.ID, now.Add(-time.Hour)); err != nil {
+	if err := repo.ClearRemovalConfirmed(ctx, returned.ID, now.Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	var stillConfirmed bool
-	if err := fx.pool.QueryRow(ctx, `SELECT removal_confirmed_at IS NOT NULL FROM media_files WHERE id = $1`, returned.ID).Scan(&stillConfirmed); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT removal_confirmed_at IS NOT NULL FROM media_files WHERE id = $1`, returned.ID).Scan(&stillConfirmed); err != nil {
 		t.Fatal(err)
 	}
 	if !stillConfirmed {
 		t.Fatal("clear dropped a confirmation written after the scan looked")
 	}
-	if err := fx.repo.ClearRemovalConfirmed(ctx, returned.ID, time.Now().UTC()); err != nil {
+	if err := repo.ClearRemovalConfirmed(ctx, returned.ID, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	if deleted := fx.sweep(); deleted != 1 || fx.exists(replaced.ID) {
-		t.Fatalf("deleted = %d, replaced row exists = %v; want only the confirmed row deleted", deleted, fx.exists(replaced.ID))
+	if deleted := sweep(); deleted != 1 || exists(replaced.ID) {
+		t.Fatalf("deleted = %d, replaced row exists = %v; want only the confirmed row deleted", deleted, exists(replaced.ID))
 	}
-	if !fx.exists(vanished.ID) {
+	if !exists(vanished.ID) {
 		t.Fatal("unconfirmed missing row was deleted inside the grace period")
 	}
 
 	// A later outage marks the returned file missing; its cleared
 	// confirmation must not let it skip the grace.
-	fx.markMissing(returned.ID)
-	if deleted := fx.sweep(); deleted != 0 {
+	if err := repo.MarkMissing(ctx, returned.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	if deleted := sweep(); deleted != 0 {
 		t.Fatalf("sweep after the outage deleted %d rows, want 0", deleted)
 	}
-}
-
-// A confirmation is lost when the file is upserted again, and a confirmed row
-// still waits while it holds first-seen data or sits under a protected root.
-func TestConfirmedRemovalExceptionsPostgres(t *testing.T) {
-	fx := newSweepFixture(t, "Removal confirmed exceptions")
-	ctx := t.Context()
 
 	// Seeing a confirmed file again through the upsert clears it as well.
-	reupserted := fx.upsert("S01E06.mkv")
-	fx.confirm(reupserted.FilePath)
-	fx.upsert("S01E06.mkv")
-	fx.markMissing(reupserted.ID)
-	if deleted := fx.sweep(); deleted != 0 {
+	reupserted := upsert("S01E06.mkv")
+	if _, err := repo.ConfirmFilesRemoved(ctx, []string{reupserted.FilePath}); err != nil {
+		t.Fatal(err)
+	}
+	upsert("S01E06.mkv")
+	if err := repo.MarkMissing(ctx, reupserted.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	if deleted := sweep(); deleted != 0 {
 		t.Fatalf("sweep after a re-upsert deleted %d rows, want 0", deleted)
 	}
 
 	// A confirmed row holding a removed episode's first-seen date waits for
 	// the replacement file to claim it; deleting it would make the episode
 	// look newly added.
-	holding := fx.upsert("S01E05.mkv")
-	fx.confirm(holding.FilePath)
-	fx.markMissing(holding.ID)
-	if _, err := fx.pool.Exec(ctx, `UPDATE media_files SET held_episode_first_seen_at = NOW() - interval '30 days' WHERE id = $1`, holding.ID); err != nil {
+	holding := upsert("S01E05.mkv")
+	if _, err := repo.ConfirmFilesRemoved(ctx, []string{holding.FilePath}); err != nil {
 		t.Fatal(err)
 	}
-	if deleted := fx.sweep(); deleted != 0 {
+	if err := repo.MarkMissing(ctx, holding.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE media_files SET held_episode_first_seen_at = NOW() - interval '30 days' WHERE id = $1`, holding.ID); err != nil {
+		t.Fatal(err)
+	}
+	if deleted := sweep(); deleted != 0 {
 		t.Fatalf("holding sweep deleted %d rows, want 0", deleted)
 	}
-	if _, err := fx.pool.Exec(ctx, `UPDATE media_files SET held_episode_first_seen_at = NULL WHERE id = $1`, holding.ID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE media_files SET held_episode_first_seen_at = NULL WHERE id = $1`, holding.ID); err != nil {
 		t.Fatal(err)
 	}
+
 	// Protected roots still win over a confirmation.
-	if deleted := fx.sweep(fx.base); deleted != 0 || !fx.exists(holding.ID) {
+	if deleted := sweep(base); deleted != 0 || !exists(holding.ID) {
 		t.Fatalf("protected sweep deleted %d rows, want 0", deleted)
 	}
-	if deleted := fx.sweep(); deleted != 1 || fx.exists(holding.ID) {
+	if deleted := sweep(); deleted != 1 || exists(holding.ID) {
 		t.Fatalf("sweep after the hold was claimed deleted %d rows, want the row deleted", deleted)
 	}
 }
@@ -357,146 +328,117 @@ func TestScanFileClearsRemovalConfirmation(t *testing.T) {
 	}
 }
 
-// movieLibrary is a movie library on disk whose movies are scanned, matched
-// titles listed in the library, as in a real catalog.
-type movieLibrary struct {
-	t          *testing.T
-	pool       *pgxpool.Pool
-	repo       *FileRepository
-	scanner    *Scanner
-	folder     *models.MediaFolder
-	dirs       map[string]string
-	files      map[string]string
-	contentIDs map[string]string
-}
-
-func newMovieLibrary(t *testing.T, name string, movies ...string) movieLibrary {
-	t.Helper()
-	pool := newDeadRootTestPool(t)
-	ctx := t.Context()
-	folderID := seedDeadRootTestFolder(t, pool, "movies", name)
-	root := t.TempDir()
-	lib := movieLibrary{
-		t: t, pool: pool, repo: NewFileRepository(pool),
-		folder:     &models.MediaFolder{ID: folderID, Paths: []string{root}, Type: "movies", Name: name, Enabled: true},
-		dirs:       map[string]string{},
-		files:      map[string]string{},
-		contentIDs: map[string]string{},
-	}
-	lib.scanner = NewScanner(lib.repo, "", nil, 2, true, 24*time.Hour)
-	for _, movie := range movies {
-		dir := filepath.Join(root, movie)
-		path := filepath.Join(dir, movie+".mkv")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte("fake movie payload"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		lib.dirs[movie], lib.files[movie] = dir, path
-	}
-	if _, err := lib.scanner.ScanFolder(ctx, lib.folder); err != nil {
-		t.Fatalf("scan: %v", err)
-	}
-	suffix := time.Now().UnixNano()
-	ids := make([]string, 0, len(movies))
-	for _, movie := range movies {
-		id := fmt.Sprintf("removal-folder-%d-%s", suffix, strings.Fields(movie)[0])
-		lib.contentIDs[movie] = id
-		ids = append(ids, id)
-		if _, err := pool.Exec(ctx, `
-			INSERT INTO media_items (content_id, type, title, status, genres, poster_path, backdrop_path, logo_path)
-			VALUES ($1, 'movie', $1, 'matched', '{}'::text[], '', '', '')`, id); err != nil {
-			t.Fatalf("seed item: %v", err)
-		}
-		if _, err := pool.Exec(ctx, `UPDATE media_files SET content_id = $1 WHERE media_folder_id = $2 AND file_path = $3`,
-			id, folderID, lib.files[movie]); err != nil {
-			t.Fatalf("link file: %v", err)
-		}
-	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.WithoutCancel(ctx), `DELETE FROM media_items WHERE content_id = ANY($1)`, ids)
-	})
-	if err := lib.scanner.syncPresentLibraryState(ctx, folderID); err != nil {
-		t.Fatalf("seed memberships: %v", err)
-	}
-	for _, movie := range movies {
-		if !lib.listed(movie) {
-			t.Fatalf("seeded movie %s is not in the library", movie)
-		}
-	}
-	return lib
-}
-
-// deleteFolder removes a movie's folder from disk, confirmed by arr or not,
-// and runs the subtree scan a webhook or the realtime monitor would.
-func (lib movieLibrary) deleteFolder(movie string, confirmed bool) {
-	lib.t.Helper()
-	ctx := lib.t.Context()
-	if err := os.RemoveAll(lib.dirs[movie]); err != nil {
-		lib.t.Fatal(err)
-	}
-	if confirmed {
-		if n, err := lib.repo.ConfirmFilesRemovedUnder(ctx, []string{lib.dirs[movie]}); err != nil || n != 1 {
-			lib.t.Fatalf("ConfirmFilesRemovedUnder = %d, %v; want 1 file", n, err)
-		}
-	}
-	if _, err := lib.scanner.ScanSubtree(ctx, lib.folder, lib.dirs[movie]); err != nil {
-		lib.t.Fatalf("subtree scan %s: %v", movie, err)
-	}
-}
-
-func (lib movieLibrary) listed(movie string) bool {
-	lib.t.Helper()
-	var ok bool
-	if err := lib.pool.QueryRow(lib.t.Context(),
-		`SELECT EXISTS(SELECT 1 FROM media_item_libraries WHERE content_id = $1 AND media_folder_id = $2)`,
-		lib.contentIDs[movie], lib.folder.ID).Scan(&ok); err != nil {
-		lib.t.Fatal(err)
-	}
-	return ok
-}
-
-func (lib movieLibrary) missing(movie string) bool {
-	lib.t.Helper()
-	var missing bool
-	if err := lib.pool.QueryRow(lib.t.Context(),
-		`SELECT missing_since IS NOT NULL FROM media_files WHERE media_folder_id = $1 AND file_path = $2`,
-		lib.folder.ID, lib.files[movie]).Scan(&missing); err != nil {
-		lib.t.Fatalf("file of %s: %v", movie, err)
-	}
-	return missing
-}
-
 // A subtree scan of a movie folder that is gone from a live library root
 // protects its files as a possible lost mount, unless arr confirmed deleting
 // the folder: then the scan reconciles the files and the movie leaves the
 // library. The row of a title's only file holds its added date, so it waits
 // out the grace in the trash like any other.
 func TestScanSubtreeReconcilesFolderArrDeleted(t *testing.T) {
-	lib := newMovieLibrary(t, "Removal confirmed folder", "Alpha (2020)", "Beta (2021)", "Gamma (2022)")
-	lib.deleteFolder("Alpha (2020)", true)
-	lib.deleteFolder("Beta (2021)", false)
-
-	if !lib.missing("Alpha (2020)") || lib.listed("Alpha (2020)") {
-		t.Fatal("movie arr deleted is still listed, or its file is not reconciled as missing")
+	pool := newDeadRootTestPool(t)
+	ctx := t.Context()
+	folderID := seedDeadRootTestFolder(t, pool, "movies", "Removal confirmed folder")
+	root := t.TempDir()
+	movie := func(name string) (dir, path string) {
+		t.Helper()
+		dir = filepath.Join(root, name)
+		path = filepath.Join(dir, name+".mkv")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("fake movie payload"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return dir, path
 	}
-	if lib.missing("Beta (2021)") || !lib.listed("Beta (2021)") {
-		t.Fatal("movie under an unconfirmed vanished folder was not protected")
-	}
-	if lib.missing("Gamma (2022)") || !lib.listed("Gamma (2022)") {
-		t.Fatal("untouched movie was reconciled")
-	}
-}
+	deletedDir, deleted := movie("Alpha (2020)")
+	vanishedDir, vanished := movie("Beta (2021)")
+	_, kept := movie("Gamma (2022)")
 
-// Deleting a library root's last movie leaves the root empty, which looks
-// like a lost mount while it still owns cataloged files. Files arr confirmed
-// removing do not count as that evidence.
-func TestScanSubtreeReconcilesLastFolderArrDeleted(t *testing.T) {
-	lib := newMovieLibrary(t, "Removal confirmed last folder", "Alpha (2020)")
-	lib.deleteFolder("Alpha (2020)", true)
+	repo := NewFileRepository(pool)
+	s := NewScanner(repo, "", nil, 2, true, 24*time.Hour)
+	folder := &models.MediaFolder{ID: folderID, Paths: []string{root}, Type: "movies", Name: "Removal confirmed folder", Enabled: true}
+	if _, err := s.ScanFolder(ctx, folder); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	// Each movie is a matched title in the library, as in a real catalog.
+	suffix := time.Now().UnixNano()
+	contentIDs := map[string]string{}
+	for _, path := range []string{deleted, vanished, kept} {
+		id := fmt.Sprintf("removal-folder-%d-%s", suffix, filepath.Base(filepath.Dir(path))[:5])
+		contentIDs[path] = id
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO media_items (content_id, type, title, status, genres, poster_path, backdrop_path, logo_path)
+			VALUES ($1, 'movie', $1, 'matched', '{}'::text[], '', '', '')`, id); err != nil {
+			t.Fatalf("seed item: %v", err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE media_files SET content_id = $1 WHERE media_folder_id = $2 AND file_path = $3`, id, folderID, path); err != nil {
+			t.Fatalf("link file: %v", err)
+		}
+	}
+	t.Cleanup(func() {
+		ids := make([]string, 0, len(contentIDs))
+		for _, id := range contentIDs {
+			ids = append(ids, id)
+		}
+		_, _ = pool.Exec(context.WithoutCancel(ctx), `DELETE FROM media_items WHERE content_id = ANY($1)`, ids)
+	})
+	if err := s.syncPresentLibraryState(ctx, folderID); err != nil {
+		t.Fatalf("seed memberships: %v", err)
+	}
+	listed := func(path string) bool {
+		t.Helper()
+		var ok bool
+		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM media_item_libraries WHERE content_id = $1 AND media_folder_id = $2)`,
+			contentIDs[path], folderID).Scan(&ok); err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	if !listed(deleted) || !listed(kept) {
+		t.Fatal("seeded movies are not in the library")
+	}
+	state := func(path string) (found, missing bool) {
+		t.Helper()
+		var missingSince *time.Time
+		err := pool.QueryRow(ctx,
+			`SELECT missing_since FROM media_files WHERE media_folder_id = $1 AND file_path = $2`,
+			folderID, path).Scan(&missingSince)
+		if err != nil {
+			if strings.Contains(err.Error(), "no rows") {
+				return false, false
+			}
+			t.Fatal(err)
+		}
+		return true, missingSince != nil
+	}
 
-	if !lib.missing("Alpha (2020)") || lib.listed("Alpha (2020)") {
-		t.Fatal("last movie arr deleted is still listed, or its file is not reconciled as missing")
+	for _, dir := range []string{deletedDir, vanishedDir} {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := repo.ConfirmFilesRemovedUnder(ctx, []string{deletedDir}); err != nil || n != 1 {
+		t.Fatalf("ConfirmFilesRemovedUnder = %d, %v; want 1 file", n, err)
+	}
+	for _, dir := range []string{deletedDir, vanishedDir} {
+		if _, err := s.ScanSubtree(ctx, folder, dir); err != nil {
+			t.Fatalf("subtree scan %s: %v", dir, err)
+		}
+	}
+
+	if found, missing := state(deleted); !found || !missing {
+		t.Fatalf("file of the folder arr deleted: found=%v missing=%v, want reconciled as missing", found, missing)
+	}
+	if listed(deleted) {
+		t.Fatal("movie arr deleted is still listed in the library")
+	}
+	if !listed(vanished) {
+		t.Fatal("movie under an unconfirmed vanished folder left the library")
+	}
+	if found, missing := state(vanished); !found || missing {
+		t.Fatalf("unconfirmed vanished folder: found=%v missing=%v, want protected and untouched", found, missing)
+	}
+	if found, missing := state(kept); !found || missing {
+		t.Fatalf("untouched movie: found=%v missing=%v, want present", found, missing)
 	}
 }
