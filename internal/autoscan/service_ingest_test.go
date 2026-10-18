@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/Silo-Server/silo-server/internal/scantrigger"
@@ -278,15 +279,19 @@ func TestIngestChangesConfirmsArrRemovedFiles(t *testing.T) {
 	}
 }
 
-// A movie or series folder arr deleted is confirmed as a folder, and only
-// when it is gone from a library directory that still exists. A folder still
-// on disk, or one whose parent is gone too (possibly a lost mount), keeps the
-// removal grace.
+// A movie or series folder arr deleted is confirmed as a folder once its
+// parent directory exists, whether the folder is already gone or arr is still
+// removing it. A folder whose parent is gone too (possibly a lost mount), or a
+// path that is a file rather than a folder, keeps the removal grace.
 func TestIngestChangesConfirmsArrRemovedFolders(t *testing.T) {
 	root := t.TempDir()
 	gone := filepath.Join(root, "Gone Movie (2020)")
-	present := filepath.Join(root, "Present Movie (2021)")
-	if err := os.Mkdir(present, 0o700); err != nil {
+	deleting := filepath.Join(root, "Deleting Movie (2021)")
+	if err := os.Mkdir(deleting, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	notFolder := filepath.Join(root, "Not A Folder (2023)")
+	if err := os.WriteFile(notFolder, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	orphaned := filepath.Join(root, "unmounted", "Orphan Movie (2022)")
@@ -300,14 +305,16 @@ func TestIngestChangesConfirmsArrRemovedFolders(t *testing.T) {
 		ProviderEventType: "MovieDelete",
 		Changes: []Change{
 			{SourcePath: gone, Scope: ChangeScopeSubtree, Removed: true},
-			{SourcePath: present, Scope: ChangeScopeSubtree, Removed: true},
+			{SourcePath: deleting, Scope: ChangeScopeSubtree, Removed: true},
+			{SourcePath: notFolder, Scope: ChangeScopeSubtree, Removed: true},
 			{SourcePath: orphaned, Scope: ChangeScopeSubtree, Removed: true},
 		},
 	}); err != nil {
 		t.Fatalf("IngestChanges: %v", err)
 	}
-	if len(removals.folders) != 1 || removals.folders[0] != gone || len(removals.paths) != 0 {
-		t.Fatalf("confirmed folders = %v, files = %v, want only folder %s", removals.folders, removals.paths, gone)
+	want := []string{gone, deleting}
+	if !slices.Equal(removals.folders, want) || len(removals.paths) != 0 {
+		t.Fatalf("confirmed folders = %v, files = %v, want folders %v", removals.folders, removals.paths, want)
 	}
 }
 

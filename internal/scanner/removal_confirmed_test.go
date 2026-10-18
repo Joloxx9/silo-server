@@ -500,3 +500,34 @@ func TestScanSubtreeReconcilesLastFolderArrDeleted(t *testing.T) {
 		t.Fatal("last movie arr deleted is still listed, or its file is not reconciled as missing")
 	}
 }
+
+// Arr sends its movie delete event while it is still removing the folder, so
+// the confirmation can come before the folder is gone. Scans that still find
+// the files keep it, and the scan that finds the folder gone reconciles it.
+func TestScanSubtreeWaitsForFolderArrIsDeleting(t *testing.T) {
+	lib := newMovieLibrary(t, "Removal confirmed while deleting", "Alpha (2020)", "Beta (2021)")
+	ctx := t.Context()
+	dir := lib.dirs["Alpha (2020)"]
+	if n, err := lib.repo.ConfirmFilesRemovedUnder(ctx, []string{dir}); err != nil || n != 1 {
+		t.Fatalf("ConfirmFilesRemovedUnder = %d, %v; want 1 file", n, err)
+	}
+	if _, err := lib.scanner.ScanSubtree(ctx, lib.folder, dir); err != nil {
+		t.Fatalf("subtree scan before the delete finished: %v", err)
+	}
+	if lib.missing("Alpha (2020)") || !lib.listed("Alpha (2020)") {
+		t.Fatal("movie still on disk was reconciled before arr finished deleting it")
+	}
+
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lib.scanner.ScanSubtree(ctx, lib.folder, dir); err != nil {
+		t.Fatalf("subtree scan after the delete: %v", err)
+	}
+	if !lib.missing("Alpha (2020)") || lib.listed("Alpha (2020)") {
+		t.Fatal("movie arr finished deleting is still listed, or its file is not reconciled as missing")
+	}
+	if lib.missing("Beta (2021)") || !lib.listed("Beta (2021)") {
+		t.Fatal("untouched movie was reconciled")
+	}
+}
