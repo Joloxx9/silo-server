@@ -11,6 +11,7 @@
 ./internal/catalog TestJellyfinPersonReadsMatchNativeVisibilityPostgres
 ./internal/recommendations TestRecentCompletedItemIDsGroupsSeriesBeforeLimit
 ./internal/sections TestCompatibilityRecentlyAddedReturnsFlatDistinctSeries
+./internal/sections TestSectionsSkipItemsInNoLibraryPostgres
 ./internal/scanner TestFileRepositoryPreservesFirstSeenScanProvenance
 ./internal/scanner TestMatroskaTrackBackfillRecordsTrackNumbers
 ./internal/scanner TestMatroskaTrackBackfillStopsOnStalledStorage
@@ -63,6 +64,16 @@
 
 # Scoped administrator keys cannot redirect recovery through either API version.
 ./internal/apiv2 TestScopedAdminKeyCannotRedirectRecoveryDB
+
+# API key verifiers preserve credentials without retaining recoverable bearers.
+./internal/auth TestAPIKeyStorageDoesNotRetainBearer
+./internal/auth TestAPIKeyVerifierUpgrade
+./internal/auth TestAPIKeyVerifierEmptyMigrationRoundTrip
+./internal/auth TestAPIKeyVerifierLegacyDigestCollision
+./internal/auth TestAPIKeyVerifierMigrationRollback
+./internal/auth TestAPIKeyVerifierDownSeesConcurrentInsert
+./internal/api/handlers TestAPIKeyLegacyListsAndEditorNeverReturnStoredSecret
+./internal/api/handlers TestAPIKeyCreationStillReturnsTheOnlyFullSecretResponse
 
 # Recovery identity changes retire links and prevent delivery to a stale address.
 ./internal/passwordreset TestResetLinkRetiresOnRecoveryEmailChangeDB
@@ -222,6 +233,10 @@
 
 # Intro analysis state timestamps and config-hash isolation.
 ./internal/intromarkers TestSeasonStateIsKeyedByAnalysisHashPostgres
+
+# Credits tail failures replace legacy metadata verdicts and back off.
+./internal/intromarkers TestMovieTailFailureReplacesMetadataUnusableRowPostgres
+./internal/mediaartifact TestArtifactFailureReplacesListedUnusableDetailsPostgres
 
 # Login sessions record the device that signed in.
 ./internal/auth TestLoginSessionRecordsReportedDeviceDB
@@ -387,6 +402,10 @@
 ./migrations TestDeletingLibraryPrunesAccessPolicyReferencesPostgres
 ./migrations TestLibraryDeleteRacingAccessWritePostgres
 ./migrations TestPruneDeletedLibraryAccessMigrationRepairsStaleIDsPostgres
+
+# Deleting a library keeps the admin collections that cover other libraries,
+# moving one off the deleted library without a slug clash.
+./internal/catalog TestFolderDeleteKeepsMultiLibraryCollectionsDB
 
 # AI metadata translations never replace provider or manual localized text.
 ./internal/catalog TestAITranslationNeverOverwritesProviderOrManualText
