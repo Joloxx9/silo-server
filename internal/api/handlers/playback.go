@@ -1219,9 +1219,11 @@ func (h *PlaybackHandler) finalizeSessionStop(ctx context.Context, session *play
 // finalizeExpiredSession finalizes a session the liveness reaper expired. The
 // reaper then marks its attempt stopped, so a client starts a new session
 // rather than resuming this one, and watch providers that mirror live
-// sessions hear this one ended.
+// sessions hear this one ended. A Jellyfin play's upstream session is the
+// exception: jellycompat can revive it under the same id and sends that
+// play's own stop, so its expiry stays a plain pause.
 func (h *PlaybackHandler) finalizeExpiredSession(ctx context.Context, session *playback.Session) {
-	h.finalizeSessionStopWithResult(ctx, session, false, "", false, true)
+	h.finalizeSessionStopWithResult(ctx, session, false, "", false, !session.IsJellyfinCompat)
 }
 
 // finalizeSessionStopWithResult is finalizeSessionStop reporting the history
