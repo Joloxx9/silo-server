@@ -558,6 +558,32 @@ output supports HDR10, and the plan carries the `hdr_range_assumed_hdr10`
 degradation warning. Refusing to play those outright would be worse than an
 assumption the client is told about.
 
+An `hdr10_plus` source is HDR10 with dynamic metadata that HDR10-only displays
+ignore, so an output that claims HDR10 but not HDR10+ takes it as HDR10, within
+its HDR10 ceilings, and the plan claims HDR10. The jellycompat device profile
+checks follow Jellyfin 10.11: each HDR10+ range type (`HDR10Plus`,
+`DOVIWithHDR10Plus`, `DOVIWithELHDR10Plus`) satisfies a positive
+`VideoRangeType` condition that its form without HDR10+ (`HDR10`,
+`DOVIWithHDR10`, `DOVIWithEL`) satisfies, any condition for an HLS copy, and
+is excluded by a negative condition that excludes that form. A file therefore
+keeps the routes it had before its HDR10+ metadata was detected, with one
+change Jellyfin makes too: a client that excludes the HDR10+ range type while
+accepting its form, such as Jellyfin Android TV on a display without HDR10+,
+gets an HLS copy of the same stream instead of direct play.
+
+FFmpeg reports HDR10+ only as frame side data, so the scanner decodes the first
+frame of the primary video stream when it is PQ. A stored first video track
+carries `hdr10_plus`, `false` included, only once that frame has been read. A
+PQ track without the key was probed before this check, or the read failed, or
+playback's probe repair rewrote it; the repair skips the frame read to stay
+within its budget and keeps a recorded status only when the reprobed stream
+is unchanged. A failed read is never recorded as "not HDR10+", so a
+misbehaving ffprobe cannot mark the library that way. The
+`backfill_hdr10_plus` task, at startup and daily, reads the first frame of the
+unchecked files and sets only `hdr10_plus` and, for an HDR10+ file,
+`video_range_type`, writing only while the file and the track still match the
+row it read.
+
 A client may additionally report the raw display probe in `output.display`
 with an evidence tier:
 
@@ -1701,7 +1727,14 @@ scale it down to 2160 lines.
 Compound rungs are strict resolution/bitrate selections. A bandwidth cap can
 clamp their bitrate but does not silently demote their resolution. Plain labels
 remain accepted for stored/default preferences and size their output like
-`auto` below.
+`auto` below, except under a cap: a plain label keeps its resolution while
+`bandwidth_cap_kbps` reaches the lowest rung of that resolution and lowers only
+the bitrate to the cap, so `1080p` under a 3000 kbps cap encodes a 1920x1080
+source the same way as `1080p-low`. The plain label still fits a cropped source
+into its class's box as `auto` does (a 3840x1600 source is 1920x800), where the
+compound rung keeps 1080 lines. Below every rung of its resolution it steps down
+to the tallest resolution whose lowest rung the cap reaches, or to 480p at the
+cap when none does.
 
 `auto` is best-effort direct play. It sends the source as-is unless the device
 rules it out, through a `max_resolution` below the source or decode
@@ -1717,9 +1750,9 @@ that choice; it is now an alias of `auto`.
 
 A source over the estimate's budget is re-encoded at the class that 80% of the
 estimate earns on the shared bitrate ladder ([quality-ladder.md](quality-ladder.md))
-for the source's frame rate. A source over `bandwidth_cap_kbps` is re-encoded at
-the tallest class whose class bitrate (below) fits within the cap, with no
-headroom and whatever the frame rate: a 6000 kbps cap earns 1080p at 6000 kbps,
+for the source's frame rate. Under `auto`, a source over `bandwidth_cap_kbps` is
+re-encoded at the tallest class whose class bitrate (below) fits within the cap,
+with no headroom and whatever the frame rate: a 6000 kbps cap earns 1080p at 6000 kbps,
 and a cap between two classes earns the lower one. A source of unknown bitrate
 counts as needing its class's full bitrate against an estimate, and is always
 re-encoded under a cap, since it cannot be shown to fit. A source whose bitrate

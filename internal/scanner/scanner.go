@@ -3134,6 +3134,7 @@ func (s *Scanner) processFile(
 		// Apply probe data if available.
 		if probe != nil {
 			applyProbeData(&mf, probe, probeSource)
+			s.keepStoredHDR10PlusStatus(ctx, existing, &mf)
 		} else if probeRejected {
 			markProbeRejected(&mf)
 		}
@@ -4135,6 +4136,7 @@ func applyProbeData(mf *models.MediaFile, probe *ProbeData, probeSource string) 
 			BitDepth:            vt.BitDepth,
 			PixelFormat:         vt.PixelFormat,
 			ReferenceFrames:     vt.ReferenceFrames,
+			HDR10PlusUnchecked:  vt.HDR10PlusUnchecked,
 		}
 	}
 	mf.VideoTracks = videoTracks
@@ -4226,6 +4228,27 @@ func (s *Scanner) probeFile(ctx context.Context, filePath string) (probe *ProbeD
 		return nil, probeSource, IsProbeRejection(ctx, filePath, err)
 	}
 	return probe, probeSource, false
+}
+
+// keepStoredHDR10PlusStatus keeps the HDR10+ status already recorded for an
+// unchanged file whose first-frame read failed in this rescan, as playback's
+// probe repair does, so a transient failure does not drop a status that was
+// read. The stored row is read only on that failure path.
+func (s *Scanner) keepStoredHDR10PlusStatus(ctx context.Context, existing *scanStateFile, mf *models.MediaFile) {
+	if existing == nil || len(mf.VideoTracks) == 0 || !mf.VideoTracks[0].HDR10PlusUnchecked {
+		return
+	}
+	// A changed file's old status no longer describes it.
+	if existing.FileSize != mf.FileSize || mf.FileModifiedAt == nil || !sameFileModifiedAt(existing.FileModifiedAt, *mf.FileModifiedAt) {
+		return
+	}
+	stored, err := s.fileRepo.GetByID(ctx, existing.ID)
+	if err != nil {
+		slog.DebugContext(ctx, "scanner: could not read the stored HDR10+ status",
+			"component", "scanner", "file_id", existing.ID, "error", err)
+		return
+	}
+	carryCheckedHDR10Plus(stored.VideoTracks, mf.VideoTracks)
 }
 
 // markProbeRejected records on a media file being written that ffprobe
