@@ -69,6 +69,7 @@ export const v2Operations = {
   "DELETE /api/v2/notifications/discord-link": "unlinkNotificationDiscord",
   "DELETE /api/v2/notifications/email-preferences/address": "clearNotificationEmailAddress",
   "DELETE /api/v2/notifications/push/devices/{device_id}": "unregisterPushDevice",
+  "DELETE /api/v2/notifications/series/{series_id}/mute": "unmuteNotificationSeries",
   "DELETE /api/v2/notifications/web-push/subscriptions/{id}":
     "deleteNotificationWebPushSubscription",
   "DELETE /api/v2/notifications/webhooks/{id}": "deleteNotificationWebhook",
@@ -470,6 +471,7 @@ export const v2Operations = {
   "GET /api/v2/scan/capabilities": "getScanCapabilities",
   "GET /api/v2/sections/recipes": "listSectionRecipes",
   "GET /api/v2/sections/recipes/{type}/candidates": "listSectionRecipeCandidates",
+  "GET /api/v2/sections/seasonal-themes": "listSeasonalThemes",
   "GET /api/v2/settings/contract": "getSettingsContract",
   "GET /api/v2/settings/contract/capabilities": "getSettingsContractCapabilities",
   "GET /api/v2/settings/overlay-config": "getOverlayConfig",
@@ -894,6 +896,7 @@ export const v2Operations = {
   "PUT /api/v2/notifications/email-preferences": "updateNotificationEmailPreferences",
   "PUT /api/v2/notifications/email-preferences/address": "requestNotificationEmailVerification",
   "PUT /api/v2/notifications/preferences": "updateNotificationPreferences",
+  "PUT /api/v2/notifications/series/{series_id}/mute": "muteNotificationSeries",
   "PUT /api/v2/notifications/webhooks/{id}": "updateNotificationWebhook",
   "PUT /api/v2/onboarding/progress": "updateOnboardingProgress",
   "PUT /api/v2/profile/sections": "replaceProfileSectionOverrides",

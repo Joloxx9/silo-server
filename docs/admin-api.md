@@ -61,9 +61,9 @@ task's triggers with its configured poll interval.
 
 Uploadable images white-label the server: the sidebar wordmark, the square
 mark (collapsed sidebar and installed PWA), the browser favicon, and the login
-background. Each is stored in the public S3 bucket and referenced from a
-`server_settings` row, so uploads return `503 unavailable` until
-`s3.public_bucket` is configured.
+background. Each is stored in artwork storage (`artwork.storage_backend`: a
+local directory, or the public S3 bucket when the backend is S3) and referenced
+from a `server_settings` row, so uploads work without an S3 bucket.
 
 | Route                                         | Auth   | Purpose                                                              |
 | --------------------------------------------- | ------ | -------------------------------------------------------------------- |
@@ -3176,6 +3176,8 @@ automatically. A revision precondition (`If-Match`) is a follow-up, not part of 
 `POST /api/v2/admin/plugins/installations/{id}/config/test` probes one prospective entry:
 the server starts a temporary plugin instance with the merged configuration, runs the
 plugin's connection check under a 20 s timeout, and stops the instance. Nothing is stored.
+A metadata provider is checked with a movie search; a marker provider is asked for its
+account statistics, which need the staged credentials.
 A completed failed check, including a plugin without connection-check support, is a 200
 result with `success` false and the message; only transport or store failures are problems.
 The probe launches a process and may call a billed provider, so it is non-retryable: the

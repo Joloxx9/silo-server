@@ -18,6 +18,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/catalog"
 	"github.com/Silo-Server/silo-server/internal/catalog/reattribute"
 	"github.com/Silo-Server/silo-server/internal/contentid"
+	"github.com/Silo-Server/silo-server/internal/database/queryattr"
 	"github.com/Silo-Server/silo-server/internal/idgen"
 	"github.com/Silo-Server/silo-server/internal/lang"
 	"github.com/Silo-Server/silo-server/internal/models"
@@ -75,6 +76,13 @@ type metadataItemRepo interface {
 	IncrementRefreshFailure(ctx context.Context, contentID string) error
 	ReplacePeople(ctx context.Context, contentID string, people []models.ItemPerson) error
 	ListUnmatchedByFolderAndPathPrefix(ctx context.Context, folderID int, pathPrefix string, limit int) ([]string, error)
+}
+
+// metadataPersonRepo resolves credited people and claims their local photos.
+// The concrete *catalog.PersonRepository satisfies this interface.
+type metadataPersonRepo interface {
+	localPersonPhotoRepo
+	BatchFindOrCreate(ctx context.Context, people []models.Person) ([]int64, error)
 }
 
 type metadataItemDeleteRepo interface {
@@ -197,6 +205,11 @@ type metadataSeasonRepo interface {
 	ListBySeriesAndNumbers(ctx context.Context, seriesID string, seasonNumbers []int32) ([]*models.Season, error)
 	Upsert(ctx context.Context, s *models.Season) error
 	BulkUpsert(ctx context.Context, seasons []*models.Season) error
+}
+
+type metadataItemLocalizationRepo interface {
+	Get(ctx context.Context, contentID, language string) (*models.MediaItemLocalization, error)
+	Upsert(ctx context.Context, loc *models.MediaItemLocalization) error
 }
 
 type metadataSeasonLocalizationRepo interface {
@@ -434,13 +447,13 @@ type MetadataService struct {
 	seasonRepo              metadataSeasonRepo
 	libraryRepo             metadataLibraryRepo
 	folderRepo              metadataFolderRepo
-	itemLocalizationRepo    *catalog.MediaItemLocalizationRepository
+	itemLocalizationRepo    metadataItemLocalizationRepo
 	itemBackdropRepo        metadataItemBackdropRepo
 	itemAliasRepo           *catalog.ItemAliasRepository
 	seasonLocalizationRepo  metadataSeasonLocalizationRepo
 	episodeLocalizationRepo metadataEpisodeLocalizationRepo
 	autoTranslator          AutoTranslator // optional; set via SetAutoTranslator
-	personRepo              *catalog.PersonRepository
+	personRepo              metadataPersonRepo
 	videoRepo               metadataVideoRepo
 	enrichmentState         enrichmentStateStore
 	ratingSourceRepo        metadataRatingSourceRepo
@@ -534,7 +547,7 @@ func NewMetadataService(
 	staleIDRepo metadataStaleIDRepo,
 	rootClaimRepo *catalog.RootClaimRepository,
 ) *MetadataService {
-	var itemLocalizationRepo *catalog.MediaItemLocalizationRepository
+	var itemLocalizationRepo metadataItemLocalizationRepo
 	var itemBackdropRepo metadataItemBackdropRepo
 	var itemAliasRepo *catalog.ItemAliasRepository
 	var seasonLocalizationRepo metadataSeasonLocalizationRepo
@@ -565,7 +578,7 @@ func NewMetadataService(
 		groupOverrideRepo = scanner.NewMediaGroupOverrideRepository(pool)
 		observedLocationRepo = scanner.NewObservedLocationRepository(pool)
 	}
-	return &MetadataService{
+	svc := &MetadataService{
 		chainRepo:               chainRepo,
 		pluginResolver:          pluginResolver,
 		enabledChecker:          enabledChecker,
@@ -580,7 +593,6 @@ func NewMetadataService(
 		itemAliasRepo:           itemAliasRepo,
 		seasonLocalizationRepo:  seasonLocalizationRepo,
 		episodeLocalizationRepo: episodeLocalizationRepo,
-		personRepo:              personRepo,
 		videoRepo:               videoRepo,
 		ratingSourceRepo:        ratingSourceRepo,
 		fileRepo:                fileRepo,
@@ -598,6 +610,11 @@ func NewMetadataService(
 		chainCache:              make(map[string]chainCacheEntry),
 		chainCacheTTL:           60 * time.Second,
 	}
+	// A nil *PersonRepository stored in the interface would pass s.personRepo != nil.
+	if personRepo != nil {
+		svc.personRepo = personRepo
+	}
+	return svc
 }
 
 // SetImageCacher enables S3 image caching during metadata persistence.
@@ -780,7 +797,7 @@ func (s *MetadataService) maybeAutoTranslate(ctx context.Context, folderID int, 
 	if strings.EqualFold(strings.TrimSpace(item.DefaultMetadataLanguage), library) {
 		return
 	}
-	go s.autoTranslator.AutoEnqueue(context.WithoutCancel(ctx), contentID, library)
+	go s.autoTranslator.AutoEnqueue(queryattr.Detach(context.WithoutCancel(ctx)), contentID, library)
 }
 
 // adoptableFolderLanguage reports whether a folder-scoped refresh should
@@ -2327,9 +2344,9 @@ func (s *MetadataService) processInternal(ctx context.Context, req ProcessReques
 		return &ProcessResult{Updated: false, Decision: matchDecision}, nil
 	}
 
+	ctx = withLocalMetadataUnreadable(ctx, localMetadataUnreadable)
 	if s.localArtworkUsable() {
 		ctx = withLocalArtworkSearched(ctx, localArtworkSearched)
-		ctx = withLocalMetadataUnreadable(ctx, localMetadataUnreadable)
 	}
 	result, err := s.mergeAndPersist(ctx, req, accumulator, allImages, allSeasons, allEpisodes, contentType)
 	if err != nil {
@@ -2827,6 +2844,19 @@ func (s *MetadataService) mergeAndPersist(
 	// Whether the providers listed any people, before the merge below folds
 	// the stored item into the accumulator.
 	providersListPeople := len(accumulator.People) > 0
+	// The merge below replaces accumulator with the stored item, whose text is
+	// in the canonical language; a non-canonical write keeps the text it
+	// fetched in req.Language for the localization row.
+	var fetchedText *MetadataResult
+	if !isCanonicalWrite {
+		fetchedText = &MetadataResult{
+			Title:           accumulator.Title,
+			SortTitle:       accumulator.SortTitle,
+			Overview:        accumulator.Overview,
+			Tagline:         accumulator.Tagline,
+			TitleIsFallback: accumulator.TitleIsFallback,
+		}
+	}
 
 	if existingItem != nil {
 		existingResult := itemToMetadataResult(existingItem)
@@ -2954,7 +2984,7 @@ func (s *MetadataService) mergeAndPersist(
 	if handleArtwork {
 		prepareItemImagesForQueue(item, existingItem, keepStored)
 		dropGoneItemOnlyArtwork(localArt, item, images)
-		applyLocalArtworkFallback(item, images, req.Language)
+		applyLocalArtworkFallback(item, existingItem, images, req.Language)
 	}
 
 	if isNew && contentID == "" {
@@ -3005,8 +3035,15 @@ func (s *MetadataService) mergeAndPersist(
 		if err != nil {
 			return nil, fmt.Errorf("loading item localization: %w", err)
 		}
+		// A pass that could not read the NFO keeps what the NFO set, even
+		// where it matches the canonical text.
+		copiesOf := accumulator
+		if localMetadataUnreadableLevels(ctx)&localArtworkItem != 0 {
+			copiesOf = nil
+		}
 		loc := buildItemLocalizationRecord(
-			existingLoc, contentID, req.Language, contentType, accumulator, images, mergeMode, req.Language,
+			existingLoc, contentID, req.Language, contentType, localizedItemText(fetchedText, accumulator, locked), copiesOf,
+			images, mergeMode, req.Language,
 			isFieldLocked(locked, FieldName),
 			keepStored,
 		)
@@ -3032,30 +3069,32 @@ func (s *MetadataService) mergeAndPersist(
 				// A failed local re-apply is retried by the next check.
 				return nil, fmt.Errorf("finding people: %w", err)
 			}
-			slog.WarnContext(ctx, "metadata: batch find/create people failed", "component", "metadata", "error", err)
+			// Keep the stored cast: no credit got an ID, so replacing it now
+			// would store only the credits that already had one, often none.
+			slog.WarnContext(ctx, "metadata: batch find/create people failed; keeping stored people", "component", "metadata", "content_id", contentID, "error", err)
 		} else {
 			for i := range item.People {
 				item.People[i].Person.ID = personIDs[i]
 			}
-		}
-		// Filter out entries where FindOrCreate failed (Person.ID stayed 0).
-		valid := item.People[:0]
-		for _, p := range item.People {
-			if p.Person.ID != 0 {
-				valid = append(valid, p)
+			// Filter out entries where FindOrCreate failed (Person.ID stayed 0).
+			valid := item.People[:0]
+			for _, p := range item.People {
+				if p.ID != 0 {
+					valid = append(valid, p)
+				}
 			}
-		}
-		if req.localReapply && len(valid) != len(item.People) {
-			// A partial cast would replace the stored one.
-			return nil, fmt.Errorf("resolving people: %d of %d unresolved", len(item.People)-len(valid), len(item.People))
-		}
-		if err := s.itemRepo.ReplacePeople(ctx, contentID, valid); err != nil {
-			if req.localReapply {
-				return nil, fmt.Errorf("replacing people: %w", err)
+			if req.localReapply && len(valid) != len(item.People) {
+				// A partial cast would replace the stored one.
+				return nil, fmt.Errorf("resolving people: %d of %d unresolved", len(item.People)-len(valid), len(item.People))
 			}
-			slog.WarnContext(ctx, "metadata: failed to replace people", "component", "metadata", "content_id", contentID, "error", err)
+			if err := s.itemRepo.ReplacePeople(ctx, contentID, valid); err != nil {
+				if req.localReapply {
+					return nil, fmt.Errorf("replacing people: %w", err)
+				}
+				slog.WarnContext(ctx, "metadata: failed to replace people", "component", "metadata", "content_id", contentID, "error", err)
+			}
+			s.applyLocalPersonPhotos(ctx, contentID, valid)
 		}
-		s.applyLocalPersonPhotos(ctx, contentID, valid)
 	}
 
 	// Persist remote videos (trailers etc.), filtered by the library's
@@ -3231,11 +3270,15 @@ func (s *MetadataService) persistItemAndProviderIDsOnceTx(
 	providerIDs map[string]string,
 	identityChosen bool,
 ) error {
-	tx, err := s.dbPool.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := s.dbPool.BeginTx(ctx, catalog.MetadataCurationTxOptions(ctx))
 	if err != nil {
 		return fmt.Errorf("begin metadata item/provider transaction: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if err := catalog.GuardMetadataCurationItems(ctx, tx, item.ContentID); err != nil {
+		return err
+	}
 
 	if err := itemRepo.UpsertTx(ctx, tx, item); err != nil {
 		return fmt.Errorf("upserting item: %w", err)
@@ -4990,12 +5033,44 @@ func dropAIText(value *string, source string) {
 	}
 }
 
+// localizedItemText is the text a non-canonical write stores in the item's
+// localization row: the text fetched in the request language, except that a
+// locked field keeps the stored canonical value, as the base item does. A
+// provider's fallback title (the original title, for want of one in the
+// request language) is no translation, so the row keeps what it has or falls
+// back to the base title.
+func localizedItemText(fetched, canonical *MetadataResult, locked []MetadataField) *MetadataResult {
+	text := *fetched
+	if text.TitleIsFallback {
+		text.Title, text.SortTitle = "", ""
+	}
+	if isFieldLocked(locked, FieldName) {
+		text.Title, text.SortTitle = canonical.Title, canonical.SortTitle
+	}
+	if isFieldLocked(locked, FieldOverview) {
+		text.Overview, text.Tagline = canonical.Overview, canonical.Tagline
+	}
+	return &text
+}
+
+// clearCanonicalCopy empties a stored localized value identical to the
+// canonical one. Such a value is a copy of the base text, not a translation:
+// earlier releases wrote the canonical text into the localization row of
+// every non-canonical refresh. Cleared, it takes this refresh's text in either
+// merge mode, and with none it falls back to the identical base value.
+func clearCanonicalCopy(value *string, canonical string) {
+	if *value != "" && *value == canonical {
+		*value = ""
+	}
+}
+
 func buildItemLocalizationRecord(
 	existing *models.MediaItemLocalization,
 	contentID string,
 	language string,
 	contentType string,
 	accumulator *MetadataResult,
+	canonical *MetadataResult,
 	images []RemoteImage,
 	mergeMode MergeMode,
 	preferredLanguage string,
@@ -5010,9 +5085,20 @@ func buildItemLocalizationRecord(
 		*loc = *existing
 		loc.ContentID = contentID
 		loc.Language = language
-		// AI text is not dropped here, unlike seasons and episodes: a refresh
-		// in a non-canonical language passes the canonical-language result as
-		// accumulator, so a dropped field would fill with canonical text.
+		// AI text is not dropped here, unlike seasons and episodes: a locked
+		// field passes the canonical value as accumulator, so a dropped field
+		// would fill with canonical text. A nil canonical leaves stored copies
+		// alone.
+		if canonical != nil {
+			clearCanonicalCopy(&loc.Title, canonical.Title)
+			clearCanonicalCopy(&loc.SortTitle, canonical.SortTitle)
+			if loc.OverviewSource == models.LocalizationSourceProvider {
+				clearCanonicalCopy(&loc.Overview, canonical.Overview)
+			}
+			if loc.TaglineSource == models.LocalizationSourceProvider {
+				clearCanonicalCopy(&loc.Tagline, canonical.Tagline)
+			}
+		}
 	}
 
 	mergeScalar(&loc.Title, accumulator.Title, mergeMode)
@@ -8262,11 +8348,22 @@ func (s *MetadataService) rebindItemOnto(ctx context.Context, fromContentID, toC
 		return fmt.Errorf("rebind skeleton requires database pool")
 	}
 
-	tx, err := s.dbPool.Begin(ctx)
+	tx, err := s.dbPool.BeginTx(ctx, catalog.MetadataCurationTxOptions(ctx))
 	if err != nil {
 		return fmt.Errorf("begin skeleton rebind transaction: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if err := catalog.LockMetadataCurationFiles(ctx, tx, fromContentID); err != nil {
+		return err
+	}
+	err = catalog.GuardMetadataCurationItems(ctx, tx, fromContentID, toContentID)
+	if errors.Is(err, catalog.ErrItemNotFound) {
+		return rebindOntoAfterMissingItem(ctx, tx, fromContentID, toContentID, markIdentity, err)
+	}
+	if err != nil {
+		return err
+	}
 
 	steps := []struct {
 		name string
@@ -8426,6 +8523,36 @@ func (s *MetadataService) rebindItemOnto(ctx context.Context, fromContentID, toC
 		return fmt.Errorf("commit skeleton rebind transaction: %w", err)
 	}
 	MarkRecommendationsStale(ctx, s.recsStaler, MovedStateTargets(report, toContentID, episodePairs)...)
+	return nil
+}
+
+// rebindOntoAfterMissingItem finishes a curated rebind whose guard found the
+// source or the target missing (notFound).
+func rebindOntoAfterMissingItem(ctx context.Context, tx pgx.Tx, fromContentID, toContentID string, markIdentity bool, notFound error) error {
+	// Lock and authorize the target again: one created since the guard's read
+	// is visible now. A missing target still fails.
+	if err := catalog.GuardMetadataCurationItems(ctx, tx, toContentID); err != nil {
+		return err
+	}
+	var sourceExists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM media_items WHERE content_id = $1)`, fromContentID).Scan(&sourceExists); err != nil {
+		return err
+	}
+	if sourceExists {
+		return notFound
+	}
+	// A source merged or deleted after the caller found it leaves nothing to
+	// move. An Identify still marks the target, as without curation authority;
+	// no source rows are touched.
+	if !markIdentity {
+		return nil
+	}
+	if err := catalog.MarkIdentityChosenTx(ctx, tx, toContentID); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit skeleton rebind transaction: %w", err)
+	}
 	return nil
 }
 
