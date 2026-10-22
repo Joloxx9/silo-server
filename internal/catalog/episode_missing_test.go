@@ -33,13 +33,18 @@ func TestEpisodeAvailability(t *testing.T) {
 	}
 }
 
-// Specials never show what the library lacks.
-func TestMissingPredicatesKeepSpecialsLibraryOnly(t *testing.T) {
-	if !strings.Contains(episodeOrMissingPredicate, "episodes.season_number > 0 OR") {
-		t.Fatalf("episodeOrMissingPredicate = %q", episodeOrMissingPredicate)
+// Specials and episodes still to air never show as missing.
+func TestMissingPredicatesTakeOnlyAiredRegularEpisodes(t *testing.T) {
+	for name, predicate := range map[string]string{
+		"episodeOrMissingPredicate": episodeOrMissingPredicate,
+		"missingEpisodePredicate":   missingEpisodePredicate,
+	} {
+		if !strings.Contains(predicate, "episodes.season_number > 0 AND episodes.air_date <= now()") {
+			t.Fatalf("%s = %q", name, predicate)
+		}
 	}
-	if !strings.HasPrefix(missingEpisodePredicate, "episodes.season_number > 0 AND NOT") {
-		t.Fatalf("missingEpisodePredicate = %q", missingEpisodePredicate)
+	if !strings.HasPrefix(episodeOrMissingPredicate, "((") || !strings.Contains(episodeOrMissingPredicate, ") OR EXISTS") {
+		t.Fatalf("episodeOrMissingPredicate must keep library episodes: %q", episodeOrMissingPredicate)
 	}
 }
 

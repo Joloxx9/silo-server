@@ -8,15 +8,19 @@ import (
 	"github.com/Silo-Server/silo-server/internal/models"
 )
 
-// episodeOrMissingPredicate widens episodeAvailabilityPredicate to every
-// metadata episode of a numbered season, for a viewer who asked to see what
-// the library lacks. Specials stay library-only: providers list many of them
-// (extras, shorts, recaps) that nobody expects to collect.
-const episodeOrMissingPredicate = `(episodes.season_number > 0 OR ` + episodeAvailabilityPredicate + `)`
+// airedRegularEpisode selects the metadata episodes of numbered seasons that
+// have aired. Specials stay library-only: providers list many of them
+// (extras, shorts, recaps) that nobody expects to collect. Episodes still to
+// air are left out too: the download server picks them up on release, so they
+// are not missing yet.
+const airedRegularEpisode = `episodes.season_number > 0 AND episodes.air_date <= now()`
 
-// missingEpisodePredicate selects the metadata episodes of numbered seasons
-// that no library holds.
-const missingEpisodePredicate = `episodes.season_number > 0 AND NOT ` + episodeAvailabilityPredicate
+// episodeOrMissingPredicate widens episodeAvailabilityPredicate to the aired
+// regular episodes, for a viewer who asked to see what the library lacks.
+const episodeOrMissingPredicate = `((` + airedRegularEpisode + `) OR ` + episodeAvailabilityPredicate + `)`
+
+// missingEpisodePredicate selects the aired regular episodes no library holds.
+const missingEpisodePredicate = airedRegularEpisode + ` AND NOT ` + episodeAvailabilityPredicate
 
 // ListBySeasonWithMissing is ListBySeason including the season's episodes the
 // library lacks, each marked with its Availability.
