@@ -26,7 +26,7 @@ type sweepFixture struct {
 
 func newSweepFixture(t *testing.T, name string) sweepFixture {
 	t.Helper()
-	pool := newDeadRootTestPool(t)
+	pool := newScannerTestPool(t)
 	return sweepFixture{
 		t:        t,
 		pool:     pool,
@@ -69,7 +69,11 @@ func (fx sweepFixture) confirm(paths ...string) int {
 func (fx sweepFixture) markMissing(ids ...int) {
 	fx.t.Helper()
 	for _, id := range ids {
-		if err := fx.repo.MarkMissing(fx.t.Context(), id, time.Now().UTC()); err != nil {
+		var path string
+		if err := fx.pool.QueryRow(fx.t.Context(), `SELECT file_path FROM media_files WHERE id = $1`, id).Scan(&path); err != nil {
+			fx.t.Fatal(err)
+		}
+		if err := fx.repo.MarkMissing(fx.t.Context(), id, path, time.Now().UTC()); err != nil {
 			fx.t.Fatal(err)
 		}
 	}
@@ -250,7 +254,7 @@ func TestConfirmedReplacedEpisodeKeepsFirstSeenAndSkipsGrace(t *testing.T) {
 // the scan that finds it gone, and a confirmed file the scan still finds
 // loses its confirmation, so a later disappearance waits out the grace.
 func TestScanFolderHonorsAndClearsRemovalConfirmation(t *testing.T) {
-	pool := newDeadRootTestPool(t)
+	pool := newScannerTestPool(t)
 	ctx := t.Context()
 	folderID := seedDeadRootTestFolder(t, pool, "movies", "Removal confirmed scan")
 	root := t.TempDir()
@@ -320,7 +324,7 @@ func TestScanFolderHonorsAndClearsRemovalConfirmation(t *testing.T) {
 // A single-file scan that finds a confirmed file unchanged on disk clears the
 // confirmation, even though the unchanged file takes no upsert.
 func TestScanFileClearsRemovalConfirmation(t *testing.T) {
-	pool := newDeadRootTestPool(t)
+	pool := newScannerTestPool(t)
 	ctx := t.Context()
 	folderID := seedDeadRootTestFolder(t, pool, "movies", "Removal confirmed single file")
 	root := t.TempDir()
@@ -372,7 +376,7 @@ type movieLibrary struct {
 
 func newMovieLibrary(t *testing.T, name string, movies ...string) movieLibrary {
 	t.Helper()
-	pool := newDeadRootTestPool(t)
+	pool := newScannerTestPool(t)
 	ctx := t.Context()
 	folderID := seedDeadRootTestFolder(t, pool, "movies", name)
 	root := t.TempDir()

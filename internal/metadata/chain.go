@@ -576,13 +576,6 @@ func extractLookupProviderIDs(metadataJSON []byte) []string {
 	return extractProviderIDKeys(metadataJSON, "lookup_provider_ids")
 }
 
-// extractImageLookupProviderIDs parses image_lookup_provider_ids. It follows
-// the same normalization rules as lookup_provider_ids, but opts a provider
-// into image requests only; metadata lookup remains controlled separately.
-func extractImageLookupProviderIDs(metadataJSON []byte) []string {
-	return extractProviderIDKeys(metadataJSON, "image_lookup_provider_ids")
-}
-
 func extractProviderIDKeys(metadataJSON []byte, field string) []string {
 	raw, ok := capabilityMetadataField(metadataJSON, field)
 	if !ok {
