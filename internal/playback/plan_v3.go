@@ -1673,9 +1673,11 @@ type QualityResultV3 struct {
 // A fixed rung or plain resolution never reads the estimate.
 //
 // bandwidth_cap_kbps is a hard delivery ceiling honored in every quality mode:
-// a source whose bitrate exceeds it is re-encoded at the tallest class whose
-// encode bitrate fits within the cap, and a fixed rung whose ladder bitrate
-// exceeds it is lowered. A source that fits under the cap is still sent as-is.
+// under auto a source whose bitrate exceeds it is re-encoded at the tallest
+// class whose encode bitrate fits within the cap, a plain resolution keeps its
+// class down to that resolution's lowest menu rung, and a fixed rung whose
+// ladder bitrate exceeds it is lowered. A source that fits under the cap is
+// still sent as-is.
 func ResolveQualityPolicyV3(request StartRequestV3, source SourceDescriptorV3) QualityResultV3 {
 	quality, changed := NormalizeQualityV3(request.QualityPreference)
 	var warnings []DegradationWarningV3
@@ -1738,7 +1740,10 @@ func ResolveQualityPolicyV3(request StartRequestV3, source SourceDescriptorV3) Q
 	// The cap also constrains the rung chosen above: a rung that would
 	// preserve the source is forced down when the source bitrate exceeds the
 	// cap, and a transcode rung whose ladder bitrate exceeds the cap drops to
-	// the cap's rung.
+	// the cap's rung. Auto takes the tallest class whose class bitrate fits
+	// the cap; a plain resolution keeps its class while the cap reaches that
+	// resolution's lowest menu rung, as the explicit rung does, so 1080p under
+	// a 3000 kbps cap is 1080p Low rather than 720p.
 	if capKbps > 0 {
 		wouldPreserve := source.Height > 0 && targetHeight >= source.Height
 		if (wouldPreserve && capExceededBySource) || (!wouldPreserve && ladderClassBitrateKbpsV3(targetHeight) > capKbps) {
@@ -1747,6 +1752,9 @@ func ResolveQualityPolicyV3(request StartRequestV3, source SourceDescriptorV3) Q
 			// than the cap's class, so a cropped source wider than that class
 			// still fits its box.
 			capHeight := capLadderClassV3(capKbps)
+			if quality != QualityAutoV3 {
+				capHeight = capRungClassV3(streamClassV3(targetHeight, classLimit, source), capKbps)
+			}
 			targetHeight = min(targetHeight, capHeight)
 			classLimit = minPositiveV3(classLimit, capHeight)
 		}
@@ -2218,6 +2226,30 @@ var ladderRungsV3 = []ladderRungV3{
 	{Label: "480p", DisplayName: "480p", Height: 480, BitrateKbps: 1_500},
 }
 
+// capRungClassV3 is the class a plain resolution preference encodes at under
+// a bandwidth cap: class itself while the cap reaches the lowest menu rung at
+// or below it, otherwise the tallest lower resolution whose lowest rung fits,
+// and the bottom rung's resolution when none does. A class without rungs of
+// its own, such as 540p, is judged by the rung below it.
+func capRungClassV3(class, capKbps int) int {
+	kept := class
+	for i, rung := range ladderRungsV3 {
+		lowestOfResolution := i+1 == len(ladderRungsV3) || ladderRungsV3[i+1].Height != rung.Height
+		if rung.Height > class || !lowestOfResolution {
+			continue
+		}
+		if rung.BitrateKbps <= capKbps {
+			return kept
+		}
+		if i+1 < len(ladderRungsV3) {
+			kept = ladderRungsV3[i+1].Height
+		} else {
+			kept = rung.Height
+		}
+	}
+	return kept
+}
+
 func ladderRungForLabelV3(label string) (ladderRungV3, bool) {
 	normalized := strings.ToLower(strings.TrimSpace(label))
 	for _, rung := range ladderRungsV3 {
@@ -2394,7 +2426,13 @@ func hdrDetailsSupportPlanV3(hdr HDRCapabilitiesV3, plan PlanV3) bool {
 	case DynamicRangeHDR10V3, DynamicRangeHDRUnknownV3:
 		return hdr.HDR10 && hdr10LimitsSupportPlanV3(hdr, plan)
 	case DynamicRangeHDR10PlusV3:
-		return hdr.HDR10Plus
+		// A plan that claims HDR10+ needs a delivery that carries it. An HDR10
+		// output shows HDR10+ as its HDR10 signal, and the HDR10 ceilings bound
+		// an HDR10+ output as well.
+		if plan.Claims.Video.HDR10Plus && !hdr.HDR10Plus {
+			return false
+		}
+		return (hdr.HDR10Plus || hdr.HDR10) && hdr10LimitsSupportPlanV3(hdr, plan)
 	case DynamicRangeHLGV3:
 		return hdr.HLG
 	case DynamicRangeDolbyVisionV3:

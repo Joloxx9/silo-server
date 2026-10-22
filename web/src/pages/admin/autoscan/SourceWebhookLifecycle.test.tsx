@@ -253,8 +253,10 @@ it("copies the local-network URL only while the profile that opened the view is 
   );
 
   writeText.mockClear();
-  setProfileId("b");
-  fireEvent.click(screen.getByRole("button", { name: "Copy local webhook URL" }));
+  act(() => setProfileToken("pin-b"));
+  // The view may already have hidden the button; either way nothing is copied.
+  const copyLocal = screen.queryByRole("button", { name: "Copy local webhook URL" });
+  if (copyLocal) fireEvent.click(copyLocal);
   await act(async () => {});
   expect(writeText).not.toHaveBeenCalled();
 });

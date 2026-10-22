@@ -91,6 +91,7 @@ type Dependencies struct {
 	DirectDownloadLinks              DirectDownloadLinkService
 	ViewerSubtitleDelete             ViewerSubtitleDeleteService
 	OrderedApplePush                 OrderedApplePushService
+	ApplePushRetirement              ApplePushRetirementService
 	NotificationEmailVerification    NotificationEmailVerificationService
 	AdminAutoscanSourceDeletes       AdminAutoscanSourceDeleteService
 	AdminAutoscanSourceWrites        AdminAutoscanSourceWriteService
@@ -110,6 +111,7 @@ type Dependencies struct {
 	AdminOperationalLogs             AdminOperationalLogsService
 	AdminJellyfinCompatSettings      AdminJellyfinCompatSettingsService
 	OrderedAndroidPush               OrderedAndroidPushService
+	AndroidPushRetirement            AndroidPushRetirementService
 	WatchTogetherSuggestionDelete    WatchTogetherSuggestionDeleteService
 	WatchTogetherClose               WatchTogetherCloseService
 	WatchTogetherRoomRead            WatchTogetherRoomReadService

@@ -821,6 +821,10 @@ func identityRecipeCard(s *playback.Session) playback.RecipeCard {
 		card = playback.NewRemuxRecipeCard(s.ID, s.UserID, s.ProfileID, s.MediaFileID, s.TranscodeAudio, s.AudioTrackIndex, s.RemuxDVMode)
 		card.RemuxResumeLeadingPictureDrop = s.RemuxResumeLeadingPictureDrop
 		card.TargetCodecAudio = s.TargetAudioCodec
+		if !s.TranscodeAudio {
+			// A copied track's planned codec is the source track's codec.
+			card.CopyAudioCodec = s.TargetAudioCodec
+		}
 		card.TargetAudioChannels = s.TargetAudioChannels
 		card.TargetAudioBitrateKbps = s.TargetAudioBitrateKbps
 		if s.TranscodeAudio && playback.IsAudioToAACStereoDownmixV3(s.SourceAudioChannels, s.TargetAudioCodec, s.TargetAudioChannels) {
@@ -1176,6 +1180,7 @@ func (h *PlaybackHandler) buildAdminHistoryEntry(
 		DurationSeconds: durationPtr,
 		Completed:       completed,
 		ClientIP:        clientip.FromContext(ctx),
+		Watch:           session.Watch,
 	}
 	return entry, nil
 }
@@ -1215,9 +1220,11 @@ func (h *PlaybackHandler) finalizeSessionStop(ctx context.Context, session *play
 // finalizeExpiredSession finalizes a session the liveness reaper expired. The
 // reaper then marks its attempt stopped, so a client starts a new session
 // rather than resuming this one, and watch providers that mirror live
-// sessions hear this one ended.
+// sessions hear this one ended. A Jellyfin play's upstream session is the
+// exception: jellycompat can revive it under the same id and sends that
+// play's own stop, so its expiry stays a plain pause.
 func (h *PlaybackHandler) finalizeExpiredSession(ctx context.Context, session *playback.Session) {
-	h.finalizeSessionStopWithResult(ctx, session, false, "", false, true)
+	h.finalizeSessionStopWithResult(ctx, session, false, "", false, !session.IsJellyfinCompat)
 }
 
 // finalizeSessionStopWithResult is finalizeSessionStop reporting the history
@@ -1240,7 +1247,7 @@ func (h *PlaybackHandler) finalizeSessionStopWithResult(ctx context.Context, ses
 		// token would; only a real stop retires the recovery card. A remote
 		// transport is the exception: the teardown above stopped its node job
 		// and dropped the node's recipe, so the card could only rebuild a
-		// session that relays the node's 404.
+		// session the node refuses.
 		h.deleteSessionRecipeV3(ctx, session.ID)
 	}
 	stopResult := h.recordStoppedSession(ctx, session, userInitiated, sessionEnded)
@@ -1392,29 +1399,44 @@ func (h *PlaybackHandler) handleExpiredSession(session *playback.Session) {
 		return
 	}
 	sessionCopy := *session
-	go func() {
-		slog.Info("expired inactive playback session", append([]any{
-			"session", sessionCopy.ID, "playback_session_id", sessionCopy.ID,
-		}, sessionCopy.ClientInfo().LogAttrs()...)...)
-		ctx := context.Background()
-		// Another replica may own the live copy: its progress and media
-		// requests never touch this replica's activity clock. A row that saw
-		// progress after this copy went idle, or that is already stopped,
-		// means this copy is stale, not the session. Drop it without writing
-		// history, the deny marker, or a stop over the other replica's.
-		if h.attemptStoppedElsewhere(ctx, sessionCopy.ID) || h.attemptActiveElsewhere(ctx, &sessionCopy) {
-			slog.Info("dropped stale local playback session copy", "session", sessionCopy.ID, "playback_session_id", sessionCopy.ID)
-			h.closeTranscodeForSession(&sessionCopy)
-			return
-		}
-		// Expiry is a liveness reap, not a user stop, but it ends the attempt
-		// all the same (below), so nothing can reconstruct the session afterwards.
-		h.finalizeExpiredSession(ctx, &sessionCopy)
-		// The attempt is over: mark its row stopped under a server-minted stop
-		// id so a start replay reports session_expired on every replica, and
-		// deny its tokens so no replica serves it again.
-		h.markAttemptStoppedServerSide(ctx, sessionCopy.ID)
-	}()
+	go h.expireSessionCopy(context.Background(), &sessionCopy)
+}
+
+// expireSessionCopy finishes a liveness reap of this replica's copy of a
+// session. handleExpiredSession runs it off the session manager's goroutine.
+//
+//nolint:goconst // slog keys used verbatim across the package
+func (h *PlaybackHandler) expireSessionCopy(ctx context.Context, session *playback.Session) {
+	slog.InfoContext(ctx, "expired inactive playback session", append([]any{
+		"session", session.ID, "playback_session_id", session.ID,
+	}, session.ClientInfo().LogAttrs()...)...)
+	// Another replica may own the live copy: its progress and media
+	// requests never touch this replica's activity clock. A row that saw
+	// progress after this copy went idle, or that is already stopped,
+	// means this copy is stale, not the session. Drop it without writing
+	// history, the deny marker, or a stop over the other replica's.
+	if h.attemptStoppedElsewhere(ctx, session.ID) {
+		slog.InfoContext(ctx, "dropped stale local playback session copy", "session", session.ID, "playback_session_id", session.ID)
+		// The attempt is over, so nothing still serves this copy's transport,
+		// and the replica that recorded the stop may not have known it.
+		h.closeTranscodeForSession(session)
+		return
+	}
+	if h.attemptActiveElsewhere(ctx, session) {
+		slog.InfoContext(ctx, "dropped stale local playback session copy", "session", session.ID, "playback_session_id", session.ID)
+		// Only this replica's own transcode goes. The remote transport is the
+		// other replica's to keep or stop: a stop here would kill the job it is
+		// serving, and the node then refuses to rebuild that transport.
+		h.tm.CloseTranscodeSession(session.ID, "")
+		return
+	}
+	// Expiry is a liveness reap, not a user stop, but it ends the attempt
+	// all the same (below), so nothing can reconstruct the session afterwards.
+	h.finalizeExpiredSession(ctx, session)
+	// The attempt is over: mark its row stopped under a server-minted stop
+	// id so a start replay reports session_expired on every replica, and
+	// deny its tokens so no replica serves it again.
+	h.markAttemptStoppedServerSide(ctx, session.ID)
 }
 
 // handleFinishedSession records a play that another playback frontend ended
