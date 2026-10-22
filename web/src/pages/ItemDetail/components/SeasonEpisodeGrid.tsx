@@ -78,9 +78,7 @@ export default function SeasonEpisodeGrid({
           <MissingEpisodeCard
             key={episode.content_id}
             episode={episode}
-            onRequest={
-              onRequestSeason ? () => onRequestSeason(episode.season_number) : undefined
-            }
+            onRequest={onRequestSeason ? () => onRequestSeason(episode.season_number) : undefined}
             requested={requestedSeasons?.has(episode.season_number) ?? false}
           />
         ) : (

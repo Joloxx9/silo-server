@@ -78,10 +78,7 @@ export default function SeriesContent({
   const canRequestSeasons = useMissingSeasonsRequestable(Boolean(currentProfile?.id) && tmdbID > 0);
   const showMissing = useShowMissingEpisodes();
   const missingRequest = useMissingSeasonRequest(tmdbID, item.title ?? "", showMissing);
-  const { data: seasonsData, isLoading: seasonsLoading } = useSeasons(
-    item.content_id,
-    showMissing,
-  );
+  const { data: seasonsData, isLoading: seasonsLoading } = useSeasons(item.content_id, showMissing);
   const { data: similarData, isLoading: similarLoading } = useSimilarItems(item.content_id);
   const seasons = useMemo(() => seasonsData?.seasons ?? [], [seasonsData?.seasons]);
   const crewGroups = useMemo(() => buildCrewGroups(item.crew ?? [], "Creator"), [item.crew]);
