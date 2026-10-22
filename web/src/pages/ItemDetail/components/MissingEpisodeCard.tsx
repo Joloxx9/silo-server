@@ -24,7 +24,7 @@ export default function MissingEpisodeCard({
   const label = unaired ? "Not aired yet" : "Not in library";
 
   return (
-    <div className="media-card" data-availability={episode.availability}>
+    <div className="group/missing media-card" data-availability={episode.availability}>
       <div className="media-card-image relative aspect-video overflow-hidden">
         {episode.still_url ? (
           <img

@@ -2,6 +2,14 @@ import { Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+/**
+ * Hidden until the pointer is over the season (group/season) or episode
+ * (group/missing) card, or focus reaches it. A touch screen has no hover, so
+ * there it always shows.
+ */
+const REVEAL_ON_HOVER =
+  "opacity-0 transition-opacity group-hover/season:opacity-100 group-hover/missing:opacity-100 group-focus-within/season:opacity-100 group-focus-within/missing:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100";
+
 interface RequestSeasonButtonProps {
   /** What the request covers, for the accessible name, e.g. "Season 2". */
   target: string;
@@ -13,7 +21,9 @@ interface RequestSeasonButtonProps {
 
 /**
  * The Request button on a season or episode the library lacks. Once a request
- * covers the season it reads Requested and stays disabled.
+ * covers the season it reads Requested and does nothing. It is marked
+ * aria-disabled rather than disabled, so the disabled style does not fight the
+ * hover reveal.
  */
 export default function RequestSeasonButton({
   target,
@@ -26,9 +36,9 @@ export default function RequestSeasonButton({
       type="button"
       size="sm"
       variant="secondary"
-      className={cn("gap-1 text-xs", requested && "disabled:opacity-90", className)}
-      onClick={onRequest}
-      disabled={requested}
+      className={cn("gap-1 text-xs", REVEAL_ON_HOVER, requested && "cursor-default", className)}
+      onClick={requested ? undefined : onRequest}
+      aria-disabled={requested || undefined}
       aria-label={requested ? `${target} requested` : `Request ${target}`}
     >
       {requested ? <Check className="size-3.5" /> : <Download className="size-3.5" />}
