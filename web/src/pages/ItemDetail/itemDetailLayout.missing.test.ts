@@ -30,4 +30,14 @@ describe("formatSeasonMeta with missing episodes", () => {
   it("names a season the library lacks entirely", () => {
     expect(formatSeasonMeta(season(0, 1))).toBe("Not in library · 1 episode");
   });
+
+  it("names a season still to air", () => {
+    const now = new Date("2026-10-22T12:00:00Z");
+    expect(formatSeasonMeta({ ...season(0, 8), air_date: "2027-01-10" }, now)).toBe(
+      "Upcoming · 8 episodes",
+    );
+    expect(formatSeasonMeta({ ...season(0, 8), air_date: "2025-01-10" }, now)).toBe(
+      "Not in library · 8 episodes",
+    );
+  });
 });

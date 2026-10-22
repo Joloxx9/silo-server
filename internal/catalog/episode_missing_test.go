@@ -33,18 +33,23 @@ func TestEpisodeAvailability(t *testing.T) {
 	}
 }
 
-// Specials and episodes still to air never show as missing.
-func TestMissingPredicatesTakeOnlyAiredRegularEpisodes(t *testing.T) {
-	for name, predicate := range map[string]string{
-		"episodeOrMissingPredicate": episodeOrMissingPredicate,
-		"missingEpisodePredicate":   missingEpisodePredicate,
-	} {
-		if !strings.Contains(predicate, "episodes.season_number > 0 AND episodes.air_date <= now()") {
-			t.Fatalf("%s = %q", name, predicate)
+// Specials never show as missing; episodes still to air only when asked.
+func TestMissingPredicates(t *testing.T) {
+	const aired = "episodes.season_number > 0 AND episodes.air_date <= now()"
+	for _, predicate := range []string{episodeOrMissingPredicate(false), missingEpisodePredicate(false)} {
+		if !strings.Contains(predicate, aired) {
+			t.Fatalf("aired-only predicate = %q", predicate)
 		}
 	}
-	if !strings.HasPrefix(episodeOrMissingPredicate, "((") || !strings.Contains(episodeOrMissingPredicate, ") OR EXISTS") {
-		t.Fatalf("episodeOrMissingPredicate must keep library episodes: %q", episodeOrMissingPredicate)
+	for _, predicate := range []string{episodeOrMissingPredicate(true), missingEpisodePredicate(true)} {
+		if strings.Contains(predicate, "air_date") || !strings.Contains(predicate, "episodes.season_number > 0") {
+			t.Fatalf("upcoming predicate = %q", predicate)
+		}
+	}
+	for _, upcoming := range []bool{false, true} {
+		if p := episodeOrMissingPredicate(upcoming); !strings.HasPrefix(p, "((") || !strings.Contains(p, ") OR EXISTS") {
+			t.Fatalf("episodeOrMissingPredicate must keep library episodes: %q", p)
+		}
 	}
 }
 

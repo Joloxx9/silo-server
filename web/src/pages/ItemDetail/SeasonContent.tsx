@@ -61,7 +61,7 @@ export default function SeasonContent({ item }: { item: ItemDetail & { type: "se
   // A request names the series, which the season page knows only by id; the
   // series page the viewer came from usually has its detail cached.
   const seriesDetail = useCatalogItemDetail(
-    showMissing && listedEpisodes.length > episodes.length ? item.series_id : undefined,
+    listedEpisodes.length > episodes.length ? item.series_id : undefined,
   );
   const missingRequest = useMissingSeasonRequest(
     Number(seriesDetail.data?.tmdb_id) || 0,

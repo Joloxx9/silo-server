@@ -2388,9 +2388,12 @@ func (h *ItemsHandler) ContextAccessFilter(ctx context.Context, opts AccessFilte
 type ItemViewer struct {
 	Access    catalog.AccessFilter
 	ProfileID string
-	// IncludeMissing adds the episodes and seasons the library lacks to
-	// season and episode lists, outside specials.
+	// IncludeMissing adds the aired episodes and seasons the library lacks
+	// to season and episode lists, outside specials.
 	IncludeMissing bool
+	// IncludeUpcoming, with IncludeMissing, also adds the regular episodes
+	// still to air.
+	IncludeUpcoming bool
 }
 
 // viewerFromRequest pairs an already-resolved access filter with the

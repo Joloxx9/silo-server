@@ -82,7 +82,7 @@ vi.mock("@/hooks/queries/catalogRead", () => ({
   useCatalogItemDetail: () => ({ data: undefined }),
 }));
 
-vi.mock("@/hooks/useShowMissingEpisodes", () => ({ useShowMissingEpisodes: () => false }));
+vi.mock("@/hooks/useShowMissingEpisodes", () => ({ useShowMissingEpisodes: () => "none" }));
 
 vi.mock("./useMissingSeasonRequest", () => ({
   useMissingSeasonRequest: () => ({ requestedSeasons: new Set<number>(), dialog: null }),

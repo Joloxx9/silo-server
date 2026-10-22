@@ -10,36 +10,51 @@ import (
 
 // airedRegularEpisode selects the metadata episodes of numbered seasons that
 // have aired. Specials stay library-only: providers list many of them
-// (extras, shorts, recaps) that nobody expects to collect. Episodes still to
-// air are left out too: the download server picks them up on release, so they
-// are not missing yet.
+// (extras, shorts, recaps) that nobody expects to collect.
 const airedRegularEpisode = `episodes.season_number > 0 AND episodes.air_date <= now()`
 
-// episodeOrMissingPredicate widens episodeAvailabilityPredicate to the aired
-// regular episodes, for a viewer who asked to see what the library lacks.
-const episodeOrMissingPredicate = `((` + airedRegularEpisode + `) OR ` + episodeAvailabilityPredicate + `)`
+// anyRegularEpisode also takes the regular episodes still to air, for a
+// viewer whose download server can say whether they are already coming.
+const anyRegularEpisode = `episodes.season_number > 0`
 
-// missingEpisodePredicate selects the aired regular episodes no library holds.
-const missingEpisodePredicate = airedRegularEpisode + ` AND NOT ` + episodeAvailabilityPredicate
+func missingScope(upcoming bool) string {
+	if upcoming {
+		return anyRegularEpisode
+	}
+	return airedRegularEpisode
+}
 
-// ListBySeasonWithMissing is ListBySeason including the season's episodes the
-// library lacks, each marked with its Availability.
-func (r *EpisodeRepository) ListBySeasonWithMissing(ctx context.Context, seriesID string, seasonNum int) ([]*models.Episode, error) {
+// episodeOrMissingPredicate widens episodeAvailabilityPredicate to the
+// regular episodes in scope, for a viewer who asked to see what the library
+// lacks.
+func episodeOrMissingPredicate(upcoming bool) string {
+	return `((` + missingScope(upcoming) + `) OR ` + episodeAvailabilityPredicate + `)`
+}
+
+// missingEpisodePredicate selects the regular episodes in scope no library
+// holds.
+func missingEpisodePredicate(upcoming bool) string {
+	return missingScope(upcoming) + ` AND NOT ` + episodeAvailabilityPredicate
+}
+
+// ListBySeasonWithMissing is ListBySeason including the season's aired
+// episodes the library lacks, and with upcoming its episodes still to air,
+// each marked with its Availability.
+func (r *EpisodeRepository) ListBySeasonWithMissing(ctx context.Context, seriesID string, seasonNum int, upcoming bool) ([]*models.Episode, error) {
 	query := `SELECT ` + episodeColumns + `
 		FROM episodes
 		WHERE series_id = $1 AND season_number = $2
-		  AND ` + episodeOrMissingPredicate + `
+		  AND ` + episodeOrMissingPredicate(upcoming) + `
 		ORDER BY episode_number ASC`
 	return r.listWithMissing(ctx, query, seriesID, seasonNum)
 }
 
-// ListBySeasonIDWithMissing is ListBySeasonID including the season's episodes
-// the library lacks, each marked with its Availability.
-func (r *EpisodeRepository) ListBySeasonIDWithMissing(ctx context.Context, seasonID string) ([]*models.Episode, error) {
+// ListBySeasonIDWithMissing is ListBySeasonWithMissing for a season row.
+func (r *EpisodeRepository) ListBySeasonIDWithMissing(ctx context.Context, seasonID string, upcoming bool) ([]*models.Episode, error) {
 	query := `SELECT ` + episodeColumns + `
 		FROM episodes
 		WHERE season_id = $1
-		  AND ` + episodeOrMissingPredicate + `
+		  AND ` + episodeOrMissingPredicate(upcoming) + `
 		ORDER BY episode_number ASC`
 	return r.listWithMissing(ctx, query, seasonID)
 }
@@ -107,13 +122,13 @@ func episodeAvailability(inLibrary bool, airDate *time.Time, now time.Time) stri
 	}
 }
 
-// CountMissingBySeason counts, per numbered season, the series' metadata
-// episodes no library holds.
-func (r *EpisodeRepository) CountMissingBySeason(ctx context.Context, seriesID string) (map[int]int, error) {
+// CountMissingBySeason counts, per numbered season, the series' aired
+// episodes no library holds, and with upcoming its episodes still to air.
+func (r *EpisodeRepository) CountMissingBySeason(ctx context.Context, seriesID string, upcoming bool) (map[int]int, error) {
 	rows, err := r.pool.Query(ctx, `SELECT season_number, COUNT(*)
 		FROM episodes
 		WHERE series_id = $1
-		  AND `+missingEpisodePredicate+`
+		  AND `+missingEpisodePredicate(upcoming)+`
 		GROUP BY season_number`, seriesID)
 	if err != nil {
 		return nil, fmt.Errorf("counting missing episodes: %w", err)

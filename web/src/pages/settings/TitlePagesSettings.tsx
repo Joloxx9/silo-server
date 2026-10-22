@@ -105,7 +105,7 @@ export default function TitlePagesSettings() {
         >
           {switchRow(
             SETTING_KEYS.CATALOG_SHOW_MISSING_EPISODES,
-            "Show the aired seasons and episodes the library does not have, dimmed, with a button to request them. Specials and episodes still to air are left out.",
+            "Show the seasons and episodes the library does not have, dimmed, with a button to request them. Episodes still to air show only while Sonarr is connected, which tells whether they are already coming. Specials are left out.",
           )}
         </SettingsGroup>
       ) : null}

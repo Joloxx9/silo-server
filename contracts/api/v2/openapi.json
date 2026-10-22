@@ -136734,6 +136734,16 @@
               "description": "Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count",
               "type": "boolean"
             }
+          },
+          {
+            "description": "With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those",
+            "explode": false,
+            "in": "query",
+            "name": "include_upcoming",
+            "schema": {
+              "description": "With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -139949,6 +139959,16 @@
               "description": "Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count",
               "type": "boolean"
             }
+          },
+          {
+            "description": "With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those",
+            "explode": false,
+            "in": "query",
+            "name": "include_upcoming",
+            "schema": {
+              "description": "With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -140243,6 +140263,16 @@
               "description": "Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count",
               "type": "boolean"
             }
+          },
+          {
+            "description": "With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those",
+            "explode": false,
+            "in": "query",
+            "name": "include_upcoming",
+            "schema": {
+              "description": "With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -140535,6 +140565,16 @@
             "name": "include_missing",
             "schema": {
               "description": "Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those",
+            "explode": false,
+            "in": "query",
+            "name": "include_upcoming",
+            "schema": {
+              "description": "With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those",
               "type": "boolean"
             }
           }

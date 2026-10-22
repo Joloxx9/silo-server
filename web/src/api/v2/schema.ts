@@ -90136,6 +90136,8 @@ export interface operations {
         image_size?: "small" | "medium" | "large" | "original";
         /** @description Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count */
         include_missing?: boolean;
+        /** @description With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those */
+        include_upcoming?: boolean;
         /** @description The library the item is being viewed in; picks its presentation when the item is in several */
         library_id?: string;
         /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
@@ -91956,6 +91958,8 @@ export interface operations {
         include_artwork?: boolean;
         /** @description Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count */
         include_missing?: boolean;
+        /** @description With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those */
+        include_upcoming?: boolean;
         /** @description The library the series is being viewed in */
         library_id?: string;
         /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
@@ -92082,6 +92086,8 @@ export interface operations {
         image_size?: "small" | "medium" | "large" | "original";
         /** @description Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count */
         include_missing?: boolean;
+        /** @description With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those */
+        include_upcoming?: boolean;
         /** @description The library the series is being viewed in */
         library_id?: string;
         /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
@@ -92210,6 +92216,8 @@ export interface operations {
         image_size?: "small" | "medium" | "large" | "original";
         /** @description Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count */
         include_missing?: boolean;
+        /** @description With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those */
+        include_upcoming?: boolean;
         /** @description The library the series is being viewed in */
         library_id?: string;
         /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */

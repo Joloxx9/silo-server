@@ -37,7 +37,7 @@ vi.mock("@/hooks/useCurrentProfile", () => ({
 vi.mock("@/hooks/useIsActingAdmin", () => ({ useIsActingAdmin: () => false }));
 // The fork's missing-seasons reads are covered on their own; this test
 // budgets the requests upstream's series page makes.
-vi.mock("@/hooks/useShowMissingEpisodes", () => ({ useShowMissingEpisodes: () => false }));
+vi.mock("@/hooks/useShowMissingEpisodes", () => ({ useShowMissingEpisodes: () => "none" }));
 vi.mock("./useMissingSeasonRequest", () => ({
   useMissingSeasonRequest: () => ({ requestedSeasons: new Set<number>(), dialog: null }),
 }));

@@ -10,7 +10,7 @@ import (
 // including the ones the library lacks when the viewer asked for them.
 func (h *CatalogResourceHandler) seasonEpisodesByNumber(ctx context.Context, v ItemViewer, seriesID string, num int) ([]*models.Episode, error) {
 	if v.IncludeMissing {
-		return h.items.episodeRepo.ListBySeasonWithMissing(ctx, seriesID, num)
+		return h.items.episodeRepo.ListBySeasonWithMissing(ctx, seriesID, num, v.IncludeUpcoming)
 	}
 	return h.items.episodeRepo.ListBySeason(ctx, seriesID, num)
 }
@@ -18,7 +18,7 @@ func (h *CatalogResourceHandler) seasonEpisodesByNumber(ctx context.Context, v I
 // seasonEpisodesByID is seasonEpisodesByNumber for a season row.
 func (h *CatalogResourceHandler) seasonEpisodesByID(ctx context.Context, v ItemViewer, seasonID string) ([]*models.Episode, error) {
 	if v.IncludeMissing {
-		return h.items.episodeRepo.ListBySeasonIDWithMissing(ctx, seasonID)
+		return h.items.episodeRepo.ListBySeasonIDWithMissing(ctx, seasonID, v.IncludeUpcoming)
 	}
 	return h.items.episodeRepo.ListBySeasonID(ctx, seasonID)
 }
@@ -29,7 +29,7 @@ func (h *CatalogResourceHandler) missingEpisodeCounts(ctx context.Context, v Ite
 	if !v.IncludeMissing {
 		return nil, nil
 	}
-	return h.items.episodeRepo.CountMissingBySeason(ctx, seriesID)
+	return h.items.episodeRepo.CountMissingBySeason(ctx, seriesID, v.IncludeUpcoming)
 }
 
 // episodeResponsesWithAvailability is buildEpisodeResponses carrying each

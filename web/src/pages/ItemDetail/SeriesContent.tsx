@@ -77,7 +77,7 @@ export default function SeriesContent({
   const tmdbID = Number(item.tmdb_id) || 0;
   const canRequestSeasons = useMissingSeasonsRequestable(Boolean(currentProfile?.id) && tmdbID > 0);
   const showMissing = useShowMissingEpisodes();
-  const missingRequest = useMissingSeasonRequest(tmdbID, item.title ?? "", showMissing);
+  const missingRequest = useMissingSeasonRequest(tmdbID, item.title ?? "", showMissing !== "none");
   const { data: seasonsData, isLoading: seasonsLoading } = useSeasons(item.content_id, showMissing);
   const { data: similarData, isLoading: similarLoading } = useSimilarItems(item.content_id);
   const seasons = useMemo(() => seasonsData?.seasons ?? [], [seasonsData?.seasons]);

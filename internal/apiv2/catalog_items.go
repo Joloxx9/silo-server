@@ -160,7 +160,8 @@ type CatalogSeriesInput struct {
 // MissingQuery asks a season or episode list to include what the library
 // lacks.
 type MissingQuery struct {
-	IncludeMissing bool `query:"include_missing" doc:"Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count"`
+	IncludeMissing  bool `query:"include_missing" doc:"Include the seasons and episodes the library lacks, outside specials, marked by availability and missing_episode_count"`
+	IncludeUpcoming bool `query:"include_upcoming" doc:"With include_missing, also include the regular episodes still to air, marked unaired, and the seasons that hold only those"`
 }
 
 // CatalogSeasonsInput selects artwork for a season list.
@@ -1294,6 +1295,7 @@ func (reg *Registry) listCatalogItemEpisodes(ctx context.Context, in *CatalogIte
 		return nil, p
 	}
 	viewer.IncludeMissing = in.IncludeMissing
+	viewer.IncludeUpcoming = in.IncludeMissing && in.IncludeUpcoming
 	episodes, err := svc.ItemEpisodes(ctx, viewer, in.ID)
 	if err != nil {
 		return nil, serviceProblem(err)
@@ -1311,6 +1313,7 @@ func (reg *Registry) listSeriesSeasons(ctx context.Context, in *CatalogSeasonsIn
 		return nil, p
 	}
 	viewer.IncludeMissing = in.IncludeMissing
+	viewer.IncludeUpcoming = in.IncludeMissing && in.IncludeUpcoming
 	seasons, err := svc.SeriesSeasons(ctx, viewer, in.ID, in.IncludeArtwork)
 	if err != nil {
 		return nil, serviceProblem(err)
@@ -1332,6 +1335,7 @@ func (reg *Registry) getSeriesSeason(ctx context.Context, in *CatalogSeasonInput
 		return nil, p
 	}
 	viewer.IncludeMissing = in.IncludeMissing
+	viewer.IncludeUpcoming = in.IncludeMissing && in.IncludeUpcoming
 	season, err := svc.SeriesSeason(ctx, viewer, in.ID, in.Number)
 	if err != nil {
 		return nil, serviceProblem(err)
@@ -1349,6 +1353,7 @@ func (reg *Registry) listSeasonEpisodes(ctx context.Context, in *CatalogSeasonIn
 		return nil, p
 	}
 	viewer.IncludeMissing = in.IncludeMissing
+	viewer.IncludeUpcoming = in.IncludeMissing && in.IncludeUpcoming
 	episodes, err := svc.SeasonEpisodes(ctx, viewer, in.ID, in.Number)
 	if err != nil {
 		return nil, serviceProblem(err)
