@@ -70,10 +70,16 @@ export const catalogKeys = {
   itemVersions: (id: string) => ["catalog", "items", id, "versions"] as const,
   audiobookGroups: (libraryId: number, groupBy: string, sort: string, search: string) =>
     ["catalog", "audiobookGroups", libraryId, groupBy, sort, search] as const,
-  itemEpisodes: (id: string, libraryId?: number) =>
-    ["catalog", "items", id, "episodes", libraryId ?? "default"] as const,
-  seriesSeasons: (seriesId: string, libraryId?: number) =>
-    ["catalog", "series", seriesId, "seasons", libraryId ?? "default"] as const,
+  // includeMissing appends to the key, so invalidating the plain key (a
+  // prefix) refreshes both lists.
+  itemEpisodes: (id: string, libraryId?: number, includeMissing = false) =>
+    includeMissing
+      ? (["catalog", "items", id, "episodes", libraryId ?? "default", "missing"] as const)
+      : (["catalog", "items", id, "episodes", libraryId ?? "default"] as const),
+  seriesSeasons: (seriesId: string, libraryId?: number, includeMissing = false) =>
+    includeMissing
+      ? (["catalog", "series", seriesId, "seasons", libraryId ?? "default", "missing"] as const)
+      : (["catalog", "series", seriesId, "seasons", libraryId ?? "default"] as const),
   seasonDetail: (seriesId: string, seasonNum: number, libraryId?: number) =>
     [
       "catalog",

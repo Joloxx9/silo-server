@@ -1,17 +1,20 @@
 import type { ReactNode } from "react";
-import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import type { Season } from "@/api/types";
 import { usePrefetchCatalogSeason } from "@/hooks/queries/catalogRead";
 import { useCarouselEmbla } from "@/hooks/useCarouselEmbla";
 import { formatSeasonMeta, formatSeasonProgress, getSeasonDisplayTitle } from "./itemDetailLayout";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
+import { Button } from "@/components/ui/button";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
 
 interface SeasonCarouselProps {
   seasons: Season[];
+  /** Requests a season the library lacks entirely; absent when requests are off. */
+  onRequestSeason?: (seasonNumber: number) => void;
 }
 
-export default function SeasonCarousel({ seasons }: SeasonCarouselProps) {
+export default function SeasonCarousel({ seasons, onRequestSeason }: SeasonCarouselProps) {
   const sorted = seasons.slice().sort((a, b) => a.season_number - b.season_number);
   const prefetchSeason = usePrefetchCatalogSeason();
 
@@ -22,6 +25,11 @@ export default function SeasonCarousel({ seasons }: SeasonCarouselProps) {
   return (
     <SeasonRail count={sorted.length}>
       {sorted.map((season) => {
+        if (season.episode_count === 0 && (season.missing_episode_count ?? 0) > 0) {
+          return (
+            <MissingSeasonSlide key={season.content_id} season={season} onRequest={onRequestSeason} />
+          );
+        }
         const userData = season.user_data;
         const isCompleted = userData?.played === true;
         const hasProgress =
@@ -107,6 +115,56 @@ export default function SeasonCarousel({ seasons }: SeasonCarouselProps) {
         );
       })}
     </SeasonRail>
+  );
+}
+
+/** A season with no episode in the library: dimmed, not a link, requestable. */
+function MissingSeasonSlide({
+  season,
+  onRequest,
+}: {
+  season: Season;
+  onRequest?: (seasonNumber: number) => void;
+}) {
+  return (
+    <li className="embla__slide shrink-0" data-availability="missing">
+      <div className="w-[160px] sm:w-[170px]">
+        <div className="media-card-image relative aspect-[2/3] overflow-hidden rounded-xl">
+          {season.poster_url ? (
+            <img
+              src={season.poster_url}
+              alt={getSeasonDisplayTitle(season)}
+              className="h-full w-full object-cover opacity-40 grayscale"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <div className="text-muted-foreground bg-surface flex h-full items-center justify-center p-4 text-center text-sm font-medium">
+              {getSeasonDisplayTitle(season)}
+            </div>
+          )}
+          {onRequest && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="absolute inset-x-2.5 bottom-2.5 h-8 gap-1.5 text-xs"
+              onClick={() => onRequest(season.season_number)}
+              aria-label={`Request ${getSeasonDisplayTitle(season)}`}
+            >
+              <Download className="size-3.5" />
+              Request
+            </Button>
+          )}
+        </div>
+        <div className="px-0.5 pt-2.5 opacity-60">
+          <div className="truncate text-[0.8125rem] font-semibold">
+            {getSeasonDisplayTitle(season)}
+          </div>
+          <div className="text-muted-foreground text-xs">{formatSeasonMeta(season)}</div>
+        </div>
+      </div>
+    </li>
   );
 }
 

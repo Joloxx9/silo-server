@@ -1,0 +1,96 @@
+# Image of the missing-seasons branch for this fork: upstream main plus the
+# show-missing-seasons-and-episodes feature, and nothing else. It publishes
+# ghcr.io/joloxx9/silo-server:missing-seasons and never touches :latest,
+# which fork main's own workflow owns.
+#
+# Fork-only: upstream's publisher is gated on Silo-Server/silo-server.
+
+name: Fork image (missing seasons)
+
+on:
+  push:
+    branches: [missing-seasons]
+  workflow_dispatch:
+
+concurrency:
+  group: fork-image-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  PACKAGE: silo-server
+  GOPROXY: https://proxy.golang.org,direct
+  GOPRIVATE: github.com/Silo-Server/*
+  GONOSUMDB: github.com/Silo-Server/*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      # The runtime stage pulls jellyfin-ffmpeg, libvips and the Intel compute
+      # runtime, so the hosted runner's default free space is tight.
+      - name: Reclaim runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /usr/share/swift /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Resolve build identity
+        run: |
+          {
+            echo "IMAGE_LC=${GITHUB_REPOSITORY_OWNER,,}/${PACKAGE}"
+            echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:missing-seasons
+            ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:${{ github.sha }}
+          build-args: |
+            BUILD_REVISION=${{ github.sha }}
+            BUILD_DIRTY=false
+            BUILD_NUMBER=${{ github.run_number }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+          labels: |
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=missing-seasons
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=fork-image-amd64
+          cache-to: type=gha,scope=fork-image-amd64,mode=max
+
+      - name: Report the image
+        run: |
+          {
+            echo "### Image"
+            echo
+            echo '```'
+            echo "${REGISTRY}/${IMAGE_LC}:missing-seasons"
+            echo "${REGISTRY}/${IMAGE_LC}:${GITHUB_SHA}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

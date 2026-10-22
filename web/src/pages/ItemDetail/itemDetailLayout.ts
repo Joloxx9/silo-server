@@ -69,6 +69,11 @@ export function formatEpisodeCount(count: number): string {
 }
 
 export function formatSeasonMeta(season: Season): string {
+  const missing = season.missing_episode_count ?? 0;
+  if (missing > 0) {
+    if (season.episode_count === 0) return `Not in library · ${formatEpisodeCount(missing)}`;
+    return `${season.episode_count} of ${formatEpisodeCount(season.episode_count + missing)}`;
+  }
   return formatEpisodeCount(season.episode_count);
 }
 
