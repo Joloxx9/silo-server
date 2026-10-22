@@ -3,9 +3,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * Hidden until the pointer is over the season (group/season) or episode
- * (group/missing) card, or focus reaches it. A touch screen has no hover, so
- * there it always shows.
+ * Request stays hidden until the pointer is over the season (group/season) or
+ * episode (group/missing) card, or focus reaches it. A touch screen has no
+ * hover, so there it always shows. Requested always shows.
  */
 const REVEAL_ON_HOVER =
   "opacity-0 transition-opacity group-hover/season:opacity-100 group-hover/missing:opacity-100 group-focus-within/season:opacity-100 group-focus-within/missing:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100";
@@ -36,7 +36,7 @@ export default function RequestSeasonButton({
       type="button"
       size="sm"
       variant="secondary"
-      className={cn("gap-1 text-xs", REVEAL_ON_HOVER, requested && "cursor-default", className)}
+      className={cn("gap-1 text-xs", requested ? "cursor-default" : REVEAL_ON_HOVER, className)}
       onClick={requested ? undefined : onRequest}
       aria-disabled={requested || undefined}
       aria-label={requested ? `${target} requested` : `Request ${target}`}
