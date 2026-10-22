@@ -63,6 +63,8 @@ import { capabilityListLabel } from "@/lib/pluginCapabilities";
 import { missingRequiredConfig } from "@/lib/pluginConfigReady";
 import {
   configPanelId,
+  installationTier,
+  pendingUpdateVersion,
   pluginDisplayName,
   sourceLabel,
   tierNotice,
@@ -232,8 +234,8 @@ function Banner({
   );
 }
 
-function TierNotice({ sourceKind }: { sourceKind: string }) {
-  const notice = tierNotice(sourceKind);
+function TierNotice({ tier }: { tier: string }) {
+  const notice = tierNotice(tier);
   if (!notice) return null;
   return (
     <Banner
@@ -241,9 +243,18 @@ function TierNotice({ sourceKind }: { sourceKind: string }) {
       icon={<Info aria-hidden="true" className="text-muted-foreground mt-0.5 size-4 shrink-0" />}
     >
       <p>
-        <strong className="font-semibold">{sourceLabel(sourceKind)}.</strong> {notice}
+        <strong className="font-semibold">{sourceLabel(tier)}.</strong> {notice}
       </p>
     </Banner>
+  );
+}
+
+/** Stands in for the Updates menu when no update policy can apply. */
+function UpdatesState({ children }: { children: ReactNode }) {
+  return (
+    <span className="text-muted-foreground inline-flex h-8 items-center text-[13px]">
+      {children}
+    </span>
   );
 }
 
@@ -272,8 +283,9 @@ function InstalledPluginPage({
   );
   const canRestart = runtime.resident && installation.enabled;
   const restartDisabled = restartInstallation.isPending || runtime.state === "starting";
-  const hasMenuActions =
-    canRestart || Boolean(installation.available_version) || adminRoutes.length > 0;
+  const tier = installationTier(installation);
+  const updateVersion = pendingUpdateVersion(installation);
+  const hasMenuActions = canRestart || Boolean(updateVersion) || adminRoutes.length > 0;
   const policy = installation.update_policy || "auto";
   const policyOptions = UPDATE_POLICY_LABELS[policy]
     ? Object.keys(UPDATE_POLICY_LABELS)
@@ -282,8 +294,7 @@ function InstalledPluginPage({
   const jobs = capabilityListLabel(capabilities);
   const runtimeProblem =
     installation.enabled &&
-    runtime.resident &&
-    (runtime.state === "failed" || runtime.state === "backoff");
+    (runtime.state === "failed" || (runtime.resident && runtime.state === "backoff"));
 
   const restartButton = (
     <Button
@@ -308,33 +319,42 @@ function InstalledPluginPage({
             {publisher ? <span>by {publisher}</span> : null}
             <span>Version {installation.version}</span>
             {jobs ? <span>{jobs}</span> : null}
-            <span>{sourceLabel(installation.source_kind)}</span>
+            <span>{sourceLabel(tier)}</span>
             <PluginStatusLabel {...status} />
           </>
         }
         actions={
           <>
-            <Select
-              value={policy}
-              disabled={updateInstallation.isPending}
-              onValueChange={(value) =>
-                updateInstallation.mutate({
-                  id: installation.id,
-                  body: { update_policy: value },
-                })
-              }
-            >
-              <SelectTrigger size="sm" aria-label="Updates" className="h-8 text-[13px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {policyOptions.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {UPDATE_POLICY_LABELS[value] ?? value}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Without a repository there is nothing to check; with the
+                approved community catalog hidden, checks are paused. Either
+                way the stored policy does nothing, so it is not offered. */}
+            {tier === "unverified" ? (
+              <UpdatesState>Updated by upload</UpdatesState>
+            ) : installation.updates_paused ? (
+              <UpdatesState>Updates paused</UpdatesState>
+            ) : (
+              <Select
+                value={policy}
+                disabled={updateInstallation.isPending}
+                onValueChange={(value) =>
+                  updateInstallation.mutate({
+                    id: installation.id,
+                    body: { update_policy: value },
+                  })
+                }
+              >
+                <SelectTrigger size="sm" aria-label="Updates" className="h-8 text-[13px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {policyOptions.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {UPDATE_POLICY_LABELS[value] ?? value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <label className="text-foreground/85 flex items-center gap-2 text-[13.5px]">
               <Switch
                 checked={installation.enabled}
@@ -362,13 +382,13 @@ function InstalledPluginPage({
                     Restart
                   </DropdownMenuItem>
                 ) : null}
-                {installation.available_version ? (
+                {updateVersion ? (
                   <DropdownMenuItem
                     disabled={applyUpdate.isPending}
                     onSelect={() => applyUpdate.mutate(installation.id)}
                   >
                     <Download aria-hidden="true" />
-                    Update to {installation.available_version}
+                    Update to {updateVersion}
                   </DropdownMenuItem>
                 ) : null}
                 {adminRoutes.map((route) => (
@@ -400,24 +420,31 @@ function InstalledPluginPage({
             <AlertTriangle aria-hidden="true" className="text-warning mt-0.5 size-4 shrink-0" />
           }
         >
-          <p>
-            <strong className="font-semibold">
-              {runtime.state === "failed"
-                ? `${name} stopped and won't restart on its own.`
-                : `${name} keeps stopping.`}
-            </strong>{" "}
-            Silo has restarted it {runtime.restart_count}{" "}
-            {runtime.restart_count === 1 ? "time" : "times"}
-            {runtime.state === "backoff" && runtime.next_restart_at
-              ? `. The next attempt is at ${formatDateTime(runtime.next_restart_at)}.`
-              : "."}
-          </p>
+          {runtime.resident ? (
+            <p>
+              <strong className="font-semibold">
+                {runtime.state === "failed"
+                  ? `${name} stopped and won't restart on its own.`
+                  : `${name} keeps stopping.`}
+              </strong>{" "}
+              Silo has restarted it {runtime.restart_count}{" "}
+              {runtime.restart_count === 1 ? "time" : "times"}
+              {runtime.state === "backoff" && runtime.next_restart_at
+                ? `. The next attempt is at ${formatDateTime(runtime.next_restart_at)}.`
+                : "."}
+            </p>
+          ) : (
+            <p>
+              <strong className="font-semibold">{name} failed to start.</strong> Silo tries again
+              the next time it needs the plugin.
+            </p>
+          )}
           {runtime.last_error ? (
             <pre className="bg-background/60 rounded-lg border px-3 py-2 font-mono text-xs [overflow-wrap:anywhere] whitespace-pre-wrap">
               {runtime.last_error}
             </pre>
           ) : null}
-          <div>{restartButton}</div>
+          {canRestart ? <div>{restartButton}</div> : null}
         </Banner>
       ) : null}
 
@@ -443,7 +470,30 @@ function InstalledPluginPage({
         </Banner>
       ) : null}
 
-      <TierNotice sourceKind={installation.source_kind} />
+      {installation.updates_paused ? (
+        <Banner
+          tone="info"
+          icon={
+            <Info aria-hidden="true" className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+          }
+        >
+          <p>
+            <strong className="font-semibold">Update checks are paused.</strong> Approved community
+            plugins are turned off, so Silo doesn't look for new versions of {name}.{" "}
+            <ViewTransitionLink
+              to="/admin/plugins?tab=catalog"
+              className="underline underline-offset-4"
+            >
+              Turn them back on
+            </ViewTransitionLink>{" "}
+            to resume its{" "}
+            {UPDATE_POLICY_LABELS[policy] ? `“${UPDATE_POLICY_LABELS[policy]}” setting` : "updates"}
+            .
+          </p>
+        </Banner>
+      ) : null}
+
+      <TierNotice tier={tier} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
         <div className="flex min-w-0 flex-col gap-3.5">
@@ -525,7 +575,7 @@ function CatalogPluginPreview({ entry }: { entry: PluginCatalogEntry }) {
           </Button>
         }
       />
-      <TierNotice sourceKind={entry.source_kind} />
+      <TierNotice tier={entry.source_kind} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
         <div className="flex min-w-0 flex-col gap-3.5">
           <PluginDeclaredSettings schemas={entry.global_config_schema ?? []} />
