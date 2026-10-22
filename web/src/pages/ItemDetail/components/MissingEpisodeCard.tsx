@@ -1,19 +1,25 @@
-import { CalendarClock, Download } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import type { EpisodeListItem } from "@/api/types";
-import { Button } from "@/components/ui/button";
 import EpisodeCardCaption from "./EpisodeCardCaption";
+import RequestSeasonButton from "./RequestSeasonButton";
 
 interface MissingEpisodeCardProps {
   episode: EpisodeListItem;
   /** Opens a request for the episode's season; absent when requests are off. */
   onRequest?: () => void;
+  /** A request already covers the episode's season. */
+  requested?: boolean;
 }
 
 /**
  * An episode the library lacks, in a season grid that asked to show them:
  * dimmed, not a link, labeled by whether it has aired, with a request button.
  */
-export default function MissingEpisodeCard({ episode, onRequest }: MissingEpisodeCardProps) {
+export default function MissingEpisodeCard({
+  episode,
+  onRequest,
+  requested = false,
+}: MissingEpisodeCardProps) {
   const unaired = episode.availability === "unaired";
   const label = unaired ? "Not aired yet" : "Not in library";
 
@@ -37,17 +43,12 @@ export default function MissingEpisodeCard({ episode, onRequest }: MissingEpisod
           {label}
         </span>
         {onRequest && (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="absolute right-2 bottom-2 h-7 gap-1 px-2 text-xs"
-            onClick={onRequest}
-            aria-label={`Request season ${episode.season_number}`}
-          >
-            <Download className="size-3.5" />
-            Request
-          </Button>
+          <RequestSeasonButton
+            target={`season ${episode.season_number}`}
+            requested={requested}
+            onRequest={onRequest}
+            className="absolute right-2 bottom-2 h-7 px-2"
+          />
         )}
       </div>
       <div className="opacity-60">

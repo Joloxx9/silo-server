@@ -77,7 +77,7 @@ export default function SeriesContent({
   const tmdbID = Number(item.tmdb_id) || 0;
   const canRequestSeasons = useMissingSeasonsRequestable(Boolean(currentProfile?.id) && tmdbID > 0);
   const showMissing = useShowMissingEpisodes();
-  const missingRequest = useMissingSeasonRequest(tmdbID, item.title ?? "");
+  const missingRequest = useMissingSeasonRequest(tmdbID, item.title ?? "", showMissing);
   const { data: seasonsData, isLoading: seasonsLoading } = useSeasons(
     item.content_id,
     showMissing,
@@ -264,10 +264,15 @@ export default function SeriesContent({
                     isLoading={singleSeasonEpisodesQuery.isLoading}
                     episodeLinkState={singleSeasonEpisodeLinkState}
                     onRequestSeason={missingRequest.onRequestSeason}
+                    requestedSeasons={missingRequest.requestedSeasons}
                   />
                 </section>
               ) : (
-                <SeasonCarousel seasons={seasons} onRequestSeason={missingRequest.onRequestSeason} />
+                <SeasonCarousel
+                  seasons={seasons}
+                  onRequestSeason={missingRequest.onRequestSeason}
+                  requestedSeasons={missingRequest.requestedSeasons}
+                />
               )}
             </div>
           )}

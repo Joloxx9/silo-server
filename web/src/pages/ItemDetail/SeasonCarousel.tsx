@@ -1,20 +1,26 @@
 import type { ReactNode } from "react";
-import { Check, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Season } from "@/api/types";
 import { usePrefetchCatalogSeason } from "@/hooks/queries/catalogRead";
 import { useCarouselEmbla } from "@/hooks/useCarouselEmbla";
 import { formatSeasonMeta, formatSeasonProgress, getSeasonDisplayTitle } from "./itemDetailLayout";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
-import { Button } from "@/components/ui/button";
+import RequestSeasonButton from "./components/RequestSeasonButton";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
 
 interface SeasonCarouselProps {
   seasons: Season[];
   /** Requests a season the library lacks entirely; absent when requests are off. */
   onRequestSeason?: (seasonNumber: number) => void;
+  /** Seasons a request already covers. */
+  requestedSeasons?: ReadonlySet<number>;
 }
 
-export default function SeasonCarousel({ seasons, onRequestSeason }: SeasonCarouselProps) {
+export default function SeasonCarousel({
+  seasons,
+  onRequestSeason,
+  requestedSeasons,
+}: SeasonCarouselProps) {
   const sorted = seasons.slice().sort((a, b) => a.season_number - b.season_number);
   const prefetchSeason = usePrefetchCatalogSeason();
 
@@ -27,7 +33,12 @@ export default function SeasonCarousel({ seasons, onRequestSeason }: SeasonCarou
       {sorted.map((season) => {
         if (season.episode_count === 0 && (season.missing_episode_count ?? 0) > 0) {
           return (
-            <MissingSeasonSlide key={season.content_id} season={season} onRequest={onRequestSeason} />
+            <MissingSeasonSlide
+              key={season.content_id}
+              season={season}
+              onRequest={onRequestSeason}
+              requested={requestedSeasons?.has(season.season_number) ?? false}
+            />
           );
         }
         const userData = season.user_data;
@@ -125,9 +136,11 @@ export default function SeasonCarousel({ seasons, onRequestSeason }: SeasonCarou
 function MissingSeasonSlide({
   season,
   onRequest,
+  requested,
 }: {
   season: Season;
   onRequest?: (seasonNumber: number) => void;
+  requested: boolean;
 }) {
   return (
     <li className="embla__slide shrink-0" data-availability="missing">
@@ -152,17 +165,12 @@ function MissingSeasonSlide({
             )}
           </ViewTransitionLink>
           {onRequest && (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="absolute inset-x-2.5 bottom-2.5 h-8 gap-1.5 text-xs"
-              onClick={() => onRequest(season.season_number)}
-              aria-label={`Request ${getSeasonDisplayTitle(season)}`}
-            >
-              <Download className="size-3.5" />
-              Request
-            </Button>
+            <RequestSeasonButton
+              target={getSeasonDisplayTitle(season)}
+              requested={requested}
+              onRequest={() => onRequest(season.season_number)}
+              className="absolute inset-x-2.5 bottom-2.5 h-8"
+            />
           )}
         </div>
         <ViewTransitionLink

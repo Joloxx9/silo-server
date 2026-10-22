@@ -66,6 +66,7 @@ export default function SeasonContent({ item }: { item: ItemDetail & { type: "se
   const missingRequest = useMissingSeasonRequest(
     Number(seriesDetail.data?.tmdb_id) || 0,
     item.series_title ?? "",
+    listedEpisodes.length > episodes.length,
   );
   // The season's pending language also covers its episodes. While an episode
   // is the thing missing, or the season has no overview of its own, the
@@ -218,6 +219,7 @@ export default function SeasonContent({ item }: { item: ItemDetail & { type: "se
               isLoading={episodesLoading}
               episodeLinkState={episodeLinkState}
               onRequestSeason={missingRequest.onRequestSeason}
+              requestedSeasons={missingRequest.requestedSeasons}
             />
           </section>
         </div>
