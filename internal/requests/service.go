@@ -1415,6 +1415,9 @@ func (s *Service) GetFeatureStatus(ctx context.Context, viewer Viewer) (FeatureS
 		if status.MissingSeasonsRequestable, err = s.moreSeasonsRequestable(ctx); err != nil {
 			return FeatureStatus{}, err
 		}
+		if status.SeriesServerConnected, err = s.seriesServerConnected(ctx); err != nil {
+			return FeatureStatus{}, err
+		}
 		// The account's own permission is left to the caller, which reads
 		// it for the request capability anyway.
 		status.WatchlistRequests = settings.WatchlistRequests && viewer.UserID != 0 && s.watchlistAutoRequest(ctx, viewer)

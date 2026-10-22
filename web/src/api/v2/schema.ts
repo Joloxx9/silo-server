@@ -23728,6 +23728,8 @@ export interface components {
       /** @description Opaque revision of this document */
       revision: string;
       season_requests_supported: boolean;
+      /** @description Whether an enabled download server connection takes series requests, so a request for missing seasons has somewhere to go. Absent when none does. */
+      series_server_connected?: boolean;
       /**
        * @description Support and configuration state, not health
        * @enum {string}
