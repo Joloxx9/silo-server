@@ -810,6 +810,7 @@ func (s *Service) GetDetail(ctx context.Context, viewer Viewer, mediaType MediaT
 			return nil, err
 		}
 		seasons = requestSeasons(raw, counts, primaryRequests[raw.ID])
+		markMonitoredSeasons(seasons, s.monitoredSeasons(ctx, raw.TVDBID))
 		if active := primaryRequests[raw.ID]; active != nil && len(active.Seasons) > 0 && counts != nil {
 			// Attach the season progress the request lists attach, so the
 			// state can read partially available or available.

@@ -1957,7 +1957,7 @@ export interface RequestMediaSeason {
   poster_path?: string;
   /** Whether every aired episode is in the library. */
   availability: "missing" | "partial" | "available";
-  /** The title's active request covers this season. */
+  /** The title's active request covers this season, or Sonarr already monitors it. */
   requested: boolean;
 }
 
