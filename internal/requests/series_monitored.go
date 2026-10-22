@@ -74,7 +74,7 @@ func findSonarrSeries(ctx context.Context, baseURL, apiKey string, tvdbID int) (
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, monitoredSeasonsMaxBody))
 		return nil, fmt.Errorf("sonarr answered %d", resp.StatusCode)
@@ -90,7 +90,7 @@ func findSonarrSeries(ctx context.Context, baseURL, apiKey string, tvdbID int) (
 // that has what a read needs.
 func isSonarrConnection(in Integration) bool {
 	kind, _ := in.PluginConfig["service_kind"].(string)
-	return in.Enabled && in.CapabilityID == "arr" && kind == "sonarr" &&
+	return in.Enabled && in.CapabilityID == arrCapabilityID && kind == kindSonarr &&
 		strings.TrimSpace(in.BaseURL) != "" && strings.TrimSpace(in.APIKeyRef) != ""
 }
 
