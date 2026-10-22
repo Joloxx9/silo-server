@@ -2,19 +2,33 @@ package requests
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/Silo-Server/silo-server/internal/requests/arrclient"
 )
 
 // monitoredSeasonsTimeout bounds the Sonarr read on a title detail, so a slow
 // or unreachable server only costs the detail its monitored seasons.
 const monitoredSeasonsTimeout = 4 * time.Second
 
+// monitoredSeasonsMaxBody caps a Sonarr series answer; one series is small.
+const monitoredSeasonsMaxBody = 1 << 20
+
 var monitoredSeasonsHTTPClient = &http.Client{Timeout: monitoredSeasonsTimeout}
+
+// sonarrSeries is the part of a Sonarr series this server reads. The read is
+// local to this package because arrclient imports it.
+type sonarrSeries struct {
+	Monitored bool `json:"monitored"`
+	Seasons   []struct {
+		SeasonNumber int  `json:"seasonNumber"`
+		Monitored    bool `json:"monitored"`
+	} `json:"seasons"`
+}
 
 // monitoredSeasons returns the seasons of the series with tvdbID that an
 // enabled Sonarr connection already monitors, whoever added it there. A
@@ -36,8 +50,7 @@ func (s *Service) monitoredSeasons(ctx context.Context, tvdbID int) map[int]bool
 		if !isSonarrConnection(in) {
 			continue
 		}
-		client := arrclient.New(in.BaseURL, in.APIKeyRef, monitoredSeasonsHTTPClient)
-		series, err := arrclient.FindSeriesByTVDB(ctx, client, tvdbID)
+		series, err := findSonarrSeries(ctx, in.BaseURL, in.APIKeyRef, tvdbID)
 		if err != nil {
 			slog.WarnContext(ctx, "requests: reading monitored seasons from sonarr", "server", in.Name, "tvdb_id", tvdbID, "error", err)
 			continue
@@ -45,6 +58,32 @@ func (s *Service) monitoredSeasons(ctx context.Context, tvdbID int) map[int]bool
 		mergeMonitoredSeasons(monitored, series)
 	}
 	return monitored
+}
+
+// findSonarrSeries reads the series Sonarr already has for a TVDB id from
+// Sonarr's own library; an unknown id answers an empty list.
+func findSonarrSeries(ctx context.Context, baseURL, apiKey string, tvdbID int) ([]sonarrSeries, error) {
+	url := fmt.Sprintf("%s/api/v3/series?tvdbId=%d", strings.TrimRight(strings.TrimSpace(baseURL), "/"), tvdbID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Api-Key", strings.TrimSpace(apiKey))
+	resp, err := monitoredSeasonsHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, monitoredSeasonsMaxBody))
+		return nil, fmt.Errorf("sonarr answered %d", resp.StatusCode)
+	}
+	var out []sonarrSeries
+	if err := json.NewDecoder(io.LimitReader(resp.Body, monitoredSeasonsMaxBody)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decoding sonarr series: %w", err)
+	}
+	return out, nil
 }
 
 // isSonarrConnection reports an enabled arr connection to a Sonarr server
@@ -56,7 +95,7 @@ func isSonarrConnection(in Integration) bool {
 }
 
 // mergeMonitoredSeasons adds the regular seasons a monitored series monitors.
-func mergeMonitoredSeasons(into map[int]bool, series []arrclient.SeriesResource) {
+func mergeMonitoredSeasons(into map[int]bool, series []sonarrSeries) {
 	for _, s := range series {
 		if !s.Monitored {
 			continue

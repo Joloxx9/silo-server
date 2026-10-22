@@ -1,24 +1,52 @@
 package requests
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
-
-	"github.com/Silo-Server/silo-server/internal/requests/arrclient"
 )
 
-func TestMergeMonitoredSeasons(t *testing.T) {
+// sonarrSeriesJSON is how Sonarr answers /api/v3/series?tvdbId=.
+const sonarrSeriesJSON = `[
+	{"id": 7, "tvdbId": 423022, "monitored": true, "seasons": [
+		{"seasonNumber": 0, "monitored": true},
+		{"seasonNumber": 1, "monitored": false},
+		{"seasonNumber": 2, "monitored": true}
+	]},
+	{"id": 8, "tvdbId": 423022, "monitored": false, "seasons": [
+		{"seasonNumber": 3, "monitored": true}
+	]}
+]`
+
+func TestFindSonarrSeriesAndMerge(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v3/series" || r.URL.Query().Get("tvdbId") != "423022" || r.Header.Get("X-Api-Key") != "key" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(sonarrSeriesJSON))
+	}))
+	defer srv.Close()
+
+	series, err := findSonarrSeries(t.Context(), srv.URL+"/", "key", 423022)
+	if err != nil {
+		t.Fatal(err)
+	}
 	got := map[int]bool{}
-	mergeMonitoredSeasons(got, []arrclient.SeriesResource{
-		{Monitored: true, Seasons: []arrclient.SeriesSeasonResource{
-			{SeasonNumber: 0, Monitored: true},
-			{SeasonNumber: 1, Monitored: false},
-			{SeasonNumber: 2, Monitored: true},
-		}},
-		// An unmonitored series wants nothing, whatever its seasons say.
-		{Monitored: false, Seasons: []arrclient.SeriesSeasonResource{{SeasonNumber: 3, Monitored: true}}},
-	})
+	mergeMonitoredSeasons(got, series)
+	// Specials and the unmonitored series' seasons stay out.
 	if len(got) != 1 || !got[2] {
 		t.Fatalf("monitored = %v, want only season 2", got)
+	}
+}
+
+func TestFindSonarrSeriesReportsServerErrors(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	if _, err := findSonarrSeries(t.Context(), srv.URL, "bad", 1); err == nil {
+		t.Fatal("a 401 must be an error")
 	}
 }
 

@@ -219,8 +219,7 @@ export function useCatalogSeriesSeasons(
 ) {
   return useQuery({
     queryKey: catalogKeys.seriesSeasons(seriesId!, libraryId, missing),
-    queryFn: ({ signal }) =>
-      fetchCatalogSeriesSeasons(seriesId!, libraryId, { signal }, missing),
+    queryFn: ({ signal }) => fetchCatalogSeriesSeasons(seriesId!, libraryId, { signal }, missing),
     enabled: !!seriesId,
   });
 }
