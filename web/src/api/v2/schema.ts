@@ -67,7 +67,7 @@ export interface paths {
     put?: never;
     /**
      * Link a directory (LDAP) identity to the caller's account with the directory username and password.
-     * @description The account re-enters its local password; the credentials plugin then checks the directory username and password, and the identity it answers for is linked to this account with the same rules as other linking: linking turns local password sign-in off unless the account is break-glass, and is audited. Answers 201 with the linked identity as listAccountIdentities shows it. Refusals, by problem type: 422 validation_failed at body.password (wrong local password) or at body.directory_password (the directory refused the credentials); 409 local_password_required (the account has no local password sign-in); 403 not_permitted (the directory's group rules); 403 account_disabled (the directory account is disabled, locked or expired); 403 password_expired (the directory password expired); 403 permission_denied (the Silo account is disabled, or the caller is an API key or impersonation session); 409 identity_linked_elsewhere; 409 already_linked (this account already has an identity at the installation); 404 not_found (not an enabled credentials provider, an OAuth one included); 503 provider_unavailable. Spends the login rate-limit budget. getExternalSignInCapabilities reports credentials_linking.
+     * @description The account re-enters its local password; the credentials plugin then checks the directory username and password, and the identity it answers for is linked to this account with the same rules as other linking: linking turns local password sign-in off unless the account is break-glass, and is audited. Answers 201 with the linked identity as listAccountIdentities shows it. Refusals, by problem type: 422 validation_failed at body.password (wrong local password) or at body.directory_password (the directory refused the credentials); 409 local_password_required (the account has no local password sign-in); 403 not_permitted (the directory's group rules); 403 account_disabled (the directory account is disabled, locked or expired); 403 password_expired (the directory password expired); 403 permission_denied (the Silo account is disabled, or the caller is an API key or impersonation session); 409 identity_linked_elsewhere; 409 already_linked (this account already has an identity at the installation); 404 not_found (not an enabled credentials provider, an OAuth one included); 429 rate_limited with Retry-After (the directory username has used its sign-in attempt budget); 503 provider_unavailable. Spends the login rate-limit budget. getExternalSignInCapabilities reports credentials_linking.
      */
     post: operations["linkAccountIdentityWithCredentials"];
     delete?: never;
@@ -2475,7 +2475,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Request cancellation of a cancellable administrator job. Completed effects and verified storage-copy checkpoints are retained. */
+    /** Request cancellation of a job that reports cancelable: library refresh, storage transition, or image cache cleanup. Completed effects and verified storage-copy checkpoints are retained. */
     post: operations["cancelAdminJob"];
     delete?: never;
     options?: never;
@@ -7369,6 +7369,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/devices/push/apple/retire": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Stop delivery to an Apple installation without a login session, proved by its installation key. Send it after removing this server, when the session is already gone. */
+    post: operations["retireApplePushInstallation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/diagnostics/capabilities": {
     parameters: {
       query?: never;
@@ -9047,7 +9064,10 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Unlink the account's current Discord identity and turn delivery off. Send once; replay can unlink a later connection. */
+    /**
+     * Unlink the account's current Discord identity and turn delivery off. Send once; replay can unlink a later connection.
+     * @description Discord delivery is account-wide, so only the account's household manager may change it. X-Profile-Id must name the account's primary profile, with X-Profile-Token when that profile is PIN-protected (without it the request is 403 profile_verification_required); naming any other profile is 403 permission_denied, including on an admin account. A request without X-Profile-Id is accepted only from an admin account's API key, or from an admin account's login session while no profile on the account is PIN-protected or access-restricted; otherwise it is 403 permission_denied.
+     */
     delete: operations["unlinkNotificationDiscord"];
     options?: never;
     head?: never;
@@ -9063,7 +9083,10 @@ export interface paths {
     };
     /** Read the login account's Discord notification preferences. */
     get: operations["getNotificationDiscordPreferences"];
-    /** Set the login account's Discord delivery mode. */
+    /**
+     * Set the login account's Discord delivery mode.
+     * @description Discord delivery is account-wide, so only the account's household manager may change it. X-Profile-Id must name the account's primary profile, with X-Profile-Token when that profile is PIN-protected (without it the request is 403 profile_verification_required); naming any other profile is 403 permission_denied, including on an admin account. A request without X-Profile-Id is accepted only from an admin account's API key, or from an admin account's login session while no profile on the account is PIN-protected or access-restricted; otherwise it is 403 permission_denied.
+     */
     put: operations["updateNotificationDiscordPreferences"];
     post?: never;
     delete?: never;
@@ -9098,7 +9121,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Begin one account-bound Discord consent flow. */
+    /**
+     * Begin one account-bound Discord consent flow.
+     * @description Discord delivery is account-wide, so only the account's household manager may change it. X-Profile-Id must name the account's primary profile, with X-Profile-Token when that profile is PIN-protected (without it the request is 403 profile_verification_required); naming any other profile is 403 permission_denied, including on an admin account. A request without X-Profile-Id is accepted only from an admin account's API key, or from an admin account's login session while no profile on the account is PIN-protected or access-restricted; otherwise it is 403 permission_denied.
+     */
     post: operations["beginNotificationDiscordLink"];
     delete?: never;
     options?: never;
@@ -9258,6 +9284,23 @@ export interface paths {
     post?: never;
     /** Apply an ordered removal for the installation's current account/profile. Tombstones prevent stale registration replay. */
     delete: operations["unregisterPushDevice"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/notifications/push/devices/{device_id}/retire": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Stop delivery to an Android installation without a login session, proved by its installation key. Send it after removing this server or signing out, when the login is already gone. */
+    post: operations["retirePushDevice"];
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -16584,6 +16627,11 @@ export interface components {
       /** @description episode, or the catalog item type; empty when unknown */
       media_type: string;
       play_method: string;
+      /**
+       * Format: double
+       * @description Seconds of the media watched by normal playback, excluding pauses, seeks and buffering; null when the play has no watch-time measurement, which includes every play recorded before it existed
+       */
+      played_seconds: number | null;
       profile_id: string;
       /** @description Profile display name at the time of playback; the profile id when none was recorded */
       profile_name: string;
@@ -16608,7 +16656,10 @@ export interface components {
       user_id: string;
       /** @description Empty when the account no longer exists */
       username: string;
-      /** Format: double */
+      /**
+       * Format: double
+       * @description Position the play ended at, in seconds. Not how long it was watched: a play resumed partway through reports the resume point plus what was watched; played_seconds is the watch time
+       */
       watched_seconds: number;
     };
     AdminPlaybackReliability: {
@@ -19971,6 +20022,15 @@ export interface components {
        */
       server_id?: string;
     };
+    AndroidPushRetirementReceipt: {
+      /**
+       * @description The retirement's generation, which is now the installation's newest intent.
+       * @example 1
+       */
+      generation: string;
+      /** @description Always true: the server delivers nothing to this installation until it registers again with a higher generation. */
+      removed: boolean;
+    };
     APIKeyScope: {
       description: string;
       name: string;
@@ -20026,6 +20086,18 @@ export interface components {
        * @example 3f2a9d5e-6b1c-4c7e-9a0d-2f4b8c1e7a35
        */
       server_id?: string;
+    };
+    ApplePushRetirementBody: {
+      device_id: string;
+    };
+    ApplePushRetirementReceipt: {
+      /**
+       * @description The retirement's generation, which is now the installation's newest intent.
+       * @example 1
+       */
+      generation: string;
+      /** @description Always true: the server delivers nothing to this installation until it registers again with a higher generation. */
+      removed: boolean;
     };
     AppliedQuirkV3: {
       action: string;
@@ -24399,6 +24471,9 @@ export interface components {
       /** Format: int64 */
       file_id?: number;
       kind: string;
+      still_thumbhash?: string;
+      /** @description Presigned, short-lived. 16:9 image of the extra; absent when it has none */
+      still_url?: string;
       title?: string;
     };
     ItemImageEntry: {
@@ -27166,6 +27241,8 @@ export interface components {
       stop_id?: string;
     };
     PlaybackPlan: {
+      /** @description The available_qualities label this plan delivers, so a client can mark that menu entry: the label quality_preference named while the menu lists it and the encode keeps its resolution, otherwise the rung whose resolution class and bitrate the encode matches. Absent when the plan delivers no listed entry, such as the source played unchanged or a plain-resolution or auto request whose capped encode falls between two rungs. Present on servers that advertise plan_active_quality_v1. */
+      active_quality?: string;
       applied_quirks: components["schemas"]["AppliedQuirkV3"][];
       /** @description Fixed quality rungs a quality_change replan may request, in menu order. The source is not listed: quality_preference auto returns to it. Empty when no rung applies. */
       available_qualities: components["schemas"]["AvailableQualityV3"][];
@@ -31504,7 +31581,7 @@ export interface components {
       /** @description Logical watch choices, each spanning one or more ordered parts */
       playback_variants?: components["schemas"]["WatchPlaybackVariant"][];
       poster_thumbhash?: string;
-      /** @description The item's poster, an episode's still, or an extra's parent poster, sized by image_size; for system media controls */
+      /** @description The item's poster, an episode's still, or a local extra's still (its parent's poster when it has none), sized by image_size; for system media controls */
       poster_url?: string;
       preview?: components["schemas"]["WatchMarker"];
       recap?: components["schemas"]["WatchMarker"];
@@ -86319,6 +86396,15 @@ export interface operations {
           "application/problem+json": components["schemas"]["Problem"];
         };
       };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -89382,7 +89468,7 @@ export interface operations {
           | "person";
         /** @description Metadata match state */
         status?: string;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
         /** @description Media scope: movie, series, episode, audiobook, ebook, manga, or video (movies and series). video_with_episodes, for source=query only, searches movies, series, and episodes when q is set and lists movies and series without q; check getCatalogSearchCapabilities.video_with_episodes_scope first */
         type?: string;
@@ -89518,7 +89604,7 @@ export interface operations {
         skip_total?: boolean;
         /** @description Default name */
         sort?: "name" | "count" | "duration";
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -89916,7 +90002,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -90044,7 +90130,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -90170,7 +90256,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -90973,7 +91059,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -91576,7 +91662,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -91862,7 +91948,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -91986,7 +92072,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -92112,7 +92198,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -97432,6 +97518,134 @@ export interface operations {
         headers: {
           /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
           ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  retireApplePushInstallation: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Positive decimal int64, persisted and incremented for each new installation intent across account/profile switches. Reuse exactly after uncertainty. */
+        "X-Push-Generation": string;
+        /** @description Secret 32-byte base64url installation credential. Persist privately; never rotate on retry or account switch. */
+        "X-Push-Installation-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ApplePushRetirementBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApplePushRetirementReceipt"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -103808,7 +104022,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -104254,7 +104468,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -105882,7 +106096,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -106001,7 +106215,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -106120,7 +106334,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -111028,7 +111242,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -111150,7 +111364,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -112108,7 +112322,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -114910,6 +115124,114 @@ export interface operations {
       };
     };
   };
+  retirePushDevice: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Positive decimal int64, persisted and incremented for each new installation intent across account/profile switches. Reuse exactly after uncertainty. */
+        "X-Push-Generation": string;
+        /** @description Secret 32-byte base64url installation credential. Persist privately; never rotate on retry or account switch. */
+        "X-Push-Installation-Key": string;
+      };
+      path: {
+        device_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AndroidPushRetirementReceipt"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   getPushRegistrationCapabilities: {
     parameters: {
       query?: never;
@@ -115210,7 +115532,7 @@ export interface operations {
           | "-latest_episode_added";
         /** @description active keeps the series that notify; inactive keeps the ones that do not, because the profile's preferences silence every reason or the profile muted the series */
         status?: "all" | "active" | "inactive";
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -122270,7 +122592,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -122392,7 +122714,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -122513,7 +122835,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -122634,7 +122956,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -122757,7 +123079,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -122880,7 +123202,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -123003,7 +123325,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -123134,7 +123456,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -123255,7 +123577,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -123624,7 +123946,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -123745,7 +124067,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -123872,7 +124194,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -128875,7 +129197,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -129035,7 +129357,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -129273,7 +129595,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -129435,7 +129757,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
@@ -139011,7 +139333,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header?: {
@@ -139467,7 +139789,7 @@ export interface operations {
         photo_width?: number;
         /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
         poster_width?: number;
-        /** @description Width in device pixels the client draws an episode's still_url at. Overrides image_size for episode stills */
+        /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
       header: {
