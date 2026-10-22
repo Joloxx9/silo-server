@@ -635,7 +635,7 @@ type recordingMissingMarker struct {
 	ids []int
 }
 
-func (m *recordingMissingMarker) MarkMissing(_ context.Context, id int, _ time.Time) error {
+func (m *recordingMissingMarker) MarkMissing(_ context.Context, id int, _ string, _ time.Time) error {
 	m.ids = append(m.ids, id)
 	return nil
 }
@@ -758,20 +758,25 @@ func TestFinalizeSessionStop_UsesProviderLifecycleSemantics(t *testing.T) {
 
 // Expiry and abort retire the session id, so their pause tells providers the
 // session ended. A session that keeps no progress is not scrobbled on abort.
+// A Jellyfin play's upstream session can be revived under the same id, and
+// jellycompat sends that play's own stop, so its expiry stays a plain pause.
 func TestRetiredSessionsReportEndedPause(t *testing.T) {
+	expire := func(h *PlaybackHandler, s *playback.Session) { h.finalizeExpiredSession(context.Background(), s) }
+	abort := func(h *PlaybackHandler, s *playback.Session) {
+		h.finalizeSessionAbort(context.Background(), s, false, "")
+	}
 	tests := []struct {
 		name               string
 		finalize           func(*PlaybackHandler, *playback.Session)
 		disablePersistence bool
+		jellyfinCompat     bool
 		wantPauses         int
+		wantEnded          bool
 	}{
-		{"expiry", func(h *PlaybackHandler, s *playback.Session) { h.finalizeExpiredSession(context.Background(), s) }, false, 1},
-		{"abort", func(h *PlaybackHandler, s *playback.Session) {
-			h.finalizeSessionAbort(context.Background(), s, false, "")
-		}, false, 1},
-		{"abort without progress", func(h *PlaybackHandler, s *playback.Session) {
-			h.finalizeSessionAbort(context.Background(), s, false, "")
-		}, true, 0},
+		{"expiry", expire, false, false, 1, true},
+		{"abort", abort, false, false, 1, true},
+		{"abort without progress", abort, true, false, 0, false},
+		{"jellyfin expiry", expire, false, true, 1, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -788,6 +793,7 @@ func TestRetiredSessionsReportEndedPause(t *testing.T) {
 				MediaFileID:                file.ID,
 				Position:                   600,
 				DisableProgressPersistence: tt.disablePersistence,
+				IsJellyfinCompat:           tt.jellyfinCompat,
 				StartedAt:                  time.Now().Add(-time.Minute),
 			})
 
@@ -795,8 +801,8 @@ func TestRetiredSessionsReportEndedPause(t *testing.T) {
 				t.Fatalf("pauses = %d, stops = %d, want %d pauses", len(scrobbler.pauses), len(scrobbler.stops), tt.wantPauses)
 			}
 			for _, event := range scrobbler.pauses {
-				if !event.SessionEnded {
-					t.Fatal("pause for a retired session was not marked ended")
+				if event.SessionEnded != tt.wantEnded {
+					t.Fatalf("pause SessionEnded = %v, want %v", event.SessionEnded, tt.wantEnded)
 				}
 			}
 		})

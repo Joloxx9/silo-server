@@ -2090,6 +2090,13 @@ func main() {
 		}
 		personRefreshService = metadata.NewPersonRefreshService(deps.DB, pluginResolver, personRepo)
 		personRefreshService.SetImageResolver(imageResolver)
+		// Person lookups reuse their resolved providers like the item chain
+		// cache does, and drop them on the same plugin lifecycle events.
+		if pluginService != nil {
+			pluginService.AddLifecycleHook(func(context.Context) {
+				personRefreshService.InvalidateProviders()
+			})
+		}
 
 		// Wire the audiobook enricher. It uses the same plugin resolver and chain
 		// repo as the movie/TV pipeline, but resolves providers at
@@ -2873,6 +2880,10 @@ func main() {
 	// The Quick Connect code budget per account follows the same rule, and
 	// the native approval routes and Jellyfin's Authorize share it.
 	deps.QuickConnectCodeAttempts = ratelimit.NewQuickConnectCodeAttemptLimiter(apiRedisClient)
+	// The per-name password sign-in budget follows the same rule. One
+	// limiter serves the native, Jellyfin and Audiobookshelf auth services,
+	// so no listener gets its own allowance.
+	deps.SignInAttempts = ratelimit.NewSignInNameAttemptLimiter(apiRedisClient)
 
 	// Activity log writer + consumer.
 	if err := activitylog.SeedDefaults(ctx, settingsRepo); err != nil {
@@ -3069,6 +3080,7 @@ func main() {
 		// does: those processes have the libraries mounted.
 		if deps.FileRepo != nil {
 			taskMgr.Register(tasks.NewBackfillMatroskaTrackNumbersTask(deps.DB, scanner.NewMatroskaTrackBackfiller(deps.FileRepo)))
+			taskMgr.Register(tasks.NewBackfillHDR10PlusTask(deps.DB, scanner.NewHDR10PlusBackfiller(deps.FileRepo, scanner.FFprobePathFromFFmpeg(cfg.Playback.FFmpegPath))))
 		}
 		taskMgr.Register(tasks.NewRefreshSeriesAirDatesTask(catalog.NewEpisodeRepository(deps.DB)))
 		if deps.Blobs.Assets != nil {
@@ -3106,9 +3118,9 @@ func main() {
 		if deps.MarkerPopulation != nil {
 			taskMgr.Register(tasks.NewSyncMarkersTask(deps.MarkerPopulation))
 		}
-		if deps.MarkerContributionService != nil && deps.MarkerProviderConfig != nil && deps.MarkerContributionStore != nil && deps.FileRepo != nil {
+		if deps.MarkerContributionService != nil && deps.MarkerContributionStore != nil && deps.FileRepo != nil {
 			taskMgr.Register(tasks.NewContributeMarkersTask(
-				deps.MarkerContributionService, deps.MarkerProviderConfig, deps.MarkerContributionStore, deps.FileRepo,
+				deps.MarkerContributionService, deps.MarkerContributionStore, deps.FileRepo,
 			))
 		}
 		if chapterBackfiller, ok := deps.ChapterThumbnailQueuer.(*chapterthumbs.Service); ok {
@@ -3125,6 +3137,9 @@ func main() {
 		taskMgr.Register(tasks.NewOperationalLogCleanupTask(deps.DB, settingsRepo, opsPM))
 		maintenanceSteps = append(maintenanceSteps,
 			tasks.NewTaskHistoryCleanupTask(historyRepo, settingsRepo),
+			// Wired outside the autoscan service so events left by a disabled
+			// or unconfigured autoscan still age out.
+			tasks.NewAutoscanEventCleanupTask(autoscan.NewRepository(deps.DB, deps.SecretCipher), settingsRepo),
 			tasks.NewAuthSessionCleanupTask(auth.NewSessionRepository(deps.DB)),
 			tasks.NewDeviceLoginCleanupTask(auth.NewDeviceLoginRetention(deps.DB)),
 			tasks.NewOAuthFlowCleanupTask(auth.NewPGOAuthStore(deps.DB)),
@@ -3455,6 +3470,7 @@ func main() {
 			nil, // settings: not needed here
 			nil, // user store: not needed here
 		)
+		absAuthSvc.SetSignInAttempts(deps.SignInAttempts)
 		// Audiobookshelf compatibility (beta) signs in local accounts only:
 		// its sessions refresh without the provider re-check, so directory
 		// users are not routed to their provider here.
@@ -3827,6 +3843,7 @@ func main() {
 			})
 			provider := auth.NewLocalProvider(userRepo, sessionRepo)
 			compatDeps.AuthService = auth.NewService(provider, jwtService, sessionRepo, userRepo, nil, nil, nil)
+			compatDeps.AuthService.SetSignInAttempts(deps.SignInAttempts)
 			// Jellyfin Quick Connect runs on the device sign-in requests the
 			// native API approves; profile tokens are only for remote playback.
 			if devices := auth.NewDeviceLoginService(deps.DB, userRepo, jwtService, sessionRepo, compatDeps.UserStoreProvider, nil); devices != nil {
