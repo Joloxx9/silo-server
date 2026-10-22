@@ -29297,7 +29297,7 @@ export interface components {
       name?: string;
       /** @description TMDB image path */
       poster_path?: string;
-      /** @description The title's active request covers this season, or a Sonarr server already monitors it */
+      /** @description The title's active request covers this season, or a Sonarr server monitors it or Seerr already has it requested */
       requested: boolean;
       /**
        * Format: int64

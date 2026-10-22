@@ -30,12 +30,13 @@ type sonarrSeries struct {
 	} `json:"seasons"`
 }
 
-// monitoredSeasons returns the seasons of the series with tvdbID that an
-// enabled Sonarr connection already monitors, whoever added it there. A
-// series the server does not monitor contributes nothing. Errors are logged
-// and leave the answer to the servers that did reply.
-func (s *Service) monitoredSeasons(ctx context.Context, tvdbID int) map[int]bool {
-	if tvdbID <= 0 {
+// monitoredSeasons returns the seasons of a series that an enabled Sonarr
+// connection already monitors or an enabled Seerr connection already has
+// requested, whoever asked there. A series neither server knows contributes
+// nothing. Errors are logged and leave the answer to the servers that did
+// reply.
+func (s *Service) monitoredSeasons(ctx context.Context, tmdbID, tvdbID int) map[int]bool {
+	if tmdbID <= 0 && tvdbID <= 0 {
 		return nil
 	}
 	integrations, err := s.store.ListIntegrations(ctx)
@@ -47,15 +48,22 @@ func (s *Service) monitoredSeasons(ctx context.Context, tvdbID int) map[int]bool
 	defer cancel()
 	monitored := map[int]bool{}
 	for _, in := range integrations {
-		if !isSonarrConnection(in) {
-			continue
+		switch {
+		case isSonarrConnection(in) && tvdbID > 0:
+			series, err := findSonarrSeries(ctx, in.BaseURL, in.APIKeyRef, tvdbID)
+			if err != nil {
+				slog.WarnContext(ctx, "requests: reading monitored seasons from sonarr", "server", in.Name, "tvdb_id", tvdbID, "error", err)
+				continue
+			}
+			mergeMonitoredSeasons(monitored, series)
+		case isSeerrConnection(in) && tmdbID > 0:
+			media, err := findSeerrSeries(ctx, in.BaseURL, in.APIKeyRef, tmdbID)
+			if err != nil {
+				slog.WarnContext(ctx, "requests: reading requested seasons from seerr", "server", in.Name, "tmdb_id", tmdbID, "error", err)
+				continue
+			}
+			mergeSeerrSeasons(monitored, media)
 		}
-		series, err := findSonarrSeries(ctx, in.BaseURL, in.APIKeyRef, tvdbID)
-		if err != nil {
-			slog.WarnContext(ctx, "requests: reading monitored seasons from sonarr", "server", in.Name, "tvdb_id", tvdbID, "error", err)
-			continue
-		}
-		mergeMonitoredSeasons(monitored, series)
 	}
 	return monitored
 }
