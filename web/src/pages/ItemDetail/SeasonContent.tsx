@@ -206,7 +206,9 @@ export default function SeasonContent({ item }: { item: ItemDetail & { type: "se
                   />
                 )}
                 <span className="text-muted-foreground text-sm">
-                  {item.episode_count ?? episodes.length} total
+                  {listedEpisodes.length > episodes.length
+                    ? `${episodes.length} of ${listedEpisodes.length} in library`
+                    : `${item.episode_count ?? episodes.length} total`}
                 </span>
               </div>
             </div>

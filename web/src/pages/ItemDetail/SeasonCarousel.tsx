@@ -118,7 +118,10 @@ export default function SeasonCarousel({ seasons, onRequestSeason }: SeasonCarou
   );
 }
 
-/** A season with no episode in the library: dimmed, not a link, requestable. */
+/**
+ * A season with no episode in the library: dimmed, requestable, and still a
+ * link, so its page lists the episodes to choose from.
+ */
 function MissingSeasonSlide({
   season,
   onRequest,
@@ -128,21 +131,26 @@ function MissingSeasonSlide({
 }) {
   return (
     <li className="embla__slide shrink-0" data-availability="missing">
-      <div className="w-[160px] sm:w-[170px]">
-        <div className="media-card-image relative aspect-[2/3] overflow-hidden rounded-xl">
-          {season.poster_url ? (
-            <img
-              src={season.poster_url}
-              alt={getSeasonDisplayTitle(season)}
-              className="h-full w-full object-cover opacity-40 grayscale"
-              loading="lazy"
-              decoding="async"
-            />
-          ) : (
-            <div className="text-muted-foreground bg-surface flex h-full items-center justify-center p-4 text-center text-sm font-medium">
-              {getSeasonDisplayTitle(season)}
-            </div>
-          )}
+      <div className="group/season w-[160px] sm:w-[170px]">
+        <div className="relative">
+          <ViewTransitionLink
+            to={`/item/${season.content_id}`}
+            className="media-card-image relative block aspect-[2/3] overflow-hidden rounded-xl"
+          >
+            {season.poster_url ? (
+              <img
+                src={season.poster_url}
+                alt={getSeasonDisplayTitle(season)}
+                className="h-full w-full object-cover opacity-40 grayscale transition-opacity duration-300 group-hover/season:opacity-60"
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <div className="text-muted-foreground bg-surface flex h-full items-center justify-center p-4 text-center text-sm font-medium">
+                {getSeasonDisplayTitle(season)}
+              </div>
+            )}
+          </ViewTransitionLink>
           {onRequest && (
             <Button
               type="button"
@@ -157,12 +165,15 @@ function MissingSeasonSlide({
             </Button>
           )}
         </div>
-        <div className="px-0.5 pt-2.5 opacity-60">
+        <ViewTransitionLink
+          to={`/item/${season.content_id}`}
+          className="block px-0.5 pt-2.5 opacity-60"
+        >
           <div className="truncate text-[0.8125rem] font-semibold">
             {getSeasonDisplayTitle(season)}
           </div>
           <div className="text-muted-foreground text-xs">{formatSeasonMeta(season)}</div>
-        </div>
+        </ViewTransitionLink>
       </div>
     </li>
   );
