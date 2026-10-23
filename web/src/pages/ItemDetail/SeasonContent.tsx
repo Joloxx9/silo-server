@@ -23,6 +23,7 @@ import MetadataBadges from "./components/MetadataBadges";
 import WatchedActionBar from "./components/WatchedActionBar";
 import DetailBreadcrumb from "./components/DetailBreadcrumb";
 import SeasonEpisodeGrid from "./components/SeasonEpisodeGrid";
+import SeasonRequestAction from "./components/SeasonRequestAction";
 import type { EpisodeNavigationState } from "./itemDetailLayout";
 import { canCurateMetadata as canCurateMetadataForUser } from "@/lib/permissions";
 import { hasMachineTranslation } from "./components/machineTranslation";
@@ -211,6 +212,13 @@ export default function SeasonContent({ item }: { item: ItemDetail & { type: "se
                     ? `${episodes.length} of ${listedEpisodes.length} in library`
                     : `${item.episode_count ?? episodes.length} total`}
                 </span>
+                {listedEpisodes.length > episodes.length && (
+                  <SeasonRequestAction
+                    seasonNumber={seasonNumber}
+                    onRequestSeason={missingRequest.onRequestSeason}
+                    requested={missingRequest.requestedSeasons.has(seasonNumber)}
+                  />
+                )}
               </div>
             </div>
 
@@ -218,7 +226,6 @@ export default function SeasonContent({ item }: { item: ItemDetail & { type: "se
               episodes={listedEpisodes}
               isLoading={episodesLoading}
               episodeLinkState={episodeLinkState}
-              onRequestSeason={missingRequest.onRequestSeason}
               requestedSeasons={missingRequest.requestedSeasons}
             />
           </section>

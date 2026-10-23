@@ -479,7 +479,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     description: "Show seasons and episodes the library lacks, with a way to request them.",
     category: "catalog",
     control: "switch",
-    platforms: ["web"],
+    platforms: ["web", "ios", "tvos", "macos"],
   },
   "downloads.default_quality": {
     key: "downloads.default_quality",

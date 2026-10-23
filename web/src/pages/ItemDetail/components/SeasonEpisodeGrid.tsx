@@ -36,9 +36,7 @@ interface SeasonEpisodeGridProps {
   episodes: EpisodeListItem[];
   isLoading: boolean;
   episodeLinkState?: EpisodeNavigationState;
-  /** Requests an episode's season, for episodes the library lacks. */
-  onRequestSeason?: (seasonNumber: number) => void;
-  /** Seasons a request already covers. */
+  /** Seasons a request already covers, for episodes the library lacks. */
   requestedSeasons?: ReadonlySet<number>;
 }
 
@@ -46,7 +44,6 @@ export default function SeasonEpisodeGrid({
   episodes,
   isLoading,
   episodeLinkState,
-  onRequestSeason,
   requestedSeasons,
 }: SeasonEpisodeGridProps) {
   const { prefs: overlayPrefs, quickActionMode } = useOverlayPrefs();
@@ -78,7 +75,6 @@ export default function SeasonEpisodeGrid({
           <MissingEpisodeCard
             key={episode.content_id}
             episode={episode}
-            onRequest={onRequestSeason ? () => onRequestSeason(episode.season_number) : undefined}
             requested={requestedSeasons?.has(episode.season_number) ?? false}
           />
         ) : (

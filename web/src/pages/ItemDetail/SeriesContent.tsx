@@ -27,6 +27,7 @@ import { useOnViewTranslation } from "@/hooks/useOnViewTranslation";
 import SeasonCarousel from "./SeasonCarousel";
 import { useMissingSeasonRequest } from "./useMissingSeasonRequest";
 import SeasonEpisodeGrid from "./components/SeasonEpisodeGrid";
+import SeasonRequestAction from "./components/SeasonRequestAction";
 import MetadataBadges from "./components/MetadataBadges";
 import TrailersSection from "./components/TrailersSection";
 import ExtrasSection from "./components/ExtrasSection";
@@ -254,13 +255,21 @@ export default function SeriesContent({
                       <span className="text-muted-foreground text-sm">
                         {singleSeason.episode_count} total
                       </span>
+                      {(singleSeason.missing_episode_count ?? 0) > 0 && (
+                        <SeasonRequestAction
+                          seasonNumber={singleSeason.season_number}
+                          onRequestSeason={missingRequest.onRequestSeason}
+                          requested={missingRequest.requestedSeasons.has(
+                            singleSeason.season_number,
+                          )}
+                        />
+                      )}
                     </div>
                   </div>
                   <SeasonEpisodeGrid
                     episodes={singleSeasonEpisodesQuery.data?.episodes ?? []}
                     isLoading={singleSeasonEpisodesQuery.isLoading}
                     episodeLinkState={singleSeasonEpisodeLinkState}
-                    onRequestSeason={missingRequest.onRequestSeason}
                     requestedSeasons={missingRequest.requestedSeasons}
                   />
                 </section>
