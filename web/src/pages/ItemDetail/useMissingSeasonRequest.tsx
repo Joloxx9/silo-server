@@ -11,7 +11,8 @@ import { useCurrentProfile } from "@/hooks/useCurrentProfile";
  * when no enabled download server takes series, so a request would have
  * nowhere to go.
  * requestedSeasons names the seasons a request already covers, read only
- * while active, so a page that shows nothing missing asks for nothing.
+ * while active, so a page that shows nothing missing asks for nothing, and
+ * for any viewer, whether or not they may request.
  */
 export function useMissingSeasonRequest(
   tmdbID: number,
@@ -23,12 +24,17 @@ export function useMissingSeasonRequest(
   dialog: ReactNode;
 } {
   const { profile } = useCurrentProfile();
-  const requestable = useMissingSeasonsRequestable(Boolean(profile?.id) && tmdbID > 0);
+  const enabled = Boolean(profile?.id) && tmdbID > 0;
+  const requestable = useMissingSeasonsRequestable(enabled);
   // The same cached status the requestable check reads.
-  const status = useRequestFeatureStatus({ enabled: requestable, refetchOnMount: false });
-  const canRequest = requestable && status.data?.series_server_connected === true;
-  // The dialog reads the same query, and a new request refreshes it.
-  const detail = useRequestMediaDetail("series", tmdbID, { enabled: canRequest && active });
+  const status = useRequestFeatureStatus({ enabled, refetchOnMount: false });
+  const seriesServer =
+    status.data?.requests_enabled === true && status.data.series_server_connected === true;
+  const canRequest = requestable && seriesServer;
+  // Requested is read apart from the account's permission to request, so a
+  // viewer who cannot request still sees what is already coming. The dialog
+  // reads the same query, and a new request refreshes it.
+  const detail = useRequestMediaDetail("series", tmdbID, { enabled: seriesServer && active });
   const requestedSeasons = useMemo(
     () =>
       new Set(

@@ -58,6 +58,18 @@ func TestMarkMonitoredSeasons(t *testing.T) {
 	}
 }
 
+func TestHasOpenRequestSeason(t *testing.T) {
+	held := RequestSeason{Number: 1, Availability: AvailabilityAvailable}
+	requested := RequestSeason{Number: 2, Availability: AvailabilityMissing, Requested: true}
+	open := RequestSeason{Number: 3, Availability: AvailabilityPartial}
+	if hasOpenRequestSeason([]RequestSeason{held, requested}) {
+		t.Fatal("held and requested seasons reported open")
+	}
+	if !hasOpenRequestSeason([]RequestSeason{held, open}) {
+		t.Fatal("partial season not reported open")
+	}
+}
+
 func TestIsSonarrConnection(t *testing.T) {
 	sonarr := Integration{Enabled: true, CapabilityID: "arr", BaseURL: "http://sonarr:8989", APIKeyRef: "key",
 		PluginConfig: map[string]any{"service_kind": "sonarr"}}
