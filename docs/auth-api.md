@@ -373,6 +373,36 @@ Direct connections and requests through a network access provider, whose plugin 
 header itself, spend only the per-client budget. An exhausted budget answers 429 with
 `Retry-After`.
 
+### When the server is too busy to check a password
+
+Every bcrypt hash and comparison, for account passwords and profile PINs alike, runs
+under one limit per server process (`internal/auth/passwordhash`). At most half the
+process's processors hash at once (`GOMAXPROCS`, which follows a container CPU limit;
+at least one), and up to four requests per slot wait for a turn, for at most two
+seconds. A request beyond that is refused before its password or PIN is checked, so on
+a server with more than one processor a burst of sign-ins cannot take every core from
+playback and the rest of the API.
+
+The refusal is `503` with `Retry-After: 1`: v2 `dependency_unavailable`, v1 error code
+`service_unavailable`, Jellyfin `ServiceUnavailable`, and a plain `503` on the
+Audiobookshelf listener. It never answers as a wrong password, and every sign-in name
+gets the same answer whether or not it has an account. Password sign-in, password
+changes and resets, setup, signup, invitation acceptance, account creation and edits by
+an administrator, credential linking, and setting a profile PIN all answer this way;
+clients retry after the delay. A signup or invitation acceptance whose account was
+already created when its sign-in was refused answers as before (`500`, or
+`sign_in_required` from v2 invitation acceptance), since repeating it cannot succeed. A
+first OAuth sign-in that has to create the account fails with `login_failed`, and the
+person starts it again.
+
+A refused sign-in still spends an attempt of the name's budget, like any other failed
+one ([Sign-in attempts per name](#sign-in-attempts-per-name)).
+
+Profile PIN checks wait in a queue of their own that takes every other turn, so a burst
+of sign-ins does not keep a signed-in household from switching profiles; see
+[Profile PINs](#profile-pins). A Jellyfin or Audiobookshelf sign-in with `password#PIN`
+still checks the password first and can be refused with it.
+
 ## Sign-in attempts per name
 
 Every password sign-in also spends a budget kept for the name it signs in with, however
@@ -393,7 +423,8 @@ While a name is locked every attempt is refused before any password is checked, 
 right password included. A successful sign-in while the name is not locked clears the
 count, and so does the right temporary password on a Jellyfin or Audiobookshelf sign-in,
 which is refused only because those apps cannot change it. Every other failure counts,
-including one caused by an unavailable directory or database. A count that never reaches
+including one caused by an unavailable directory or database, or by a server too busy to
+check the password ([`503`](#when-the-server-is-too-busy-to-check-a-password)). A count that never reaches
 ten expires 15 minutes after its first attempt. A Jellyfin or Audiobookshelf sign-in whose
 password ends in a `#PIN` part counts twice, whether or not the name has a local account,
 because it may check the password both with and without that part.
@@ -442,8 +473,17 @@ budget using the existing 429 response and `Retry-After`.
 Requests without an authenticated account do not spend an account allowance.
 Pre-authentication display-token lookup and public sign-in/device operations retain
 their source and global checks. With the memory backend, counters are per process;
-Redis shares them across instances, with the existing fail-open behavior when Redis
-is unavailable. Disabling rate limiting disables the account allowance too.
+Redis shares them across instances. When Redis is unavailable each process counts
+its checks in its own memory, in the same second and minute windows Redis uses, so
+the limits keep holding per process instead of switching off. A check that fails, or
+gets no answer within a second, is counted locally, and that process then stops
+waiting on Redis: its checks count locally at once, and every five seconds one
+request is also counted in Redis in the background to find out whether Redis answers
+again. The failure that stops the waiting and each failed background count are
+logged. Checks that start before the first failure is noticed, up to a second after
+Redis stops answering, each wait up to a second. A check that fails only because its
+own request ended early does not count as Redis failing. Disabling rate limiting
+disables the account allowance too.
 
 ## Profile PINs
 
@@ -471,7 +511,10 @@ right PIN included, so the lockout cannot be bypassed by guessing on. A correct 
 while not locked clears the count, and so does setting or removing the profile's PIN.
 A count that never reaches five expires five minutes after its first attempt.
 Attempts are counted before the PIN is compared, so concurrent guesses cannot overrun
-the limit.
+the limit. The check then waits for a hashing turn in its own queue, ahead of
+sign-ins ([when the server is too busy](#when-the-server-is-too-busy-to-check-a-password)).
+When that queue is full or no turn comes within two seconds it answers that `503`, and
+the attempt counts like any other; clients still must not replay a check automatically.
 
 A locked check answers 429 with `Retry-After` giving the seconds left:
 
@@ -500,7 +543,7 @@ authenticates.
 The count lives in Redis whenever the server has Redis configured, so every node
 shares it, independent of `ratelimit.backend` and of whether request rate limiting
 is enabled. Only a server without Redis keeps it in process memory, which is correct
-for a single node. Like the request limiter, a Redis error fails open and is logged;
+for a single node. A Redis error fails open and is logged;
 a request whose own context was canceled is refused instead, so dropping the
 connection does not buy an uncounted guess. Clients show the lockout from
 `Retry-After`, for example "Too many incorrect PINs. Try again in 5 minutes.",
@@ -518,7 +561,7 @@ it where they are signed in. Rules for codes, links and lifetimes are in
 | `POST /auth/device/poll` (`pollDeviceLogin`) | device code | `opened: true` once an approver has looked a pending request up. A pending answer carries the current `expires_at`, which lookups can move later; the device moves its local deadline there. `approved` carries the token pair exactly once. |
 | `POST /auth/device/cancel` (`cancelDeviceLogin`) | device code | Withdraws a live pending, or approved but uncollected, request and answers `canceled`; any other request answers its unchanged state (`denied`, `consumed`, `canceled`) or `expired`. Repeating converges. |
 | `GET /auth/device?code=` or `?token=` (`getDeviceLogin`) | none; a login session's bearer token when sent | Adds `requested_at`, `server_name` and, when known, `server_id`. A lookup of a pending request marks it opened and holds its code for at least five more minutes, never past 30 minutes after start. A six-digit Jellyfin Quick Connect code is looked up only with the account's own login session: without a valid token it answers 401 and from an impersonation session 403, for every six-digit code. |
-| `POST /auth/device/approve`, `/approve-handoff`, `/deny` | the account's own login session | A canceled request is refused with 409. An API key, an impersonation session or a remote-playback handoff session is refused with 403 `permission_denied` (v1: 403 `forbidden`), because an approval gives the device a login session. `approve-handoff` approves a remote-playback or Jellyfin Quick Connect request for the verified profile in `X-Profile-Id` (with `X-Profile-Token` for a PIN profile); `approve` refuses both with 409. |
+| `POST /auth/device/approve`, `/approve-handoff`, `/deny` | the account's own login session | A canceled request is refused with 409, and so is approving a request another account (for `approve-handoff`, another profile) already approved, or denying one another account approved (v2 `conflict`, v1 `approval_conflict`). An API key, an impersonation session or a remote-playback handoff session is refused with 403 `permission_denied` (v1: 403 `forbidden`), because an approval gives the device a login session. `approve-handoff` approves a remote-playback or Jellyfin Quick Connect request for the verified profile in `X-Profile-Id` (with `X-Profile-Token` for a PIN profile); `approve` refuses both with 409. |
 | `GET /auth/device/capability` | none | `cancel` and `opened_signal` report the two additions; `jellyfin_quick_connect` reports Quick Connect approval. |
 
 `status` gains `canceled` on lookup and poll. Start, poll and cancel spend the

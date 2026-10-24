@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Silo-Server/silo-server/internal/auth"
+	"github.com/Silo-Server/silo-server/internal/auth/passwordhash"
 	"github.com/Silo-Server/silo-server/internal/clientip"
 	"github.com/Silo-Server/silo-server/internal/config"
 	"github.com/Silo-Server/silo-server/internal/ratelimit"
@@ -194,6 +195,9 @@ func (h *AuthHandler) HandleAuthenticateByName(w http.ResponseWriter, r *http.Re
 			writeCompatRateLimited(w, retryAfter)
 			return
 		}
+		if errors.Is(err, passwordhash.ErrBusy) {
+			w.Header().Set("Retry-After", strconv.Itoa(passwordhash.RetryAfterSeconds))
+		}
 		status, code, message := mapLoginError(err)
 		writeError(w, status, code, message)
 		return
@@ -319,7 +323,10 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Unauthorized", "Missing authentication token")
 		return
 	}
-	h.authenticator.sessions.Delete(token)
+	if err := h.authenticator.sessions.Delete(token); err != nil {
+		writeError(w, http.StatusInternalServerError, "ServerError", "Could not sign out")
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Silo-Server/silo-server/internal/auth"
+	"github.com/Silo-Server/silo-server/internal/auth/passwordhash"
 	"github.com/Silo-Server/silo-server/internal/ratelimit"
 )
 
@@ -112,6 +113,9 @@ func (h *Handler) handleStandaloneLogin(w http.ResponseWriter, r *http.Request) 
 		} else if errors.Is(err, auth.ErrPasswordChangeRequired) {
 			// This client cannot run the change a temporary password requires.
 			http.Error(w, "sign in to Silo to replace your temporary password", http.StatusUnauthorized)
+		} else if errors.Is(err, passwordhash.ErrBusy) {
+			w.Header().Set("Retry-After", strconv.Itoa(passwordhash.RetryAfterSeconds))
+			http.Error(w, "the server is busy; try again in a moment", http.StatusServiceUnavailable)
 		} else {
 			slog.ErrorContext(r.Context(), "abs login: cred validator failed", "component", "audiobooks", "username", body.Username, "err", err)
 			http.Error(w, "login service unavailable", http.StatusServiceUnavailable)
