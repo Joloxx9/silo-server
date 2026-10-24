@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/Silo-Server/silo-server/internal/models"
@@ -75,6 +76,10 @@ func (r *EpisodeRepository) listWithMissing(ctx context.Context, query string, a
 	return episodes, nil
 }
 
+// episodeMembershipBatchSize bounds the episode ids one library membership
+// read sends.
+const episodeMembershipBatchSize = 500
+
 // markAvailability sets Availability on the episodes no library holds:
 // unaired while the air date is unknown or still ahead of now, missing once
 // it has passed.
@@ -86,22 +91,11 @@ func (r *EpisodeRepository) markAvailability(ctx context.Context, episodes []*mo
 	for _, ep := range episodes {
 		ids = append(ids, ep.ContentID)
 	}
-	rows, err := r.pool.Query(ctx,
-		`SELECT DISTINCT episode_id FROM episode_libraries WHERE episode_id = ANY($1)`, ids)
-	if err != nil {
-		return fmt.Errorf("reading episode library membership: %w", err)
-	}
-	defer rows.Close()
 	inLibrary := make(map[string]bool, len(ids))
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return fmt.Errorf("scanning episode library membership: %w", err)
+	for batch := range slices.Chunk(ids, episodeMembershipBatchSize) {
+		if err := r.readLibraryMembership(ctx, batch, inLibrary); err != nil {
+			return err
 		}
-		inLibrary[id] = true
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterating episode library membership: %w", err)
 	}
 	for _, ep := range episodes {
 		ep.Availability = episodeAvailability(inLibrary[ep.ContentID], ep.AirDate, now)
@@ -158,4 +152,26 @@ func InLibrary(episodes []*models.Episode) []*models.Episode {
 		}
 	}
 	return out
+}
+
+// readLibraryMembership marks in inLibrary the ids of batch some library
+// holds.
+func (r *EpisodeRepository) readLibraryMembership(ctx context.Context, batch []string, inLibrary map[string]bool) error {
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT episode_id FROM episode_libraries WHERE episode_id = ANY($1)`, batch)
+	if err != nil {
+		return fmt.Errorf("reading episode library membership: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("scanning episode library membership: %w", err)
+		}
+		inLibrary[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterating episode library membership: %w", err)
+	}
+	return nil
 }

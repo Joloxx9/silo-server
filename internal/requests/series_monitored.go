@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -46,25 +47,40 @@ func (s *Service) monitoredSeasons(ctx context.Context, tmdbID, tvdbID int) map[
 	}
 	ctx, cancel := context.WithTimeout(ctx, monitoredSeasonsTimeout)
 	defer cancel()
+	// Each server is read at once, so the slowest one, not their sum, bounds
+	// the detail.
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
 	monitored := map[int]bool{}
 	for _, in := range integrations {
 		switch {
 		case isSonarrConnection(in) && tvdbID > 0:
-			series, err := findSonarrSeries(ctx, in.BaseURL, in.APIKeyRef, tvdbID)
-			if err != nil {
-				slog.WarnContext(ctx, "requests: reading monitored seasons from sonarr", "server", in.Name, "tvdb_id", tvdbID, "error", err)
-				continue
-			}
-			mergeMonitoredSeasons(monitored, series)
+			wg.Go(func() {
+				series, err := findSonarrSeries(ctx, in.BaseURL, in.APIKeyRef, tvdbID)
+				if err != nil {
+					slog.WarnContext(ctx, "requests: reading monitored seasons from sonarr", "server", in.Name, "tvdb_id", tvdbID, "error", err)
+					return
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				mergeMonitoredSeasons(monitored, series)
+			})
 		case isSeerrConnection(in) && tmdbID > 0:
-			media, err := findSeerrSeries(ctx, in.BaseURL, in.APIKeyRef, tmdbID)
-			if err != nil {
-				slog.WarnContext(ctx, "requests: reading requested seasons from seerr", "server", in.Name, "tmdb_id", tmdbID, "error", err)
-				continue
-			}
-			mergeSeerrSeasons(monitored, media)
+			wg.Go(func() {
+				media, err := findSeerrSeries(ctx, in.BaseURL, in.APIKeyRef, tmdbID)
+				if err != nil {
+					slog.WarnContext(ctx, "requests: reading requested seasons from seerr", "server", in.Name, "tmdb_id", tmdbID, "error", err)
+					return
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				mergeSeerrSeasons(monitored, media)
+			})
 		}
 	}
+	wg.Wait()
 	return monitored
 }
 
@@ -124,4 +140,16 @@ func markMonitoredSeasons(seasons []RequestSeason, monitored map[int]bool) {
 			seasons[i].Requested = true
 		}
 	}
+}
+
+// hasOpenRequestSeason reports whether any season is neither in the library
+// nor already requested. Only those can change with what Sonarr or Seerr
+// know, so a series without one skips their reads.
+func hasOpenRequestSeason(seasons []RequestSeason) bool {
+	for _, season := range seasons {
+		if season.Availability != AvailabilityAvailable && !season.Requested {
+			return true
+		}
+	}
+	return false
 }
