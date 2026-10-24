@@ -30,6 +30,24 @@ function libraryQuery(libraryId?: number): { library_id?: string } {
   return libraryId ? { library_id: String(libraryId) } : {};
 }
 
+/**
+ * Which episodes the library lacks a season or episode list includes: none,
+ * the aired ones, or all of them including the ones still to air.
+ */
+export type MissingEpisodes = "none" | "aired" | "all";
+
+function listQuery(
+  libraryId?: number,
+  missing: MissingEpisodes = "none",
+): { library_id?: string; include_missing?: boolean; include_upcoming?: boolean } {
+  if (missing === "none") return libraryQuery(libraryId);
+  return {
+    ...libraryQuery(libraryId),
+    include_missing: true,
+    ...(missing === "all" && { include_upcoming: true }),
+  };
+}
+
 export async function fetchCatalogItemDetail(
   id: string,
   libraryId?: number,
@@ -59,10 +77,11 @@ export async function fetchCatalogItemEpisodes(
   id: string,
   libraryId?: number,
   options?: ReadOptions,
+  missing: MissingEpisodes = "none",
 ): Promise<EpisodesResponse> {
   const episodes = await v2("GET /api/v2/catalog/items/{id}/episodes", {
     path: { id },
-    query: { ...libraryQuery(libraryId), ...artworkQuery("episodes") },
+    query: { ...listQuery(libraryId, missing), ...artworkQuery("episodes") },
     signal: signalOf(options),
   });
   return { episodes: episodes.items.map(episodeFromV2) };
@@ -72,10 +91,11 @@ export async function fetchCatalogSeriesSeasons(
   seriesId: string,
   libraryId?: number,
   options?: ReadOptions,
+  missing: MissingEpisodes = "none",
 ): Promise<SeasonsResponse> {
   const seasons = await v2("GET /api/v2/catalog/series/{id}/seasons", {
     path: { id: seriesId },
-    query: { ...libraryQuery(libraryId), ...artworkQuery("seasons") },
+    query: { ...listQuery(libraryId, missing), ...artworkQuery("seasons") },
     signal: signalOf(options),
   });
   return { seasons: seasons.items.map(seasonFromV2) };
@@ -147,10 +167,14 @@ export function useMangaSeriesFiles(id: string | undefined, enabled: boolean) {
   });
 }
 
-export function useCatalogItemEpisodes(id: string | undefined, libraryId?: number) {
+export function useCatalogItemEpisodes(
+  id: string | undefined,
+  libraryId?: number,
+  missing: MissingEpisodes = "none",
+) {
   return useQuery({
-    queryKey: catalogKeys.itemEpisodes(id!, libraryId),
-    queryFn: ({ signal }) => fetchCatalogItemEpisodes(id!, libraryId, { signal }),
+    queryKey: catalogKeys.itemEpisodes(id!, libraryId, missing),
+    queryFn: ({ signal }) => fetchCatalogItemEpisodes(id!, libraryId, { signal }, missing),
     enabled: !!id,
   });
 }
@@ -191,10 +215,14 @@ export function usePrefetchCatalogItemDetail(libraryId?: number) {
   );
 }
 
-export function useCatalogSeriesSeasons(seriesId: string | undefined, libraryId?: number) {
+export function useCatalogSeriesSeasons(
+  seriesId: string | undefined,
+  libraryId?: number,
+  missing: MissingEpisodes = "none",
+) {
   return useQuery({
-    queryKey: catalogKeys.seriesSeasons(seriesId!, libraryId),
-    queryFn: ({ signal }) => fetchCatalogSeriesSeasons(seriesId!, libraryId, { signal }),
+    queryKey: catalogKeys.seriesSeasons(seriesId!, libraryId, missing),
+    queryFn: ({ signal }) => fetchCatalogSeriesSeasons(seriesId!, libraryId, { signal }, missing),
     enabled: !!seriesId,
   });
 }

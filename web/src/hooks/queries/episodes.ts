@@ -3,13 +3,18 @@ import {
   useCatalogSeasonDetail,
   useCatalogSeasonEpisodes,
   useCatalogSeriesSeasons,
+  type MissingEpisodes,
 } from "./catalogRead";
 
 // libraryId names the library the page was opened from; see
 // "Library-scoped version lists" in docs/catalog-api.md.
 
-export function useSeasons(seriesId: string | undefined, libraryId?: number) {
-  return useCatalogSeriesSeasons(seriesId, libraryId);
+export function useSeasons(
+  seriesId: string | undefined,
+  libraryId?: number,
+  missing: MissingEpisodes = "none",
+) {
+  return useCatalogSeriesSeasons(seriesId, libraryId, missing);
 }
 
 export function useSeasonEpisodes(
@@ -20,8 +25,12 @@ export function useSeasonEpisodes(
   return useCatalogSeasonEpisodes(seriesId, seasonNum, libraryId);
 }
 
-export function useItemEpisodes(itemId: string | undefined, libraryId?: number) {
-  return useCatalogItemEpisodes(itemId, libraryId);
+export function useItemEpisodes(
+  itemId: string | undefined,
+  libraryId?: number,
+  missing: MissingEpisodes = "none",
+) {
+  return useCatalogItemEpisodes(itemId, libraryId, missing);
 }
 
 export function useSeasonDetail(
