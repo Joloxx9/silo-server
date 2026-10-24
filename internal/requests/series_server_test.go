@@ -1,6 +1,9 @@
 package requests
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestSeriesRouterConnectionsNeedAnEnabledSeriesServer(t *testing.T) {
 	sonarr := Integration{Enabled: true, CapabilityID: "arr", SupportedMediaTypes: []string{string(MediaTypeSeries)}}
@@ -23,5 +26,13 @@ func TestSeriesRouterConnectionsNeedAnEnabledSeriesServer(t *testing.T) {
 				t.Fatalf("series connections = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSeriesServerConnectedWithoutRouterReadsNothing(t *testing.T) {
+	// A nil store would panic if the configuration were read.
+	connected, err := (&Service{}).seriesServerConnected(context.Background())
+	if err != nil || connected {
+		t.Fatalf("seriesServerConnected = %v, %v; want false, nil", connected, err)
 	}
 }
