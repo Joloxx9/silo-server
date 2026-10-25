@@ -261,3 +261,18 @@ func TestAdminHistorySourceCallFailuresKeepTheirStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestAdminHistoryMappingCarriesProfileName(t *testing.T) {
+	f := fixtureAdminHistoryImports()
+	h := adminHistoryHandler(f)
+	path := Prefix + "/admin/history-imports/mappings/2"
+	unnamed := do(t, h, http.MethodGet, path, "", actingRequestAdmin)
+	if unnamed.Code != 200 || strings.Contains(unnamed.Body.String(), "silo_profile_name") {
+		t.Fatal(unnamed.Code, unnamed.Body.String())
+	}
+	f.mapping.SiloProfileName = "Kids"
+	named := do(t, h, http.MethodGet, path, "", actingRequestAdmin)
+	if named.Code != 200 || !strings.Contains(named.Body.String(), `"silo_profile_name":"Kids"`) {
+		t.Fatal(named.Code, named.Body.String())
+	}
+}

@@ -22,7 +22,7 @@ func queueRunnerRepository(t *testing.T) *Repository {
 	// fixture independent of application tables in the public schema.
 	if _, err := repo.pool.Exec(t.Context(), `CREATE TABLE users(id integer PRIMARY KEY);
  CREATE TABLE user_profiles(user_id integer REFERENCES users(id),id text,PRIMARY KEY(user_id,id));
- INSERT INTO users VALUES(1); INSERT INTO user_profiles VALUES(1,'p')`); err != nil {
+ INSERT INTO users VALUES(1); INSERT INTO user_profiles VALUES(1,'p'),(1,'other')`); err != nil {
 		t.Fatal(err)
 	}
 	return repo
@@ -188,6 +188,21 @@ func TestQueueRecoversExpiredCancellation(t *testing.T) {
 	}
 	if _, err := repo.EnqueueAdminRun(ctx, 1, AdminRunOptions{}); err != nil {
 		t.Fatalf("canceled run still blocks its mapping: %v", err)
+	}
+}
+
+func TestQueueRefusesAdminRunForMissingProfile(t *testing.T) {
+	repo := queueRunnerRepository(t)
+	ctx := t.Context()
+	if _, err := repo.pool.Exec(ctx, `UPDATE history_import_user_mappings SET silo_profile_id='gone' WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.EnqueueAdminRun(ctx, 1, AdminRunOptions{}); !errors.Is(err, ErrProfileNotFound) {
+		t.Fatalf("enqueue=%v", err)
+	}
+	var runs int
+	if err := repo.pool.QueryRow(ctx, `SELECT count(*) FROM history_import_runs`).Scan(&runs); err != nil || runs != 0 {
+		t.Fatalf("runs=%d %v", runs, err)
 	}
 }
 

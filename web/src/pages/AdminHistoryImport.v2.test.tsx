@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { v2, V2ProblemError } from "@/api/v2/request";
 import { adminImportScope } from "@/api/v2/adminHistoryImports";
 import { adminKeys } from "@/hooks/queries/keys";
 import AdminHistoryImport from "./AdminHistoryImport";
-const state = vi.hoisted(() => ({ profile: "owner", available: true }));
+const state = vi.hoisted(() => ({
+  profile: "owner",
+  available: true,
+  profiles: undefined as { id: string; name: string }[] | undefined,
+}));
 vi.mock("@/api/v2/request", async (original) => ({
   ...(await original<typeof import("@/api/v2/request")>()),
   v2: vi.fn(),
@@ -28,7 +33,20 @@ vi.mock("@/components/realtimeEventsContext", () => ({ useEventChannel: vi.fn() 
 vi.mock("@/hooks/queries/admin/users", () => ({
   useAdminUsers: () => ({ data: [{ id: 1, username: "Member" }] }),
 }));
-vi.mock("@/hooks/queries/admin/history", () => ({ useAdminUserProfiles: () => ({ data: [] }) }));
+vi.mock("@/hooks/queries/admin/history", () => ({
+  useAdminUserProfiles: (userId?: number) =>
+    userId && state.profiles ? { data: state.profiles, isSuccess: true } : { data: [] },
+  // Every test account is user 1; undefined profiles means the list never loaded.
+  useAdminProfileNames: () => ({
+    names: new Map((state.profiles ?? []).map((p) => [`1:${p.id}`, p.name])),
+    loaded: new Set(state.profiles ? [1] : []),
+  }),
+}));
+// Radix Select opens through pointer capture, which jsdom lacks.
+if (typeof window !== "undefined" && !window.HTMLElement.prototype.hasPointerCapture) {
+  window.HTMLElement.prototype.hasPointerCapture = () => false;
+  window.HTMLElement.prototype.scrollIntoView = () => {};
+}
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const source = {
   id: "1",
@@ -104,6 +122,7 @@ function mount() {
 beforeEach(() => {
   state.profile = "owner";
   state.available = true;
+  state.profiles = undefined;
   vi.mocked(v2).mockImplementation(baseline);
 });
 afterEach(() => {
@@ -351,5 +370,46 @@ describe("admin history import editors", () => {
     expect(screen.queryByText("Import all")).toBeNull();
     fireEvent.click(screen.getByTitle("Edit server"));
     await screen.findByText(/This saved address contains unsupported credential/);
+  });
+  it("names the mapped profile beside the account", async () => {
+    state.profiles = [{ id: "profile", name: "Kids" }];
+    mount();
+    expect(await screen.findByText("Member (Kids)")).toBeTruthy();
+    expect((screen.getByTitle("Run import") as HTMLButtonElement).disabled).toBe(false);
+  });
+  it("blocks an import whose mapped profile no longer exists", async () => {
+    state.profiles = [{ id: "other", name: "Adults" }];
+    mount();
+    expect(await screen.findByText(/Profile no longer exists/)).toBeTruthy();
+    const run = screen.getByTitle("The mapped profile no longer exists") as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+  });
+  it("edits a mapping's profile with its tag", async () => {
+    state.profiles = [
+      { id: "profile", name: "Kids" },
+      { id: "other", name: "Adults" },
+    ];
+    vi.mocked(v2).mockImplementation((op, options) =>
+      op === "PUT /api/v2/admin/history-imports/mappings/{id}"
+        ? reply(options, { ...mapping, silo_profile_id: "other" }, '"saved"')
+        : baseline(op, options),
+    );
+    mount();
+    fireEvent.click(await screen.findByTitle("Edit mapping"));
+    const dialog = screen.getByRole("dialog");
+    const save = within(dialog).getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Profile" }));
+    await userEvent.click(screen.getByRole("option", { name: "Adults" }));
+    fireEvent.click(save);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const put = vi
+      .mocked(v2)
+      .mock.calls.find(([op]) => op === "PUT /api/v2/admin/history-imports/mappings/{id}");
+    expect(put![1]).toMatchObject({
+      path: { id: "2" },
+      body: { silo_user_id: "1", silo_profile_id: "other" },
+      headers: { "If-Match": '"initial"' },
+    });
   });
 });

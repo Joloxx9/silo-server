@@ -90,6 +90,10 @@ func (r *Repository) EnqueueAdminRun(ctx context.Context, mappingID int, opts Ad
 	if sourceID != lockedSourceID {
 		return nil, ErrRunConfigurationChanged
 	}
+	// Refuse a mapping whose target profile is gone, and hold it until commit.
+	if err = lockMappingTarget(ctx, tx, userID, profileID); err != nil {
+		return nil, err
+	}
 	var active bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM history_import_runs WHERE mapping_id=$1 AND status IN ('queued','running'))`, mappingID).Scan(&active); err != nil {
 		return nil, err
