@@ -7682,6 +7682,15 @@
             "format": "int64",
             "type": "integer"
           },
+          "max_lookback_hours": {
+            "description": "Largest accepted lookback_hours.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "played_lookback": {
+            "description": "Run and bulk-run accept lookback_hours for Jellyfin sources.",
+            "type": "boolean"
+          },
           "revision": {
             "description": "Opaque revision of this document",
             "type": "string"
@@ -7702,6 +7711,8 @@
           "guarded_configuration",
           "durable_runs",
           "max_bulk_mappings",
+          "played_lookback",
+          "max_lookback_hours",
           "revision",
           "state",
           "allowed"
@@ -7937,6 +7948,13 @@
             "format": "int64",
             "type": "integer"
           },
+          "played_since": {
+            "description": "The lookback cutoff: the run imports only items last played at or after it. Absent for a full import.",
+            "format": "date-time",
+            "pattern": "^(?:[1-9][0-9]{3}|0[1-9][0-9]{2}|00[1-9][0-9]|000[2-9])-",
+            "patternDescription": "a non-zero RFC 3339 instant",
+            "type": "string"
+          },
           "profile_id": {
             "description": "The profile the history is written to",
             "examples": [
@@ -8042,6 +8060,25 @@
           "unmatched_samples",
           "created_at"
         ],
+        "type": "object"
+      },
+      "AdminHistoryImportRunCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "lookback_hours": {
+            "description": "Import only items last played within this many hours before the run is queued. Resume positions and favorites are still read in full. Jellyfin sources only. Write it as a plain JSON integer; 72.0 and 1e2 are refused. Omit it or send null for a full import.",
+            "examples": [
+              72
+            ],
+            "format": "int64",
+            "maximum": 8760,
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "AdminHistoryImportSource": {
@@ -29399,6 +29436,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "segment_container": {
+            "type": "string"
+          },
           "video_codec": {
             "type": "string"
           },
@@ -42404,6 +42444,13 @@
             ],
             "type": "boolean"
           },
+          "mark_watched_records_rewatch": {
+            "description": "Whether markWatched on a watched movie or episode that has a resume position (a rewatch in progress) records another play and clears the position; otherwise that mark is a no-op",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
           "revision": {
             "description": "Opaque revision of this document",
             "type": "string"
@@ -42421,6 +42468,7 @@
         },
         "required": [
           "clear_resume_position",
+          "mark_watched_records_rewatch",
           "revision",
           "state",
           "allowed"
@@ -45129,6 +45177,7 @@
               20
             ],
             "format": "int64",
+            "maximum": 500,
             "minimum": 1,
             "type": [
               "integer",
@@ -48047,6 +48096,13 @@
           "links": {
             "$ref": "#/components/schemas/SystemInfoLinks",
             "description": "Stable links to the contract and to capability documents"
+          },
+          "request_origin": {
+            "description": "The origin this request reached, scheme://host[:port]: scheme and host in lower case, the scheme's default port omitted, IPv6 hosts in brackets, no path or trailing slash. It is the transport scheme and Host header, replaced by X-Forwarded-Proto and X-Forwarded-Host only when the request came from a configured trusted proxy, derived the same way as the OAuth iss. A client compares it with its configured server origin before sending credentials, to detect a redirect or a proxy that delivered the request elsewhere. Always present on servers that serve it; absent on older servers.",
+            "examples": [
+              "https://silo.example.com"
+            ],
+            "type": "string"
           },
           "server_version": {
             "description": "Server build identity (short revision, +dirty when built from a modified tree, or \"unavailable\"). Diagnostic only: never feature-detect on it.",
@@ -77711,6 +77767,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminHistoryImportRunCreate",
+                "description": "Absent, empty, or whitespace-only runs a full import, whatever the Content-Type; any other body must be application/json."
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "content": {
@@ -77788,6 +77854,36 @@
               }
             },
             "description": "Not Acceptable"
+          },
+          "408": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -78655,6 +78751,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminHistoryImportRunCreate",
+                "description": "Absent, empty, or whitespace-only runs a full import, whatever the Content-Type; any other body must be application/json."
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -78715,6 +78821,36 @@
               }
             },
             "description": "Not Acceptable"
+          },
+          "408": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -217201,7 +217337,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Mark an item watched for the acting profile; a season or series marks every episode. Marking an already watched item is a no-op.",
+        "summary": "Mark an item watched for the acting profile; a season or series marks every episode. Marking an already watched item is a no-op, except a movie or episode with a resume position from a rewatch: that records another play and clears the position. A season or series mark leaves such episodes alone.",
         "tags": [
           "watch"
         ],
@@ -228467,6 +228603,9 @@
           "video_bitstream_filter": {
             "type": "string"
           },
+          "video_range": {
+            "type": "string"
+          },
           "video_sample_entry": {
             "type": "string"
           }
@@ -228485,6 +228624,9 @@
           },
           "copy_fmp4_recipe_version": {
             "type": "string"
+          },
+          "copy_video_mpegts": {
+            "type": "boolean"
           },
           "encoder_hw_accel": {
             "type": "string"
