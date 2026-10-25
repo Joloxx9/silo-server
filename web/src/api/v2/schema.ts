@@ -15444,6 +15444,8 @@ export interface components {
        * @example 1
        */
       silo_profile_id: string;
+      /** @description Display name of the target profile; absent when the profile no longer exists */
+      silo_profile_name?: string;
       /**
        * @description Opaque identifier
        * @example 1

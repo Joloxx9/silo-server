@@ -7744,6 +7744,10 @@
             "minLength": 1,
             "type": "string"
           },
+          "silo_profile_name": {
+            "description": "Display name of the target profile; absent when the profile no longer exists",
+            "type": "string"
+          },
           "silo_user_id": {
             "description": "Opaque identifier",
             "examples": [
