@@ -473,10 +473,10 @@ func (lib movieLibrary) missing(movie string) bool {
 }
 
 // A subtree scan of a movie folder that is gone from a live library root
-// protects its files as a possible lost mount, unless arr confirmed deleting
-// the folder: then the scan reconciles the files and the movie leaves the
-// library. The row of a title's only file holds its added date, so it waits
-// out the grace in the trash like any other.
+// reconciles its files and the movie leaves the library, whether or not arr
+// confirmed deleting the folder: the parent is still there, so it is not a
+// lost mount. The row of a title's only file holds its added date, so it
+// waits out the grace in the trash like any other.
 func TestScanSubtreeReconcilesFolderArrDeleted(t *testing.T) {
 	lib := newMovieLibrary(t, "Removal confirmed folder", "Alpha (2020)", "Beta (2021)", "Gamma (2022)")
 	lib.deleteFolder("Alpha (2020)", true)
@@ -485,8 +485,8 @@ func TestScanSubtreeReconcilesFolderArrDeleted(t *testing.T) {
 	if !lib.missing("Alpha (2020)") || lib.listed("Alpha (2020)") {
 		t.Fatal("movie arr deleted is still listed, or its file is not reconciled as missing")
 	}
-	if lib.missing("Beta (2021)") || !lib.listed("Beta (2021)") {
-		t.Fatal("movie under an unconfirmed vanished folder was not protected")
+	if !lib.missing("Beta (2021)") || lib.listed("Beta (2021)") {
+		t.Fatal("movie whose folder vanished without arr is still listed, or its file is not reconciled as missing")
 	}
 	if lib.missing("Gamma (2022)") || !lib.listed("Gamma (2022)") {
 		t.Fatal("untouched movie was reconciled")
