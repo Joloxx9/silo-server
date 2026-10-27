@@ -1752,6 +1752,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 			&handlers.PoolFolderLookup{Pool: deps.DB},
 			deps.MetadataService,
 		)
+		adminMatchHandler.EventBus = deps.EventBus
 	}
 
 	// Build admin split/merge handler for repairing wrong version groupings.
@@ -1789,6 +1790,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 			providerIDRepo,
 		)
 		adminImageHandler.EventsHub = deps.EventsHub
+		adminImageHandler.EventBus = deps.EventBus
 	}
 
 	var adminIntroHandler *handlers.AdminIntroHandler
@@ -2757,6 +2759,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		v2deps.AdminSettingsInspection = adminHandler
 		v2deps.AdminSettingsWrite = adminHandler
 		v2deps.AdminSettingsChecks = adminHandler
+		v2deps.AdminAIProviders = adminHandler
 		adminHandler.ChatGPT = chatGPT
 	}
 	if chatGPT != nil {
@@ -5039,7 +5042,7 @@ func resolveOptionalPluginAccessUser(
 	// account's current role rather than the token's.
 	// A remote-playback handoff only plays on its device; plugins are not
 	// part of that.
-	authority, active, err := sessionRepo.ActiveSession(r.Context(), claims.SessionID)
+	authority, active, err := sessionRepo.ActiveSession(r.Context(), claims.SessionID, claims.UserID)
 	if err != nil || !active || authority.IsRemotePlayback() {
 		return false, false, 0, ""
 	}
@@ -5277,7 +5280,8 @@ func llmConfigFromServer(cfg *config.Config) llm.Config {
 // effectiveSubtitleAIConfig derives the subtitle AI service config from the server config.
 func effectiveSubtitleAIConfig(cfg *config.Config) subtitleai.Config {
 	return subtitleai.Config{
-		Configured:            cfg.AI.BaseURL != "",
+		Configured:            cfg.AI.BaseURL != "" || cfg.AI.AuthMode == llm.AuthModeChatGPT,
+		SpeechConfigured:      cfg.AI.ASRBaseURL != "",
 		TranslateEnabled:      cfg.SubtitleAI.Enabled,
 		TranscribeEnabled:     cfg.SubtitleAI.TranscribeEnabled,
 		ChatModel:             cfg.AI.ChatModel,
@@ -5325,7 +5329,7 @@ func (r scopeEntitlementResolver) resolveScope(ctx context.Context, userID int, 
 func metadataAIConfigFromServer(cfg *config.Config) metadatatranslation.Config {
 	return metadatatranslation.Config{
 		Enabled:    cfg.MetadataAI.Enabled,
-		Configured: cfg.AI.BaseURL != "",
+		Configured: cfg.AI.BaseURL != "" || cfg.AI.AuthMode == llm.AuthModeChatGPT,
 		ChatModel:  cfg.AI.ChatModel,
 		OnView:     cfg.MetadataAI.OnView,
 	}

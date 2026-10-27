@@ -16,7 +16,7 @@ COPY web/ .
 # The v2 contract fixtures are imported by web tests, which `tsrs -b` type-checks
 # as part of the build; they live outside web/ so copy them explicitly.
 COPY contracts/api/v2/fixtures/ /app/contracts/api/v2/fixtures/
-# The buffering-quality test vectors are imported the same way.
+# Web tests also import the shared design schema vectors under docs/.
 COPY docs/design/schemas/ /app/docs/design/schemas/
 RUN pnpm run build
 
