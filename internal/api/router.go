@@ -98,6 +98,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/userstore"
 	"github.com/Silo-Server/silo-server/internal/watchlist"
 	"github.com/Silo-Server/silo-server/internal/watchstate"
+	"github.com/Silo-Server/silo-server/internal/watchsync"
 	"github.com/Silo-Server/silo-server/internal/watchtogether"
 	"github.com/Silo-Server/silo-server/internal/webhooksync"
 )
@@ -1232,6 +1233,11 @@ func newChiRouter(deps Dependencies) chi.Router {
 		if watchlistTitles != nil {
 			personalDataHandler.SetWatchlistTitles(watchlistTitles)
 			watchlistTitles.SetEffects(personalDataHandler)
+			if watchSync, ok := deps.WatchProviderService.(interface {
+				SetWatchlistTitles(watchsync.WatchlistTitles)
+			}); ok {
+				watchSync.SetWatchlistTitles(watchlistTitles.WatchSync())
+			}
 		}
 		personalDataHandler.EventsHub = deps.EventsHub
 		if dispatcher, ok := deps.WatchProviderService.(handlers.LocalListEventDispatcher); ok {
