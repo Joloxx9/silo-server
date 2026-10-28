@@ -76,26 +76,29 @@ func (s *titlesStub) WatchlistTitleListed(_ context.Context, _ int, _ string, ti
 // A provider's watchlist title the library doesn't have becomes a watchlist
 // entry outside the library, follows the provider's removals, and a local
 // removal or a promotion onto the library watchlist retires its row.
-func TestServiceWatchlistImportKeepsTitlesOutsideLibrary(t *testing.T) {
+// watchlistTitleImportCase is one TestServiceWatchlistImportKeepsTitlesOutsideLibrary case.
+type watchlistTitleImportCase struct {
+	name        string
+	library     map[int]bool
+	entries     map[int]time.Time
+	states      []ListItemState
+	rows        []RemoteFavorite
+	wantEntry   bool
+	wantResult  ImportListResult
+	wantLocal   bool
+	wantRemote  bool
+	wantNoState bool
+	wantQueued  int
+}
+
+func watchlistTitleImportCases() []watchlistTitleImportCase {
 	const titleRow = "watchlist-title:movie:550"
 	listedAt := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	fightClub := RemoteFavorite{
 		ProviderItemKey: "movie:imdb:tt0137523", Kind: "movie", Title: "Fight Club", Year: 1999,
 		IMDbID: "tt0137523", TMDBID: "550", FavoritedAt: listedAt,
 	}
-	tests := []struct {
-		name        string
-		library     map[int]bool
-		entries     map[int]time.Time
-		states      []ListItemState
-		rows        []RemoteFavorite
-		wantEntry   bool
-		wantResult  ImportListResult
-		wantLocal   bool
-		wantRemote  bool
-		wantNoState bool
-		wantQueued  int
-	}{
+	return []watchlistTitleImportCase{
 		{
 			name:       "listed title the library lacks",
 			rows:       []RemoteFavorite{fightClub},
@@ -146,7 +149,11 @@ func TestServiceWatchlistImportKeepsTitlesOutsideLibrary(t *testing.T) {
 			wantResult: ImportListResult{Found: 1, Unmatched: 1},
 		},
 	}
-	for _, tt := range tests {
+}
+
+func TestServiceWatchlistImportKeepsTitlesOutsideLibrary(t *testing.T) {
+	const titleRow = "watchlist-title:movie:550"
+	for _, tt := range watchlistTitleImportCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			store, repo, conn := favoriteImportFixture(t)
 			conn.ImportWatchlistEnabled, conn.SyncWatchlistRemovalsEnabled = true, true
