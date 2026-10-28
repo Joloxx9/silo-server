@@ -729,7 +729,7 @@ func TestFinalizeSessionStop_UsesProviderLifecycleSemantics(t *testing.T) {
 	tests := []struct {
 		name               string
 		position           float64
-		userInitiated      bool
+		reason             PlaybackEndReason
 		disablePersistence bool
 		wantPauseCalls     int
 		wantStopCalls      int
@@ -738,7 +738,7 @@ func TestFinalizeSessionStop_UsesProviderLifecycleSemantics(t *testing.T) {
 		{
 			name:              "user exit stops below-resume-threshold scrobble",
 			position:          120,
-			userInitiated:     true,
+			reason:            PlaybackEndStopped,
 			wantStopCalls:     1,
 			wantEventPosition: 120,
 		},
@@ -756,14 +756,14 @@ func TestFinalizeSessionStop_UsesProviderLifecycleSemantics(t *testing.T) {
 		},
 		{
 			name:              "user exit at zero still stops scrobble",
-			userInitiated:     true,
+			reason:            PlaybackEndStopped,
 			wantStopCalls:     1,
 			wantEventPosition: 0,
 		},
 		{
 			name:               "disabled persistence does not scrobble",
 			position:           120,
-			userInitiated:      true,
+			reason:             PlaybackEndStopped,
 			disablePersistence: true,
 		},
 	}
@@ -790,7 +790,7 @@ func TestFinalizeSessionStop_UsesProviderLifecycleSemantics(t *testing.T) {
 				DisableProgressPersistence: tt.disablePersistence,
 				StartedAt:                  time.Now().Add(-time.Minute),
 			}
-			handler.finalizeSessionStop(context.Background(), session, false, "", tt.userInitiated)
+			handler.finalizeSessionStop(context.Background(), session, false, "", tt.reason)
 
 			if got := len(scrobbler.pauses); got != tt.wantPauseCalls {
 				t.Fatalf("pause calls = %d, want %d", got, tt.wantPauseCalls)
@@ -819,12 +819,14 @@ func TestFinalizeSessionStop_UsesProviderLifecycleSemantics(t *testing.T) {
 
 // Expiry and abort retire the session id, so their pause tells providers the
 // session ended. A session that keeps no progress is not scrobbled on abort.
-// A Jellyfin play's upstream session can be revived under the same id, and
-// jellycompat sends that play's own stop, so its expiry stays a plain pause.
+// A Jellyfin play's own stop still reaches providers from its client's
+// Stopped report after the expiry, so its expiry stays a plain pause.
 func TestRetiredSessionsReportEndedPause(t *testing.T) {
-	expire := func(h *PlaybackHandler, s *playback.Session) { h.finalizeExpiredSession(context.Background(), s) }
+	expire := func(h *PlaybackHandler, s *playback.Session) {
+		h.finalizeSessionStopWithResult(context.Background(), s, false, "", PlaybackEndExpired)
+	}
 	abort := func(h *PlaybackHandler, s *playback.Session) {
-		h.finalizeSessionAbort(context.Background(), s, false, "")
+		h.finalizeSessionAbort(context.Background(), s, false, "", nativeEndClaim{owned: true})
 	}
 	tests := []struct {
 		name               string
