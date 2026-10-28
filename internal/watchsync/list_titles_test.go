@@ -35,6 +35,7 @@ func (p *watchlistBatchProviderStub) FetchWatchlist(context.Context, ServerConfi
 type titlesStub struct {
 	library map[int]bool
 	entries map[int]time.Time
+	queued  []WatchlistTitle
 }
 
 func (s *titlesStub) LibraryHas(_ context.Context, title WatchlistTitle) (bool, error) {
@@ -51,6 +52,11 @@ func (s *titlesStub) AddWatchlistTitle(_ context.Context, _ int, _ string, title
 
 func (s *titlesStub) RemoveWatchlistTitle(_ context.Context, _ int, _ string, title WatchlistTitle) error {
 	delete(s.entries, title.TMDBID)
+	return nil
+}
+
+func (s *titlesStub) RequestQueuedWatchlistTitles(_ context.Context, _ int, _ string, titles []WatchlistTitle) error {
+	s.queued = append(s.queued, titles...)
 	return nil
 }
 
@@ -88,6 +94,7 @@ func TestServiceWatchlistImportKeepsTitlesOutsideLibrary(t *testing.T) {
 		wantLocal   bool
 		wantRemote  bool
 		wantNoState bool
+		wantQueued  int
 	}{
 		{
 			name:       "listed title the library lacks",
@@ -95,6 +102,15 @@ func TestServiceWatchlistImportKeepsTitlesOutsideLibrary(t *testing.T) {
 			wantEntry:  true,
 			wantResult: ImportListResult{Found: 1, Imported: 1, added: 1},
 			wantLocal:  true, wantRemote: true,
+		},
+		{
+			name:       "listed title already on the watchlist is queued for its request",
+			entries:    map[int]time.Time{550: listedAt},
+			states:     []ListItemState{{MediaItemID: titleRow, Kind: "movie", ProviderItemKey: fightClub.ProviderItemKey, RemotePresent: true, LocalPresent: true}},
+			rows:       []RemoteFavorite{fightClub},
+			wantEntry:  true,
+			wantResult: ImportListResult{Found: 1, Imported: 1},
+			wantLocal:  true, wantRemote: true, wantQueued: 1,
 		},
 		{
 			name:        "listed title the library has but did not match",
@@ -154,6 +170,9 @@ func TestServiceWatchlistImportKeepsTitlesOutsideLibrary(t *testing.T) {
 			result.Warnings = nil
 			if !reflect.DeepEqual(result, tt.wantResult) {
 				t.Fatalf("result = %#v, want %#v", result, tt.wantResult)
+			}
+			if len(titles.queued) != tt.wantQueued {
+				t.Fatalf("queued = %#v, want %d", titles.queued, tt.wantQueued)
 			}
 			if _, ok := titles.entries[550]; ok != tt.wantEntry {
 				t.Fatalf("entry present = %v, want %v", ok, tt.wantEntry)

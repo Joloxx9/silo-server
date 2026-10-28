@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/Silo-Server/silo-server/internal/access"
@@ -253,6 +254,56 @@ func (s *Service) RequestFromWatchlist(ctx context.Context, viewer Viewer, title
 		state.Reason = refusal
 	}
 	return state, nil
+}
+
+// RequestQueuedWatchlistTitles requests, in order, the watchlist titles no
+// request was ever made for, until the viewer's quota runs out. Watch
+// provider sync passes the provider-listed entries the library doesn't have
+// on every run, so a title the quota refused when it was imported is
+// requested on a later run, once the window has room. A title with any
+// request on record, open, declined, canceled or done, is skipped, so a
+// decline or a withdrawal is never undone. It makes no call while watchlist
+// requests don't apply to the viewer.
+func (s *Service) RequestQueuedWatchlistTitles(ctx context.Context, viewer Viewer, titles []WatchlistTitle) error {
+	if err := validateViewer(viewer); err != nil || len(titles) == 0 {
+		return err
+	}
+	enabled, err := s.WatchlistRequestsEnabled(withPolicyCache(ctx), viewer)
+	if err != nil || !enabled {
+		return err
+	}
+	requested := map[MediaType]map[int]bool{}
+	for _, title := range titles {
+		mediaType, err := normalizeMediaType(title.MediaType)
+		if err != nil || title.TMDBID <= 0 {
+			continue
+		}
+		title.MediaType = mediaType
+		if requested[mediaType] == nil {
+			ids := make([]int, 0, len(titles))
+			for _, t := range titles {
+				ids = append(ids, t.tmdbIDs()...)
+			}
+			if requested[mediaType], err = s.store.ListRequestedTMDB(ctx, mediaType, ids); err != nil {
+				return err
+			}
+		}
+		if slices.ContainsFunc(title.tmdbIDs(), func(id int) bool { return requested[mediaType][id] }) {
+			continue
+		}
+		// A fresh policy read per title: each request uses up the quota.
+		policy, err := s.EffectivePolicy(ctx, viewer.UserID)
+		if err != nil {
+			return err
+		}
+		if policy.Blocked || (!policy.Unlimited && policy.Remaining <= 0) {
+			return nil
+		}
+		if refusal := s.applyWatchlistRequest(ctx, viewer, title); refusal != "" {
+			return nil
+		}
+	}
+	return nil
 }
 
 // applyWatchlistRequest creates or follows the title's request and returns

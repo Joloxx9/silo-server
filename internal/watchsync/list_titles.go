@@ -2,6 +2,7 @@ package watchsync
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +46,10 @@ type WatchlistTitles interface {
 	AddWatchlistTitle(ctx context.Context, userID int, profileID string, title WatchlistTitle, addedAt time.Time) (bool, error)
 	// RemoveWatchlistTitle takes the profile's entry for the title off.
 	RemoveWatchlistTitle(ctx context.Context, userID int, profileID string, title WatchlistTitle) error
+	// RequestQueuedWatchlistTitles applies watchlist requests, in order, to
+	// listed titles no request was ever made for, so a title a request quota
+	// refused at import is requested on a later run.
+	RequestQueuedWatchlistTitles(ctx context.Context, userID int, profileID string, titles []WatchlistTitle) error
 	// ListWatchlistTitles returns every entry of the profile.
 	ListWatchlistTitles(ctx context.Context, userID int, profileID string) ([]WatchlistTitle, error)
 	// WatchlistTitleListed reports whether the profile has an entry for the
@@ -125,7 +130,9 @@ func watchlistTitleFromListItemID(id string) (WatchlistTitle, bool) {
 // library item carries. A title some library item carries is left unmatched:
 // the matcher found it ambiguous, and an entry outside the library would
 // show it as missing. It returns the row's shadow state, or nil when the row
-// stays unmatched or waits for a local removal to reach the provider.
+// stays unmatched or waits for a local removal to reach the provider. A title
+// already on the watchlist joins queued, the titles whose requests
+// requestQueuedListTitles retries.
 func (s *Service) importListTitle(
 	ctx context.Context,
 	conn Connection,
@@ -133,6 +140,7 @@ func (s *Service) importListTitle(
 	row RemoteFavorite,
 	key string,
 	removalsPending map[string]time.Time,
+	queued *[]WatchlistTitle,
 ) (state *ListItemState, kept, added bool, err error) {
 	titles := s.watchlistTitles(b)
 	if titles == nil {
@@ -157,6 +165,9 @@ func (s *Service) importListTitle(
 	added, err = titles.AddWatchlistTitle(ctx, conn.UserID, conn.ProfileID, title, row.FavoritedAt)
 	if err != nil {
 		return nil, false, false, err
+	}
+	if !added {
+		*queued = append(*queued, title)
 	}
 	listedAt := row.FavoritedAt
 	return &ListItemState{
@@ -281,4 +292,19 @@ func (s *Service) localListTitles(ctx context.Context, conn Connection, b listBi
 		})
 	}
 	return items, states, nil
+}
+
+// requestQueuedListTitles applies watchlist requests to the listed titles that
+// were already on the watchlist. A new entry is requested as it is added; one
+// a request quota refused then gets its request on a later run. A failure is
+// logged and leaves the import's result alone.
+func (s *Service) requestQueuedListTitles(ctx context.Context, conn Connection, b listBinding, queued []WatchlistTitle) {
+	titles := s.watchlistTitles(b)
+	if titles == nil || len(queued) == 0 {
+		return
+	}
+	if err := titles.RequestQueuedWatchlistTitles(ctx, conn.UserID, conn.ProfileID, queued); err != nil {
+		slog.WarnContext(ctx, "requesting queued watchlist titles failed", "component", "watchsync",
+			"connection_id", conn.ID, "error", err)
+	}
 }

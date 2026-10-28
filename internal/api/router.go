@@ -1236,7 +1236,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 			if watchSync, ok := deps.WatchProviderService.(interface {
 				SetWatchlistTitles(watchsync.WatchlistTitles)
 			}); ok {
-				watchSync.SetWatchlistTitles(watchlistTitles.WatchSync())
+				watchSync.SetWatchlistTitles(watchlistTitles.WatchSync(nil))
 			}
 		}
 		personalDataHandler.EventsHub = deps.EventsHub
@@ -3107,6 +3107,14 @@ func newChiRouter(deps Dependencies) chi.Router {
 		if watchlistRequests, ok := requestHandler.Service().(apiv2.WatchlistRequestService); ok && personalDataHandler != nil && watchlistTitles != nil {
 			v2deps.WatchlistTitles = personalDataHandler
 			v2deps.WatchlistRequests = watchlistRequests
+			// Titles watch provider sync adds are requested like ones added
+			// by hand.
+			syncRequests, requestsOK := watchlistRequests.(syncRequestService)
+			if watchSync, ok := deps.WatchProviderService.(interface {
+				SetWatchlistTitles(watchsync.WatchlistTitles)
+			}); ok && requestsOK {
+				watchSync.SetWatchlistTitles(watchlistTitles.WatchSync(watchlistSyncRequests{requests: syncRequests}))
+			}
 		}
 		// *requests.Service implements the usage read (pinned at the top of
 		// this file), so the assertion only fails for a test double.
