@@ -590,6 +590,13 @@ func (s *Service) exportList(ctx context.Context, conn Connection, cfg ServerCon
 		return result, err
 	}
 	result.Warnings = append(result.Warnings, warnings...)
+	titleItems, titleStates, err := s.localListTitles(ctx, conn, b)
+	if err != nil {
+		return result, err
+	}
+	result.LocalFound += len(titleItems)
+	items = append(items, titleItems...)
+	states = append(states, titleStates...)
 	if err := s.repo.UpsertListItemStates(ctx, states); err != nil {
 		return result, err
 	}

@@ -15,8 +15,8 @@ import (
 // side), so the import keeps them there too instead of skipping them. Their
 // shadow rows carry a synthetic media item id naming the title, which no
 // library item can hold, so the shared list pipeline tracks them like any
-// other row: a provider removal takes the entry off, and a local removal goes
-// to the provider when removals sync.
+// other row: an entry added in Silo is exported, a provider removal takes the
+// entry off, and a local removal goes to the provider when removals sync.
 
 // listTitlePrefix starts the media item id of a shadow row for a watchlist
 // entry outside the library: "watchlist-title:<kind>:<tmdb id>".
@@ -31,6 +31,8 @@ type WatchlistTitle struct {
 	TVDBID int
 	Title  string
 	Year   int
+	// AddedAt is when the entry joined the watchlist, on a listed entry.
+	AddedAt time.Time
 }
 
 // WatchlistTitles keeps the watchlist entries for titles the library doesn't
@@ -43,6 +45,8 @@ type WatchlistTitles interface {
 	AddWatchlistTitle(ctx context.Context, userID int, profileID string, title WatchlistTitle, addedAt time.Time) (bool, error)
 	// RemoveWatchlistTitle takes the profile's entry for the title off.
 	RemoveWatchlistTitle(ctx context.Context, userID int, profileID string, title WatchlistTitle) error
+	// ListWatchlistTitles returns every entry of the profile.
+	ListWatchlistTitles(ctx context.Context, userID int, profileID string) ([]WatchlistTitle, error)
 	// WatchlistTitleListed reports whether the profile has an entry for the
 	// title.
 	WatchlistTitleListed(ctx context.Context, userID int, profileID string, title WatchlistTitle) (bool, error)
@@ -229,4 +233,52 @@ func (s *Service) reconcileLocalListTitles(ctx context.Context, conn Connection,
 		}
 	}
 	return nil
+}
+
+// localListTitles returns the profile's watchlist entries outside the library
+// as export items, with their shadow states, the way localItemsFromRows does
+// for library items.
+func (s *Service) localListTitles(ctx context.Context, conn Connection, b listBinding) ([]LocalFavorite, []ListItemState, error) {
+	titles := s.watchlistTitles(b)
+	if titles == nil {
+		return nil, nil, nil
+	}
+	entries, err := titles.ListWatchlistTitles(ctx, conn.UserID, conn.ProfileID)
+	if err != nil {
+		return nil, nil, err
+	}
+	items := make([]LocalFavorite, 0, len(entries))
+	states := make([]ListItemState, 0, len(entries))
+	for _, title := range entries {
+		item := LocalFavorite{
+			MediaItemID: title.listItemID(),
+			Kind:        title.Kind,
+			Title:       title.Title,
+			Year:        title.Year,
+			IMDbID:      title.IMDbID,
+			TMDBID:      strconv.Itoa(title.TMDBID),
+			FavoritedAt: title.AddedAt,
+		}
+		if title.TVDBID > 0 {
+			item.TVDBID = strconv.Itoa(title.TVDBID)
+		}
+		if item.FavoritedAt.IsZero() {
+			item.FavoritedAt = s.now()
+		}
+		item.ProviderItemKey = providerItemKeyForLocalFavorite(item)
+		items = append(items, item)
+		listedAt := item.FavoritedAt
+		states = append(states, ListItemState{
+			ConnectionID:    conn.ID,
+			ListKind:        b.kind,
+			MediaItemID:     item.MediaItemID,
+			ProviderItemKey: item.ProviderItemKey,
+			Kind:            item.Kind,
+			Title:           item.Title,
+			Year:            item.Year,
+			LocalPresent:    true,
+			LastSeenLocalAt: &listedAt,
+		})
+	}
+	return items, states, nil
 }

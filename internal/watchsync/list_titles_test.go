@@ -8,15 +8,25 @@ import (
 )
 
 type watchlistBatchProviderStub struct {
-	rows []RemoteFavorite
+	rows     []RemoteFavorite
+	exported []LocalFavorite
 }
 
-func (watchlistBatchProviderStub) Key() string         { return "plugin:4:list" }
-func (watchlistBatchProviderStub) DisplayName() string { return "List" }
-func (watchlistBatchProviderStub) Capabilities() Capabilities {
-	return Capabilities{ImportWatchlist: true}
+func (*watchlistBatchProviderStub) Key() string         { return "plugin:4:list" }
+func (*watchlistBatchProviderStub) DisplayName() string { return "List" }
+func (*watchlistBatchProviderStub) Capabilities() Capabilities {
+	return Capabilities{ImportWatchlist: true, ExportWatchlist: true}
 }
-func (p watchlistBatchProviderStub) FetchWatchlist(context.Context, ServerConfig, Connection) ([]RemoteFavorite, error) {
+func (p *watchlistBatchProviderStub) ExportWatchlist(_ context.Context, _ ServerConfig, _ Connection, items []LocalFavorite) (ExportResult, error) {
+	p.exported = append(p.exported, items...)
+	result := ExportResult{}
+	for _, item := range items {
+		result.Sent = append(result.Sent, item.MediaItemID)
+	}
+	return result, nil
+}
+
+func (p *watchlistBatchProviderStub) FetchWatchlist(context.Context, ServerConfig, Connection) ([]RemoteFavorite, error) {
 	return p.rows, nil
 }
 
@@ -42,6 +52,14 @@ func (s *titlesStub) AddWatchlistTitle(_ context.Context, _ int, _ string, title
 func (s *titlesStub) RemoveWatchlistTitle(_ context.Context, _ int, _ string, title WatchlistTitle) error {
 	delete(s.entries, title.TMDBID)
 	return nil
+}
+
+func (s *titlesStub) ListWatchlistTitles(context.Context, int, string) ([]WatchlistTitle, error) {
+	out := make([]WatchlistTitle, 0, len(s.entries))
+	for id, at := range s.entries {
+		out = append(out, WatchlistTitle{Kind: "movie", TMDBID: id, AddedAt: at})
+	}
+	return out, nil
 }
 
 func (s *titlesStub) WatchlistTitleListed(_ context.Context, _ int, _ string, title WatchlistTitle) (bool, error) {
@@ -129,7 +147,7 @@ func TestServiceWatchlistImportKeepsTitlesOutsideLibrary(t *testing.T) {
 				WithUserStoreProvider(staticStoreProvider{store: store})
 			service.SetWatchlistTitles(titles)
 
-			result, err := service.importList(context.Background(), conn, ServerConfig{}, watchlistBatchProviderStub{rows: tt.rows}, service.watchlistBinding())
+			result, err := service.importList(context.Background(), conn, ServerConfig{}, &watchlistBatchProviderStub{rows: tt.rows}, service.watchlistBinding())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -161,4 +179,29 @@ func listItemStateOf(repo *serviceFakeRepo, mediaItemID string) *ListItemState {
 		}
 	}
 	return nil
+}
+
+// A watchlist entry outside the library added in Silo goes to the provider
+// under its TMDB ID.
+func TestServiceWatchlistExportSendsTitlesOutsideLibrary(t *testing.T) {
+	store, repo, conn := favoriteImportFixture(t)
+	conn.ExportWatchlistEnabled = true
+	titles := &titlesStub{entries: map[int]time.Time{550: time.Now().UTC()}}
+	service := NewService(repo, NewRegistry()).WithUserStoreProvider(staticStoreProvider{store: store})
+	service.SetWatchlistTitles(titles)
+	provider := &watchlistBatchProviderStub{}
+
+	result, err := service.exportList(context.Background(), conn, ServerConfig{}, provider, service.watchlistBinding())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.LocalFound != 1 || result.Sent != 1 || len(provider.exported) != 1 {
+		t.Fatalf("result = %#v, exported = %#v", result, provider.exported)
+	}
+	if item := provider.exported[0]; item.MediaItemID != "watchlist-title:movie:550" || item.TMDBID != "550" || item.ProviderItemKey != "tmdb:550" {
+		t.Fatalf("exported = %#v", item)
+	}
+	if state := listItemStateOf(repo, "watchlist-title:movie:550"); state == nil || !state.RemotePresent || !state.LocalPresent {
+		t.Fatalf("state = %#v, want exported", state)
+	}
 }
