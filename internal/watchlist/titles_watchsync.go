@@ -131,12 +131,22 @@ func (t syncTitles) RequestQueuedWatchlistTitles(ctx context.Context, userID int
 		return err
 	}
 	byKey := make(map[TitleKey]Title, len(entries))
+	// A stored row keeps the TMDB ID it was listed under, which a check may
+	// since have repointed, so former IDs resolve too.
+	for _, e := range entries {
+		for _, id := range e.Title.FormerTMDBIDs {
+			byKey[TitleKey{MediaType: e.Title.MediaType, TMDBID: id}] = e.Title
+		}
+	}
 	for _, e := range entries {
 		byKey[e.Title.Key()] = e.Title
 	}
 	stored := make([]Title, 0, len(titles))
+	seen := make(map[TitleKey]bool, len(titles))
 	for _, title := range titles {
-		if found, ok := byKey[TitleKey{MediaType: title.Kind, TMDBID: title.TMDBID}]; ok {
+		found, ok := byKey[TitleKey{MediaType: title.Kind, TMDBID: title.TMDBID}]
+		if ok && !seen[found.Key()] {
+			seen[found.Key()] = true
 			stored = append(stored, found)
 		}
 	}
@@ -197,12 +207,12 @@ func (t syncTitles) WatchlistTitlePromoted(ctx context.Context, userID int, prof
 	if err != nil {
 		return false, err
 	}
+	listed, err := store.ListWatchlistByMediaItems(ctx, profileID, matches)
+	if err != nil {
+		return false, err
+	}
 	for _, id := range matches {
-		entry, err := store.GetWatchlistEntry(ctx, profileID, id)
-		if err != nil {
-			return false, err
-		}
-		if entry != nil {
+		if listed[id] {
 			return true, nil
 		}
 	}
