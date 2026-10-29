@@ -276,7 +276,6 @@ func (s *Service) importList(ctx context.Context, conn Connection, cfg ServerCon
 	// them, so an order-providing list (e.g. MDBList watchlist) can mirror its
 	// sort locally.
 	orderedIDs := make([]string, 0, len(rows))
-	var queuedTitles []WatchlistTitle
 	for _, row := range rows {
 		if row.Removed {
 			unlisted, err := s.applyRemoteListTombstone(ctx, conn, store, b, row, existingByRemoteKey, &result)
@@ -306,7 +305,7 @@ func (s *Service) importList(ctx context.Context, conn Connection, cfg ServerCon
 			return result, err
 		}
 		if match == nil {
-			state, kept, added, err := s.importListTitle(ctx, conn, b, row, key, removalsPending, &queuedTitles)
+			state, kept, added, err := s.importListTitle(ctx, conn, b, row, key, removalsPending)
 			if err != nil {
 				return result, err
 			}
@@ -360,12 +359,12 @@ func (s *Service) importList(ctx context.Context, conn Connection, cfg ServerCon
 	if err := s.repo.UpsertListItemStates(ctx, states); err != nil {
 		return result, err
 	}
-	s.requestQueuedListTitles(ctx, conn, b, queuedTitles)
 	if !batch.Incremental {
 		if err := s.reconcileMissingRemoteListItems(ctx, conn, store, b, seenRemote, &result); err != nil {
 			return result, err
 		}
 	}
+	s.requestQueuedListTitles(ctx, conn, b)
 	// An incremental response is only a delta; replacing the whole local order
 	// with that subset would discard every item absent from the delta.
 	if !batch.Incremental && b.applyOrder != nil && b.orderEnabled != nil && b.capOrder != nil &&
