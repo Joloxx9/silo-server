@@ -3,6 +3,7 @@ package watchsync
 import (
 	"context"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,14 +48,18 @@ type WatchlistTitles interface {
 	// RemoveWatchlistTitle takes the profile's entry for the title off.
 	RemoveWatchlistTitle(ctx context.Context, userID int, profileID string, title WatchlistTitle) error
 	// RequestQueuedWatchlistTitles applies watchlist requests, in order, to
-	// listed titles no request was ever made for, so a title a request quota
-	// refused at import is requested on a later run.
+	// the listed titles, so a title a request quota refused at import is
+	// requested on a later run.
 	RequestQueuedWatchlistTitles(ctx context.Context, userID int, profileID string, titles []WatchlistTitle) error
 	// ListWatchlistTitles returns every entry of the profile.
 	ListWatchlistTitles(ctx context.Context, userID int, profileID string) ([]WatchlistTitle, error)
-	// WatchlistTitleListed reports whether the profile has an entry for the
-	// title.
-	WatchlistTitleListed(ctx context.Context, userID int, profileID string, title WatchlistTitle) (bool, error)
+	// WatchlistTitlesListed reports which of the titles the profile has an
+	// entry for, by any TMDB ID the entry's title has held.
+	WatchlistTitlesListed(ctx context.Context, userID int, profileID string, titles []WatchlistTitle) (map[WatchlistTitle]bool, error)
+	// WatchlistTitlePromoted reports whether a library item with the title's
+	// IDs is on the profile's library watchlist, where promotion moves an
+	// entry once the library has its title.
+	WatchlistTitlePromoted(ctx context.Context, userID int, profileID string, title WatchlistTitle) (bool, error)
 }
 
 type watchlistTitlesRef struct{ WatchlistTitles }
@@ -130,9 +135,7 @@ func watchlistTitleFromListItemID(id string) (WatchlistTitle, bool) {
 // library item carries. A title some library item carries is left unmatched:
 // the matcher found it ambiguous, and an entry outside the library would
 // show it as missing. It returns the row's shadow state, or nil when the row
-// stays unmatched or waits for a local removal to reach the provider. A title
-// already on the watchlist joins queued, the titles whose requests
-// requestQueuedListTitles retries.
+// stays unmatched or waits for a local removal to reach the provider.
 func (s *Service) importListTitle(
 	ctx context.Context,
 	conn Connection,
@@ -140,7 +143,6 @@ func (s *Service) importListTitle(
 	row RemoteFavorite,
 	key string,
 	removalsPending map[string]time.Time,
-	queued *[]WatchlistTitle,
 ) (state *ListItemState, kept, added bool, err error) {
 	titles := s.watchlistTitles(b)
 	if titles == nil {
@@ -165,9 +167,6 @@ func (s *Service) importListTitle(
 	added, err = titles.AddWatchlistTitle(ctx, conn.UserID, conn.ProfileID, title, row.FavoritedAt)
 	if err != nil {
 		return nil, false, false, err
-	}
-	if !added {
-		*queued = append(*queued, title)
 	}
 	listedAt := row.FavoritedAt
 	return &ListItemState{
@@ -202,9 +201,9 @@ func (s *Service) removeLocalListItem(ctx context.Context, store userstore.UserS
 // reconcileLocalListTitles records which imported watchlist entries outside
 // the library left the profile's watchlist. One the profile removed is a
 // local removal, which goes to the provider when removals sync. One that
-// left because the library got the title moved onto the library watchlist
-// and is still listed; its row retires without a removal, and the library
-// item's own row takes over at the next import.
+// promotion moved onto the library watchlist is still on the watchlist; its
+// row retires without a removal, and the library item's own row takes over at
+// the next import.
 func (s *Service) reconcileLocalListTitles(ctx context.Context, conn Connection, b listBinding) error {
 	titles := s.watchlistTitles(b)
 	if titles == nil {
@@ -214,33 +213,39 @@ func (s *Service) reconcileLocalListTitles(ctx context.Context, conn Connection,
 	if err != nil {
 		return err
 	}
-	now := s.now()
+	rows := map[WatchlistTitle]string{}
+	keys := make([]WatchlistTitle, 0, len(states))
 	for _, state := range states {
-		if !state.LocalPresent {
+		if title, ok := watchlistTitleFromListItemID(state.MediaItemID); ok && state.LocalPresent {
+			rows[title] = state.MediaItemID
+			keys = append(keys, title)
+		}
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	listed, err := titles.WatchlistTitlesListed(ctx, conn.UserID, conn.ProfileID, keys)
+	if err != nil {
+		return err
+	}
+	now := s.now()
+	for _, title := range keys {
+		if listed[title] {
 			continue
 		}
-		title, ok := watchlistTitleFromListItemID(state.MediaItemID)
-		if !ok {
-			continue
-		}
-		listed, err := titles.WatchlistTitleListed(ctx, conn.UserID, conn.ProfileID, title)
+		promoted, err := titles.WatchlistTitlePromoted(ctx, conn.UserID, conn.ProfileID, title)
 		if err != nil {
 			return err
 		}
-		if listed {
-			continue
-		}
-		promoted, err := titles.LibraryHas(ctx, title)
-		if err != nil {
-			return err
-		}
-		if err := s.repo.MarkListItemLocalRemoved(ctx, conn.ID, b.kind, state.MediaItemID, now); err != nil {
-			return err
-		}
+		// The remote side goes first: a row left local-removed but remote
+		// present would send the provider a removal.
 		if promoted {
-			if err := s.repo.MarkListItemRemoteRemoved(ctx, conn.ID, b.kind, state.MediaItemID, now); err != nil {
+			if err := s.repo.MarkListItemRemoteRemoved(ctx, conn.ID, b.kind, rows[title], now); err != nil {
 				return err
 			}
+		}
+		if err := s.repo.MarkListItemLocalRemoved(ctx, conn.ID, b.kind, rows[title], now); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -294,17 +299,54 @@ func (s *Service) localListTitles(ctx context.Context, conn Connection, b listBi
 	return items, states, nil
 }
 
-// requestQueuedListTitles applies watchlist requests to the listed titles that
-// were already on the watchlist. A new entry is requested as it is added; one
-// a request quota refused then gets its request on a later run. A failure is
-// logged and leaves the import's result alone.
-func (s *Service) requestQueuedListTitles(ctx context.Context, conn Connection, b listBinding, queued []WatchlistTitle) {
+// requestQueuedListTitles applies watchlist requests to every entry outside
+// the library that the provider lists, oldest listing first. A new entry is
+// requested as it is added; one a request quota refused then gets its request
+// on a later run. The titles come from the stored rows rather than the
+// provider's batch, which an incremental provider sends only for changes. A
+// failure is logged and leaves the import's result alone.
+func (s *Service) requestQueuedListTitles(ctx context.Context, conn Connection, b listBinding) {
 	titles := s.watchlistTitles(b)
-	if titles == nil || len(queued) == 0 {
+	if titles == nil {
+		return
+	}
+	states, err := s.repo.ListListItemStates(ctx, conn.ID, b.kind)
+	if err != nil {
+		slog.WarnContext(ctx, "reading queued watchlist titles failed", "component", "watchsync",
+			"connection_id", conn.ID, "error", err)
+		return
+	}
+	listed := make([]ListItemState, 0, len(states))
+	for _, state := range states {
+		if _, ok := watchlistTitleFromListItemID(state.MediaItemID); ok && state.LocalPresent && state.RemotePresent {
+			listed = append(listed, state)
+		}
+	}
+	sort.SliceStable(listed, func(i, j int) bool {
+		return listedBefore(listed[i].LastSeenLocalAt, listed[j].LastSeenLocalAt)
+	})
+	queued := make([]WatchlistTitle, 0, len(listed))
+	for _, state := range listed {
+		title, _ := watchlistTitleFromListItemID(state.MediaItemID)
+		queued = append(queued, title)
+	}
+	if len(queued) == 0 {
 		return
 	}
 	if err := titles.RequestQueuedWatchlistTitles(ctx, conn.UserID, conn.ProfileID, queued); err != nil {
 		slog.WarnContext(ctx, "requesting queued watchlist titles failed", "component", "watchsync",
 			"connection_id", conn.ID, "error", err)
+	}
+}
+
+// listedBefore orders listing times oldest first, unknown last.
+func listedBefore(a, b *time.Time) bool {
+	switch {
+	case a == nil:
+		return false
+	case b == nil:
+		return true
+	default:
+		return a.Before(*b)
 	}
 }

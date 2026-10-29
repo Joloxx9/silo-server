@@ -81,25 +81,36 @@ func (t syncTitles) AddWatchlistTitle(ctx context.Context, userID int, profileID
 
 // ListWatchlistTitles returns every entry of the profile outside the library.
 func (t syncTitles) ListWatchlistTitles(ctx context.Context, userID int, profileID string) ([]watchsync.WatchlistTitle, error) {
+	entries, err := t.listEntries(ctx, userID, profileID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]watchsync.WatchlistTitle, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, watchsync.WatchlistTitle{
+			Kind:    e.Title.MediaType,
+			TMDBID:  e.Title.TMDBID,
+			IMDbID:  e.Title.IMDbID,
+			TVDBID:  e.Title.TVDBID,
+			Title:   e.Title.Title,
+			Year:    e.Title.Year,
+			AddedAt: e.AddedAt,
+		})
+	}
+	return out, nil
+}
+
+// listEntries reads every entry of the profile, a page at a time.
+func (t syncTitles) listEntries(ctx context.Context, userID int, profileID string) ([]Entry, error) {
 	const pageSize = 500
-	var out []watchsync.WatchlistTitle
+	var out []Entry
 	var after *PageKey
 	for {
 		entries, err := t.titles.repo.listPage(ctx, userID, profileID, after, pageSize)
 		if err != nil {
 			return nil, err
 		}
-		for _, e := range entries {
-			out = append(out, watchsync.WatchlistTitle{
-				Kind:    e.Title.MediaType,
-				TMDBID:  e.Title.TMDBID,
-				IMDbID:  e.Title.IMDbID,
-				TVDBID:  e.Title.TVDBID,
-				Title:   e.Title.Title,
-				Year:    e.Title.Year,
-				AddedAt: e.AddedAt,
-			})
-		}
+		out = append(out, entries...)
 		if len(entries) < pageSize {
 			return out, nil
 		}
@@ -108,20 +119,25 @@ func (t syncTitles) ListWatchlistTitles(ctx context.Context, userID int, profile
 	}
 }
 
-// RequestQueuedWatchlistTitles hands the stored titles, with the snapshots
-// their checks keep current, to the request service.
+// RequestQueuedWatchlistTitles hands the profile's stored titles, with the
+// snapshots their checks keep current, to the request service in the order
+// given. One read of the profile's entries loads them all.
 func (t syncTitles) RequestQueuedWatchlistTitles(ctx context.Context, userID int, profileID string, titles []watchsync.WatchlistTitle) error {
 	if t.requests == nil || len(titles) == 0 {
 		return nil
 	}
+	entries, err := t.listEntries(ctx, userID, profileID)
+	if err != nil {
+		return err
+	}
+	byKey := make(map[TitleKey]Title, len(entries))
+	for _, e := range entries {
+		byKey[e.Title.Key()] = e.Title
+	}
 	stored := make([]Title, 0, len(titles))
 	for _, title := range titles {
-		found, err := t.titles.Find(ctx, title.Kind, title.TMDBID)
-		if err != nil {
-			return err
-		}
-		if found != nil {
-			stored = append(stored, *found)
+		if found, ok := byKey[TitleKey{MediaType: title.Kind, TMDBID: title.TMDBID}]; ok {
+			stored = append(stored, found)
 		}
 	}
 	t.requests.RequestQueuedWatchlistTitles(ctx, userID, profileID, stored)
@@ -150,8 +166,45 @@ func (t syncTitles) RemoveWatchlistTitle(ctx context.Context, userID int, profil
 	return nil
 }
 
-func (t syncTitles) WatchlistTitleListed(ctx context.Context, userID int, profileID string, title watchsync.WatchlistTitle) (bool, error) {
-	key := TitleKey{MediaType: title.Kind, TMDBID: title.TMDBID}
-	on, err := t.titles.OnWatchlist(ctx, Viewer{UserID: userID, ProfileID: profileID}, []TitleKey{key})
-	return on[key], err
+func (t syncTitles) WatchlistTitlesListed(ctx context.Context, userID int, profileID string, titles []watchsync.WatchlistTitle) (map[watchsync.WatchlistTitle]bool, error) {
+	keys := make([]TitleKey, len(titles))
+	for i, title := range titles {
+		keys[i] = TitleKey{MediaType: title.Kind, TMDBID: title.TMDBID}
+	}
+	on, err := t.titles.OnWatchlist(ctx, Viewer{UserID: userID, ProfileID: profileID}, keys)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[watchsync.WatchlistTitle]bool, len(titles))
+	for i, title := range titles {
+		out[title] = on[keys[i]]
+	}
+	return out, nil
+}
+
+// WatchlistTitlePromoted checks the profile's library watchlist for the
+// library items carrying the title's IDs. The library having the title is not
+// enough: the profile may have removed the entry before promotion ran.
+func (t syncTitles) WatchlistTitlePromoted(ctx context.Context, userID int, profileID string, title watchsync.WatchlistTitle) (bool, error) {
+	if t.titles.storeFor == nil {
+		return false, nil
+	}
+	matches, err := t.titles.LibraryMatches(ctx, title.Kind, []int{title.TMDBID}, title.IMDbID, title.TVDBID)
+	if err != nil || len(matches) == 0 {
+		return false, err
+	}
+	store, err := t.titles.storeFor(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	for _, id := range matches {
+		entry, err := store.GetWatchlistEntry(ctx, profileID, id)
+		if err != nil {
+			return false, err
+		}
+		if entry != nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }

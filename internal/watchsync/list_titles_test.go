@@ -33,9 +33,10 @@ func (p *watchlistBatchProviderStub) FetchWatchlist(context.Context, ServerConfi
 // titlesStub keeps one profile's watchlist entries outside the library by
 // TMDB ID, with the TMDB IDs the library carries.
 type titlesStub struct {
-	library map[int]bool
-	entries map[int]time.Time
-	queued  []WatchlistTitle
+	library  map[int]bool
+	entries  map[int]time.Time
+	promoted map[int]bool
+	queued   []WatchlistTitle
 }
 
 func (s *titlesStub) LibraryHas(_ context.Context, title WatchlistTitle) (bool, error) {
@@ -68,9 +69,16 @@ func (s *titlesStub) ListWatchlistTitles(context.Context, int, string) ([]Watchl
 	return out, nil
 }
 
-func (s *titlesStub) WatchlistTitleListed(_ context.Context, _ int, _ string, title WatchlistTitle) (bool, error) {
-	_, ok := s.entries[title.TMDBID]
-	return ok, nil
+func (s *titlesStub) WatchlistTitlesListed(_ context.Context, _ int, _ string, titles []WatchlistTitle) (map[WatchlistTitle]bool, error) {
+	out := map[WatchlistTitle]bool{}
+	for _, title := range titles {
+		_, out[title] = s.entries[title.TMDBID]
+	}
+	return out, nil
+}
+
+func (s *titlesStub) WatchlistTitlePromoted(_ context.Context, _ int, _ string, title WatchlistTitle) (bool, error) {
+	return s.promoted[title.TMDBID], nil
 }
 
 // A provider's watchlist title the library doesn't have becomes a watchlist
@@ -80,6 +88,7 @@ func (s *titlesStub) WatchlistTitleListed(_ context.Context, _ int, _ string, ti
 type watchlistTitleImportCase struct {
 	name        string
 	library     map[int]bool
+	promoted    map[int]bool
 	entries     map[int]time.Time
 	states      []ListItemState
 	rows        []RemoteFavorite
@@ -104,7 +113,7 @@ func watchlistTitleImportCases() []watchlistTitleImportCase {
 			rows:       []RemoteFavorite{fightClub},
 			wantEntry:  true,
 			wantResult: ImportListResult{Found: 1, Imported: 1, added: 1},
-			wantLocal:  true, wantRemote: true,
+			wantLocal:  true, wantRemote: true, wantQueued: 1,
 		},
 		{
 			name:       "listed title already on the watchlist is queued for its request",
@@ -142,8 +151,17 @@ func watchlistTitleImportCases() []watchlistTitleImportCase {
 			wantRemote: true,
 		},
 		{
+			name:       "title removed locally after the library got it waits for the provider removal",
+			library:    map[int]bool{550: true},
+			states:     []ListItemState{{MediaItemID: titleRow, Kind: "movie", ProviderItemKey: fightClub.ProviderItemKey, RemotePresent: true, LocalPresent: true}},
+			rows:       []RemoteFavorite{fightClub},
+			wantResult: ImportListResult{Found: 1, Unmatched: 1},
+			wantRemote: true,
+		},
+		{
 			name:       "title promoted onto the library watchlist",
 			library:    map[int]bool{550: true},
+			promoted:   map[int]bool{550: true},
 			states:     []ListItemState{{MediaItemID: titleRow, Kind: "movie", ProviderItemKey: fightClub.ProviderItemKey, RemotePresent: true, LocalPresent: true}},
 			rows:       []RemoteFavorite{fightClub},
 			wantResult: ImportListResult{Found: 1, Unmatched: 1},
@@ -161,7 +179,7 @@ func TestServiceWatchlistImportKeepsTitlesOutsideLibrary(t *testing.T) {
 				state.ConnectionID, state.ListKind = conn.ID, ListKindWatchlist
 				repo.listItemStates = append(repo.listItemStates, state)
 			}
-			titles := &titlesStub{library: tt.library, entries: map[int]time.Time{}}
+			titles := &titlesStub{library: tt.library, promoted: tt.promoted, entries: map[int]time.Time{}}
 			for id, at := range tt.entries {
 				titles.entries[id] = at
 			}
