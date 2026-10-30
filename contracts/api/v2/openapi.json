@@ -4988,6 +4988,9 @@
           "downloads_stats": {
             "type": "boolean"
           },
+          "egress_by_source": {
+            "type": "boolean"
+          },
           "egress_totals": {
             "type": "boolean"
           },
@@ -5037,6 +5040,7 @@
           "watch_providers",
           "downloads_stats",
           "egress_totals",
+          "egress_by_source",
           "revision",
           "state",
           "allowed"
@@ -5116,6 +5120,47 @@
           "username",
           "downloads",
           "total_bytes"
+        ],
+        "type": "object"
+      },
+      "AdminDashboardEgressSource": {
+        "additionalProperties": false,
+        "properties": {
+          "egress_bytes": {
+            "description": "Data this source served over the whole window, integrated from every sampled minute like the window's egress_bytes. Rank sources by this rather than by the per-point split, which shows only each bucket's peak minute.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "key": {
+            "description": "The key used in a point's egress_by_source: \"api\" or \"node:\u003cnode_id\u003e\".",
+            "type": "string"
+          },
+          "kind": {
+            "description": "api is every API server process together; node is one stream node.",
+            "enum": [
+              "api",
+              "node"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name. A node deleted since it was sampled is named \"Removed node \u003cid\u003e\".",
+            "type": "string"
+          },
+          "node_id": {
+            "description": "The stream node, for kind node.",
+            "examples": [
+              "1"
+            ],
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "name",
+          "egress_bytes"
         ],
         "type": "object"
       },
@@ -5313,6 +5358,13 @@
             "format": "int64",
             "type": "integer"
           },
+          "egress_sources": {
+            "description": "Every source with samples in the window, which covers every key a point's egress_by_source uses; the API source first, then nodes by name.",
+            "items": {
+              "$ref": "#/components/schemas/AdminDashboardEgressSource"
+            },
+            "type": "array"
+          },
           "from": {
             "description": "RFC 3339 instant in UTC with millisecond precision",
             "format": "date-time",
@@ -5355,6 +5407,7 @@
           "oldest_sample_at",
           "egress_bytes",
           "download_egress_bytes",
+          "egress_sources",
           "points"
         ],
         "type": "object"
@@ -5369,6 +5422,14 @@
           "download_egress_kbps": {
             "format": "int64",
             "type": "integer"
+          },
+          "egress_by_source": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "description": "egress_kbps split by egress_sources key, from the bucket's peak-egress minute. Egress no listed source accounts for, such as minutes sampled before per-source rows existed, is egress_kbps minus the sum of these values.",
+            "type": "object"
           },
           "egress_kbps": {
             "format": "int64",
@@ -5401,7 +5462,8 @@
           "remux",
           "transcode",
           "egress_kbps",
-          "download_egress_kbps"
+          "download_egress_kbps",
+          "egress_by_source"
         ],
         "type": "object"
       },
@@ -6418,6 +6480,15 @@
       "AdminDiscoverList": {
         "additionalProperties": false,
         "properties": {
+          "order": {
+            "description": "mdblist only: list keeps the list's rank order (the default, stored as absent), newest_added puts the latest additions to the list first, newest_released the newest release dates first. A tmdb_list row keeps the list's order",
+            "enum": [
+              "list",
+              "newest_added",
+              "newest_released"
+            ],
+            "type": "string"
+          },
           "url": {
             "description": "A themoviedb.org list page (or its number) for tmdb_list; an mdblist.com list page for mdblist. Stored canonical",
             "examples": [
@@ -9371,7 +9442,7 @@
             "type": "string"
           },
           "type": {
-            "description": "The slot the image fills. Seasons take poster only.",
+            "description": "The slot the image fills. Seasons take poster or backdrop.",
             "enum": [
               "poster",
               "backdrop",
@@ -16029,6 +16100,10 @@
             "description": "Whether the Requests Discover page's layout can be edited under /admin/request-discover",
             "type": "boolean"
           },
+          "discover_list_order": {
+            "description": "Whether an mdblist Discover row takes list.order. Send it only when true",
+            "type": "boolean"
+          },
           "guarded_configuration": {
             "type": "boolean"
           },
@@ -16056,6 +16131,7 @@
           "guarded_configuration",
           "routing",
           "discover_layout",
+          "discover_list_order",
           "revision",
           "state",
           "allowed"
@@ -33490,7 +33566,7 @@
             "type": "string"
           },
           "episode_parent_artwork": {
-            "description": "Episode cards may carry series_poster_url, series_backdrop_url and season_poster_url with their thumbhashes, sized by the poster and backdrop slots, on Home and library sections (including Continue Watching and Next Up), catalog browse and search, Watch Tonight, and episode detail (getCatalogItem). Seasons store no backdrop, so there is no season backdrop",
+            "description": "Episode cards may carry series_poster_url, series_backdrop_url and season_poster_url with their thumbhashes, sized by the poster and backdrop slots, on Home and library sections (including Continue Watching and Next Up), catalog browse and search, Watch Tonight, and episode detail (getCatalogItem). There is no season backdrop field; in Continue Watching and Next Up rows an episode card's backdrop_url is the season backdrop, else the series backdrop, else the episode still",
             "type": "boolean"
           },
           "episode_still_provenance": {
@@ -51633,12 +51709,34 @@
       "WatchMarker": {
         "additionalProperties": false,
         "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "confidence": {
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
           "end_seconds": {
             "examples": [
               90
             ],
             "format": "double",
             "type": "number"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "scanner",
+              "online",
+              "plugin",
+              "s3",
+              "manual"
+            ],
+            "type": "string"
           },
           "start_seconds": {
             "examples": [
@@ -70591,6 +70689,16 @@
             },
             "description": "Not Acceptable"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "412": {
             "content": {
               "application/problem+json": {
@@ -71605,6 +71713,16 @@
             },
             "description": "Not Acceptable"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -71781,6 +71899,16 @@
               }
             },
             "description": "Not Acceptable"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -71980,6 +72108,16 @@
               }
             },
             "description": "Request Timeout"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "412": {
             "content": {
@@ -72195,6 +72333,16 @@
             },
             "description": "Not Acceptable"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -72377,6 +72525,16 @@
               }
             },
             "description": "Request Timeout"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "413": {
             "content": {
@@ -79183,6 +79341,16 @@
             },
             "description": "Not Acceptable"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "412": {
             "content": {
               "application/problem+json": {
@@ -80191,6 +80359,16 @@
             },
             "description": "Request Timeout"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "413": {
             "content": {
               "application/problem+json": {
@@ -81028,6 +81206,16 @@
             },
             "description": "Request Timeout"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "413": {
             "content": {
               "application/problem+json": {
@@ -81815,6 +82003,16 @@
               }
             },
             "description": "Not Acceptable"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -87296,6 +87494,16 @@
               }
             },
             "description": "Not Acceptable"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -103450,6 +103658,16 @@
             },
             "description": "Not Acceptable"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -103621,6 +103839,16 @@
               }
             },
             "description": "Request Timeout"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "413": {
             "content": {
@@ -108562,6 +108790,16 @@
             },
             "description": "Not Acceptable"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -108705,6 +108943,16 @@
               }
             },
             "description": "Not Acceptable"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -108850,6 +109098,16 @@
             },
             "description": "Not Acceptable"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -108993,6 +109251,16 @@
               }
             },
             "description": "Not Acceptable"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -126300,6 +126568,16 @@
             },
             "description": "Not Acceptable"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -126771,6 +127049,16 @@
               }
             },
             "description": "Not Acceptable"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -127835,6 +128123,16 @@
             },
             "description": "Request Timeout"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "413": {
             "content": {
               "application/problem+json": {
@@ -127884,6 +128182,16 @@
               }
             },
             "description": "Internal Server Error"
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Implemented"
           },
           "503": {
             "content": {
@@ -130499,6 +130807,16 @@
               }
             },
             "description": "Not Acceptable"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -133580,6 +133898,16 @@
             },
             "description": "Unauthorized"
           },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "406": {
             "content": {
               "application/problem+json": {
@@ -135335,6 +135663,16 @@
             },
             "description": "Unprocessable Entity"
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "500": {
             "content": {
               "application/problem+json": {
@@ -135761,6 +136099,16 @@
             },
             "description": "Unprocessable Entity"
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "500": {
             "content": {
               "application/problem+json": {
@@ -135874,6 +136222,16 @@
               }
             },
             "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "500": {
             "content": {
@@ -138236,6 +138594,16 @@
             },
             "description": "Unprocessable Entity"
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "500": {
             "content": {
               "application/problem+json": {
@@ -138440,6 +138808,16 @@
               }
             },
             "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "500": {
             "content": {
@@ -138715,6 +139093,16 @@
               }
             },
             "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "500": {
             "content": {
@@ -141330,6 +141718,16 @@
             },
             "description": "Internal Server Error"
           },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Implemented"
+          },
           "503": {
             "content": {
               "application/problem+json": {
@@ -141665,6 +142063,16 @@
               }
             },
             "description": "Internal Server Error"
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Implemented"
           },
           "503": {
             "content": {
@@ -144757,6 +145165,16 @@
             },
             "description": "Internal Server Error"
           },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Implemented"
+          },
           "503": {
             "content": {
               "application/problem+json": {
@@ -145554,6 +145972,16 @@
             },
             "description": "Internal Server Error"
           },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Implemented"
+          },
           "503": {
             "content": {
               "application/problem+json": {
@@ -145754,6 +146182,16 @@
               }
             },
             "description": "Internal Server Error"
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Implemented"
           },
           "503": {
             "content": {
@@ -204679,11 +205117,11 @@
             }
           },
           {
-            "description": "The client family whose profile_client values take part; required when a requested key has that scope",
+            "description": "The client family whose profile_client values take part; optional, and absence skips the profile_client layer",
             "in": "header",
             "name": "X-Silo-Client-Family",
             "schema": {
-              "description": "The client family whose profile_client values take part; required when a requested key has that scope",
+              "description": "The client family whose profile_client values take part; optional, and absence skips the profile_client layer",
               "enum": [
                 "tv",
                 "mobile",
@@ -204878,11 +205316,11 @@
             }
           },
           {
-            "description": "The client family whose profile_client values take part; required when a requested key has that scope",
+            "description": "The client family whose profile_client values take part; optional, and absence skips the profile_client layer",
             "in": "header",
             "name": "X-Silo-Client-Family",
             "schema": {
-              "description": "The client family whose profile_client values take part; required when a requested key has that scope",
+              "description": "The client family whose profile_client values take part; optional, and absence skips the profile_client layer",
               "enum": [
                 "tv",
                 "mobile",

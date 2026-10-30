@@ -1061,6 +1061,15 @@ export interface SubtitleTrackSignature {
 export interface TimeRange {
   start: number;
   end: number;
+  /**
+   * Where the marked range came from, carried through the v1-shaped view model
+   * the player reads. Absent for a server that does not report provenance, and
+   * absent rather than 0 for a marker nobody rated.
+   */
+  source?: string | null;
+  provider?: string | null;
+  confidence?: number | null;
+  algorithm?: string | null;
 }
 
 /** The four editable marker kinds. "credits" is exposed as Jellyfin's "Outro". */
@@ -5043,6 +5052,23 @@ export interface AdminTimeseriesPoint {
   // and 0 on samples written before the split — "not measured", not "no
   // downloads".
   download_egress_kbps?: number;
+  // `egress_kbps` split by `AdminTimeseries.egress_sources` key, read from the
+  // bucket's peak-egress minute. The parts add up to no more than
+  // `egress_kbps`; the remainder is egress no source accounts for. v2 only
+  // (the `egress_by_source` dashboard capability).
+  egress_by_source?: Record<string, number>;
+}
+
+// One key of `AdminTimeseriesPoint.egress_by_source`: every API process
+// together ("api") or one stream node ("node:<node_id>").
+export interface AdminTimeseriesEgressSource {
+  key: string;
+  kind: "api" | "node";
+  node_id?: string;
+  name: string;
+  // Served over the whole window, integrated from every sampled minute. Rank
+  // sources by this: the per-point split shows only each bucket's peak minute.
+  egress_bytes: number;
 }
 
 // `oldest_sample_at` is null until the sampler has written anything, which is
@@ -5061,6 +5087,8 @@ export interface AdminTimeseries {
   // because older servers do not send it.
   egress_bytes?: number;
   download_egress_bytes?: number;
+  // The API source first, then nodes by name. v2 only.
+  egress_sources?: AdminTimeseriesEgressSource[];
   points: AdminTimeseriesPoint[];
 }
 
