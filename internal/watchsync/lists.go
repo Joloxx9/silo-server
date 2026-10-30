@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -537,14 +538,35 @@ func (p remoteListPresence) listed(kind, key string) bool {
 	return kinds[kind] || kinds[""] || (kind == "" && len(kinds) > 0)
 }
 
+// listedTMDB reports whether the read listed a title of this kind under any
+// of the TMDB IDs.
+func (p remoteListPresence) listedTMDB(kind string, tmdbIDs []int) bool {
+	for _, id := range tmdbIDs {
+		if p.listed(kind, prefixedID("tmdb", strconv.Itoa(id))) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) reconcileMissingRemoteListItems(ctx context.Context, conn Connection, store userstore.UserStore, b listBinding, seenRemote remoteListPresence, result *ImportListResult) error {
 	states, err := s.repo.ListListItemStates(ctx, conn.ID, b.kind)
 	if err != nil {
 		return err
 	}
-	now := s.now()
+	missing := make([]ListItemState, 0, len(states))
 	for _, state := range states {
-		if !state.RemotePresent || state.ProviderItemKey == "" || seenRemote.listed(state.Kind, state.ProviderItemKey) {
+		if state.RemotePresent && state.ProviderItemKey != "" && !seenRemote.listed(state.Kind, state.ProviderItemKey) {
+			missing = append(missing, state)
+		}
+	}
+	heldIDs, err := s.heldTitleTMDBIDs(ctx, conn, b, missing)
+	if err != nil {
+		return err
+	}
+	now := s.now()
+	for _, state := range missing {
+		if title, ok := watchlistTitleFromListItemID(state.MediaItemID); ok && seenRemote.listedTMDB(state.Kind, heldIDs[title]) {
 			continue
 		}
 		if b.removalsEnabled(conn) && state.LocalPresent {
