@@ -36,6 +36,7 @@ type titlesStub struct {
 	library  map[int]bool
 	entries  map[int]time.Time
 	promoted map[int]bool
+	former   map[int][]int
 	queued   []WatchlistTitle
 }
 
@@ -77,6 +78,16 @@ func (s *titlesStub) WatchlistTitlesListed(_ context.Context, _ int, _ string, t
 	return out, nil
 }
 
+func (s *titlesStub) WatchlistTitleTMDBIDs(_ context.Context, _ int, _ string, titles []WatchlistTitle) (map[WatchlistTitle][]int, error) {
+	out := map[WatchlistTitle][]int{}
+	for _, title := range titles {
+		if _, ok := s.entries[title.TMDBID]; ok {
+			out[title] = append([]int{title.TMDBID}, s.former[title.TMDBID]...)
+		}
+	}
+	return out, nil
+}
+
 func (s *titlesStub) WatchlistTitlePromoted(_ context.Context, _ int, _ string, title WatchlistTitle) (bool, error) {
 	return s.promoted[title.TMDBID], nil
 }
@@ -89,6 +100,7 @@ type watchlistTitleImportCase struct {
 	name        string
 	library     map[int]bool
 	promoted    map[int]bool
+	former      map[int][]int
 	entries     map[int]time.Time
 	states      []ListItemState
 	rows        []RemoteFavorite
@@ -144,6 +156,16 @@ func watchlistTitleImportCases() []watchlistTitleImportCase {
 			wantResult: ImportListResult{Removed: 1},
 		},
 		{
+			name:       "title the provider lists under a former TMDB ID",
+			former:     map[int][]int{550: {100}},
+			entries:    map[int]time.Time{550: listedAt},
+			states:     []ListItemState{{MediaItemID: titleRow, Kind: "movie", ProviderItemKey: "tmdb:550", RemotePresent: true, LocalPresent: true}},
+			rows:       []RemoteFavorite{{Kind: "movie", Title: "Fight Club", TMDBID: "100", FavoritedAt: listedAt}},
+			wantEntry:  true,
+			wantResult: ImportListResult{Found: 1, Imported: 1, added: 1},
+			wantLocal:  true, wantRemote: true, wantQueued: 2,
+		},
+		{
 			name:       "title removed locally waits for the provider removal",
 			states:     []ListItemState{{MediaItemID: titleRow, Kind: "movie", ProviderItemKey: fightClub.ProviderItemKey, RemotePresent: true, LocalPresent: true}},
 			rows:       []RemoteFavorite{fightClub},
@@ -179,7 +201,7 @@ func TestServiceWatchlistImportKeepsTitlesOutsideLibrary(t *testing.T) {
 				state.ConnectionID, state.ListKind = conn.ID, ListKindWatchlist
 				repo.listItemStates = append(repo.listItemStates, state)
 			}
-			titles := &titlesStub{library: tt.library, promoted: tt.promoted, entries: map[int]time.Time{}}
+			titles := &titlesStub{library: tt.library, promoted: tt.promoted, former: tt.former, entries: map[int]time.Time{}}
 			for id, at := range tt.entries {
 				titles.entries[id] = at
 			}

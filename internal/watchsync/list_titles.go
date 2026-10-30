@@ -56,6 +56,9 @@ type WatchlistTitles interface {
 	// WatchlistTitlesListed reports which of the titles the profile has an
 	// entry for, by any TMDB ID the entry's title has held.
 	WatchlistTitlesListed(ctx context.Context, userID int, profileID string, titles []WatchlistTitle) (map[WatchlistTitle]bool, error)
+	// WatchlistTitleTMDBIDs returns every TMDB ID the profile's entries for
+	// the titles have held. A title without an entry has none.
+	WatchlistTitleTMDBIDs(ctx context.Context, userID int, profileID string, titles []WatchlistTitle) (map[WatchlistTitle][]int, error)
 	// WatchlistTitlePromoted reports whether a library item with the title's
 	// IDs is on the profile's library watchlist, where promotion moves an
 	// entry once the library has its title.
@@ -196,6 +199,26 @@ func (s *Service) removeLocalListItem(ctx context.Context, store userstore.UserS
 		return titles.RemoveWatchlistTitle(ctx, conn.UserID, conn.ProfileID, title)
 	}
 	return b.localRemove(ctx, store, conn.ProfileID, mediaItemID)
+}
+
+// heldTitleTMDBIDs returns every TMDB ID the titles behind the shadow rows
+// have held. TMDB can repoint a title while the provider keeps listing it
+// under the other ID, and a row's key names only one of them.
+func (s *Service) heldTitleTMDBIDs(ctx context.Context, conn Connection, b listBinding, states []ListItemState) (map[WatchlistTitle][]int, error) {
+	titles := s.watchlistTitles(b)
+	if titles == nil {
+		return nil, nil
+	}
+	keys := make([]WatchlistTitle, 0, len(states))
+	for _, state := range states {
+		if title, ok := watchlistTitleFromListItemID(state.MediaItemID); ok {
+			keys = append(keys, title)
+		}
+	}
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	return titles.WatchlistTitleTMDBIDs(ctx, conn.UserID, conn.ProfileID, keys)
 }
 
 // reconcileLocalListTitles records which imported watchlist entries outside

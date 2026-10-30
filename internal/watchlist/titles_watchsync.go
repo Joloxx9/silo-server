@@ -192,6 +192,27 @@ func (t syncTitles) WatchlistTitlesListed(ctx context.Context, userID int, profi
 	return out, nil
 }
 
+// WatchlistTitleTMDBIDs reads the profile's entries once and returns each
+// title's current and former TMDB IDs, reached through any of them.
+func (t syncTitles) WatchlistTitleTMDBIDs(ctx context.Context, userID int, profileID string, titles []watchsync.WatchlistTitle) (map[watchsync.WatchlistTitle][]int, error) {
+	entries, err := t.listEntries(ctx, userID, profileID)
+	if err != nil {
+		return nil, err
+	}
+	byKey := make(map[TitleKey][]int, len(entries))
+	for _, e := range entries {
+		held := append([]int{e.Title.TMDBID}, e.Title.FormerTMDBIDs...)
+		for _, id := range held {
+			byKey[TitleKey{MediaType: e.Title.MediaType, TMDBID: id}] = held
+		}
+	}
+	out := make(map[watchsync.WatchlistTitle][]int, len(titles))
+	for _, title := range titles {
+		out[title] = byKey[TitleKey{MediaType: title.Kind, TMDBID: title.TMDBID}]
+	}
+	return out, nil
+}
+
 // WatchlistTitlePromoted checks the profile's library watchlist for the
 // library items carrying the title's IDs. The library having the title is not
 // enough: the profile may have removed the entry before promotion ran.
