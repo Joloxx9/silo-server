@@ -170,12 +170,15 @@ type LibraryStatus struct {
 }
 
 // LibraryStatuses reports every library that generates previews, with its
-// files' counts by state and the bytes its sheets take.
+// files' counts by state and the bytes its sheets take. A missing file is
+// gone from the library, so it leaves the counts while its row waits out the
+// removal grace.
 func (a *Admin) LibraryStatuses(ctx context.Context) ([]LibraryStatus, error) {
 	rows, err := a.pool.Query(ctx, `
 		WITH files AS (
 			SELECT f.id AS library_id, f.name, t.sheet_bytes,
-			       CASE WHEN mf.missing_since IS NULL AND mf.probe_updated_at IS NOT NULL AND mf.duration > 0
+			       CASE WHEN mf.missing_since IS NOT NULL THEN NULL
+			            WHEN mf.probe_updated_at IS NOT NULL AND mf.duration > 0
 			              AND jsonb_typeof(mf.video_tracks) = 'array' AND jsonb_array_length(mf.video_tracks) > 0
 			            THEN COALESCE(t.state, 'pending')
 			            WHEN t.media_file_id IS NOT NULL THEN 'unusable' END AS state
