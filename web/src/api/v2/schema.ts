@@ -130564,7 +130564,7 @@ export interface operations {
       };
     };
   };
-  deleteRequest: {
+  getRequest: {
     parameters: {
       query?: never;
       header: {
@@ -130574,19 +130574,21 @@ export interface operations {
         "X-Profile-Token"?: string;
       };
       path: {
-        /** @description Opaque identifier */
+        /** @description The request */
         id: string;
       };
       cookie?: never;
     };
     requestBody?: never;
     responses: {
-      /** @description No Content */
-      204: {
+      /** @description OK */
+      200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["MediaRequest"];
+        };
       };
       /** @description Bad Request */
       400: {
@@ -130680,7 +130682,7 @@ export interface operations {
       };
     };
   };
-  getRequest: {
+  deleteRequest: {
     parameters: {
       query?: never;
       header: {
@@ -130690,21 +130692,19 @@ export interface operations {
         "X-Profile-Token"?: string;
       };
       path: {
-        /** @description The request */
+        /** @description Opaque identifier */
         id: string;
       };
       cookie?: never;
     };
     requestBody?: never;
     responses: {
-      /** @description OK */
-      200: {
+      /** @description No Content */
+      204: {
         headers: {
           [name: string]: unknown;
         };
-        content: {
-          "application/json": components["schemas"]["MediaRequest"];
-        };
+        content?: never;
       };
       /** @description Bad Request */
       400: {
