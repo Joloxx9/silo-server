@@ -51,7 +51,9 @@ type Change struct {
 	// upgrade or manual delete), or on a subtree change a series or movie
 	// folder it deleted, as opposed to one it only noticed was gone. When
 	// the path is confirmed absent on disk, its rows skip the scanner's
-	// file-removal grace period.
+	// file-removal grace period, and webhook ingestion waits for a removed
+	// folder to disappear before scanning it. Only the host's own webhook
+	// parser sets it.
 	Removed bool `json:"removed,omitempty"`
 }
 

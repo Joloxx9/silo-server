@@ -87,8 +87,8 @@ var folderDeleteEventTypes = map[string]bool{
 }
 
 // decodeDeletedFiles reads deletedFiles once the event type is known: the bool
-// folder-delete events send reports whether arr deleted the folder, and
-// anything else that is not a list of files is malformed.
+// folder-delete events send says whether arr deleted the folder, and anything
+// else that is not a list of files is malformed.
 func decodeDeletedFiles(eventType string, raw json.RawMessage) (files []fileRef, folderDeleted bool, err error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
@@ -180,13 +180,15 @@ func Parse(provider string, body []byte) (ParsedWebhook, error) {
 		out.Changes = filePaths(p, true, false)
 	case deleteEventTypes[eventType]:
 		out.Changes = filePaths(p, false, arrDeletedFile(p.DeleteReason))
-	case folderDeleteEventTypes[eventType]:
-		// Removing a series or movie without deleting its files leaves the
-		// media on disk, so there is nothing to rescan.
-		if !p.FolderDeleted {
+	case folderDeleteEventTypes[eventType] && folderDeleted:
+		// The folder is still on disk when arr sends this: arr deletes it
+		// after the notification returns. Removed tells autoscan to wait for
+		// it to disappear before scanning.
+		out.Changes = folderPath(p, true)
+		if len(out.Changes) == 0 {
+			// No folder named: nothing to do, like any unsupported event.
 			return out, nil
 		}
-		out.Changes = folderPath(p, true)
 	default:
 		// Unsupported event type: valid delivery, nothing to do.
 		return out, nil
@@ -261,8 +263,8 @@ func filePaths(p payload, includePrevious, removed bool) []autoscan.Change {
 	return changes
 }
 
-// subtreeFallback maps an import event with no file details to the series or
-// movie folder as one subtree-scope change.
+// subtreeFallback maps an import event with no file details, or a deleted
+// series or movie, to its folder as one subtree-scope change.
 func subtreeFallback(p payload) []autoscan.Change {
 	return folderPath(p, false)
 }

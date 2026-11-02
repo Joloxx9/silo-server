@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"reflect"
 	"testing"
 
 	"github.com/Silo-Server/silo-server/internal/autoscan"
@@ -235,31 +236,44 @@ func TestParseUnknownEventIsNoOpNotError(t *testing.T) {
 	}
 }
 
-// SeriesDelete and MovieDelete send deletedFiles as a bool, not the file list
-// an upgrade's download carries. When arr deleted the folder, it is one
-// removed subtree change; when it only stopped managing it, the media is still
-// on disk and the delivery is a no-op.
+// A series or movie deleted with its files becomes one subtree change for its
+// folder, marked Removed; one deleted with its files kept changes nothing.
 func TestParseSeriesAndMovieDelete(t *testing.T) {
+	removed := func(path string) []autoscan.Change {
+		return []autoscan.Change{{SourcePath: path, Scope: autoscan.ChangeScopeSubtree, Removed: true}}
+	}
 	for _, tc := range []struct {
-		fixture, eventType, provider string
-		want                         []autoscan.Change
+		name, eventType, provider string
+		body                      []byte
+		want                      []autoscan.Change
 	}{
-		{"sonarr_series_delete.json", "SeriesDelete", ProviderSonarr,
-			[]autoscan.Change{{SourcePath: "/data/tv/Example Show", Scope: autoscan.ChangeScopeSubtree, Removed: true}}},
-		{"radarr_movie_delete.json", "MovieDelete", ProviderRadarr, nil},
-		{"radarr_movie_delete_files.json", "MovieDelete", ProviderRadarr,
-			[]autoscan.Change{{SourcePath: "/data/movies/Example Movie (2024)", Scope: autoscan.ChangeScopeSubtree, Removed: true}}},
+		{"series, files deleted", "SeriesDelete", ProviderSonarr, fixture(t, "sonarr_series_delete.json"), removed("/data/tv/Example Show")},
+		{"movie, files kept", "MovieDelete", ProviderRadarr, fixture(t, "radarr_movie_delete.json"), nil},
+		{"movie, files deleted, fixture", "MovieDelete", ProviderRadarr, fixture(t, "radarr_movie_delete_files.json"), removed("/data/movies/Example Movie (2024)")},
+		{"series, files kept", "SeriesDelete", ProviderSonarr,
+			[]byte(`{"eventType":"SeriesDelete","series":{"path":"/data/tv/Show"},"deletedFiles":false}`), nil},
+		{"movie, files deleted", "MovieDelete", ProviderRadarr,
+			[]byte(`{"eventType":"MovieDelete","movie":{"folderPath":"/data/movies/Film (2024)","path":"/data/movies/Film (2024)"},"deletedFiles":true}`),
+			removed("/data/movies/Film (2024)")},
+		{"movie without folderPath", "MovieDelete", ProviderRadarr,
+			[]byte(`{"eventType":"MovieDelete","movie":{"path":"/data/movies/Film (2024)"},"deletedFiles":true}`),
+			removed("/data/movies/Film (2024)")},
+		{"deletedFiles absent", "MovieDelete", ProviderRadarr,
+			[]byte(`{"eventType":"MovieDelete","movie":{"folderPath":"/data/movies/Film (2024)"}}`), nil},
+		{"no folder named", "MovieDelete", "", []byte(`{"eventType":"MovieDelete","deletedFiles":true}`), nil},
 	} {
-		parsed, err := Parse(ProviderAuto, fixture(t, tc.fixture))
-		if err != nil {
-			t.Fatalf("%s: Parse: %v", tc.fixture, err)
-		}
-		if parsed.EventType != tc.eventType || parsed.Provider != tc.provider || parsed.Test {
-			t.Fatalf("%s: want %s from %s, got %+v", tc.fixture, tc.eventType, tc.provider, parsed)
-		}
-		if !slices.Equal(parsed.Changes, tc.want) {
-			t.Fatalf("%s: changes = %+v, want %+v", tc.fixture, parsed.Changes, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := Parse(ProviderAuto, tc.body)
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			if parsed.EventType != tc.eventType || parsed.Provider != tc.provider || parsed.Test {
+				t.Fatalf("want %s from %s, got %+v", tc.eventType, tc.provider, parsed)
+			}
+			if !reflect.DeepEqual(parsed.Changes, tc.want) {
+				t.Fatalf("changes = %+v, want %+v", parsed.Changes, tc.want)
+			}
+		})
 	}
 }
 

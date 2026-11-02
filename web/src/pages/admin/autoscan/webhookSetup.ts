@@ -55,7 +55,7 @@ const SONARR_TRIGGERS: WebhookTrigger[] = [
   },
   {
     label: "On Series Delete",
-    reason: "Lets Silo drop a show you deleted together with its files.",
+    reason: "Lets Silo drop a series you deleted along with its files.",
     required: false,
   },
 ];
@@ -69,7 +69,7 @@ const RADARR_TRIGGERS: WebhookTrigger[] = [
   },
   {
     label: "On Movie Delete",
-    reason: "Lets Silo drop a movie you deleted together with its files.",
+    reason: "Lets Silo drop a movie you deleted along with its files.",
     required: false,
   },
 ];
@@ -90,8 +90,7 @@ export function triggersFor(provider: AutoscanWebhookProvider | "auto"): Webhook
     },
     {
       label: "On Series Delete / On Movie Delete",
-      reason:
-        "Whichever your service offers — lets Silo drop a show or movie you deleted with its files.",
+      reason: "Whichever your service offers — lets Silo drop titles you deleted with their files.",
       required: false,
     },
   ];

@@ -5,23 +5,33 @@ for episodes) exists while its item or episode has a present file in that
 library. Catalog reads hide anything without one, so removing a membership is
 how a title with no playable file leaves the library. That includes listings
 that name no library, for an administrator too: catalog browse, search, Home
-rows, and the unmatched-items list. Only a read by ID still opens such an
-item for a viewer whose library access is unrestricted. The scanner marks a
-vanished file `missing_since`; membership reconciliation then removes the
-memberships left without a present file, in the same pass.
+rows, the unmatched-items list, upcoming episodes, people, and collection
+members. Counts follow the same rule: collection item counts, a person's
+credit counts, and the admin dashboard totals count titles in a library, and
+the dashboard's file and storage totals count present files only. Only a read
+by ID still opens such an item (or a person credited only on it) for a viewer
+whose library access is unrestricted. The scanner marks a vanished file
+`missing_since`; membership reconciliation then removes the memberships left
+without a present file, in the same pass.
 
 The scanner's file removal grace (`scanner.file_removal_grace`, 24 hours by
 default) is how long a removal stays reversible. A replacement file, or the
 same file returning, within the grace restores the title as it was:
 
-- **Item hold.** Reconciliation does not delete an orphaned movie or series
-  while any of its files was marked missing within the grace
+- **Item hold.** Reconciliation does not delete an orphaned movie, series, or
+  audiobook while any of its files was marked missing within the grace
   (`LibraryItemRepository.WithRemovalGrace`). The item is hidden, but its
-  collections, manual metadata, artwork, and root claim survive, so a
+  collections, manual metadata, artwork, progress, and root claim survive, so a
   replacement file relinks to it without a new match. A reconciliation after
-  the grace deletes it. A zero grace deletes at once. Book items are deleted
-  at once regardless: chapter and series listings read child tables (such as
-  `manga_chapters`) that only an item delete clears.
+  the grace deletes it. A zero grace deletes at once. Ebook and manga items are
+  deleted at once regardless: chapter and series listings read child tables
+  (such as `manga_chapters`) that only an item delete clears. Audiobook
+  listings (Audiobookshelf lists and the progress they hydrate, a book's
+  related rows, work pages) also require a library membership, so a held
+  audiobook stays out of its author and series lists. A monitored rename of a book folder can scan the old
+  path first; the hold keeps the book until the new path's scan matches it by
+  its author, narrator, year, duration, and title tags. An untagged book gets a
+  new item.
 - **Added date.** Deleting a membership holds its `first_seen_at` (and an
   episode's `first_seen_scan_run_id`) on the title's missing file rows in that
   library (`media_files.held_*`). Inserting the membership again, or moving
@@ -77,9 +87,14 @@ Deleting a whole series or movie in arr with its files sends `SeriesDelete` or
 `MovieDelete` with `deletedFiles: true`, which the parser turns into one
 `Removed` subtree change for the folder. Autoscan confirms every cataloged file
 beneath it with `FileRepository.ConfirmFilesRemovedUnder` once the folder's
-parent directory exists. Arr sends these events while it is still removing the
-folder, so the folder may still be on disk; the confirmations are dated a few
-minutes ahead, and scans that still find the files in that window keep them.
+parent directory exists. Arr sends these events while it is still removing the folder, so the delivery
+waits in the webhook queue, rechecked every 10 to 25 seconds for two minutes
+and about once a minute after that, until the folder is gone (`ENOENT`) while
+its parent is still a directory. Each check is a bounded stat, so a stalled
+mount keeps the delivery waiting. A folder not confirmed gone an hour after
+the delivery arrived is confirmed and scanned as it stands; the confirmations
+are dated a few minutes ahead, and scans that still find the files in that
+window keep them.
 A scan whose
 walk then fails on that folder would normally protect it as a possible lost
 mount; when every cataloged file beneath it is confirmed, the scan reconciles
