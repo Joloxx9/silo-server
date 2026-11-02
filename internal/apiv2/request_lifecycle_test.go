@@ -28,6 +28,11 @@ func (f *fakeLifecycle) Cancel(_ context.Context, v mediarequests.Viewer, id, re
 	f.reason = reason
 	return fixtureMediaRequest(id, 949), f.err
 }
+func (f *fakeLifecycle) RemoveFailed(_ context.Context, v mediarequests.Viewer, id string) error {
+	f.viewer = v
+	f.id = id
+	return f.err
+}
 func (f *fakeLifecycle) GetFeatureStatus(_ context.Context, v mediarequests.Viewer) (mediarequests.FeatureStatus, error) {
 	f.viewer = v
 	return mediarequests.FeatureStatus{RequestsEnabled: !f.requestsDisabled, RatingRestrictionsEnforced: true}, f.err
@@ -193,6 +198,7 @@ func requestLifecycleFixtureCases() []fixtureCase {
 		{name: "watch_provider_delete_ok", operationID: "deleteWatchProviderConnection", method: http.MethodDelete, path: Prefix + "/watch-providers/trakt/connection", status: http.StatusNoContent},
 		{name: "request_status_ok", operationID: "getRequestStatus", method: http.MethodGet, path: Prefix + "/requests/status", schema: "FeatureStatus"},
 		{name: "cancel_request_ok", operationID: "cancelRequest", method: http.MethodPost, path: Prefix + "/requests/r-1/cancel", body: `{"reason":"No longer needed"}`, schema: "MediaRequest"},
+		{name: "delete_request_ok", operationID: "deleteRequest", method: http.MethodDelete, path: Prefix + "/requests/r-1", status: http.StatusNoContent},
 		{name: "watch_provider_connection_ok", operationID: opGetWatchProviderConnection, method: http.MethodGet, path: Prefix + "/watch-providers/trakt/connection", schema: "WatchProviderConnection"},
 		{name: "watch_provider_device_auth_ok", operationID: "startWatchProviderDeviceAuth", method: http.MethodPost, path: Prefix + "/watch-providers/trakt/auth/device-code", schema: "WatchProviderDeviceAuth"},
 		{name: "watch_provider_poll_ok", operationID: "pollWatchProviderDeviceAuth", method: http.MethodPost, path: Prefix + "/watch-providers/trakt/auth/poll", body: `{"auth_session_id":"00000000-0000-4000-8000-000000000001"}`, schema: "WatchProviderConnection"},
