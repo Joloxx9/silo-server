@@ -4,8 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/Silo-Server/silo-server/internal/autoscan"
