@@ -1,16 +1,65 @@
-import type { ReactNode } from "react";
-import type { BrowseItem } from "@/api/types";
-import ItemCard from "@/components/ItemCard";
+import { useState, type ReactNode } from "react";
+import DefaultArtwork from "@/components/DefaultArtwork";
+import ViewTransitionLink from "@/components/ViewTransitionLink";
 import MediaCarousel from "@/components/MediaCarousel";
-import { useOverlayPrefs } from "@/hooks/useOverlayPrefs";
+import { useCatalogItemDetail } from "@/hooks/queries/catalogRead";
 import { useUICustomization } from "@/hooks/useUICustomization";
 import { carouselCardWidthClasses } from "@/lib/uiCustomization";
+import CardPlayOverlay from "@/components/CardPlayOverlay";
 
 const MAX_MORE_LIKE_THIS_ITEMS = 12;
 
 interface RecommendationGridProps {
-  items: BrowseItem[];
+  items: Array<{ content_id: string }>;
   maxItems?: number;
+}
+
+function RecommendationItemCard({ itemId }: { itemId: string }) {
+  const { data: item } = useCatalogItemDetail(itemId);
+  // Keyed by URL so a re-signed poster is tried again.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  if (!item) {
+    return <div className="bg-surface aspect-[2/3] animate-pulse rounded-lg" />;
+  }
+  return (
+    <div className="group/card">
+      <div className="group/media relative">
+        <ViewTransitionLink
+          to={`/item/${encodeURIComponent(itemId)}`}
+          aria-label={item.title}
+          className="group block"
+        >
+          <div className="relative aspect-[2/3] overflow-hidden rounded-lg">
+            {item.poster_url && failedUrl !== item.poster_url ? (
+              <img
+                src={item.poster_url}
+                alt={item.title}
+                loading="lazy"
+                decoding="async"
+                onError={() => setFailedUrl(item.poster_url ?? null)}
+                className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              />
+            ) : (
+              <DefaultArtwork mediaType={item.type} />
+            )}
+          </div>
+        </ViewTransitionLink>
+        {item.play_content_id ? (
+          <CardPlayOverlay
+            contentId={item.play_content_id}
+            title={item.title}
+            type={item.type === "movie" ? "movie" : "episode"}
+          />
+        ) : null}
+      </div>
+      <ViewTransitionLink
+        to={`/item/${encodeURIComponent(itemId)}`}
+        className="mt-1.5 block truncate text-sm font-medium hover:underline"
+      >
+        {item.title}
+      </ViewTransitionLink>
+    </div>
+  );
 }
 
 interface MoreLikeThisRowProps<T> {
@@ -47,17 +96,12 @@ export function MoreLikeThisRow<T>({
 }
 
 export default function RecommendationGrid({ items, maxItems = 12 }: RecommendationGridProps) {
-  // The library's poster card, so a recommendation shows the watched and
-  // favorite state, badges and menu every other poster row does.
-  const { prefs: overlayPrefs, quickActionMode } = useOverlayPrefs();
   return (
     <MoreLikeThisRow
       items={items}
       maxItems={maxItems}
       itemKey={(item) => item.content_id}
-      renderItem={(item) => (
-        <ItemCard item={item} overlayPrefs={overlayPrefs} quickActionMode={quickActionMode} />
-      )}
+      renderItem={(item) => <RecommendationItemCard itemId={item.content_id} />}
     />
   );
 }
