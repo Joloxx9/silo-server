@@ -324,11 +324,12 @@ func queryAdminTopActivity(ctx context.Context, db adminTopActivityQuerier, days
 		SELECT r.user_id,
 		       COALESCE(u.username, '') AS username,
 		       r.profile_id,
-		       COALESCE(pn.profile_name, r.profile_id) AS profile_name,
+		       COALESCE(NULLIF(up.name, ''), pn.profile_name, r.profile_id) AS profile_name,
 		       r.plays,
 		       COALESCE(w.total_seconds, 0)::bigint AS total_seconds
 		FROM ranked r
 		LEFT JOIN users u ON u.id = r.user_id
+		LEFT JOIN user_profiles up ON up.user_id = r.user_id AND up.id = r.profile_id
 		LEFT JOIN watched w ON w.user_id = r.user_id AND w.profile_id = r.profile_id
 		LEFT JOIN LATERAL (
 			SELECT p.profile_name
