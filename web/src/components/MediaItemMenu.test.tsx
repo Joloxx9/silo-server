@@ -483,6 +483,7 @@ describe("MediaItemMenu trigger visibility", () => {
     const watchedShortcut = await screen.findByRole("button", { name: "Mark Unwatched" });
     expect(watchedShortcut).toHaveAttribute("aria-pressed", "true");
     expect(watchedShortcut.className).toContain("text-emerald-400");
+    expect(watchedShortcut.className).toContain("media-card-watched-pinned");
     expect(watchedShortcut.querySelector(".lucide-eye")).toBeTruthy();
     expect(screen.getByTestId("watched-burst")).toBeTruthy();
 
