@@ -418,9 +418,14 @@ func updateUser(ctx context.Context, db interface {
 		email = &normalized
 	}
 	var username *string
+	var previousUsername string
 	if input.Username != nil {
 		normalized := NormalizeUsername(*input.Username)
 		username = &normalized
+		err := db.QueryRow(ctx, `SELECT COALESCE(username, '') FROM users WHERE id = $1`, id).Scan(&previousUsername)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("reading current username: %w", err)
+		}
 	}
 	var permissions []string
 	if input.Permissions != nil {
@@ -532,6 +537,11 @@ func updateUser(ctx context.Context, db interface {
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
+	if username != nil {
+		if err := renamePrimaryProfileWithUsername(ctx, db, id, previousUsername, *username); err != nil {
+			return err
+		}
+	}
 	if roleChanging {
 		if err := endImpersonationsInvolving(ctx, db, id); err != nil {
 			return err
@@ -539,6 +549,35 @@ func updateUser(ctx context.Context, db interface {
 	}
 	if promoting {
 		return revokeCredentialsIssuedToNonAdmin(ctx, db, id)
+	}
+	return nil
+}
+
+// renamePrimaryProfileWithUsername carries a username change over to the
+// primary profile while that profile still carries the old username, which is
+// what account creation names it. A profile the household renamed on purpose
+// keeps its name, and so does one whose new name another profile of the
+// account already uses.
+func renamePrimaryProfileWithUsername(ctx context.Context, db interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, userID int, previous, next string) error {
+	if previous == "" || next == "" || previous == next {
+		return nil
+	}
+	_, err := db.Exec(ctx, `
+		UPDATE user_profiles p
+		SET name = $3, updated_at = NOW()
+		WHERE p.user_id = $1
+		  AND p.is_primary
+		  AND lower(btrim(p.name)) = lower(btrim($2))
+		  AND NOT EXISTS (
+			SELECT 1 FROM user_profiles o
+			WHERE o.user_id = p.user_id
+			  AND o.id <> p.id
+			  AND lower(btrim(o.name)) = lower(btrim($3))
+		  )`, userID, previous, next)
+	if err != nil {
+		return fmt.Errorf("renaming primary profile: %w", err)
 	}
 	return nil
 }
