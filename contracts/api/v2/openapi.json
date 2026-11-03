@@ -93652,7 +93652,7 @@
             }
           },
           {
-            "description": "Browser origin must match the configured public origin, the request origin, or a connected network access overlay origin.",
+            "description": "An http or https origin must match the configured public origin, the request origin, or a connected network access overlay origin. An absent, opaque (null), or non-web scheme origin, as packaged apps send, is accepted; the ticket still authorizes the socket.",
             "in": "header",
             "name": "Origin",
             "schema": {
@@ -167948,7 +167948,7 @@
             }
           },
           {
-            "description": "Browser origin must match the configured public origin, the request origin, or a connected network access overlay origin.",
+            "description": "An http or https origin must match the configured public origin, the request origin, or a connected network access overlay origin. An absent, opaque (null), or non-web scheme origin, as packaged apps send, is accepted; the ticket still authorizes the socket.",
             "in": "header",
             "name": "Origin",
             "schema": {
@@ -191109,7 +191109,7 @@
             }
           },
           {
-            "description": "Browser origin must match the configured public origin, the request origin, or a connected network access overlay origin.",
+            "description": "An http or https origin must match the configured public origin, the request origin, or a connected network access overlay origin. An absent, opaque (null), or non-web scheme origin, as packaged apps send, is accepted; the ticket still authorizes the socket.",
             "in": "header",
             "name": "Origin",
             "schema": {
@@ -223638,7 +223638,7 @@
             }
           },
           {
-            "description": "Browser origin must match the configured public origin, the request origin, or a connected network access overlay origin.",
+            "description": "An http or https origin must match the configured public origin, the request origin, or a connected network access overlay origin. An absent, opaque (null), or non-web scheme origin, as packaged apps send, is accepted; the ticket still authorizes the socket.",
             "in": "header",
             "name": "Origin",
             "schema": {
