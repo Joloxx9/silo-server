@@ -666,7 +666,7 @@ function WatchedQuickActionButton({
       label={label}
       className={cn(
         mediaItemMenuTriggerClassName(variant, density),
-        isWatched && "text-emerald-400 hover:text-emerald-300",
+        isWatched && "media-card-watched-pinned text-emerald-400 hover:text-emerald-300",
       )}
       burstClassName="bg-emerald-400/30"
       burstTestId="watched-burst"

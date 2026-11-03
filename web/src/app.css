@@ -1447,6 +1447,8 @@ html[data-navigation-direction]::view-transition-new(main-content) {
     opacity: 0;
     pointer-events: none;
   }
+  /* A watched title keeps its watched mark at rest, as the apps' check does. */
+  .media-card-action-trigger.media-card-watched-pinned,
   .media-card-action-trigger[data-state="open"],
   .media-card-action-trigger:focus-visible,
   .media-card-play-trigger:focus-visible {
