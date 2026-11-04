@@ -2208,7 +2208,9 @@ frozen v1 provider, connection, and run responses omit all of them, and a v1 set
 update ignores the toggles. See
 [watch-provider-rating-sync.md](watch-provider-rating-sync.md) for the sync rules. The
 dropped-show setting (`sync_dropped_enabled`) and `sync_dropped` capability are v2-only in
-the same way; see [dropped-shows.md](dropped-shows.md).
+the same way; see [dropped-shows.md](dropped-shows.md). The named-list setting
+(`sync_collections_enabled`) and `sync_collections` capability are v2-only too; see
+[watch-provider-plugins.md](watch-provider-plugins.md#named-list-sync).
 
 Provider connection settings are v2-only in the same way. A plugin declares them in its
 watch-sync descriptor, and `GET /watch-providers` lists them per provider as

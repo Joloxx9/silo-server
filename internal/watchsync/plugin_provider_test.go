@@ -1812,3 +1812,98 @@ func TestStopsEndedSessionsExemptsFirstPartyPlugins(t *testing.T) {
 		}
 	}
 }
+
+func collectionTestDescriptor() *pluginv1.WatchSyncProviderDescriptor {
+	return &pluginv1.WatchSyncProviderDescriptor{
+		AuthMethods:     []pluginv1.WatchSyncAuthMethod{pluginv1.WatchSyncAuthMethod_WATCH_SYNC_AUTH_METHOD_API_KEY},
+		SyncCollections: true,
+		SupportedMediaTypes: []pluginv1.WatchSyncMediaType{
+			pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_MOVIE,
+			pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_SERIES,
+		},
+		MaxBatchSize: 25,
+	}
+}
+
+func remoteCollectionState(listKey, itemKey, tmdbID string) *pluginv1.WatchSyncRemoteState {
+	return &pluginv1.WatchSyncRemoteState{
+		ProviderItemKey: itemKey,
+		Media: &pluginv1.WatchSyncMedia{
+			MediaType:   pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_MOVIE,
+			Title:       "Movie",
+			ExternalIds: map[string]string{"tmdb": tmdbID},
+		},
+		Collection: &pluginv1.WatchSyncRemoteCollectionItemState{CollectionKey: listKey},
+	}
+}
+
+// Collections arrive across pages: the lists are a union, an empty list is
+// still a list, and an item naming an unlisted list is dropped with a warning.
+func TestPluginProviderDecodesCollectionSnapshot(t *testing.T) {
+	client := &fakeWatchSyncPluginClient{listResponses: []*pluginv1.WatchSyncListRemoteStateResponse{
+		{
+			CompleteSnapshot: true,
+			NextPageToken:    "page-2",
+			Collections:      []*pluginv1.WatchSyncRemoteCollection{{CollectionKey: "b", Name: " Empty "}},
+			Items:            []*pluginv1.WatchSyncRemoteState{remoteCollectionState("ghost", "m0", "1")},
+		},
+		{
+			CompleteSnapshot: true,
+			Collections:      []*pluginv1.WatchSyncRemoteCollection{{CollectionKey: "a", Name: "Mine"}, {CollectionKey: "b", Name: "Empty"}},
+			Items: []*pluginv1.WatchSyncRemoteState{
+				remoteCollectionState("a", "m1", "603"),
+				remoteCollectionState("a", "m2", "550"),
+			},
+		},
+	}}
+	provider := testPluginProviderWithDescriptor(t, client, collectionTestDescriptor())
+	batch, err := provider.FetchCollections(context.Background(), ServerConfig{}, Connection{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(client.listRequests[0].GetStateKinds(), []pluginv1.WatchSyncRemoteStateKind{
+		pluginv1.WatchSyncRemoteStateKind_WATCH_SYNC_REMOTE_STATE_KIND_COLLECTION,
+	}) {
+		t.Fatalf("requests = %#v", client.listRequests)
+	}
+	if !slices.Equal(batch.Collections, []RemoteCollection{{Key: "a", Name: "Mine"}, {Key: "b", Name: "Empty"}}) {
+		t.Fatalf("collections = %#v", batch.Collections)
+	}
+	if len(batch.Rows["a"]) != 2 || batch.Rows["a"][0].TMDBID != "603" || len(batch.Rows["b"]) != 0 || len(batch.Warnings) != 1 {
+		t.Fatalf("batch = %#v", batch)
+	}
+
+	// An incremental traversal cannot say which lists or items are gone.
+	client = &fakeWatchSyncPluginClient{listResponse: &pluginv1.WatchSyncListRemoteStateResponse{}}
+	provider = testPluginProviderWithDescriptor(t, client, collectionTestDescriptor())
+	if _, err := provider.FetchCollections(context.Background(), ServerConfig{}, Connection{}); err == nil {
+		t.Fatal("incremental collection traversal was accepted")
+	}
+}
+
+func TestPluginProviderCollectionEventsCarryTheListKey(t *testing.T) {
+	client := &fakeWatchSyncPluginClient{applyStatus: pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_APPLIED}
+	provider := testPluginProviderWithDescriptor(t, client, collectionTestDescriptor())
+	movie := LocalFavorite{MediaItemID: testMovieMediaID, Kind: historyimport.KindMovie, TMDBID: "603", ProviderItemKey: "m1"}
+	for _, tc := range []struct {
+		send      func(context.Context, ServerConfig, Connection, string, []LocalFavorite) (ExportResult, error)
+		operation pluginv1.WatchSyncOperation
+	}{
+		{send: provider.ExportCollectionItems, operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_ADD_TO_COLLECTION},
+		{send: provider.RemoveCollectionItems, operation: pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_REMOVE_FROM_COLLECTION},
+	} {
+		result, err := tc.send(context.Background(), ServerConfig{}, Connection{}, "list-7", []LocalFavorite{movie})
+		if err != nil {
+			t.Fatal(err)
+		}
+		events := client.applyRequest.GetEvents()
+		if !slices.Equal(result.Sent, []string{testMovieMediaID}) || len(events) != 1 {
+			t.Fatalf("%s: result = %#v, events = %#v", tc.operation, result, events)
+		}
+		event := events[0]
+		if event.GetOperation() != tc.operation || event.GetCollectionKey() != "list-7" || event.GetProviderItemKey() != "m1" ||
+			event.GetEventId() != fmt.Sprintf("%s:list-7:%s", tc.operation, testMovieMediaID) {
+			t.Fatalf("event = %#v", event)
+		}
+	}
+}

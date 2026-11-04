@@ -83,6 +83,7 @@ func (h *WatchProviderHandler) HandleUpdateConnection(w http.ResponseWriter, r *
 	update.ImportRatingsEnabled = nil
 	update.ExportRatingsEnabled = nil
 	update.SyncDroppedEnabled = nil
+	update.SyncCollectionsEnabled = nil
 	update.ConnectionSettings = nil
 	status, err := h.service.UpdateConnection(r.Context(), userID, profileID, provider, update)
 	if err != nil {

@@ -8,12 +8,14 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Silo-Server/silo-server/internal/catalog"
 	"github.com/Silo-Server/silo-server/internal/collectionutil"
 	"github.com/Silo-Server/silo-server/internal/models"
 	"github.com/Silo-Server/silo-server/internal/usercollections"
 	"github.com/Silo-Server/silo-server/internal/userstore"
+	"github.com/Silo-Server/silo-server/internal/watchsync"
 )
 
 type PersonalCollectionUpdateCommand struct {
@@ -364,6 +366,7 @@ func (h *CollectionHandler) AddPersonalCollectionItem(ctx context.Context, userI
 		return apiError(http.StatusInternalServerError, "internal_error", "Failed to add item to collection")
 	}
 	h.refreshCollage(ctx, store, userID, collection)
+	h.dispatchCollectionEvent(ctx, watchsync.ListChangeAdded, userID, profileID, collectionID, itemID)
 
 	return nil
 }
@@ -413,6 +416,7 @@ func (h *CollectionHandler) RemovePersonalCollectionItem(ctx context.Context, us
 		return apiError(http.StatusInternalServerError, "internal_error", "Failed to remove item from collection")
 	}
 	h.refreshCollage(ctx, store, userID, collection)
+	h.dispatchCollectionEvent(ctx, watchsync.ListChangeRemoved, userID, profileID, collectionID, itemID)
 
 	return nil
 }
@@ -554,4 +558,44 @@ func normalizeEditableSourceURL(existing *userstore.Collection, raw string) (str
 		return normalized, nil
 	}
 	return "", fieldError("source_url", "source_url can only be edited for MDBList and TMDB list collections")
+}
+
+// dispatchCollectionEvent hands a collection item edit to watch provider list
+// sync. Best-effort: the next scheduled sync reconciles what this misses.
+func (h *CollectionHandler) dispatchCollectionEvent(ctx context.Context, change watchsync.ListChange, userID int, profileID, collectionID, itemID string) {
+	if h == nil || h.CollectionSync == nil {
+		return
+	}
+	reader, err := h.itemReader()
+	if err != nil {
+		return
+	}
+	// The edit already passed the profile's access check; this read only
+	// fills in the title's identity.
+	items, err := reader.GetByIDsWithAccess(ctx, []string{itemID}, AccessFilterFromContext(ctx, ""))
+	if err != nil {
+		return
+	}
+	for _, item := range items {
+		if item == nil || item.ContentID != itemID {
+			continue
+		}
+		_ = h.CollectionSync.HandleLocalCollectionEvent(ctx, watchsync.LocalCollectionEvent{
+			CollectionID: collectionID,
+			Change:       change,
+			UserID:       userID,
+			ProfileID:    profileID,
+			Items: []watchsync.LocalFavorite{{
+				MediaItemID: item.ContentID,
+				Kind:        item.Type,
+				Title:       item.Title,
+				Year:        item.Year,
+				IMDbID:      item.ImdbID,
+				TMDBID:      item.TmdbID,
+				TVDBID:      item.TvdbID,
+				FavoritedAt: time.Now().UTC(),
+			}},
+		})
+		return
+	}
 }
