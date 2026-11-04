@@ -231,6 +231,12 @@ because withdrawing it could leave the downstream service's state diverged from
 Silo's. Retry reopens a `failed` request to `approved` + `active` in one guarded
 write.
 
+`DELETE /api/v2/requests/{id}` removes a `failed` request for its owner or an
+admin, with its targets, events and follows, so a request that can't succeed
+does not stay in the owner's list. It tells no download server, and it answers
+409 once the request has been retried. An error stays until someone removes the
+request: failed requests are never cleaned up on their own.
+
 ## Submission is claimed
 
 Approval commits before anything is sent. The submission itself runs only for

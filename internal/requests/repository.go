@@ -670,6 +670,17 @@ func guardMiss(ctx context.Context, exec requestExecutor, id string) error {
 	return ErrInvalidState
 }
 
+func (r *Repository) DeleteFailedRequest(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM media_requests WHERE id = $1 AND outcome = $2`, id, OutcomeFailed)
+	if err != nil {
+		return fmt.Errorf("delete failed request: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return guardMiss(ctx, r.pool, id)
+	}
+	return nil
+}
+
 func (r *Repository) SetStatus(ctx context.Context, id string, from StateGuard, status Status, actor Viewer) (*Request, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

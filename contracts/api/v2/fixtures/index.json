@@ -5386,6 +5386,26 @@
       "body_file": "delete_rating_locked_profile.json"
     },
     {
+      "name": "delete_request_ok",
+      "operation_id": "deleteRequest",
+      "scenario": "Profile-scoped lifecycle response with synthetic provider state.",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/v2/requests/r-1",
+        "headers": {
+          "Authorization": "Bearer tok-member",
+          "X-Profile-Id": "p-owner"
+        }
+      },
+      "expected_status": 204,
+      "response_headers": {
+        "Cache-Control": "no-store"
+      },
+      "response_media_type": null,
+      "schema": null,
+      "body_file": null
+    },
+    {
       "name": "delete_root_override_validation_failed",
       "operation_id": "deleteRootOverride",
       "scenario": "The root is named in the query, not a body; without it the delete is a validation failure. Success answers 204 with no body.",

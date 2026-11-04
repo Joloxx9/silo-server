@@ -1048,6 +1048,33 @@ func TestCancelPendingRequestAuthority(t *testing.T) {
 	}
 }
 
+func TestRemoveFailedAuthorityAndState(t *testing.T) {
+	owner := Viewer{UserID: 7, ProfileID: "profile-1"}
+	for _, tc := range []struct {
+		name    string
+		viewer  Viewer
+		outcome Outcome
+		wantErr error
+	}{
+		{"owner", owner, OutcomeFailed, nil},
+		{"admin", Viewer{UserID: 99, IsAdmin: true}, OutcomeFailed, nil},
+		{"non-owner", Viewer{UserID: 8, ProfileID: "profile-2"}, OutcomeFailed, ErrForbidden},
+		{"not failed", owner, OutcomeActive, ErrInvalidState},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newFakeStore()
+			store.requests["req-x"] = &Request{ID: "req-x", Status: StatusQueued, Outcome: tc.outcome, RequestedByUserID: 7}
+			err := newTestService(store).RemoveFailed(context.Background(), tc.viewer, "req-x")
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+			if _, kept := store.requests["req-x"]; kept != (tc.wantErr != nil) {
+				t.Fatalf("request kept = %v, want %v", kept, tc.wantErr != nil)
+			}
+		})
+	}
+}
+
 func TestCancelRejectsRequestsAlreadyInFulfillment(t *testing.T) {
 	inFlight := time.Now().Add(time.Minute)
 	cases := []struct {
@@ -1666,6 +1693,20 @@ func (f *fakeStore) SetStatus(_ context.Context, id string, from StateGuard, sta
 	}
 	copy := *req
 	return &copy, nil
+}
+
+func (f *fakeStore) DeleteFailedRequest(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(id)
+	if req == nil {
+		return ErrNotFound
+	}
+	if req.Outcome != OutcomeFailed {
+		return ErrInvalidState
+	}
+	delete(f.requests, id)
+	return nil
 }
 
 func (f *fakeStore) SetOutcome(_ context.Context, id string, from StateGuard, outcome Outcome, _ Viewer, message string) (*Request, error) {

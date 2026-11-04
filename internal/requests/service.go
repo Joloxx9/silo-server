@@ -1176,6 +1176,27 @@ func (s *Service) cancel(ctx context.Context, viewer Viewer, id, reason string, 
 	return withdrawn, nil
 }
 
+// RemoveFailed deletes a failed request from its owner's list. Nothing is sent
+// to the download server, and a request that has been retried is refused.
+func (s *Service) RemoveFailed(ctx context.Context, viewer Viewer, id string) error {
+	if viewer.UserID == 0 {
+		return ErrForbidden
+	}
+	if !viewer.IsAdmin {
+		if err := s.ensureRequestsEnabled(ctx); err != nil {
+			return err
+		}
+	}
+	req, err := s.store.GetRequest(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return err
+	}
+	if !viewer.IsAdmin && req.RequestedByUserID != viewer.UserID {
+		return ErrForbidden
+	}
+	return s.store.DeleteFailedRequest(ctx, req.ID)
+}
+
 func (s *Service) Retry(ctx context.Context, viewer Viewer, id string) (*Request, error) {
 	if !viewer.IsAdmin {
 		return nil, ErrForbidden

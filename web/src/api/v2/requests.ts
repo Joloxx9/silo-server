@@ -59,6 +59,11 @@ export function cancelMediaRequestV2(id: string, reason?: string): Promise<Media
   );
 }
 
+// The server removes only a failed request, for its owner or an admin.
+export function removeFailedMediaRequestV2(id: string) {
+  return v2("DELETE /api/v2/requests/{id}", { path: { id } });
+}
+
 // Following is keyed by title: a viewer asks to hear when a title someone else
 // already requested becomes available.
 export function followRequestMediaV2(mediaType: RequestMediaType, tmdbID: number) {

@@ -23,11 +23,17 @@ const opUpdateWatchProviderConnection = "updateWatchProviderConnection"
 // RequestLifecycleService preserves the domain's viewer checks for cancellation.
 type RequestLifecycleService interface {
 	Cancel(context.Context, mediarequests.Viewer, string, string) (*mediarequests.Request, error)
+	RemoveFailed(context.Context, mediarequests.Viewer, string) error
 	GetFeatureStatus(context.Context, mediarequests.Viewer) (mediarequests.FeatureStatus, error)
 	RequestCapabilityAllowed(context.Context, mediarequests.Viewer) (bool, error)
 }
 
 type WatchProviderService = handlers.WatchProviderService
+
+// RequestRemoveInput names the failed request to remove.
+type RequestRemoveInput struct {
+	ID ID `path:"id"`
+}
 
 type RequestCancelInput struct {
 	ID   ID `path:"id"`
@@ -243,6 +249,21 @@ func registerRequestLifecycle(reg *Registry, requests RequestLifecycleService, p
 			return nil, requestProblem(err)
 		}
 		return &MediaRequestOutput{Body: mediaRequestOf(result, viewer)}, nil
+	})
+	remove := op(http.MethodDelete, "/requests/{id}", "deleteRequest", "Remove a failed request from the list.")
+	remove.DefaultStatus = http.StatusNoContent
+	Register(reg, remove, func(ctx context.Context, in *RequestRemoveInput) (*struct{}, error) {
+		if requests == nil {
+			return nil, unavailable("requests")
+		}
+		viewer, p := lifecycleViewer(ctx)
+		if p != nil {
+			return nil, p
+		}
+		if err := requests.RemoveFailed(ctx, viewer, string(in.ID)); err != nil {
+			return nil, requestProblem(err)
+		}
+		return nil, nil
 	})
 	scope := func(ctx context.Context) (int, string, error) {
 		if providers == nil {

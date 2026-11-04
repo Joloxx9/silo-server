@@ -114,6 +114,9 @@ func (f *fakeRequests) CreateRequest(_ context.Context, viewer mediarequests.Vie
 	return req, nil
 }
 
+func (f *fakeRequests) RemoveFailed(context.Context, mediarequests.Viewer, string) error {
+	return nil
+}
 func (f *fakeRequests) ListMine(_ context.Context, viewer mediarequests.Viewer, filter mediarequests.ListFilter) ([]*mediarequests.Request, error) {
 	f.lastFilter = filter
 	if err := f.record(viewer, "listMine"); err != nil {
