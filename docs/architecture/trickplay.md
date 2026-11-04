@@ -307,8 +307,9 @@ operations (`internal/trickplay/admin.go`):
   finishes makes the previews again, so it is non-retryable.
 - `listAdminTrickplayLibraries` counts each enabled, opted-in video library's
   generation states. Tracked files that become ineligible count as `unusable`;
-  ineligible files never added to the queue are excluded. Retained published
-  sheets still contribute to storage bytes.
+  ineligible files never added to the queue are excluded, and so are missing
+  files, which have left the library while their rows wait out the removal
+  grace. Retained published sheets still contribute to storage bytes.
 
 ## Deletion
 

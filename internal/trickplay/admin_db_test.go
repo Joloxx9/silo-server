@@ -47,13 +47,14 @@ func TestAdminRetryKeepsPublishedPreviewsDB(t *testing.T) {
 
 func TestAdminReclassifiesTrackedIneligibleFilesDB(t *testing.T) {
 	for _, change := range []struct {
-		name string
-		sql  string
+		name    string
+		sql     string
+		counted bool
 	}{
-		{"missing", "missing_since=now()"},
-		{"unprobed", "probe_updated_at=NULL"},
-		{"zero-duration", "duration=0"},
-		{"audio-only", "video_tracks='[]'::jsonb"},
+		{"missing", "missing_since=now()", false},
+		{"unprobed", "probe_updated_at=NULL", true},
+		{"zero-duration", "duration=0", true},
+		{"audio-only", "video_tracks='[]'::jsonb", true},
 	} {
 		for _, state := range []string{stateReady, statePending, stateRunning, stateUnusable} {
 			t.Run(change.name+"/"+state, func(t *testing.T) {
@@ -115,7 +116,11 @@ func TestAdminReclassifiesTrackedIneligibleFilesDB(t *testing.T) {
 						t.Fatalf("current ineligible item status: %+v %v", files, err)
 					}
 					library := readLibrary()
-					if library.Pending != 0 || library.Running != 0 || library.Ready != 0 || library.Unusable != 1 || library.SheetBytes != before.SheetBytes {
+					unusable := 0
+					if change.counted {
+						unusable = 1
+					}
+					if library.Pending != 0 || library.Running != 0 || library.Ready != 0 || library.Unusable != unusable || library.SheetBytes != before.SheetBytes {
 						t.Fatalf("current ineligible library status: %+v; item status: %+v", library, files[0])
 					}
 				}
