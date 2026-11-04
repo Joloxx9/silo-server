@@ -1298,6 +1298,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 		collectionHandler.CollectionOwners = collectionOwners
 		collectionHandler.Collages = personalCollages
 		collectionHandler.MemberCounts = personalMemberCounts
+		if dispatcher, ok := deps.WatchProviderService.(handlers.LocalCollectionEventDispatcher); ok {
+			collectionHandler.CollectionSync = dispatcher
+		}
 		// The import handler is built beside the collection handler so the v1
 		// route group and the v2 operations share one instance; the v1 routes
 		// keep their userImportHandler != nil condition.

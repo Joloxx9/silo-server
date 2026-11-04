@@ -852,56 +852,73 @@ func (s *Service) processLocalListEvent(ctx context.Context, event LocalListEven
 		if !ok {
 			continue
 		}
-		cfg, err := s.serverConfig(ctx, conn.Provider)
-		if err != nil {
-			s.recordLocalWatchEventError(ctx, conn, err)
-			continue
+		if err := s.dispatchLocalListChange(ctx, conn, provider, b, event.Change, event.Items); err != nil {
+			return err
 		}
-		refreshed, err := s.refreshConnectionIfNeeded(ctx, provider, cfg, conn)
-		if err != nil {
-			s.recordLocalWatchEventError(ctx, conn, err)
-			continue
+	}
+	return nil
+}
+
+// dispatchLocalListChange mirrors one local list change to one connection.
+// Provider failures are recorded on the connection and left for the scheduled
+// reconcile; only bookkeeping failures are returned.
+func (s *Service) dispatchLocalListChange(
+	ctx context.Context,
+	conn Connection,
+	provider Provider,
+	b listBinding,
+	change ListChange,
+	items []LocalFavorite,
+) error {
+	cfg, err := s.serverConfig(ctx, conn.Provider)
+	if err != nil {
+		s.recordLocalWatchEventError(ctx, conn, err)
+		return nil
+	}
+	refreshed, err := s.refreshConnectionIfNeeded(ctx, provider, cfg, conn)
+	if err != nil {
+		s.recordLocalWatchEventError(ctx, conn, err)
+		return nil
+	}
+	conn = refreshed
+	switch change {
+	case ListChangeAdded:
+		if !b.capExport(provider.Capabilities()) {
+			return nil
 		}
-		conn = refreshed
-		switch event.Change {
-		case ListChangeAdded:
-			if !b.capExport(provider.Capabilities()) {
-				continue
-			}
-			if err := s.exportLocalListItems(ctx, conn, cfg, provider, b, event.Items); err != nil {
-				s.recordLocalWatchEventError(ctx, conn, err)
-			}
-		case ListChangeRemoved:
-			now := s.now()
-			for _, item := range event.Items {
-				if err := s.repo.MarkListItemLocalRemoved(ctx, conn.ID, b.kind, item.MediaItemID, now); err != nil {
-					return err
-				}
-			}
-			if !b.removalsEnabled(conn) || !b.capRemove(provider.Capabilities()) {
-				continue
-			}
-			toRemove, err := s.listItemsReleasedLocally(ctx, conn, b, event.Items)
-			if err != nil {
+		if err := s.exportLocalListItems(ctx, conn, cfg, provider, b, items); err != nil {
+			s.recordLocalWatchEventError(ctx, conn, err)
+		}
+	case ListChangeRemoved:
+		now := s.now()
+		for _, item := range items {
+			if err := s.repo.MarkListItemLocalRemoved(ctx, conn.ID, b.kind, item.MediaItemID, now); err != nil {
 				return err
 			}
-			if len(toRemove) == 0 {
-				continue
-			}
-			result, ok, err := b.removeItems(ctx, cfg, conn, provider, toRemove)
-			if !ok {
-				continue
-			}
-			if err != nil {
-				// Leave remote_present set so the scheduled reconcile retries.
-				s.recordLocalWatchEventError(ctx, conn, err)
-				continue
-			}
-			for _, item := range toRemove {
-				if sent, notFound := exportItemOutcome(result, item.MediaItemID, item.ProviderItemKey); sent || notFound {
-					if err := s.repo.MarkListItemRemoteRemoved(ctx, conn.ID, b.kind, item.MediaItemID, now); err != nil {
-						return err
-					}
+		}
+		if !b.removalsEnabled(conn) || !b.capRemove(provider.Capabilities()) {
+			return nil
+		}
+		toRemove, err := s.listItemsReleasedLocally(ctx, conn, b, items)
+		if err != nil {
+			return err
+		}
+		if len(toRemove) == 0 {
+			return nil
+		}
+		result, ok, err := b.removeItems(ctx, cfg, conn, provider, toRemove)
+		if !ok {
+			return nil
+		}
+		if err != nil {
+			// Leave remote_present set so the scheduled reconcile retries.
+			s.recordLocalWatchEventError(ctx, conn, err)
+			return nil
+		}
+		for _, item := range toRemove {
+			if sent, notFound := exportItemOutcome(result, item.MediaItemID, item.ProviderItemKey); sent || notFound {
+				if err := s.repo.MarkListItemRemoteRemoved(ctx, conn.ID, b.kind, item.MediaItemID, now); err != nil {
+					return err
 				}
 			}
 		}

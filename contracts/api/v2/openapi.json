@@ -28666,6 +28666,9 @@
           "scrobble_enabled": {
             "type": "boolean"
           },
+          "sync_collections_enabled": {
+            "type": "boolean"
+          },
           "sync_dropped_enabled": {
             "type": "boolean"
           },
@@ -52728,6 +52731,10 @@
           "scrobble_playback": {
             "type": "boolean"
           },
+          "sync_collections": {
+            "description": "The provider can sync the account's own named lists with collections.",
+            "type": "boolean"
+          },
           "sync_dropped": {
             "description": "The provider can read, drop, and undrop dropped shows.",
             "type": "boolean"
@@ -52748,7 +52755,8 @@
           "scrobble_playback",
           "import_ratings",
           "export_ratings",
-          "sync_dropped"
+          "sync_dropped",
+          "sync_collections"
         ],
         "type": "object"
       },
@@ -52861,6 +52869,9 @@
           "scrobble_enabled": {
             "type": "boolean"
           },
+          "sync_collections_enabled": {
+            "type": "boolean"
+          },
           "sync_dropped_enabled": {
             "type": "boolean"
           },
@@ -52895,6 +52906,7 @@
           "import_ratings_enabled",
           "export_ratings_enabled",
           "sync_dropped_enabled",
+          "sync_collections_enabled",
           "credentials_configured"
         ],
         "type": "object"
@@ -53031,6 +53043,10 @@
           "scrobble_enabled": {
             "type": "boolean"
           },
+          "sync_collections_enabled": {
+            "description": "Sync the provider account's own named lists both ways with collections on this profile: each list gets a hand-picked collection, and titles added to or removed from either side follow. A collection made in Silo stays local.",
+            "type": "boolean"
+          },
           "sync_dropped_enabled": {
             "description": "Sync dropped shows both ways: dismissing a show, or one of its episodes, from Home drops the show on the provider, shows dropped on the provider are hidden from Continue Watching and the profile-wide Next Up (a single series' Next Up still lists them), and watching a dropped show again undrops it on both sides.",
             "type": "boolean"
@@ -53061,6 +53077,7 @@
           "import_ratings_enabled",
           "export_ratings_enabled",
           "sync_dropped_enabled",
+          "sync_collections_enabled",
           "connection_settings"
         ],
         "type": "object"

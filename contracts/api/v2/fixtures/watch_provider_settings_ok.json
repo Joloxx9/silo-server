@@ -14,5 +14,6 @@
   "import_ratings_enabled": false,
   "export_ratings_enabled": false,
   "sync_dropped_enabled": false,
+  "sync_collections_enabled": false,
   "connection_settings": {}
 }
