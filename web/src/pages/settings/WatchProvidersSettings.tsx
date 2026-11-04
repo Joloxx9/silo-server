@@ -886,6 +886,18 @@ function WatchProviderCard({
                     }
                   />
                 ) : null}
+                {connection.capabilities.sync_collections ? (
+                  <ToggleRow
+                    id={`watch-provider-${providerKey}-sync-collections`}
+                    label="Sync lists"
+                    description={`Keep your ${displayName} lists as collections, and sync titles you add to or remove from them both ways. Collections you make in Silo stay in Silo.`}
+                    checked={connection.sync_collections_enabled}
+                    disabled={isBusy}
+                    onChange={(checked) =>
+                      updateConnection.mutate({ sync_collections_enabled: checked })
+                    }
+                  />
+                ) : null}
                 <ToggleRow
                   id={`watch-provider-${providerKey}-scrobble`}
                   label="Scrobble playback"

@@ -202,6 +202,7 @@ func (p *PluginProvider) Capabilities() Capabilities {
 		ImportRatings:          p.descriptor.GetImportRatings(),
 		ExportRatings:          p.descriptor.GetExportRatings(),
 		SyncDropped:            p.descriptor.GetSyncDropped(),
+		SyncCollections:        p.descriptor.GetSyncCollections(),
 	}
 }
 

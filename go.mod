@@ -174,3 +174,5 @@ require (
 )
 
 replace github.com/zishang520/webtransport-go => ./internal/compat/zishang520-webtransport-go
+
+replace github.com/Silo-Server/silo-plugin-sdk => github.com/Joloxx9/silo-plugin-sdk v0.31.1-collections.1

@@ -132,6 +132,7 @@ type WatchProviderSettings struct {
 	ImportRatingsEnabled         bool           `json:"import_ratings_enabled" doc:"Import the provider's movie and series ratings as stars (1-2 is 1 star, 9-10 is 5 stars)."`
 	ExportRatingsEnabled         bool           `json:"export_ratings_enabled" doc:"Send the profile's star ratings to the provider (stars times two) and clear removed ones."`
 	SyncDroppedEnabled           bool           `json:"sync_dropped_enabled" doc:"Sync dropped shows both ways: dismissing a show, or one of its episodes, from Home drops the show on the provider, shows dropped on the provider are hidden from Continue Watching and the profile-wide Next Up (a single series' Next Up still lists them), and watching a dropped show again undrops it on both sides."`
+	SyncCollectionsEnabled       bool           `json:"sync_collections_enabled" doc:"Sync the provider account's own named lists both ways with collections on this profile: each list gets a hand-picked collection, and titles added to or removed from either side follow. A collection made in Silo stays local."`
 	ConnectionSettings           map[string]any `json:"connection_settings" doc:"The value of every setting in the provider's connection_settings, keyed by setting key: true or false for a boolean setting. A setting the profile has not changed has its default. Empty when the provider declares none."`
 }
 
@@ -152,6 +153,7 @@ func watchProviderSettingsOf(status watchsync.ConnectionStatus) WatchProviderSet
 		ImportRatingsEnabled:         status.ImportRatingsEnabled,
 		ExportRatingsEnabled:         status.ExportRatingsEnabled,
 		SyncDroppedEnabled:           status.SyncDroppedEnabled,
+		SyncCollectionsEnabled:       status.SyncCollectionsEnabled,
 		ConnectionSettings:           watchProviderSettingValuesOf(status.ConnectionSettingValues),
 	}
 }
@@ -506,6 +508,7 @@ type WatchProviderCapabilities struct {
 	ImportRatings          bool `json:"import_ratings"`
 	ExportRatings          bool `json:"export_ratings"`
 	SyncDropped            bool `json:"sync_dropped" doc:"The provider can read, drop, and undrop dropped shows."`
+	SyncCollections        bool `json:"sync_collections" doc:"The provider can sync the account's own named lists with collections."`
 }
 
 func watchProviderCapabilitiesOf(c watchsync.Capabilities) WatchProviderCapabilities {
@@ -525,6 +528,7 @@ func watchProviderCapabilitiesOf(c watchsync.Capabilities) WatchProviderCapabili
 		ImportRatings:          c.ImportRatings,
 		ExportRatings:          c.ExportRatings,
 		SyncDropped:            c.SyncDropped,
+		SyncCollections:        c.SyncCollections,
 	}
 }
 
@@ -550,6 +554,7 @@ type WatchProviderConnection struct {
 	ImportRatingsEnabled         bool                      `json:"import_ratings_enabled"`
 	ExportRatingsEnabled         bool                      `json:"export_ratings_enabled"`
 	SyncDroppedEnabled           bool                      `json:"sync_dropped_enabled"`
+	SyncCollectionsEnabled       bool                      `json:"sync_collections_enabled"`
 	CredentialsConfigured        bool                      `json:"credentials_configured"`
 	ConnectionConfigSchema       []AdminPluginConfigSchema `json:"connection_config_schema,omitempty"`
 	LastInboundSyncAt            *Instant                  `json:"last_inbound_sync_at,omitempty"`
@@ -588,6 +593,7 @@ func watchProviderConnectionOf(s watchsync.ConnectionStatus) (WatchProviderConne
 		ImportRatingsEnabled:         s.ImportRatingsEnabled,
 		ExportRatingsEnabled:         s.ExportRatingsEnabled,
 		SyncDroppedEnabled:           s.SyncDroppedEnabled,
+		SyncCollectionsEnabled:       s.SyncCollectionsEnabled,
 		CredentialsConfigured:        s.CredentialsConfigured,
 		ConnectionConfigSchema:       schemas,
 		LastInboundSyncAt:            instantPtr(s.LastInboundSyncAt),

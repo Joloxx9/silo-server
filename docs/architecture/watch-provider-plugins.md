@@ -123,6 +123,33 @@ Several items with one key follow these rules:
   names one. Plugin tombstones carry only the key, so one whose rows name more
   than one kind of title changes nothing and adds a warning.
 
+## Named-list sync
+
+A plugin that sets `sync_collections` syncs the account's own named lists, other
+than its watchlist and favorites, with manual collections on the connected profile.
+The connection toggle is `sync_collections_enabled`: off for connections that
+existed before the feature, on for new ones.
+
+- A `COLLECTION` traversal must be a complete snapshot. Its `collections` field
+  lists every list, empty ones included, so a list missing from it is gone from
+  the provider rather than emptied.
+- `watch_provider_collection_links` maps each `(connection_id, collection_key)` to
+  the collection that mirrors it. A list new on the provider gets a new manual
+  collection named after it. A list gone from the provider is unlinked, and its
+  collection stays as an ordinary collection. A linked collection deleted in Silo
+  is created again on the next sync while the list exists.
+- Each linked list runs through the favorites and watchlist pipeline with the list
+  kind `collection:<collection_key>`, so its rows in `watch_provider_list_items`
+  follow the rules above. Removals always sync both ways.
+- Before each import, items that left the collection without a change event (a
+  bulk edit, another client) are marked locally removed, so the removal step takes
+  them off the provider instead of the import adding them back.
+- Adding or removing a collection item through the collections API sends the
+  change to every linked provider list at once; the next sync retries a failure.
+- A collection made in Silo is not created on the provider.
+- When the connection moves to another provider account, its links and their list
+  rows are deleted; the collections stay.
+
 ## Sync-run admission
 
 Manual admission locks the current connection row for its provider, account and

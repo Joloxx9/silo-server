@@ -22,8 +22,14 @@ const (
 	// pluginDroppedCursorKey contains droppedCursorSegment, so it resets with
 	// the agreed drops when the connection moves to another provider account.
 	pluginDroppedCursorKey = "plugin.remote.dropped"
-	maxRemoteStatePages    = 10_000
-	maxRemoteStateItems    = 100_000
+	// COLLECTION traversals are always complete snapshots, so their cursor is
+	// never persisted; the key only names the traversal.
+	pluginCollectionsCursorKey = "plugin.remote.collections"
+	maxRemoteStatePages        = 10_000
+	maxRemoteStateItems        = 100_000
+	// maxRemoteCollections caps the named lists one COLLECTION traversal may
+	// report, so a misbehaving plugin cannot create collections without bound.
+	maxRemoteCollections = 500
 	// A traversal keeps at most maxRemoteStateWarnings plugin page warnings,
 	// each at most maxRemoteStateWarningBytes long, and counts the rest in one
 	// closing note, so a plugin cannot flood the sync run's warning.
@@ -41,6 +47,9 @@ type pluginRemoteTraversal struct {
 	completeSnapshot bool
 	warnings         []string
 	omittedWarnings  int
+	// collections is the union of WatchSyncListRemoteStateResponse.collections
+	// over every page, keyed by collection key, for COLLECTION traversals.
+	collections map[string]*pluginv1.WatchSyncRemoteCollection
 }
 
 // addWarnings keeps one page's warnings. They follow the fault safe_message
@@ -389,6 +398,19 @@ func (p *PluginProvider) listRemoteState(
 			return pluginRemoteTraversal{}, errors.New("watch sync plugin exceeded the remote-state item limit")
 		}
 		result.items = append(result.items, items...)
+		for _, collection := range response.GetCollections() {
+			key := strings.TrimSpace(collection.GetCollectionKey())
+			if key == "" {
+				continue
+			}
+			if result.collections == nil {
+				result.collections = make(map[string]*pluginv1.WatchSyncRemoteCollection)
+			}
+			if _, seen := result.collections[key]; !seen && len(result.collections) >= maxRemoteCollections {
+				return pluginRemoteTraversal{}, errors.New("watch sync plugin exceeded the collection limit")
+			}
+			result.collections[key] = collection
+		}
 		result.addWarnings(response.GetWarnings(),
 			append(authenticatedContextSecrets(authContext), conn.AccessToken, conn.RefreshToken)...)
 

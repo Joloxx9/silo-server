@@ -174,6 +174,7 @@ func (s *Service) GetConnectionStatus(ctx context.Context, userID int, profileID
 		ImportRatingsEnabled:         true,
 		ExportRatingsEnabled:         true,
 		SyncDroppedEnabled:           true,
+		SyncCollectionsEnabled:       true,
 	}
 	if configurable, ok := provider.(connectionConfigProvider); ok {
 		status.ConnectionConfigSchema = configurable.ConnectionConfigSchema()
@@ -198,6 +199,7 @@ func (s *Service) GetConnectionStatus(ctx context.Context, userID int, profileID
 		status.ImportRatingsEnabled = conn.ImportRatingsEnabled
 		status.ExportRatingsEnabled = conn.ExportRatingsEnabled
 		status.SyncDroppedEnabled = conn.SyncDroppedEnabled
+		status.SyncCollectionsEnabled = conn.SyncCollectionsEnabled
 		status.LastInboundSyncAt = conn.LastInboundSyncAt
 		status.LastProgressSyncAt = conn.LastProgressSyncAt
 		status.LastOutboundSyncAt = conn.LastOutboundSyncAt
@@ -644,6 +646,7 @@ func (s *Service) persistConnection(
 			ImportRatingsEnabled:      true,
 			ExportRatingsEnabled:      true,
 			SyncDroppedEnabled:        true,
+			SyncCollectionsEnabled:    true,
 		}
 	}
 	rebound := ok && conn.ProviderAccountID != "" && account.ID != "" && account.ID != conn.ProviderAccountID
@@ -680,6 +683,13 @@ func (s *Service) persistConnection(
 		}
 		if err := s.repo.ClearDroppedSyncStates(ctx, saved.ID, saved.ProviderAccountID); err != nil {
 			slog.WarnContext(ctx, "failed to clear agreed drops of a previous provider account", "component", "watchsync", "provider", providerKey, "connection_id", saved.ID, "error", err)
+		}
+		// List keys belong to the previous account too. Its collections stay
+		// as ordinary manual collections.
+		if links, err := s.collectionLinkStore(); err == nil {
+			if err := links.DeleteCollectionLinks(ctx, saved.ID); err != nil {
+				slog.WarnContext(ctx, "failed to unlink collections of a previous provider account", "component", "watchsync", "provider", providerKey, "connection_id", saved.ID, "error", err)
+			}
 		}
 		return nil
 	})
@@ -917,6 +927,11 @@ func (s *Service) executeSyncRun(ctx context.Context, conn Connection, run SyncR
 			}
 		}
 	}
+	if !halted() && conn.SyncCollectionsEnabled && provider.Capabilities().SyncCollections {
+		result, err := s.syncCollections(ctx, conn, cfg, provider)
+		run.Warning = appendWarning(run.Warning, result.Warnings)
+		afterFlow("collections", err)
+	}
 	if !halted() && (conn.ImportRatingsEnabled || conn.ExportRatingsEnabled) &&
 		(provider.Capabilities().ImportRatings || provider.Capabilities().ExportRatings) {
 		result, err := s.syncRatings(ctx, conn, cfg, provider)
@@ -1027,7 +1042,8 @@ func providerSyncNeedsAccessToken(caps Capabilities) bool {
 		caps.ScrobblePlayback ||
 		caps.ImportRatings ||
 		caps.ExportRatings ||
-		caps.SyncDropped
+		caps.SyncDropped ||
+		caps.SyncCollections
 }
 
 func (s *Service) completeSyncRun(ctx context.Context, run SyncRun) (SyncRun, error) {
