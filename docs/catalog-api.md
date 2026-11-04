@@ -519,6 +519,20 @@ and the watchlist alone. A change publishes `user_state.changed` with
 clients can update. The frozen v1 surface has no mark and does not show it. See
 [recommendations.md](architecture/recommendations.md#rows).
 
+## Episodes left on a series card
+
+On a series or season card the profile has not finished, v2 `user_state` adds
+`watched_count` (episodes the profile watched) and `unplayed_count` (available
+episodes it has not). Both are absent on a finished series or season, on movies
+and episodes, and when the user store has no episode rollup; the frozen v1 card
+never carries them. "Available" and "watched" follow `played`: an episode counts
+while it belongs to a library, and is watched when its visible progress or a
+visible completed history row says so. Clients draw the episodes-left mark in a
+card's top-right status corner from the pair (see
+[card-overlays.md](architecture/card-overlays.md)). `played` still comes from the
+completion query; the counts come from one batched rollup per kind for just the
+unfinished series and seasons on the page.
+
 ## Watchlist titles outside the library
 
 The watchlist can also hold movies and series the library doesn't have, keyed by
@@ -698,11 +712,20 @@ servers ignore an unrecognized `type`, which searches every media type, and
 reject it as a people `media_scope`. A client that hides books must check the
 flag and send `video` when it is absent.
 
-`GET /api/v2/catalog/search/capabilities` reports the selected provider and, for
+`GET /api/v2/catalog/search/capabilities` reports the provider selected by the
+responding server's current ranking-availability checks and, for
 Meilisearch, `result_window_limit`, `session_ttl_seconds`, and
-`max_sessions_per_account`. Catalog query bodies default to 50 results per page. Search
-responses also expose the applicable window limit and fixed session expiry in
-`search_diagnostics`.
+`max_sessions_per_account`. While Meilisearch is configured but its index is
+unbuilt, unreachable, or on an incompatible schema, searches fall back to
+PostgreSQL and the read reports `provider: postgres` without the Meilisearch
+limits. These provider and limit fields are an explicit exception to the usual
+configuration-only capability contract: changes in availability affect the
+document's `revision` and `ETag`, and replicas can return different answers.
+This is a snapshot, not a dependency-health guarantee; a failed PostgreSQL
+index-state read can also select fallback even though searches cannot succeed.
+Clients use each search response's `search_diagnostics` for its actual provider,
+applicable window limit, and fixed session expiry. A later search can choose a
+different provider. Catalog query bodies default to 50 results per page.
 
 PostgreSQL search retains the complete relevance tuple or requested SQL sort
 rather than a numeric page. It selects the FTS or bounded fuzzy retrieval family

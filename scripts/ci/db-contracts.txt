@@ -57,6 +57,9 @@
 # A finished regular episode does not push a half-watched special off Continue Watching.
 ./internal/catalog TestSupersededSpecialsNeedALaterSpecialPostgres
 
+# A failed play-target read returns its error and the pool reuses its connection.
+./internal/catalog TestPlayableTargetQueryFailureKeepsConnection
+
 # Series air-date sort keys advance when a known episode airs. The latest
 # available episode air date counts only episodes with a file in a library:
 # files the bulk episode link attaches count, also when an air-date correction
@@ -352,6 +355,7 @@
 
 # Request cleanup, prepared downloads and user-store transactions.
 ./internal/requests TestReplaceFailedIsScopedToRequesterDatabase
+./internal/requests TestDeleteFailedRequestDatabase
 ./internal/requests TestListDownloadingRequestsOrderDatabase
 ./internal/downloads TestConcurrentArtifactCreatesCannotBypassQuotaDB
 ./internal/downloads TestSubscriptionSyncPagePostgres
@@ -386,6 +390,7 @@
 ./internal/userstore/pgstore TestPostgresAtomicJellycompatProgress
 ./internal/userstore/pgstore TestPostgresPersonalListPage
 ./internal/userstore/pgstore TestPostgresReplaceCollectionItemsWritesOnlyTheDifference
+./internal/userstore/pgstore TestPostgresItemUserFlagsMatchesPerTableReads
 
 # Intro analysis state timestamps and config-hash isolation.
 ./internal/intromarkers TestSeasonStateIsKeyedByAnalysisHashPostgres
@@ -452,6 +457,9 @@
 
 # The Postgres auto-tuning restart warning lists only settings a restart would change.
 ./internal/database TestPostgresSettingsPendingRestartPostgres
+
+# The omnibus image's startup tuning file holds exactly the restart-only settings it can size.
+./internal/database TestPostgresStartupSettingsMatchServerPostgres
 
 # Online partitioned audit indexes preserve writers and resume canceled builds.
 ./internal/partman TestOnlinePartitionIndexesKeepWritersAvailableDB
@@ -592,6 +600,7 @@
 ./internal/recommendations TestRelevanceRubricLeakagePostgres
 ./internal/recommendations TestRelevanceRubricNewProfileGetsRowsPostgres
 ./internal/recommendations TestRelevanceRubricProfilesOnOneAccountDifferPostgres
+./internal/recommendations TestSimilarItemsValidateEveryCandidatePostgres
 ./internal/recommendations TestTasteProfileSummaryGenresComeFromTheClustersPostgres
 ./internal/recommendations TestTasteSeedPickerInterleavesGenresPostgres
 ./internal/recommendations TestTopGenresRankByCrowdThenCatalogPostgres
@@ -688,6 +697,11 @@
 # The household profile limit holds under concurrent creates (issue #2423).
 ./internal/api/handlers TestCreateProfileLimitConcurrentDB
 
+# A scan request for a scope with an active run joins that run without a
+# duplicate-key ERROR, and queues a new run if that one finished meanwhile
+# (issue #3441).
+./internal/scanqueue TestCreateOnClaimedScopeJoinsTheActiveRunDB
+
 # A scan cut short by shutdown goes back to the queue with its owed follow-up;
 # an admin cancel still ends it cancelled, and a late requeue never takes back
 # another worker's claim.
@@ -778,3 +792,13 @@
 # Local artwork in a title folder linked out of the library is vouched for by
 # present cataloged files of the same title under that folder.
 ./internal/catalog TestCatalogedFilesUnderListsPresentFilesOfTheTitleDB
+
+# Theme lookup reads only the folders that hold themes, and an item whose
+# versions span folders still finds the themes of the one that has them.
+./internal/themesongs TestResolveFindsThemesInOneOfAnItemsFoldersDB
+
+# Item detail reads the viewer's per-item state in one batch: each part equals
+# its single-item read, and a promotable watchlist title still reports
+# in_watchlist after the batch read the watchlist first.
+./internal/userstore/pgstore TestQueueItemViewerStateMatchesSingleReads
+./internal/api/handlers TestItemDetailViewerStateBatchDB
