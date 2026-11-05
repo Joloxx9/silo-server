@@ -88,7 +88,10 @@ func TestPluginProviderGetImages_RequestPurposeHeader(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewPluginProviderWithClientFactory() error = %v", err)
 			}
-			provider.imageLookupProviderIDs = tc.imageLookupIDs
+			if len(tc.imageLookupIDs) > 0 {
+				provider.lookupProviderIDs = tc.imageLookupIDs
+				provider.lookupImages = true
+			}
 
 			ctx := grpcmetadata.NewOutgoingContext(context.Background(), grpcmetadata.Pairs(
 				"unrelated-header", "preserved",
@@ -630,8 +633,9 @@ func TestPluginProviderGetMetadata_LookupProviderIDsGate(t *testing.T) {
 }
 
 // TestPluginProviderGetImages_IgnoresLookupProviderIDs pins that declared
-// lookup keys open GetMetadata only. Image, season and episode calls address
-// the provider's own catalog and stay gated on its own ID.
+// lookup keys alone open GetMetadata only. Without lookup_images, image,
+// season and episode calls address the provider's own catalog and stay gated
+// on its own ID.
 func TestPluginProviderGetImages_IgnoresLookupProviderIDs(t *testing.T) {
 	client := &fakePluginMetadataClient{imagesResponse: &pluginv1.GetImagesResponse{}}
 	provider, err := NewPluginProviderWithClientFactory(map[string]string{
@@ -657,43 +661,41 @@ func TestPluginProviderGetImages_IgnoresLookupProviderIDs(t *testing.T) {
 	}
 }
 
-func TestPluginProviderGetImages_ImageLookupProviderIDsGate(t *testing.T) {
+// TestPluginProviderGetImages_LookupImagesGate covers an artwork source that
+// declared lookup_images: its declared lookup keys open GetImages, as they open
+// GetMetadata.
+func TestPluginProviderGetImages_LookupImagesGate(t *testing.T) {
 	cases := []struct {
-		name             string
-		imageLookupIDs   []string
-		providerIDs      map[string]string
-		contentType      string
-		seasonNumber     *int
-		wantCalled       bool
-		wantProviderID   string
-		wantSeasonNumber *int32
+		name           string
+		providerIDs    map[string]string
+		wantCalled     bool
+		wantProviderID string
 	}{
-		{"own ID", nil, map[string]string{"mediux": "m-1", "tmdb": "550"}, "movie", nil, true, "m-1", nil},
-		{"movie TMDB lookup", []string{"tmdb", "tvdb"}, map[string]string{"tmdb": "550"}, "movie", nil, true, "", nil},
-		{"series TVDB lookup", []string{"tmdb", "tvdb"}, map[string]string{"tvdb": "305288"}, "series", nil, true, "", nil},
-		{"season lookup preserves scope", []string{"tmdb", "tvdb"}, map[string]string{"tvdb": "305288"}, "series", pluginIntPointer(5), true, "", pluginInt32Pointer(5)},
-		{"unrelated IDs stay gated", []string{"tmdb"}, map[string]string{"imdb": "tt0137523"}, "movie", nil, false, "", nil},
-		{"empty declared ID stays gated", []string{"tmdb"}, map[string]string{"tmdb": ""}, "movie", nil, false, "", nil},
+		{"declared lookup key opens images", map[string]string{"tmdb": "550"}, true, ""},
+		{"own id still wins", map[string]string{"fanarttv": "f-1", "tmdb": "550"}, true, "f-1"},
+		{"declared keys absent", map[string]string{"tvdb": "81189"}, false, ""},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			client := &fakePluginMetadataClient{imagesResponse: &pluginv1.GetImagesResponse{}}
+			client := &fakePluginMetadataClient{imagesResponse: &pluginv1.GetImagesResponse{
+				Images: []*pluginv1.ImageRecord{{Kind: "logo", Url: "https://assets.example.com/logo.png"}},
+			}}
 			provider, err := NewPluginProviderWithClientFactory(map[string]string{
 				pluginInstallationIDSetting: "1",
-				capabilityIDSetting:         "mediux",
+				capabilityIDSetting:         "fanarttv",
 			}, func(context.Context, int, string) (pluginMetadataClient, error) {
 				return client, nil
 			})
 			if err != nil {
 				t.Fatalf("NewPluginProviderWithClientFactory() error = %v", err)
 			}
-			provider.imageLookupProviderIDs = tc.imageLookupIDs
+			provider.lookupProviderIDs = []string{"tmdb", "imdb"}
+			provider.lookupImages = true
 
 			images, err := provider.GetImages(context.Background(), ImageRequest{
-				ProviderIDs:  tc.providerIDs,
-				ContentType:  tc.contentType,
-				SeasonNumber: tc.seasonNumber,
+				ProviderIDs: tc.providerIDs,
+				ContentType: "movie",
 			})
 			if err != nil {
 				t.Fatalf("GetImages() error = %v", err)
@@ -704,23 +706,15 @@ func TestPluginProviderGetImages_ImageLookupProviderIDsGate(t *testing.T) {
 				}
 				return
 			}
-			if client.getImagesReq == nil {
-				t.Fatal("expected an image call")
+			if client.getImagesReq == nil || len(images) != 1 {
+				t.Fatalf("expected the plugin's image, got request %v and images %+v", client.getImagesReq, images)
 			}
 			if got := client.getImagesReq.GetProviderId(); got != tc.wantProviderID {
 				t.Fatalf("ProviderId = %q, want %q", got, tc.wantProviderID)
 			}
-			if !reflect.DeepEqual(client.getImagesReq.SeasonNumber, tc.wantSeasonNumber) {
-				t.Fatalf("SeasonNumber = %v, want %v", client.getImagesReq.SeasonNumber, tc.wantSeasonNumber)
-			}
-			assertStructStringMap(t, client.getImagesReq.GetProviderIds(), tc.providerIDs)
 		})
 	}
 }
-
-func pluginIntPointer(value int) *int { return &value }
-
-func pluginInt32Pointer(value int32) *int32 { return &value }
 
 func TestPersonKindFromStringMapsCreator(t *testing.T) {
 	for _, value := range []string{"Creator", "creator", " CREATOR "} {

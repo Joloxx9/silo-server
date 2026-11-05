@@ -117,9 +117,10 @@ func TestChainlessFallback_SkipsDefaultDisabledCapability(t *testing.T) {
 	assertNotResolved(folderID, "all-disabled chain")
 }
 
-// Both chain paths must carry a capability's lookup and image-lookup provider
-// IDs into the provider they build: the explicit chain reads them per entry,
-// and the chain-less fallback reads the enabled capability listing.
+// Both chain paths must carry a capability's lookup provider IDs and
+// lookup_images flag into the provider they build: the explicit chain reads
+// them per entry, and the chain-less fallback reads the enabled capability
+// listing.
 func TestResolveChainWithChecker_CarriesProviderIDDeclarations(t *testing.T) {
 	pool := chainBuiltinTestPool(t)
 	ctx := context.Background()
@@ -127,7 +128,7 @@ func TestResolveChainWithChecker_CarriesProviderIDDeclarations(t *testing.T) {
 	installationID := insertTestInstallation(t, pool, "plugin", true)
 	capID := fmt.Sprintf("test-lookup-%d", time.Now().UnixNano())
 	insertTestCapability(t, pool, installationID, capID,
-		`{"display_name":"Lookup Plugin","metadata":{"lookup_provider_ids":["imdb","TMDB"],"image_lookup_provider_ids":["tmdb","TVDB"],"default_priority":{"movie":8}}}`)
+		`{"display_name":"Lookup Plugin","metadata":{"lookup_provider_ids":["imdb","TMDB"],"lookup_images":true,"default_priority":{"movie":8}}}`)
 	chainRepo := NewChainRepository(pool)
 	resolver := stubMetadataResolver{}
 
@@ -148,8 +149,8 @@ func TestResolveChainWithChecker_CarriesProviderIDDeclarations(t *testing.T) {
 			if want := []string{"imdb", "tmdb"}; !reflect.DeepEqual(pp.lookupProviderIDs, want) {
 				t.Fatalf("%s: lookupProviderIDs = %q, want %q", scenario, pp.lookupProviderIDs, want)
 			}
-			if want := []string{"tmdb", "tvdb"}; !reflect.DeepEqual(pp.imageLookupProviderIDs, want) {
-				t.Fatalf("%s: imageLookupProviderIDs = %q, want %q", scenario, pp.imageLookupProviderIDs, want)
+			if !pp.lookupImages {
+				t.Fatalf("%s: lookupImages = false, want true", scenario)
 			}
 			if pp.Name() != "Lookup Plugin" {
 				t.Fatalf("%s: display name = %q, want \"Lookup Plugin\"", scenario, pp.Name())

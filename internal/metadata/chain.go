@@ -365,11 +365,9 @@ type CapabilityInfo struct {
 	// capability declares it can look an item up by, from its manifest's
 	// lookup_provider_ids. See extractLookupProviderIDs.
 	LookupProviderIDs []string
-	// ImageLookupProviderIDs are the provider-ID keys the capability explicitly
-	// permits image lookup by, from image_lookup_provider_ids. This is
-	// separate from LookupProviderIDs so metadata-only enrichment plugins are
-	// not called by image pickers.
-	ImageLookupProviderIDs []string
+	// LookupImages reports that the capability also serves artwork by those
+	// keys (lookup_images). See extractLookupImages.
+	LookupImages bool
 	// BulkLookupLimit is how many concurrent lookups the capability can combine
 	// into one upstream request (bulk_lookup_limit), or 0 when it did not opt
 	// into the bulk enrichment pass. See extractBulkLookupLimit.
@@ -501,7 +499,7 @@ func ListEnabledMetadataCapabilities(ctx context.Context, pool *pgxpool.Pool) ([
 			return nil, fmt.Errorf("scanning capability: %w", err)
 		}
 		c.LookupProviderIDs = extractLookupProviderIDs(metadataJSON)
-		c.ImageLookupProviderIDs = extractImageLookupProviderIDs(metadataJSON)
+		c.LookupImages = extractLookupImages(metadataJSON)
 		c.defaultEnabled = extractDefaultEnabled(metadataJSON)
 		c.BulkLookupLimit = extractBulkLookupLimit(metadataJSON)
 		c.RatingSources = extractRatingSources(metadataJSON)
@@ -614,7 +612,7 @@ func providersFromCapabilities(ctx context.Context, caps []CapabilityInfo, resol
 			continue
 		}
 
-		provider, err := NewPluginProviderFromCapability(c.PluginInstallationID, c.CapabilityID, c.DisplayName, c.LookupProviderIDs, c.ImageLookupProviderIDs, c.RatingSources, resolver)
+		provider, err := NewPluginProviderFromCapability(c.PluginInstallationID, c.CapabilityID, c.DisplayName, c.LookupProviderIDs, c.LookupImages, c.RatingSources, resolver)
 		if err != nil {
 			slog.WarnContext(ctx, "skipping metadata provider during chain resolution", "component", "metadata",
 				"installation_id", c.PluginInstallationID,
@@ -685,7 +683,7 @@ func lookupCapabilityInfo(ctx context.Context, pool *pgxpool.Pool, installationI
 		return info
 	}
 	info.LookupProviderIDs = extractLookupProviderIDs(metadataJSON)
-	info.ImageLookupProviderIDs = extractImageLookupProviderIDs(metadataJSON)
+	info.LookupImages = extractLookupImages(metadataJSON)
 	info.BulkLookupLimit = extractBulkLookupLimit(metadataJSON)
 	info.RatingSources = extractRatingSources(metadataJSON)
 	return info

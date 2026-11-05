@@ -4113,7 +4113,7 @@ export interface paths {
     put?: never;
     /**
      * Delete the embedding lock, every item embedding, taste clusters and per-profile cached rows, and clear taste profile vectors, in one transaction.
-     * @description Recovers a server whose embedding lock pins a model it can no longer use, or switches embedding models. It refuses with 409 while the embedding, taste profile or recommendation job, or a stale profile sweep, runs on any server, while a catalog import with embeddings runs, and while saved embedding settings wait for a server restart. Run the embedding job afterwards to build the new embedding space.
+     * @description Recovers a server whose embedding lock pins a model it can no longer use, or switches embedding models. It refuses with 409 while the embedding, taste profile or recommendation job, or a stale profile sweep, runs on any server, while a catalog import with embeddings runs, and while a saved embedding model or base URL waits for a server restart. Run the embedding job afterwards to build the new embedding space.
      */
     post: operations["resetAdminRecommendationEmbeddings"];
     delete?: never;
@@ -5799,11 +5799,43 @@ export interface paths {
     /** Manage login accounts and their household configuration. */
     get: operations["listAdminUserProfiles"];
     put?: never;
-    post?: never;
+    /**
+     * Create a profile on an account.
+     * @description Takes the createProfile body. A household already at the account's profile limit, or a name another profile on the account uses, is 409 conflict. The first profile on an account becomes its primary profile. Only the server Owner may change the Owner's or another admin account's profiles (403 permission_denied otherwise): a primary profile's PIN guards that account's admin access.
+     */
+    post: operations["createAdminUserProfile"];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/users/{id}/profiles/{profile_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get one profile of an account.
+     * @description The profile as listProfiles reports it to its own household. 404 not_found when the profile does not belong to the account.
+     */
+    get: operations["getAdminUserProfile"];
+    put?: never;
+    post?: never;
+    /**
+     * Delete one profile of an account.
+     * @description Removes the profile and its per-profile data, as deleteProfile does. The primary profile cannot be deleted (409 conflict); delete the account instead. 404 not_found when the profile does not belong to the account. Only the server Owner may change the Owner's or another admin account's profiles (403 permission_denied otherwise): a primary profile's PIN guards that account's admin access.
+     */
+    delete: operations["deleteAdminUserProfile"];
+    options?: never;
+    head?: never;
+    /**
+     * Update one profile of an account; omitted members are unchanged.
+     * @description Takes the updateProfile body, every member included. "pin": null removes the profile's PIN and a new value replaces it; either ends the profile tokens issued for the old PIN and clears its wrong-attempt lockout. A name another profile on the account uses is 409 conflict. 404 not_found when the profile does not belong to the account. Only the server Owner may change the Owner's or another admin account's profiles (403 permission_denied otherwise): a primary profile's PIN guards that account's admin access.
+     */
+    patch: operations["updateAdminUserProfile"];
     trace?: never;
   };
   "/api/v2/admin/users/{id}/profiles/{profile_id}/sections": {
@@ -6210,7 +6242,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Poll a pairing request from the device and collect its tokens once approved. */
+    /**
+     * Poll a pairing request from the device and collect its tokens once approved.
+     * @description A request started with binding is polled only with its binding_secret: a poll without it, or with another secret, is 403 device_binding_mismatch and leaves the request unchanged.
+     */
     post: operations["pollDeviceLogin"];
     delete?: never;
     options?: never;
@@ -13275,6 +13310,8 @@ export interface components {
       profile_avatars: boolean;
       /** @description Whether access groups and account policy overrides take max_profiles, the household profile limit; null on an account inherits its group's limit */
       profile_limits: boolean;
+      /** @description Whether getAdminUserProfile, createAdminUserProfile, updateAdminUserProfile and deleteAdminUserProfile can read and change an account's profiles, including setting or removing a profile's PIN, and whether listAdminUserProfiles reports has_pin, is_primary and is_child */
+      profile_management: boolean;
       /** @description Whether listAdminUserProfileSectionOverrides, getAdminUserProfileSectionSettings, replaceAdminUserProfileSectionOverrides and resetAdminUserProfileSectionOverrides can read and change one profile's page layout */
       profile_sections: boolean;
       /** @description Whether getAdminRequestUserUsage can report an account's request quota use */
@@ -13350,11 +13387,16 @@ export interface components {
        * @example /avatars/presets/fox.png
        */
       avatar_url?: string;
+      /** @description Whether the profile is locked with a PIN */
+      has_pin: boolean;
       /**
        * @description Opaque identifier
        * @example 1
        */
       id: string;
+      is_child: boolean;
+      /** @description The household parent (not the server admin role) */
+      is_primary: boolean;
       /**
        * Format: date-time
        * @description Latest time any device reported this profile; null when no device has
@@ -19771,6 +19813,8 @@ export interface components {
        * @description RFC 3339 instant in UTC with millisecond precision
        */
       updated_at: string;
+      /** @description Keeps the section off every client but the web app while it is its page's first featured section, the one the web shows as the banner: a viewer section read then answers it only to a caller whose X-Silo-Client-Family is web. Once another featured section comes first, every client gets it as a regular row. Always false on a section that is not featured. */
+      web_only: boolean;
     };
     AdminSectionBulkCreate: {
       /** @description A recipe's configuration document; its keys are fixed by the recipe named in section_type. */
@@ -19807,6 +19851,8 @@ export interface components {
        * @enum {string}
        */
       state: "available" | "disabled" | "not_configured" | "unsupported";
+      /** @description Admin sections accept and answer web_only, and viewer section reads honor it */
+      web_only: boolean;
     };
     AdminSectionCreate: {
       /** @description A recipe's configuration document; its keys are fixed by the recipe named in section_type. */
@@ -19831,6 +19877,8 @@ export interface components {
       scope: "home" | "library";
       section_type: string;
       title: string;
+      /** @description Keep the featured section off every client but the web app; ignored unless featured is true. Send it only when getAdminSectionCapabilities reports web_only */
+      web_only?: boolean;
     };
     AdminSectionDefaults: {
       reset_profiles?: boolean;
@@ -19884,6 +19932,8 @@ export interface components {
       position?: number;
       section_type?: string;
       title?: string;
+      /** @description Keep the featured section off every client but the web app. Absent keeps the saved value, except that an update making the section featured saves false; a section that is not featured after the update always saves false. Send it only when getAdminSectionCapabilities reports web_only */
+      web_only?: boolean;
     };
     AdminSensitiveStatus: {
       configured: string[];
@@ -24029,6 +24079,11 @@ export interface components {
     };
     DeviceLogin: {
       /**
+       * @description The session binding the device started the request with; absent for an unbound request. An approver that compared one request's code can approve later requests carrying the same binding without comparing again
+       * @example Zmh6rfhivXdsj8GLjp-OIAiXFIVu4jOzkCpZHQ1fKSU
+       */
+      binding?: string;
+      /**
        * @description Purpose the request was opened with: device_login, remote_playback, or jellyfin_quick_connect for a Jellyfin app signing in with Quick Connect, which is approved for a profile through approve-handoff
        * @example device_login
        */
@@ -24132,6 +24187,11 @@ export interface components {
       remote_playback_handoff: boolean;
       /** @description Opaque revision of this document */
       revision: string;
+      /**
+       * @description Whether startDeviceLogin accepts binding, getDeviceLogin reports it, and pollDeviceLogin requires the matching binding_secret for a bound request
+       * @example true
+       */
+      session_binding: boolean;
       /**
        * @description Support and configuration state, not health
        * @enum {string}
@@ -30281,6 +30341,11 @@ export interface components {
     };
     PollDeviceLoginInputBody: {
       /**
+       * @description For a request started with binding: the secret, as base64url without padding, whose SHA-256 is the binding. Required on every poll of a bound request; ignored otherwise
+       * @example AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+       */
+      binding_secret?: string;
+      /**
        * @description The device code from startDeviceLogin
        * @example d3v1c3c0d3
        */
@@ -32633,6 +32698,11 @@ export interface components {
       total: number;
     };
     StartDeviceLoginInputBody: {
+      /**
+       * @description Session binding: base64url without padding of SHA-256 of a 32-byte secret the device keeps. getDeviceLogin shows it to the approver, and every poll of the request must send the secret as binding_secret. Omit for an unbound request; an empty string is malformed like any other value
+       * @example Zmh6rfhivXdsj8GLjp-OIAiXFIVu4jOzkCpZHQ1fKSU
+       */
+      binding?: string;
       /**
        * @description Pairing purpose; defaults to device_login. remote_playback requires temporary=true and is approved through approve-handoff
        * @example device_login
@@ -87851,6 +87921,536 @@ export interface operations {
       };
     };
   };
+  createAdminUserProfile: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The account */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProfileCreate"];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Profile"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  getAdminUserProfile: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The account */
+        id: string;
+        /** @description A profile of the account */
+        profile_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Profile"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  deleteAdminUserProfile: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The account */
+        id: string;
+        /** @description A profile of the account */
+        profile_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  updateAdminUserProfile: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The account */
+        id: string;
+        /** @description A profile of the account */
+        profile_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProfileUpdate"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Profile"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   listAdminUserProfileSectionOverrides: {
     parameters: {
       query?: {
@@ -91201,6 +91801,15 @@ export interface operations {
       };
       /** @description Bad Request */
       400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
         headers: {
           [name: string]: unknown;
         };
@@ -112248,6 +112857,8 @@ export interface operations {
         "X-Profile-Id": string;
         /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
         "X-Profile-Token"?: string;
+        /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
+        "X-Silo-Client-Family"?: string;
       };
       path?: never;
       cookie?: never;
@@ -112369,6 +112980,8 @@ export interface operations {
         "X-Profile-Id": string;
         /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
         "X-Profile-Token"?: string;
+        /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
+        "X-Silo-Client-Family"?: string;
       };
       path?: never;
       cookie?: never;
@@ -112490,6 +113103,8 @@ export interface operations {
         "X-Profile-Id": string;
         /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
         "X-Profile-Token"?: string;
+        /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
+        "X-Silo-Client-Family"?: string;
       };
       path: {
         /** @description Section identifier from the home layout */
@@ -117282,6 +117897,8 @@ export interface operations {
         "X-Profile-Id": string;
         /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
         "X-Profile-Token"?: string;
+        /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
+        "X-Silo-Client-Family"?: string;
       };
       path: {
         /** @description Library identifier */
@@ -117406,6 +118023,8 @@ export interface operations {
         "X-Profile-Id": string;
         /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
         "X-Profile-Token"?: string;
+        /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
+        "X-Silo-Client-Family"?: string;
       };
       path: {
         /** @description Library identifier */
@@ -117528,6 +118147,8 @@ export interface operations {
         "X-Profile-Id": string;
         /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
         "X-Profile-Token"?: string;
+        /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
+        "X-Silo-Client-Family"?: string;
       };
       path: {
         /** @description Library identifier */

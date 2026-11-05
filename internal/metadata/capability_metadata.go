@@ -112,11 +112,7 @@ func extractDefaultEnabled(metadataJSON []byte) bool {
 // deduplicated. Anything other than a JSON array of strings yields nil, which
 // leaves the provider gated on its own ID as before.
 func extractLookupProviderIDs(metadataJSON []byte) []string {
-	return extractProviderIDKeys(metadataJSON, "lookup_provider_ids")
-}
-
-func extractProviderIDKeys(metadataJSON []byte, field string) []string {
-	raw, ok := capabilityMetadataField(metadataJSON, field)
+	raw, ok := capabilityMetadataField(metadataJSON, "lookup_provider_ids")
 	if !ok {
 		return nil
 	}

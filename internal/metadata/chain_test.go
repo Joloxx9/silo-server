@@ -128,26 +128,22 @@ func TestExtractLookupProviderIDs(t *testing.T) {
 	}
 }
 
-func TestExtractImageLookupProviderIDs(t *testing.T) {
+func TestExtractLookupImages(t *testing.T) {
 	cases := []struct {
 		name         string
 		metadataJSON string
-		want         []string
+		want         bool
 	}{
-		{"inside envelope", `{"metadata":{"image_lookup_provider_ids":["tmdb","tvdb"]}}`, []string{"tmdb", "tvdb"}},
-		{"top level", `{"image_lookup_provider_ids":["tmdb"]}`, []string{"tmdb"}},
-		{"top level wins over envelope", `{"image_lookup_provider_ids":["tvdb"],"metadata":{"image_lookup_provider_ids":["imdb"]}}`, []string{"tvdb"}},
-		{"normalized and deduplicated", `{"metadata":{"image_lookup_provider_ids":[" TMDB ","tmdb","","TVDB"]}}`, []string{"tmdb", "tvdb"}},
-		{"absent", tmdbCapMetadata, nil},
-		{"comma string is not a list", `{"metadata":{"image_lookup_provider_ids":"tmdb,tvdb"}}`, nil},
-		{"mixed types", `{"metadata":{"image_lookup_provider_ids":["tmdb",7]}}`, nil},
-	}
+		{"declared", `{"metadata":{"lookup_images":true}}`, true},
 
+		// Anything but JSON true keeps images gated on the provider's own ID.
+		{"absent", tmdbCapMetadata, false},
+		{"not a boolean", `{"metadata":{"lookup_images":"true"}}`, false},
+	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := extractImageLookupProviderIDs([]byte(tc.metadataJSON))
-			if !slices.Equal(got, tc.want) {
-				t.Fatalf("extractImageLookupProviderIDs(%q) = %q, want %q", tc.metadataJSON, got, tc.want)
+			if got := extractLookupImages([]byte(tc.metadataJSON)); got != tc.want {
+				t.Fatalf("extractLookupImages(%q) = %v, want %v", tc.metadataJSON, got, tc.want)
 			}
 		})
 	}

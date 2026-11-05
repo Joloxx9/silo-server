@@ -70,10 +70,9 @@ type PluginProvider struct {
 	// look an item up by (lookup_provider_ids). GetMetadata runs when the item
 	// carries any of them, even without an ID of the provider's own.
 	lookupProviderIDs []string
-	// imageLookupProviderIDs are the external provider-ID keys the capability
-	// explicitly permits image lookup by. Unlike lookupProviderIDs, these do
-	// not affect metadata enrichment or child metadata requests.
-	imageLookupProviderIDs []string
+	// lookupImages opens GetImages to the same lookup keys (lookup_images), for
+	// an artwork source that has no IDs of its own.
+	lookupImages bool
 	// declaredRatingSources are the rating sources of its own the capability
 	// declared (rating_sources); GetMetadata keeps them alongside Silo's
 	// built-in sources.
@@ -133,15 +132,14 @@ func NewPluginProviderWithClientFactory(
 
 // NewPluginProviderFromCapability constructs a PluginProvider directly from
 // plugin capability data, without going through a settings map or registry.
-// lookupProviderIDs is the capability's declared lookup_provider_ids, or nil.
-// imageLookupProviderIDs is its explicitly declared image_lookup_provider_ids,
-// or nil.
+// lookupProviderIDs is the capability's declared lookup_provider_ids, or nil;
+// lookupImages is its declared lookup_images.
 func NewPluginProviderFromCapability(
 	installationID int,
 	capabilityID string,
 	displayName string,
 	lookupProviderIDs []string,
-	imageLookupProviderIDs []string,
+	lookupImages bool,
 	ratingSources []models.RatingSourceDefinition,
 	resolver pluginMetadataResolver,
 ) (*PluginProvider, error) {
@@ -159,13 +157,13 @@ func NewPluginProviderFromCapability(
 		}
 	}
 	return &PluginProvider{
-		installationID:         installationID,
-		capabilityID:           capabilityID,
-		displayName:            displayName,
-		lookupProviderIDs:      lookupProviderIDs,
-		imageLookupProviderIDs: imageLookupProviderIDs,
-		declaredRatingSources:  declared,
-		clientFactory:          resolver.MetadataProviderClient,
+		installationID:        installationID,
+		capabilityID:          capabilityID,
+		displayName:           displayName,
+		lookupProviderIDs:     lookupProviderIDs,
+		lookupImages:          lookupImages,
+		declaredRatingSources: declared,
+		clientFactory:         resolver.MetadataProviderClient,
 	}, nil
 }
 
@@ -411,9 +409,13 @@ func (p *PluginProvider) GetPersonDetail(ctx context.Context, req PersonDetailRe
 	}, nil
 }
 
+// GetImages fetches the item's artwork from the plugin. Like GetMetadata it
+// runs on the provider's own ID, but declared lookup keys open it only when the
+// capability also declared lookup_images: an enrichment provider such as
+// MDBList has no artwork, so it is not asked.
 func (p *PluginProvider) GetImages(ctx context.Context, req ImageRequest) ([]RemoteImage, error) {
 	providerID := req.ProviderIDs[p.capabilityID]
-	if providerID == "" && !hasProviderID(req.ProviderIDs, p.imageLookupProviderIDs) {
+	if providerID == "" && (!p.lookupImages || !p.hasLookupProviderID(req.ProviderIDs)) {
 		return nil, nil
 	}
 
