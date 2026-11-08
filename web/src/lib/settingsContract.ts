@@ -9,7 +9,7 @@
  */
 
 export const SETTINGS_API_VERSION = 1;
-export const SETTINGS_REVISION = 28;
+export const SETTINGS_REVISION = 29;
 
 export interface SettingSuggestedOption {
   value: string;
@@ -180,6 +180,8 @@ export const SETTING_OPTION_SETS = {
 export type SettingOptionSetId = keyof typeof SETTING_OPTION_SETS;
 
 export const SETTING_KEYS = {
+  /** Group box sets in libraries */
+  CATALOG_GROUP_BOX_SETS_IN_LIBRARY: "catalog.group_box_sets_in_library",
   /** Blur unwatched episode images */
   CATALOG_HIDE_UNWATCHED_EPISODE_IMAGES: "catalog.hide_unwatched_episode_images",
   /** Hide unwatched episode descriptions */
@@ -392,6 +394,22 @@ export interface SettingDefinition {
 }
 
 export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
+  "catalog.group_box_sets_in_library": {
+    key: "catalog.group_box_sets_in_library",
+    type: "boolean",
+    nullable: false,
+    persistence: "remote",
+    introducedIn: 29,
+    scopes: ["profile"],
+    scopeIntroducedIn: [29],
+    resolutionOrder: ["profile", "default"],
+    defaultValue: false,
+    label: "Group box sets in libraries",
+    description: "Show a movie box set as one card in library grids instead of its movies.",
+    category: "catalog",
+    control: "switch",
+    platforms: ["web", "ios", "tvos", "macos", "android", "android_tv"],
+  },
   "catalog.hide_unwatched_episode_images": {
     key: "catalog.hide_unwatched_episode_images",
     type: "boolean",

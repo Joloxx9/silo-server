@@ -14,7 +14,14 @@ import {
 } from "@/components/ui/select";
 import { useUICustomization } from "@/hooks/useUICustomization";
 import { useUserLibraries } from "@/hooks/queries/libraries";
-import { useClearSettingValue, useSetSettingValue } from "@/hooks/queries/settingValues";
+import {
+  useClearSettingValue,
+  useEffectiveSettings,
+  useSetSettingValue,
+} from "@/hooks/queries/settingValues";
+import { useProfileDefaultWriter } from "@/hooks/queries/profileDefaults";
+import { SettingRow } from "@/components/settings/SettingRow";
+import { Switch } from "@/components/ui/switch";
 import { SETTING_KEYS } from "@/lib/settingsContract";
 import {
   defaultWebPrimaryMenu,
@@ -107,10 +114,41 @@ export default function InterfaceSettings() {
         <div className="min-w-0">
           <PosterSettings />
           <CardOverlaySettings onShortcutsPicked={flashShortcuts} />
+          <BoxSetSettings />
           <MenuSettings />
         </div>
       </div>
     </div>
+  );
+}
+
+const BOX_SET_KEY = SETTING_KEYS.CATALOG_GROUP_BOX_SETS_IN_LIBRARY;
+
+/** Whether movie libraries list a box set as one card instead of its movies. */
+function BoxSetSettings() {
+  const { data: effective, isPending, isError } = useEffectiveSettings({ keys: [BOX_SET_KEY] });
+  const { save, isSaving } = useProfileDefaultWriter(effective);
+  const checked = effective?.[BOX_SET_KEY]?.value === true;
+  return (
+    <SettingsGroup
+      title="Box sets"
+      description="Box sets always show in search and on their movies' pages."
+    >
+      <SettingRow
+        label="Group box sets in libraries"
+        description="Show the movies of a box set, such as a film series, as one card in movie libraries. Only libraries where an administrator turned box sets on are grouped."
+        control={(id) => (
+          <Switch
+            id={id}
+            checked={checked}
+            disabled={isSaving || isPending || isError}
+            onCheckedChange={(value) =>
+              save(BOX_SET_KEY, value).catch(() => toast.error("Failed to save box set setting"))
+            }
+          />
+        )}
+      />
+    </SettingsGroup>
   );
 }
 

@@ -37,6 +37,10 @@ vi.mock("@/hooks/queries/libraryPageState", async (importOriginal) => ({
   }),
 }));
 
+vi.mock("@/hooks/useGroupBoxSets", () => ({
+  useGroupBoxSets: () => false,
+}));
+
 vi.mock("@/hooks/useDocumentTitle", () => ({
   useDocumentTitle: vi.fn(),
 }));

@@ -9,10 +9,12 @@
 package settingskeys
 
 // Revision is the manifest revision these bindings were generated from.
-const Revision = 28
+const Revision = 29
 
 // Setting keys, one constant per definition.
 const (
+	// Group box sets in libraries
+	CatalogGroupBoxSetsInLibrary = "catalog.group_box_sets_in_library"
 	// Blur unwatched episode images
 	CatalogHideUnwatchedEpisodeImages = "catalog.hide_unwatched_episode_images"
 	// Hide unwatched episode descriptions
@@ -171,6 +173,7 @@ const (
 
 // Remote lists every key the server stores.
 var Remote = []string{
+	CatalogGroupBoxSetsInLibrary,
 	CatalogHideUnwatchedEpisodeImages,
 	CatalogHideUnwatchedEpisodeOverviews,
 	CatalogMetadataLanguage,

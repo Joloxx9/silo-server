@@ -13,7 +13,16 @@ import { buildBoxSetHref } from "@/lib/mediaNavigation";
  * collection. The stacked edge above the poster and the BOX SET pill set it
  * apart from a single movie and from curated collections.
  */
-export default function BoxSetCard({ boxSet }: { boxSet: BoxSetSummary }) {
+export default function BoxSetCard({
+  boxSet,
+  posterUrl,
+  posterThumbhash,
+}: {
+  boxSet: BoxSetSummary;
+  /** The card's poster; the box set's own, or a member's when it has none. */
+  posterUrl?: string;
+  posterThumbhash?: string;
+}) {
   const href = buildBoxSetHref({ id: boxSet.id, libraryId: boxSet.library_id });
   const progress = boxSet.movie_count > 0 ? boxSet.played_count / boxSet.movie_count : 0;
   const meta =
@@ -39,10 +48,10 @@ export default function BoxSetCard({ boxSet }: { boxSet: BoxSetSummary }) {
           className="relative block overflow-hidden rounded-xl"
         >
           <MediaCardArtwork
-            src={boxSet.poster_url}
+            src={posterUrl ?? boxSet.poster_url}
             alt={boxSet.title}
             mediaType="movie"
-            thumbhash={boxSet.poster_thumbhash}
+            thumbhash={posterThumbhash}
             scrim="background"
           >
             <span className="glass-subtle text-foreground absolute top-2.5 left-2.5 rounded-full border border-white/15 px-2.5 py-1 text-[0.625rem] font-semibold tracking-[0.14em] uppercase">

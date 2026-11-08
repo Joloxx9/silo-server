@@ -28,6 +28,11 @@ vi.mock("@/hooks/queries/libraries", () => ({
 vi.mock("@/hooks/queries/settingValues", () => ({
   useSetSettingValue: (...args: unknown[]) => mocks.useSetSettingValue(...args),
   useClearSettingValue: (...args: unknown[]) => mocks.useClearSettingValue(...args),
+  useEffectiveSettings: () => ({ data: {}, isPending: false, isError: false }),
+}));
+
+vi.mock("@/hooks/queries/profileDefaults", () => ({
+  useProfileDefaultWriter: () => ({ save: () => Promise.resolve(), isSaving: false }),
 }));
 
 // Shortcuts, badges, and the preview have their own tests; here it only

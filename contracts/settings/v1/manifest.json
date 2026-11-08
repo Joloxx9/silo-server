@@ -1,6 +1,6 @@
 {
   "api_version": 1,
-  "revision": 28,
+  "revision": 29,
   "option_sets": {
     "playback_audio_languages": {
       "type": "language_tag",
@@ -820,6 +820,21 @@
       "description": "Show seasons and episodes the library lacks, with a way to request them.",
       "recommended_control": "switch",
       "notes": "Clients apply this by passing include_missing=true to the season and episode lists, which then add the metadata episodes no library holds, outside specials, marked missing or unaired, and the seasons that hold only those. Rollups, counts and play targets stay those of the library. Profile scope so the choice follows the viewer; default false so a series page shows only what can be played."
+    },
+    {
+      "key": "catalog.group_box_sets_in_library",
+      "introduced_in": 29,
+      "persistence": "remote",
+      "allowed_scopes": ["profile"],
+      "resolution_order": ["profile", "default"],
+      "value_schema": { "type": "boolean" },
+      "default_value": false,
+      "platforms": ["web", "ios", "tvos", "macos", "android", "android_tv"],
+      "category": "catalog",
+      "label": "Group box sets in libraries",
+      "description": "Show a movie box set as one card in library grids instead of its movies.",
+      "recommended_control": "switch",
+      "notes": "Clients apply this by passing group=box_set to the library grid's catalog item list for libraries with box_sets_enabled, so the movies of one box set are listed as a single box set card that opens the box set page. Search and movie pages show box sets whatever the value. Profile scope so the choice follows the viewer; default false keeps every movie in the grid."
     },
     {
       "key": "player.hdr_enabled",

@@ -10,6 +10,7 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import LibraryRecommended from "./LibraryRecommended";
 import LibraryBrowse from "./LibraryBrowse";
 import LibraryCollections from "./LibraryCollections";
+import { useGroupBoxSets } from "@/hooks/useGroupBoxSets";
 import {
   libraryPageStateWriteRetryDelay,
   useLibraryPageStatePreference,
@@ -72,6 +73,8 @@ export default function LibraryPage() {
   const id = Number(libraryId);
   const libraryPageStateKey = `${libraryPageStateOwnerKey ?? "none"}:${id}`;
   const library = libraries?.find((l) => l.id === id);
+  // Box sets group in the grid only when this profile asks for it.
+  const groupBoxSets = useGroupBoxSets();
   const libraryType = library?.type ?? "";
   const { startShuffle, isStarting: isStartingShuffle } = useStartShuffle();
   const savedLibrarySearch =
@@ -462,6 +465,7 @@ export default function LibraryPage() {
             <LibraryBrowse
               libraryId={id}
               libraryType={libraryType || "mixed"}
+              boxSetsEnabled={library?.box_sets_enabled === true && groupBoxSets}
               browseType={browseType}
               queryDefinition={queryDefinition}
               onBrowseTypeChange={handleBrowseTypeChange}
