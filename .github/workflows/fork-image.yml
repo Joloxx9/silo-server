@@ -1,4 +1,5 @@
-# Personal image build for this fork. Upstream's publisher
+# Personal image build for this fork's `spark` branch (the Spark build of
+# Silo; `main` mirrors upstream Silo and is never built here). Upstream's publisher
 # (.github/workflows/docker.yml -> trusted-linux-build.yml) is gated on
 # github.repository == 'Silo-Server/silo-server', so it never runs here.
 # This builds the single architecture Unraid needs and pushes it to the
@@ -17,7 +18,7 @@ name: Fork image
 
 on:
   push:
-    branches: [main]
+    branches: [spark]
   workflow_dispatch:
 
 concurrency:
@@ -80,6 +81,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:pr-2259
             ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:main
+            ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:spark
             ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:${{ github.sha }}
           build-args: |
             BUILD_REVISION=${{ github.sha }}
@@ -103,6 +105,7 @@ jobs:
             echo "${REGISTRY}/${IMAGE_LC}:latest"
             echo "${REGISTRY}/${IMAGE_LC}:pr-2259"
             echo "${REGISTRY}/${IMAGE_LC}:main"
+            echo "${REGISTRY}/${IMAGE_LC}:spark"
             echo "${REGISTRY}/${IMAGE_LC}:${GITHUB_SHA}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
