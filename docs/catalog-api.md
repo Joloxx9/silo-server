@@ -1179,13 +1179,20 @@ nothing to show. Each entry has:
 - `score`: the rating on a 0-100 scale.
 - `display`: the score on the source's own scale, formatted: `8.5`, `93%`,
   `4.2`.
+- `icon_url` (optional): the image the administrator assigned to the source,
+  drawn in place of `name`.
 
 Clients render each entry as its mark followed by `display`, in list order.
 The list holds at most three entries, the first in display order, so every
 client shows the same three ratings on one line.
-Marks are plain text, never a source's logo artwork, with one exception: TMDB's
-approved logo may stand in for the `TMDB` mark, as TMDB's terms allow. Clients
-do not recompute the list from the `rating_*` members.
+Marks are plain text, never logo artwork shipped with Silo or a client, with
+one exception: TMDB's approved logo may stand in for the `TMDB` mark, as TMDB's
+terms allow. When the administrator assigned an image to the source (the
+`catalog.rating_source_icons` server setting), the entry carries `icon_url`, an
+overlay image path, and clients draw that image in place of the mark; the image
+can differ by score (a separate one under 60%), and the server picks it. A
+client falls back to the text mark when the image does not load. Clients do
+not recompute the list from the `rating_*` members.
 
 IMDb and TMDB are always in the list when the title has them. Every other
 source is one an enabled metadata plugin declares, and appears only after an

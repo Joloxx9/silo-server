@@ -8,6 +8,53 @@ import {
 export { RATING_POLICY_SETTLE_MS };
 
 export const EXTRA_RATING_SOURCES_KEY = "catalog.extra_rating_sources";
+export const RATING_SOURCE_ICONS_KEY = "catalog.rating_source_icons";
+
+/** The images assigned to one rating source, by overlay image ref. */
+export interface RatingSourceIcon {
+  image?: string;
+  low_image?: string;
+}
+
+/** Reads the icon assignments; an unreadable value assigns none. */
+export function parseRatingIcons(value: string | undefined): Record<string, RatingSourceIcon> {
+  if (!value) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, RatingSourceIcon> = {};
+    for (const [source, entry] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!entry || typeof entry !== "object") continue;
+      const { image, low_image } = entry as Record<string, unknown>;
+      out[source] = {
+        ...(typeof image === "string" && image ? { image } : {}),
+        ...(typeof low_image === "string" && low_image ? { low_image } : {}),
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Sets or clears one of a source's images, keeping every other assignment. A
+ * source left with no image is dropped; no assignments store as empty.
+ */
+export function setRatingIcon(
+  value: string | undefined,
+  source: string,
+  slot: keyof RatingSourceIcon,
+  ref: string | undefined,
+): string {
+  const icons = parseRatingIcons(value);
+  const entry: RatingSourceIcon = { ...icons[source] };
+  if (ref) entry[slot] = ref;
+  else delete entry[slot];
+  if (entry.image || entry.low_image) icons[source] = entry;
+  else delete icons[source];
+  return Object.keys(icons).length > 0 ? JSON.stringify(icons) : "";
+}
 
 export function parseRatingSources(value: string | undefined): string[] {
   return (value ?? "")
@@ -74,7 +121,8 @@ export async function saveAndRefreshRatings(
   queryClient: QueryClient,
   schedule?: (run: () => void, ms: number) => unknown,
 ): Promise<void> {
-  const ratingsChanged = form.isDirty(EXTRA_RATING_SOURCES_KEY);
+  const ratingsChanged =
+    form.isDirty(EXTRA_RATING_SOURCES_KEY) || form.isDirty(RATING_SOURCE_ICONS_KEY);
   await form.save();
   if (ratingsChanged) refreshRatingChoice(queryClient, schedule);
 }

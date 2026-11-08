@@ -1,6 +1,7 @@
 {
-  "revision": "08ed7ce4904e0a3951515e06a26509ec8be109cddb028c4e57b9264d9c094c94",
+  "revision": "2a9eac24d5360b97a277cba9e5460140d590335b0405d2c945daa57e8aea0e43",
   "state": "available",
   "allowed": true,
-  "plugin_declared_sources": true
+  "plugin_declared_sources": true,
+  "rating_icons": true
 }

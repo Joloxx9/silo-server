@@ -20491,6 +20491,8 @@ export interface components {
       allowed: boolean;
       /** @description listAdminRatingSources lists IMDb, TMDB and the sources enabled metadata plugins declare, and title pages show a declared source once catalog.extra_rating_sources names it */
       plugin_declared_sources: boolean;
+      /** @description catalog.rating_source_icons assigns overlay library images to rating sources, and title page ratings carry them as icon_url */
+      rating_icons: boolean;
       /** @description Opaque revision of this document */
       revision: string;
       /**
@@ -24468,6 +24470,12 @@ export interface components {
        * @example 8.5
        */
       display: string;
+      /**
+       * Format: uri-reference
+       * @description An image the administrator assigned to the source, drawn in place of name; it can differ by score, such as a separate image under 60%. Absent, clients show name. Clients fall back to name when the image does not load.
+       * @example /api/v2/overlay-images/9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f7.webp
+       */
+      icon_url?: string;
       /**
        * @description The source's name as a plain-text mark, shown next to the score
        * @example IMDb

@@ -8,7 +8,9 @@ import {
   RATING_POLICY_SETTLE_MS,
   saveAndRefreshRatings,
   groupRatingSourcesByPlugin,
+  parseRatingIcons,
   parseRatingSources,
+  setRatingIcon,
   toggleRatingSource,
   undeclaredRatingSources,
 } from "./ratingSources";
@@ -87,5 +89,24 @@ describe("rating source setting", () => {
       throw new Error("nothing to schedule");
     });
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("setRatingIcon", () => {
+  it("changes one image and keeps the other assignments", () => {
+    let value = setRatingIcon("", "imdb", "image", "a.webp");
+    value = setRatingIcon(value, "rt_critic", "low_image", "b.webp");
+    expect(parseRatingIcons(value)).toEqual({
+      imdb: { image: "a.webp" },
+      rt_critic: { low_image: "b.webp" },
+    });
+    value = setRatingIcon(value, "rt_critic", "low_image", undefined);
+    expect(parseRatingIcons(value)).toEqual({ imdb: { image: "a.webp" } });
+    expect(setRatingIcon(value, "imdb", "image", undefined)).toBe("");
+  });
+
+  it("reads an unreadable value as no assignments", () => {
+    expect(parseRatingIcons("not json")).toEqual({});
+    expect(parseRatingIcons("[]")).toEqual({});
   });
 });

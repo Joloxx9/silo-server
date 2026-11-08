@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Silo-Server/silo-server/internal/config"
 	"github.com/Silo-Server/silo-server/internal/models"
 )
 
@@ -112,6 +113,31 @@ func TestBuildPrefersRatingColumnsOverSourceRows(t *testing.T) {
 	}
 }
 
+// An administrator's image replaces a source's mark, and the low image takes
+// over under 60%, as Rotten Tomatoes' fresh and rotten marks do.
+func TestBuildAddsAssignedIcons(t *testing.T) {
+	icons := map[string]config.RatingSourceIcon{
+		"imdb":      {Image: "imdb.webp"},
+		"rt_critic": {Image: "fresh.webp", LowImage: "rotten.webp"},
+	}
+	cases := []struct {
+		critic int
+		want   string
+	}{{93, "fresh.webp"}, {60, "fresh.webp"}, {59, "rotten.webp"}}
+	for _, tc := range cases {
+		item := Item{IMDB: ptr(8.5), TMDB: ptr(7.0), RTCritic: ptr(tc.critic)}
+		got := Build(item, NewSelection("rt_critic").WithDeclared(declared(rtCritic)).WithIcons(icons))
+		icon := map[string]string{}
+		for _, r := range got {
+			icon[r.Source] = r.Icon
+		}
+		want := map[string]string{"imdb": "imdb.webp", "tmdb": "", "rt_critic": tc.want}
+		if !reflect.DeepEqual(icon, want) {
+			t.Errorf("critics %d%%: icons = %v, want %v", tc.critic, icon, want)
+		}
+	}
+}
+
 func TestBuildDropsANaNSourceScore(t *testing.T) {
 	item := Item{Sources: map[string]float64{models.RatingSourceIMDB: math.NaN()}}
 	if got := Build(item, Selection{}); len(got) != 0 {
@@ -169,7 +195,12 @@ type stubSettings struct {
 	reads int
 }
 
-func (s *stubSettings) Get(context.Context, string) (string, error) {
+// Get answers the extra sources setting from the stub and leaves every other
+// key, such as the icon assignments, empty.
+func (s *stubSettings) Get(_ context.Context, key string) (string, error) {
+	if key != config.CatalogExtraRatingSourcesSettingKey {
+		return "", s.err
+	}
 	s.reads++
 	return s.value, s.err
 }

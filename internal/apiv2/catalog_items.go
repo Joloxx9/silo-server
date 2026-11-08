@@ -471,6 +471,7 @@ type CatalogRating struct {
 	Name    string  `json:"name" doc:"The source's name as a plain-text mark, shown next to the score" example:"IMDb"`
 	Score   float64 `json:"score" minimum:"0" maximum:"100" doc:"Score on a 0-100 scale"`
 	Display string  `json:"display" doc:"The score on the source's own scale, formatted for display" example:"8.5"`
+	IconURL string  `json:"icon_url,omitempty" format:"uri-reference" doc:"An image the administrator assigned to the source, drawn in place of name; it can differ by score, such as a separate image under 60%. Absent, clients show name. Clients fall back to name when the image does not load." example:"/api/v2/overlay-images/9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f7.webp"`
 }
 
 // catalogRatingsOf builds the title page's ratings from the stored columns
@@ -491,7 +492,11 @@ func builtRatingsOf(item ratingsources.Item, sel ratingsources.Selection) []Cata
 	built := ratingsources.Build(item, sel)
 	out := make([]CatalogRating, 0, len(built))
 	for _, r := range built {
-		out = append(out, CatalogRating{Source: r.Source, Name: r.Name, Score: r.Score, Display: r.Display})
+		rating := CatalogRating{Source: r.Source, Name: r.Name, Score: r.Score, Display: r.Display}
+		if r.Icon != "" {
+			rating.IconURL = overlayImageURL(r.Icon)
+		}
+		out = append(out, rating)
 	}
 	return out
 }

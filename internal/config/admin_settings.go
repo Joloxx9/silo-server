@@ -9,6 +9,7 @@ import (
 	"net/mail"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -104,6 +105,85 @@ const (
 // default, shows only IMDb and TMDB, because the owners of the other scores
 // restrict how others may display them. See internal/ratingsources.
 const CatalogExtraRatingSourcesSettingKey = "catalog.extra_rating_sources"
+
+// CatalogRatingSourceIconsSettingKey assigns images from the overlay image
+// library to rating sources, as a JSON object keyed by source name:
+// {"imdb":{"image":"<ref>"},"rt_critic":{"image":"<ref>","low_image":"<ref>"}}.
+// Clients draw a source's image in place of its plain-text mark, and
+// low_image instead while the score is under RatingIconLowScore. Empty, the
+// default, assigns none: Silo ships no third-party logos, and an uploaded
+// image is the administrator's to license.
+const CatalogRatingSourceIconsSettingKey = "catalog.rating_source_icons"
+
+// RatingIconLowScore is the 0-100 score below which a source's low_image
+// shows, the line Rotten Tomatoes draws between fresh and rotten.
+const RatingIconLowScore = 60
+
+// RatingSourceIcon is the images assigned to one rating source.
+type RatingSourceIcon struct {
+	Image    string `json:"image,omitempty"`
+	LowImage string `json:"low_image,omitempty"`
+}
+
+// overlayImageRefPattern matches an overlay image library ref; it mirrors
+// overlays.IsImageRef, which config cannot import without libvips.
+var overlayImageRefPattern = regexp.MustCompile(`^[0-9a-f]{64}\.webp$`)
+
+// ParseRatingSourceIcons reads a CatalogRatingSourceIconsSettingKey value,
+// dropping malformed entries. An unreadable value assigns no icons.
+func ParseRatingSourceIcons(raw string) map[string]RatingSourceIcon {
+	icons, _ := splitRatingSourceIcons(raw)
+	return icons
+}
+
+func splitRatingSourceIcons(raw string) (map[string]RatingSourceIcon, error) {
+	out := map[string]RatingSourceIcon{}
+	if strings.TrimSpace(raw) == "" {
+		return out, nil
+	}
+	var decoded map[string]RatingSourceIcon
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		return out, fmt.Errorf("must be a JSON object of rating source icons")
+	}
+	var firstErr error
+	for source, icon := range decoded {
+		source = strings.ToLower(strings.TrimSpace(source))
+		switch {
+		case !models.ValidRatingSourceID(source):
+			if firstErr == nil {
+				firstErr = fmt.Errorf("%q is not a rating source name", source)
+			}
+			continue
+		case icon.Image != "" && !overlayImageRefPattern.MatchString(icon.Image),
+			icon.LowImage != "" && !overlayImageRefPattern.MatchString(icon.LowImage):
+			if firstErr == nil {
+				firstErr = fmt.Errorf("%s: icon is not an overlay image ref", source)
+			}
+			continue
+		case icon.Image == "" && icon.LowImage == "":
+			continue
+		}
+		out[source] = icon
+	}
+	return out, firstErr
+}
+
+// normalizeRatingSourceIcons canonicalizes the icon assignments, refusing a
+// malformed source name or image ref. No entries store as empty.
+func normalizeRatingSourceIcons(key, value string) (string, error) {
+	icons, err := splitRatingSourceIcons(value)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", key, err)
+	}
+	if len(icons) == 0 {
+		return "", nil
+	}
+	encoded, err := json.Marshal(icons)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
 
 // ParseRatingSourceList splits a CatalogExtraRatingSourcesSettingKey value
 // into source names, dropping blanks, duplicates, and malformed names.
@@ -456,6 +536,7 @@ var adminSettingDefaults = map[string]string{
 	CatalogScopeVersionsToLibrarySettingKey:          "false",
 	AccessUnratedContentSettingKey:                   AccessUnratedContentHide,
 	CatalogExtraRatingSourcesSettingKey:              "",
+	CatalogRatingSourceIconsSettingKey:               "",
 	"playback.watched_threshold":                     "90",
 	"playback.min_resume_threshold":                  "5",
 	Allow4KTranscodeSettingKey:                       "true",
@@ -783,6 +864,8 @@ func NormalizeAdminSetting(key, raw string) (string, error) {
 
 	case CatalogExtraRatingSourcesSettingKey:
 		return normalizeRatingSourceList(key, value)
+	case CatalogRatingSourceIconsSettingKey:
+		return normalizeRatingSourceIcons(key, value)
 
 	case "artwork.storage_backend":
 		return normalizeAdminEnum(key, value, "auto", "local", "s3")

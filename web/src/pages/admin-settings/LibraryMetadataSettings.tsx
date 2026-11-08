@@ -10,6 +10,8 @@ import {
   useAdminRatingSourceCapabilities,
   useAdminRatingSources,
 } from "@/hooks/queries/admin/ratingSources";
+import { ImageSelect } from "@/components/overlays/settings/BadgeImagesControl";
+import { useOverlayConfig } from "@/hooks/useOverlayPrefs";
 import { useRestartKeys } from "@/hooks/useRestartKeys";
 import { LANGUAGES } from "@/player/utils/languageNames";
 import { useSettingsForm } from "@/hooks/useSettingsForm";
@@ -17,7 +19,10 @@ import { FieldGroup } from "./FieldGroup";
 import {
   EXTRA_RATING_SOURCES_KEY,
   groupRatingSourcesByPlugin,
+  parseRatingIcons,
   parseRatingSources,
+  RATING_SOURCE_ICONS_KEY,
+  setRatingIcon,
   saveAndRefreshRatings,
   toggleRatingSource,
   undeclaredRatingSources,
@@ -49,7 +54,7 @@ const FALLBACK_LANGUAGE_OPTIONS = [
 // content rating may see at all.
 const MATURITY_KEYS = ["access.unrated_content"];
 
-const RATINGS_KEYS = [EXTRA_RATING_SOURCES_KEY];
+const RATINGS_KEYS = [EXTRA_RATING_SOURCES_KEY, RATING_SOURCE_ICONS_KEY];
 
 // How many files, lookups, and images run at once is what decides scan speed
 // on a given machine, so the three worker counts are shown; the person lookup
@@ -93,6 +98,8 @@ export default function LibraryMetadataSettings() {
   const { data: ratingSourceCapabilities } = useAdminRatingSourceCapabilities();
   const pluginRatingSources = ratingSourceCapabilities?.plugin_declared_sources === true;
   const ratingSources = useAdminRatingSources(pluginRatingSources);
+  const ratingIconsSupported = ratingSourceCapabilities?.rating_icons === true;
+  const overlayImages = useOverlayConfig().data?.images ?? [];
   const queryClient = useQueryClient();
 
   // A saved rating choice also refreshes cached title pages and cards.
@@ -125,6 +132,17 @@ export default function LibraryMetadataSettings() {
         ratingSources.data.items,
       )
     : [];
+  const ratingIcons = parseRatingIcons(form.getValue(RATING_SOURCE_ICONS_KEY));
+  // Icons are offered for the sources a title page can show: IMDb, TMDB, and
+  // the declared sources turned on.
+  const iconSources = (ratingSources.data?.items ?? []).filter(
+    ({ source, always_shown }) => always_shown || extraRatingSources.includes(source),
+  );
+  const assignRatingIcon = (source: string, slot: "image" | "low_image", ref: string | undefined) =>
+    form.setValue(
+      RATING_SOURCE_ICONS_KEY,
+      setRatingIcon(form.getValue(RATING_SOURCE_ICONS_KEY), source, slot, ref),
+    );
   const setRatingSource = (source: string, on: boolean) =>
     form.setValue(
       EXTRA_RATING_SOURCES_KEY,
@@ -339,6 +357,45 @@ export default function LibraryMetadataSettings() {
                 ))}
               </div>
             )}
+          </FieldGroup>
+        )}
+
+        {pluginRatingSources && ratingIconsSupported && ratingSources.isSuccess && (
+          <FieldGroup
+            label="Rating icons"
+            description="Show an image in place of a rating's name on title pages in every app, such as a source's logo. Pick from the images uploaded under Appearance, Badge images. The second image, when set, shows instead while the score is under 60%, like Rotten Tomatoes' fresh and rotten marks. Silo ships no logos: you are responsible for having the right to show any image you upload."
+            restartAll={restartKeys.has(RATING_SOURCE_ICONS_KEY)}
+          >
+            {overlayImages.length === 0 && (
+              <SettingFieldStatus tone="muted">
+                No images uploaded yet. Add them under Appearance, Badge images.
+              </SettingFieldStatus>
+            )}
+            {overlayImages.length > 0 &&
+              iconSources.map(({ source, label }) => (
+                <div
+                  key={source}
+                  role="group"
+                  aria-label={`${label} icon`}
+                  className="grid gap-2 py-2 sm:grid-cols-[minmax(0,10rem)_1fr_1fr] sm:items-center"
+                >
+                  <span className="text-sm font-medium">{label}</span>
+                  <ImageSelect
+                    value={ratingIcons[source]?.image}
+                    images={overlayImages}
+                    label={`${label} icon`}
+                    noneLabel="Name as text"
+                    onChange={(ref) => assignRatingIcon(source, "image", ref)}
+                  />
+                  <ImageSelect
+                    value={ratingIcons[source]?.low_image}
+                    images={overlayImages}
+                    label={`${label} icon under 60%`}
+                    noneLabel="Same under 60%"
+                    onChange={(ref) => assignRatingIcon(source, "low_image", ref)}
+                  />
+                </div>
+              ))}
           </FieldGroup>
         )}
 

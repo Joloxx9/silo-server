@@ -29,6 +29,25 @@ type Selection struct {
 	extra      map[string]struct{}
 	declared   []models.RatingSourceDefinition
 	declaredID map[string]struct{}
+	icons      map[string]config.RatingSourceIcon
+}
+
+// WithIcons returns the selection with the images the administrator assigned
+// to sources under config.CatalogRatingSourceIconsSettingKey.
+func (s Selection) WithIcons(icons map[string]config.RatingSourceIcon) Selection {
+	s.icons = icons
+	return s
+}
+
+// icon returns the image ref a rating of source at score shows in place of its
+// mark: the low image under config.RatingIconLowScore when one is assigned,
+// otherwise the image. Empty means the plain-text mark.
+func (s Selection) icon(source string, score float64) string {
+	icon := s.icons[source]
+	if score < config.RatingIconLowScore && icon.LowImage != "" {
+		return icon.LowImage
+	}
+	return icon.Image
 }
 
 // WithDeclared returns the selection with the given plugin-declared source
@@ -186,7 +205,11 @@ func (p *Policy) read(ctx context.Context) Selection {
 	} else if sources, err := p.declared(ctx); err == nil {
 		declared, haveDeclared = definitionsOf(sources), true
 	}
-	sel := NewSelection(config.ParseRatingSourceList(value)...).WithDeclared(declared)
+	icons := last.icons
+	if raw, err := p.settings.Get(ctx, config.CatalogRatingSourceIconsSettingKey); err == nil {
+		icons = config.ParseRatingSourceIcons(raw)
+	}
+	sel := NewSelection(config.ParseRatingSourceList(value)...).WithDeclared(declared).WithIcons(icons)
 
 	p.mu.Lock()
 	p.selection = sel
@@ -246,6 +269,9 @@ type Rating struct {
 	// Display is the score on the source's own scale, formatted: "8.5",
 	// "93%", "4.2".
 	Display string
+	// Icon is the overlay image ref drawn in place of Name, or empty for the
+	// plain-text mark.
+	Icon string
 }
 
 // Item carries the ratings stored for one item: the four rating columns on
@@ -309,6 +335,7 @@ func Build(item Item, sel Selection) []Rating {
 			Name:    definition.Name,
 			Score:   score,
 			Display: Format(score, definition),
+			Icon:    sel.icon(definition.Source, score),
 		})
 		if len(out) == MaxTitleRatings {
 			break

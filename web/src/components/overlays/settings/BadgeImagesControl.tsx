@@ -14,7 +14,7 @@ import type { OverlayDef, OverlayImage, OverlayItemConfig } from "@/lib/overlays
 
 const NONE = "__none__";
 
-function ImageSelect({
+export function ImageSelect({
   value,
   images,
   label,

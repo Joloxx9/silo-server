@@ -20,6 +20,7 @@ type AdminRatingSource struct {
 type AdminRatingSourceCapabilities struct {
 	Capability
 	PluginDeclaredSources bool `json:"plugin_declared_sources" doc:"listAdminRatingSources lists IMDb, TMDB and the sources enabled metadata plugins declare, and title pages show a declared source once catalog.extra_rating_sources names it"`
+	RatingIcons           bool `json:"rating_icons" doc:"catalog.rating_source_icons assigns overlay library images to rating sources, and title page ratings carry them as icon_url"`
 }
 
 // AdminRatingSourceCapabilitiesOutput is the getAdminRatingSourceCapabilities
@@ -42,7 +43,7 @@ func registerAdminRatingSources(reg *Registry) {
 	capabilities := Operation{Operation: humaOp(http.MethodGet, Prefix+"/admin/rating-sources/capabilities", "getAdminRatingSourceCapabilities", "admin-settings",
 		"Discover the rating source support in this build, such as sources metadata plugins declare. Support does not promise that any plugin declares a source."), Class: ClassActingAdmin}
 	Register(reg, capabilities, func(context.Context, *CapabilityInput) (*AdminRatingSourceCapabilitiesOutput, error) {
-		return &AdminRatingSourceCapabilitiesOutput{Body: AdminRatingSourceCapabilities{PluginDeclaredSources: true}}, nil
+		return &AdminRatingSourceCapabilitiesOutput{Body: AdminRatingSourceCapabilities{PluginDeclaredSources: true, RatingIcons: true}}, nil
 	})
 
 	o := Operation{

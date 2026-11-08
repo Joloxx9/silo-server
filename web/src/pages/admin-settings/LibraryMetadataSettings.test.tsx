@@ -67,6 +67,10 @@ vi.mock("@/hooks/queries/admin/ratingSources", () => ({
   useAdminRatingSources: () => ratingSourcesMock(),
 }));
 
+vi.mock("@/hooks/useOverlayPrefs", () => ({
+  useOverlayConfig: () => ({ data: { images: [] } }),
+}));
+
 const makeForm = (values: Record<string, string>, dirty: string[] = []) =>
   fakeSettingsForm(values, { dirty });
 

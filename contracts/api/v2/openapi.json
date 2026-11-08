@@ -18468,6 +18468,10 @@
             "description": "listAdminRatingSources lists IMDb, TMDB and the sources enabled metadata plugins declare, and title pages show a declared source once catalog.extra_rating_sources names it",
             "type": "boolean"
           },
+          "rating_icons": {
+            "description": "catalog.rating_source_icons assigns overlay library images to rating sources, and title page ratings carry them as icon_url",
+            "type": "boolean"
+          },
           "revision": {
             "description": "Opaque revision of this document",
             "type": "string"
@@ -18485,6 +18489,7 @@
         },
         "required": [
           "plugin_declared_sources",
+          "rating_icons",
           "revision",
           "state",
           "allowed"
@@ -28433,6 +28438,14 @@
             "examples": [
               "8.5"
             ],
+            "type": "string"
+          },
+          "icon_url": {
+            "description": "An image the administrator assigned to the source, drawn in place of name; it can differ by score, such as a separate image under 60%. Absent, clients show name. Clients fall back to name when the image does not load.",
+            "examples": [
+              "/api/v2/overlay-images/9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f7.webp"
+            ],
+            "format": "uri-reference",
             "type": "string"
           },
           "name": {

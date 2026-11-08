@@ -1140,6 +1140,15 @@ declares is kept but shows nothing. It is
 server-wide and applies within seconds, without a restart; see "Ratings on
 title pages" in [catalog-api.md](catalog-api.md).
 
+`catalog.rating_source_icons` (default empty) assigns images from the overlay
+image library to rating sources, as a JSON object keyed by source name:
+`{"imdb":{"image":"<ref>"},"rt_critic":{"image":"<ref>","low_image":"<ref>"}}`.
+`low_image` shows instead of `image` while the score is under 60. Refs must be
+overlay image refs; a source with neither image is dropped. Title page ratings
+carry the chosen image as `icon_url`. Silo ships no third-party logos: an
+uploaded image is the administrator's to license. Server-wide, applies within
+seconds, no restart.
+
 `scanner.realtime_monitoring` (default `true`) is the server-wide real-time
 monitoring switch: Silo scans library folders automatically when their files
 change. A library is monitored only while this setting, the library's own

@@ -37,3 +37,34 @@ func TestParseRatingSourceListSkipsMalformedNames(t *testing.T) {
 		t.Fatalf("ParseRatingSourceList = %q, want %q", got, want)
 	}
 }
+
+func TestNormalizeRatingSourceIconsSetting(t *testing.T) {
+	ref := "9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f7.webp"
+	low := "0000000000000000000000000000000000000000000000000000000000000000.webp"
+	cases := map[string]string{
+		"":   "",
+		"{}": "",
+		`{" RT_Critic ":{"image":"` + ref + `","low_image":"` + low + `"}}`: `{"rt_critic":{"image":"` + ref + `","low_image":"` + low + `"}}`,
+		// A source with no image assigned is dropped.
+		`{"imdb":{"image":"` + ref + `"},"tmdb":{}}`: `{"imdb":{"image":"` + ref + `"}}`,
+	}
+	for raw, want := range cases {
+		got, err := NormalizeAdminSetting(CatalogRatingSourceIconsSettingKey, raw)
+		if err != nil || got != want {
+			t.Errorf("NormalizeAdminSetting(%q) = %q, %v; want %q", raw, got, err, want)
+		}
+	}
+	for _, raw := range []string{
+		"imdb",
+		`{"bad name":{"image":"` + ref + `"}}`,
+		`{"imdb":{"image":"https://example.com/logo.png"}}`,
+		`{"imdb":{"image":"` + ref + `","low_image":"../x.webp"}}`,
+	} {
+		if _, err := NormalizeAdminSetting(CatalogRatingSourceIconsSettingKey, raw); err == nil {
+			t.Errorf("NormalizeAdminSetting(%q) accepted a malformed value", raw)
+		}
+	}
+	if got, ok := adminSettingDefaults[CatalogRatingSourceIconsSettingKey]; !ok || got != "" {
+		t.Errorf("default = %q (present %v), want empty: Silo ships no third-party logos", got, ok)
+	}
+}
