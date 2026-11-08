@@ -1,6 +1,6 @@
 import ViewTransitionLink from "@/components/ViewTransitionLink";
 import { BookOpen, Play } from "lucide-react";
-import { memo, useCallback, useRef } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import type { ItemDetail, SectionItem } from "@/api/types";
 import type { ProgressListEntry } from "@/hooks/queries/progress";
@@ -13,6 +13,7 @@ import { useWatchPlaybackController } from "@/playback/watchPlaybackContext";
 import { parseWatchHref } from "@/pages/watchRouteHelpers";
 import { buildItemHref, buildMediaPlayHref, isVideoWatchHref } from "@/lib/mediaNavigation";
 import { type EpisodeSpoilerPrefs, useEpisodeSpoilerPrefs } from "@/hooks/useEpisodeSpoilerPrefs";
+import { useShowTitleArt } from "@/hooks/useTitleArt";
 import { useUICustomization } from "@/hooks/useUICustomization";
 import { carouselCardWidthClasses, WIDE_CAROUSEL_CARD_WIDTH_CLASSES } from "@/lib/uiCustomization";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
@@ -67,6 +68,8 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
   const playbackController = useWatchPlaybackController();
   const { cardPresentation } = useUICustomization();
   const cardRef = useRef<HTMLDivElement>(null);
+  const showTitleArt = useShowTitleArt() === true;
+  const [logoFailed, setLogoFailed] = useState(false);
   const card =
     "sectionItem" in props && props.sectionItem
       ? {
@@ -234,6 +237,8 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
   const containerWidth = isPoster
     ? carouselCardWidthClasses(cardPresentation.poster_size)
     : WIDE_CAROUSEL_CARD_WIDTH_CLASSES;
+  const showCaption = cardPresentation.caption !== "artwork";
+  const showMetadata = cardPresentation.caption === "title_metadata";
   // Audiobook covers are square (Audible-style); use 1:1 for the poster
   // variant so they don't get top/bottom-cropped into a 2:3 frame.
   const imageAspect = isPoster
@@ -257,6 +262,32 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
       played: (props.sectionItem ?? props.detail)?.user_state?.played,
       position_seconds: card.positionSeconds,
     });
+
+  // The wide card's line under the title: "S2 E1 • 40m" for an episode, the
+  // time left (or the year and length) for a movie, and the existing label
+  // for books.
+  const totalSeconds =
+    card.durationSeconds > 0
+      ? card.durationSeconds
+      : ((props.sectionItem?.runtime ?? props.detail?.runtime ?? 0) as number) * 60;
+  const timeText = formatCardDuration(
+    showProgressBar && card.durationSeconds > 0
+      ? card.durationSeconds - card.positionSeconds
+      : totalSeconds,
+  );
+  const year = props.sectionItem?.year ?? props.detail?.year;
+  const imageLine =
+    card.type === "audiobook" || card.type === "ebook"
+      ? timeLeftLabel && timeLeftLabel !== "\u00A0"
+        ? timeLeftLabel
+        : null
+      : hasEpisodeMeta
+        ? [`S${card.seasonNumber} E${card.episodeNumber}`, timeText].filter(Boolean).join(" • ")
+        : showProgressBar
+          ? timeText
+          : [year ? String(year) : null, timeText].filter(Boolean).join(" • ") || null;
+  const logoUrl = props.sectionItem?.logo_url ?? props.detail?.logo_url;
+  const logoSrc = showTitleArt && !logoFailed && logoUrl ? logoUrl : null;
 
   return (
     <div ref={cardRef} className={`media-card-longpress group/card ${containerWidth}`}>
@@ -287,23 +318,70 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
                 prefs={props.overlayPrefs}
                 variant={variant}
                 hasProgressBar={showProgressBar}
+                hideBottomEdge={!isPoster}
               />
             )}
 
             {/* Hover dim behind the play button */}
             <div className="media-card-hover-dim absolute inset-0 bg-black/0 transition-colors duration-150" />
 
-            {/* Progress bar — inset pill so a full bar doesn't read as a
-                stray edge along the artwork */}
-            {showProgressBar && (
-              <div className="absolute inset-x-2.5 bottom-2 h-[3px] overflow-hidden rounded-full bg-black/40">
-                <div
-                  className="h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${Math.min(progressPercent, 100)}%`,
-                    background: "var(--primary)",
-                  }}
-                />
+            {isPoster ? (
+              /* Progress bar — inset pill so a full bar doesn't read as a
+                 stray edge along the artwork */
+              showProgressBar && (
+                <div className="absolute inset-x-2.5 bottom-2 h-[3px] overflow-hidden rounded-full bg-black/40">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(progressPercent, 100)}%`,
+                      background: "var(--primary)",
+                    }}
+                  />
+                </div>
+              )
+            ) : (
+              /* Wide card: the title, and a play mark, progress and time
+                 left, drawn on the artwork over a dark fade. */
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-4 pt-12 pb-3.5 text-white">
+                {logoSrc ? (
+                  <img
+                    src={logoSrc}
+                    alt={heading}
+                    onError={() => setLogoFailed(true)}
+                    className="mb-2 max-h-12 max-w-[60%] object-contain object-left drop-shadow-md"
+                  />
+                ) : (
+                  <div className="mb-1 truncate text-lg leading-tight font-semibold drop-shadow-md">
+                    {heading}
+                  </div>
+                )}
+                <div className="flex items-center gap-2.5 text-sm font-medium drop-shadow-md">
+                  {showProgressBar && (
+                    <>
+                      {card.type === "ebook" ? (
+                        <BookOpen aria-hidden className="size-4 shrink-0" />
+                      ) : (
+                        <Play aria-hidden className="size-3.5 shrink-0" fill="currentColor" />
+                      )}
+                      <div className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-white/35">
+                        <div
+                          className="h-full rounded-full bg-white transition-all duration-300"
+                          style={{ width: `${Math.max(Math.min(progressPercent, 100), 4)}%` }}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {imageLine && <span className="min-w-0 truncate">{imageLine}</span>}
+                  {premiereBadge && (
+                    <span
+                      className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[0.625rem] leading-none font-semibold tracking-wide uppercase backdrop-blur-sm ${upcomingBadgeClass(
+                        premiereBadge,
+                      )}`}
+                    >
+                      {upcomingBadgeLabel(premiereBadge)}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -356,47 +434,59 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
         />
       </div>
 
-      {/* Info */}
-      <div className="px-0.5 pt-2.5">
-        <ViewTransitionLink
-          to={headingHref}
-          className="block truncate text-[0.8125rem] font-semibold hover:underline"
-        >
-          {heading}
-        </ViewTransitionLink>
-        {episodeMeta && (
+      {/* Info — the wide card draws its title on the artwork instead. */}
+      {isPoster && showCaption ? (
+        <div className="px-0.5 pt-2.5">
           <ViewTransitionLink
-            to={isMangaChapter ? card.watchHref : card.itemHref}
-            className="text-muted-foreground block truncate text-xs hover:underline"
+            to={headingHref}
+            className="block truncate text-[0.8125rem] font-semibold hover:underline"
           >
-            {episodeMeta}
+            {heading}
           </ViewTransitionLink>
-        )}
-        {(timeLeftLabel || premiereBadge) && (
-          <div className="flex items-center gap-1.5">
-            {timeLeftLabel &&
-              (timeLeftLabel === "\u00A0" ? (
-                <div className="text-muted-foreground text-xs">{timeLeftLabel}</div>
-              ) : (
-                <ViewTransitionLink
-                  to={isMangaChapter ? card.watchHref : card.itemHref}
-                  className="text-muted-foreground block w-fit truncate text-xs hover:underline"
+          {showMetadata && episodeMeta && (
+            <ViewTransitionLink
+              to={isMangaChapter ? card.watchHref : card.itemHref}
+              className="text-muted-foreground block truncate text-xs hover:underline"
+            >
+              {episodeMeta}
+            </ViewTransitionLink>
+          )}
+          {showMetadata && (timeLeftLabel || premiereBadge) && (
+            <div className="flex items-center gap-1.5">
+              {timeLeftLabel &&
+                (timeLeftLabel === "\u00A0" ? (
+                  <div className="text-muted-foreground text-xs">{timeLeftLabel}</div>
+                ) : (
+                  <ViewTransitionLink
+                    to={isMangaChapter ? card.watchHref : card.itemHref}
+                    className="text-muted-foreground block w-fit truncate text-xs hover:underline"
+                  >
+                    {timeLeftLabel}
+                  </ViewTransitionLink>
+                ))}
+              {premiereBadge && (
+                <span
+                  className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[0.625rem] leading-none font-semibold tracking-wide uppercase backdrop-blur-sm ${upcomingBadgeClass(
+                    premiereBadge,
+                  )}`}
                 >
-                  {timeLeftLabel}
-                </ViewTransitionLink>
-              ))}
-            {premiereBadge && (
-              <span
-                className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[0.625rem] leading-none font-semibold tracking-wide uppercase backdrop-blur-sm ${upcomingBadgeClass(
-                  premiereBadge,
-                )}`}
-              >
-                {upcomingBadgeLabel(premiereBadge)}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+                  {upcomingBadgeLabel(premiereBadge)}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
+}
+
+/** A length as the wide card shows it: "1h 35m", "40m", or null when unknown. */
+function formatCardDuration(seconds: number): string | null {
+  if (!(seconds > 0)) return null;
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest}m`;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }

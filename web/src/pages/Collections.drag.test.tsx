@@ -25,7 +25,7 @@ vi.mock("@/hooks/useCurrentProfile", () => ({
   useCurrentProfile: () => ({ profile: { id: "p-owner" } }),
 }));
 vi.mock("@/hooks/useUICustomization", () => ({
-  useUICustomization: () => ({ cardPresentation: { poster_size: "medium" } }),
+  useUICustomization: () => ({ cardPresentation: { poster_size: "medium", caption: "title" } }),
 }));
 vi.mock("@/hooks/useDocumentTitle", () => ({ useDocumentTitle: () => {} }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }));

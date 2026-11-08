@@ -75,7 +75,9 @@ export function RecommendationGridSkeleton({ count = 6 }: { count?: number }) {
         {Array.from({ length: count }, (_, i) => (
           <div key={i} className={posterWidthClasses}>
             <Skeleton className="aspect-[2/3] w-full rounded-lg" />
-            <Skeleton className="mt-1.5 h-4 w-3/4" />
+            {cardPresentation.caption !== "artwork" ? (
+              <Skeleton className="mt-1.5 h-4 w-3/4" />
+            ) : null}
           </div>
         ))}
       </div>

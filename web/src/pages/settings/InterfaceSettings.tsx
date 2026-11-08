@@ -20,7 +20,7 @@ import {
   defaultWebPrimaryMenu,
   menuItemKey,
   moveMenuItem,
-  cardPresentationValue,
+  type CardCaption,
   type CardPresentation,
   type PosterSize,
   type PrimaryMenuItem,
@@ -59,6 +59,12 @@ const POSTER_SIZES: readonly { value: PosterSize; label: string }[] = [
   { value: "compact", label: "Compact" },
   { value: "standard", label: "Standard" },
   { value: "large", label: "Large" },
+];
+
+const CAPTIONS: readonly { value: CardCaption; label: string }[] = [
+  { value: "title_metadata", label: "Title and details" },
+  { value: "title", label: "Title only" },
+  { value: "artwork", label: "Nothing" },
 ];
 
 function menuItemLabel(item: PrimaryMenuItem): string {
@@ -154,7 +160,8 @@ function useCustomizationBlocker(): ReactNode {
       <div className="surface-panel-subtle rounded-xl border p-4" role="alert">
         <p className="font-medium">Your server needs an update</p>
         <p className="text-muted-foreground mt-1 text-sm">
-          Poster size and the menu can be changed once your server runs a newer version of Silo.
+          Poster size, captions, and the menu can be changed once your server runs a newer version
+          of Silo.
         </p>
       </div>
     );
@@ -162,7 +169,7 @@ function useCustomizationBlocker(): ReactNode {
   return null;
 }
 
-/** Poster size, stored for the web client family. */
+/** Poster size and caption, stored for the web client family. */
 function PosterSettings() {
   const customization = useUICustomization();
   const setValue = useSetSettingValue();
@@ -177,7 +184,7 @@ function PosterSettings() {
     try {
       await setValue.mutateAsync({
         key: SETTING_KEYS.UI_CARD_PRESENTATION,
-        value: cardPresentationValue(next),
+        value: next,
         identity: CLIENT_SCOPE,
       });
     } catch (error) {
@@ -196,7 +203,7 @@ function PosterSettings() {
   return (
     <SettingsGroup
       title="Posters"
-      description="How big posters are in your web browsers."
+      description="How big posters are, and what's written under them, in your web browsers."
       actions={
         !blocker && clientOverride ? (
           <ResetButton
@@ -224,6 +231,13 @@ function PosterSettings() {
             options={POSTER_SIZES}
             disabled={busy || deviceOverride}
             onChange={(poster_size) => void save({ ...presentation, poster_size })}
+          />
+          <ChoiceButtons
+            label="Under each poster"
+            value={presentation.caption}
+            options={CAPTIONS}
+            disabled={busy || deviceOverride}
+            onChange={(caption) => void save({ ...presentation, caption })}
           />
         </>
       )}

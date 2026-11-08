@@ -43,7 +43,7 @@ vi.mock("@/hooks/useOverlayPrefs", () => ({
 }));
 vi.mock("@/hooks/useUICustomization", () => ({
   useUICustomization: () => ({
-    cardPresentation: { poster_size: "medium" },
+    cardPresentation: { poster_size: "medium", caption: "title_metadata" },
   }),
 }));
 vi.mock("./ItemCard", () => ({ default: () => <div>card</div> }));

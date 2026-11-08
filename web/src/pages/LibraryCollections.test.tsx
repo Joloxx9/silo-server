@@ -59,7 +59,7 @@ vi.mock("@/hooks/useCurrentProfile", () => ({
 }));
 vi.mock("@/hooks/useUICustomization", () => ({
   useUICustomization: () => ({
-    cardPresentation: { poster_size: "medium" },
+    cardPresentation: { poster_size: "medium", caption: "title_metadata" },
   }),
 }));
 vi.mock("@/hooks/queries/sidebarPins", () => ({

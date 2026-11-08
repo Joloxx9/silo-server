@@ -67,7 +67,7 @@ vi.mock("@/hooks/useUICustomization", () => ({
   useUICustomization: () => ({
     primaryMenu: mockPrimaryMenu,
     shortcuts: { items: [] },
-    cardPresentation: { poster_size: "standard" },
+    cardPresentation: { poster_size: "standard", caption: "title_metadata" },
     isLoading: false,
   }),
 }));

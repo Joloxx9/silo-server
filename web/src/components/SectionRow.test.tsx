@@ -139,8 +139,8 @@ describe("SectionRow", () => {
     expect(markup).toContain('href="/watch/ep-001"');
     expect(markup).toContain('href="/item/ep-001"');
     expect(markup).toContain("Breaking Bad");
-    expect(markup).toContain("Season 1 Episode 1");
-    expect(markup).toContain("Pilot");
+    // The wide card draws the series, episode and time left on the artwork.
+    expect(markup).toContain("S1 E1 • 58m");
     expect(markup).toContain("More actions");
   });
 

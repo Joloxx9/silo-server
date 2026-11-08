@@ -17,7 +17,7 @@ import { useGridLayout } from "@/hooks/useGridLayout";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useOverlayPrefs } from "@/hooks/useOverlayPrefs";
 import { useUICustomization } from "@/hooks/useUICustomization";
-import { CARD_TEXT_AREA_HEIGHT, cardGridClasses } from "@/lib/uiCustomization";
+import { cardGridClasses, cardTextAreaHeight } from "@/lib/uiCustomization";
 import {
   awaitingGridRestore,
   pendingGridRestore,
@@ -159,7 +159,7 @@ export default function ItemGrid(props: ItemGridProps) {
   const onVisibleRangeChange = hasStaticItems(props) ? () => undefined : props.onVisibleRangeChange;
   const { containerRef, layout } = useGridLayout({
     gap: gridGap,
-    textAreaHeight: CARD_TEXT_AREA_HEIGHT,
+    textAreaHeight: cardTextAreaHeight(cardPresentation.caption),
     layoutKey: cardPresentation.poster_size,
   });
   const [anchorEl, setAnchorEl] = useState<HTMLDivElement | null>(null);
