@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Play, ChevronLeft, ChevronRight } from "lucide-react";
 import type { EpisodeListItem } from "@/api/types";
-import { WatchedCheckIndicator } from "@/components/CardWatchedBadge";
+import CardWatchStatus from "@/components/overlays/CardWatchStatus";
 import { toEpisodeUserState } from "@/components/episodeUserState";
 import { isEpisodeStill, isEpisodeUnwatched, SPOILER_IMAGE_CLASS } from "@/lib/episodeSpoilers";
 import { decodeThumbhash } from "@/lib/thumbhash";
@@ -203,6 +203,7 @@ function EpisodeCarouselCard({
                   Now Viewing
                 </div>
               )}
+              <CardWatchStatus userState={toEpisodeUserState(ep.user_data)} />
               {progress != null && (
                 <div className="absolute inset-x-2 bottom-1.5 h-[3px] overflow-hidden rounded-full bg-black/40">
                   <div
@@ -237,7 +238,6 @@ function EpisodeCarouselCard({
             episode={ep}
             hideOverview={hideOverviewIfUnwatched && isEpisodeUnwatched(ep.user_data)}
             isCurrent={isCurrent}
-            badges={ep.user_data?.played && <WatchedCheckIndicator />}
           />
         </ViewTransitionLink>
       </div>
