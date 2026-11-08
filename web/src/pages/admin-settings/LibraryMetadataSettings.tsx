@@ -363,7 +363,7 @@ export default function LibraryMetadataSettings() {
         {pluginRatingSources && ratingIconsSupported && ratingSources.isSuccess && (
           <FieldGroup
             label="Rating icons"
-            description="Show an image in place of a rating's name on title pages in every app, such as a source's logo. Pick from the images uploaded under Appearance, Badge images. The second image, when set, shows instead while the score is under 60%, like Rotten Tomatoes' fresh and rotten marks. Silo ships no logos: you are responsible for having the right to show any image you upload."
+            description="Show an image in place of a rating's name on title pages in every app, such as a source's logo. Upload images under Appearance, Badge images, then pick them here. The second image, when set, shows instead while the score is under 60%, like Rotten Tomatoes' fresh and rotten marks. Best results: a PNG with a transparent background, about 128 px tall and cropped to the artwork, from square up to four times as wide as tall (for example 128 × 128 or 256 × 128). Apps scale every icon to the height of the score and never wider than four times that, so a larger or wider image still fits. Silo ships no logos: you are responsible for having the right to show any image you upload."
             restartAll={restartKeys.has(RATING_SOURCE_ICONS_KEY)}
           >
             {overlayImages.length === 0 && (
