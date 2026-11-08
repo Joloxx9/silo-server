@@ -1194,8 +1194,8 @@ nothing to show. Each entry has:
   drawn in place of `name`.
 
 Clients render each entry as its mark followed by `display`, in list order.
-The list holds at most three entries, the first in display order, so every
-client shows the same three ratings on one line.
+The list holds at most five entries, the first in display order. Clients show
+them on one line and drop whole entries from the end when they do not fit.
 Marks are plain text, never logo artwork shipped with Silo or a client, with
 one exception: TMDB's approved logo may stand in for the `TMDB` mark, as TMDB's
 terms allow. When the administrator assigned an image to the source (the

@@ -19,6 +19,7 @@ var (
 	rtCritic   = models.RatingSourceDefinition{Source: "rt_critic", Name: "RT", Label: "Rotten Tomatoes critics", Scale: 100, Percent: true}
 	rtAudience = models.RatingSourceDefinition{Source: "rt_audience", Name: "RT Audience", Label: "Rotten Tomatoes audience", Scale: 100, Percent: true}
 	metacritic = models.RatingSourceDefinition{Source: "metacritic", Name: "Metacritic", Label: "Metacritic", Scale: 100}
+	trakt      = models.RatingSourceDefinition{Source: "trakt", Name: "Trakt", Label: "Trakt", Scale: 10}
 	letterboxd = models.RatingSourceDefinition{Source: "letterboxd", Name: "Letterboxd", Label: "Letterboxd", Scale: 5}
 	kinopoisk  = models.RatingSourceDefinition{Source: "kinopoisk", Name: "Kinopoisk", Label: "Kinopoisk", Scale: 10}
 )
@@ -58,6 +59,8 @@ func TestBuildAddsDeclaredSourcesAnAdministratorTurnedOn(t *testing.T) {
 		{Source: "imdb", Name: "IMDb", Score: 85, Display: "8.5"},
 		{Source: "rt_critic", Name: "RT", Score: 93, Display: "93%"},
 		{Source: "rt_audience", Name: "RT Audience", Score: 95, Display: "95%"},
+		{Source: "metacritic", Name: "Metacritic", Score: 87, Display: "87"},
+		{Source: "letterboxd", Name: "Letterboxd", Score: 84, Display: "4.2"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Build = %+v\nwant %+v (trakt has no declaration, so it stays hidden)", got, want)
@@ -80,14 +83,15 @@ func TestBuildShowsNothingAPluginDoesNotDeclare(t *testing.T) {
 
 // A title page shows at most MaxTitleRatings ratings, the first ones in
 // display order, whatever the administrator turned on.
-func TestBuildShowsAtMostThree(t *testing.T) {
-	item := Item{IMDB: ptr(8.5), TMDB: ptr(8.25), RTCritic: ptr(93), RTAudience: ptr(95)}
-	got := Build(item, NewSelection("rt_critic", "rt_audience").WithDeclared(declared(rtCritic, rtAudience)))
+func TestBuildShowsAtMostMaxTitleRatings(t *testing.T) {
+	item := Item{IMDB: ptr(8.5), TMDB: ptr(8.25), RTCritic: ptr(93), RTAudience: ptr(95),
+		Sources: map[string]float64{"metacritic": 80, "trakt": 70}}
+	got := Build(item, NewSelection("rt_critic", "rt_audience", "metacritic", "trakt").WithDeclared(declared(rtCritic, rtAudience, metacritic, trakt)))
 	var sources []string
 	for _, r := range got {
 		sources = append(sources, r.Source)
 	}
-	if want := []string{"imdb", "tmdb", "rt_critic"}; !reflect.DeepEqual(sources, want) {
+	if want := []string{"imdb", "tmdb", "rt_critic", "rt_audience", "metacritic"}; !reflect.DeepEqual(sources, want) {
 		t.Fatalf("sources = %q, want %q", sources, want)
 	}
 }

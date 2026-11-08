@@ -285,8 +285,11 @@ type Item struct {
 }
 
 // MaxTitleRatings is how many ratings a title page shows at most, on every
-// client: the first ones in display order.
-const MaxTitleRatings = 3
+// client: the first ones in display order. It is room for IMDb, TMDB, both
+// Rotten Tomatoes scores and one more, so the administrator's selection, not
+// this cap, decides what shows. A narrow layout drops whole entries from the
+// end when they do not fit on one line.
+const MaxTitleRatings = 5
 
 // Build returns the ratings clients show for item, in display order, at most
 // MaxTitleRatings of them.
