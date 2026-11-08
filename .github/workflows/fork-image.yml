@@ -9,8 +9,9 @@
 # `frontend` stage when no named build context is supplied, so this build is
 # self-contained and needs no prebuilt bundle from CI.
 #
-# This publishes the canonical ghcr.io/joloxx9/silo-server package, tagging
-# `latest` for day-to-day Unraid use. That package must be linked to this
+# The image is branded Spark by fork/apply-brand.sh before the build and
+# published as ghcr.io/joloxx9/spark-server, tagging `latest` for day-to-day
+# Unraid use. That package must be linked to this
 # repository with the Write role (package settings -> Manage Actions access),
 # or recreated by this repo; while it sits unlinked, GITHUB_TOKEN is denied
 # write_package against it.
@@ -27,7 +28,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  PACKAGE: silo-server
+  PACKAGE: spark-server
   GOPROXY: https://proxy.golang.org,direct
   GOPRIVATE: github.com/Silo-Server/*
   GONOSUMDB: github.com/Silo-Server/*
@@ -48,6 +49,9 @@ jobs:
 
       # The runtime stage pulls jellyfin-ffmpeg, libvips and the Intel compute
       # runtime, so the hosted runner's default free space is tight.
+      - name: Apply the Spark brand
+        run: fork/apply-brand.sh
+
       - name: Reclaim runner disk space
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
@@ -79,9 +83,6 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:pr-2259
-            ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:main
-            ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:spark
             ${{ env.REGISTRY }}/${{ env.IMAGE_LC }}:${{ github.sha }}
           build-args: |
             BUILD_REVISION=${{ github.sha }}
@@ -91,7 +92,8 @@ jobs:
           labels: |
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=pr-2259
+            org.opencontainers.image.version=spark
+            org.opencontainers.image.title=Spark
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=fork-image-amd64
           cache-to: type=gha,scope=fork-image-amd64,mode=max
@@ -103,9 +105,6 @@ jobs:
             echo
             echo '```'
             echo "${REGISTRY}/${IMAGE_LC}:latest"
-            echo "${REGISTRY}/${IMAGE_LC}:pr-2259"
-            echo "${REGISTRY}/${IMAGE_LC}:main"
-            echo "${REGISTRY}/${IMAGE_LC}:spark"
             echo "${REGISTRY}/${IMAGE_LC}:${GITHUB_SHA}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
