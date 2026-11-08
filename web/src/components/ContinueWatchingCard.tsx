@@ -15,7 +15,7 @@ import { buildItemHref, buildMediaPlayHref, isVideoWatchHref } from "@/lib/media
 import { type EpisodeSpoilerPrefs, useEpisodeSpoilerPrefs } from "@/hooks/useEpisodeSpoilerPrefs";
 import { useShowTitleArt } from "@/hooks/useTitleArt";
 import { useUICustomization } from "@/hooks/useUICustomization";
-import { carouselCardWidthClasses, WIDE_CAROUSEL_CARD_WIDTH_CLASSES } from "@/lib/uiCustomization";
+import { carouselCardWidthClasses } from "@/lib/uiCustomization";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
 import type { CardQuickActionMode } from "@/lib/cardQuickActions";
 import { isEpisodeStill, isEpisodeUnwatched, SPOILER_IMAGE_CLASS } from "@/lib/episodeSpoilers";
@@ -236,7 +236,9 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
   const playableContentId = card.contentId ?? "";
   const containerWidth = isPoster
     ? carouselCardWidthClasses(cardPresentation.poster_size)
-    : WIDE_CAROUSEL_CARD_WIDTH_CLASSES;
+    : // Wide resume cards are the row's focus: most of a phone's width, a
+      // little larger than other wide cards on bigger screens.
+      "w-[84vw] max-w-[400px] shrink-0 sm:w-[360px] lg:w-[400px]";
   const showCaption = cardPresentation.caption !== "artwork";
   const showMetadata = cardPresentation.caption === "title_metadata";
   // Audiobook covers are square (Audible-style); use 1:1 for the poster
@@ -293,7 +295,13 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
     <div ref={cardRef} className={`media-card-longpress group/card ${containerWidth}`}>
       <div className="group/media relative">
         <ViewTransitionLink to={detailHref} className="block">
-          <div className={`media-card-image relative ${imageAspect} overflow-hidden rounded-xl`}>
+          <div
+            className={cn(
+              "media-card-image relative overflow-hidden",
+              imageAspect,
+              isPoster ? "rounded-xl" : "rounded-2xl",
+            )}
+          >
             {imageSrc ? (
               <img
                 src={imageSrc}
@@ -342,28 +350,32 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
             ) : (
               /* Wide card: the title, and a play mark, progress and time
                  left, drawn on the artwork over a dark fade. */
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-4 pt-12 pb-3.5 text-white">
+              <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-end bg-gradient-to-t from-black/90 via-black/35 via-45% to-transparent to-75% px-4 pb-4 text-white sm:px-5">
                 {logoSrc ? (
                   <img
                     src={logoSrc}
                     alt={heading}
                     onError={() => setLogoFailed(true)}
-                    className="mb-2 max-h-12 max-w-[60%] object-contain object-left drop-shadow-md"
+                    className="mb-2.5 max-h-9 max-w-[45%] self-start object-contain object-left-bottom drop-shadow-md"
                   />
                 ) : (
-                  <div className="mb-1 truncate text-lg leading-tight font-semibold drop-shadow-md">
+                  <div className="mb-1.5 truncate text-xl leading-tight font-semibold tracking-tight drop-shadow-md">
                     {heading}
                   </div>
                 )}
-                <div className="flex items-center gap-2.5 text-sm font-medium drop-shadow-md">
+                <div className="flex items-center gap-3 text-[0.9375rem] font-medium drop-shadow-md">
                   {showProgressBar && (
                     <>
                       {card.type === "ebook" ? (
-                        <BookOpen aria-hidden className="size-4 shrink-0" />
+                        <BookOpen aria-hidden className="size-[1.125rem] shrink-0" />
                       ) : (
-                        <Play aria-hidden className="size-3.5 shrink-0" fill="currentColor" />
+                        <Play
+                          aria-hidden
+                          className="size-[1.125rem] shrink-0"
+                          fill="currentColor"
+                        />
                       )}
-                      <div className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-white/35">
+                      <div className="h-2 w-20 shrink-0 overflow-hidden rounded-full bg-white/30">
                         <div
                           className="h-full rounded-full bg-white transition-all duration-300"
                           style={{ width: `${Math.max(Math.min(progressPercent, 100), 4)}%` }}

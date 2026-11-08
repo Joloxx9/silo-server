@@ -34,6 +34,11 @@ edit web/index.html 's{<title>Silo</title>}{<title>$ENV{APP_NAME}</title>}'
 edit web/public/site.webmanifest 's/"(name|short_name)": "Silo"/"$1": "$ENV{APP_NAME}"/g'
 edit web/public/site.webmanifest 's/"(theme_color|background_color)": "#[0-9a-fA-F]{6}"/"$1": "$ENV{THEME_COLOR}"/g'
 
+# The lockup (spark + name) is wider than Silo's: widen its boxes, same height.
+edit web/src/components/Layout.tsx 's/<SiloBrand className="h-10 w-\[94px\]" \/>/<SiloBrand className="h-10 w-[118px]" \/>/'
+edit web/src/components/AppSidebar.tsx 's/<SiloBrand variant="wordmark" className="h-12 w-\[112px\]" \/>/<SiloBrand variant="wordmark" className="h-12 w-[142px]" \/>/'
+edit web/src/components/AdminSidebar.tsx 's/<SiloBrand className="h-12 w-\[112px\]" \/>/<SiloBrand className="h-12 w-[142px]" \/>/'
+
 # Server defaults: the name a fresh server shows, Jellyfin clients see and
 # emails come from. A name an administrator saved is kept.
 edit internal/config/admin_settings.go 's/("(?:branding\.server_name|jellyfin_compat\.server_name|email\.from_name)":\s*)"Silo"/$1"$ENV{APP_NAME}"/g'
