@@ -3,6 +3,7 @@
 import tmdbLogo from "@/assets/tmdb/tmdb-logo.svg?no-inline";
 import { cn } from "@/lib/utils";
 
+import { ImdbMark, PopcornMark, TomatoMark } from "./RatingMarks";
 import type { DisplayRating } from "./ratings";
 
 interface RatingEntryProps {
@@ -12,9 +13,9 @@ interface RatingEntryProps {
 }
 
 /**
- * A rating as its source's mark and its score: "IMDb 8.5", "RT 93%". Marks
- * are plain text, never the source's logo artwork, except TMDB's approved
- * logo, which TMDB's terms allow.
+ * A rating as its source's mark and its score. TMDB uses its approved logo;
+ * IMDb and Rotten Tomatoes use marks drawn in RatingMarks; any other source
+ * falls back to its plain-text name.
  */
 export function RatingEntry({ rating, size = "md", className }: RatingEntryProps) {
   return (
@@ -25,6 +26,12 @@ export function RatingEntry({ rating, size = "md", className }: RatingEntryProps
           alt={rating.name}
           className={cn("w-auto shrink-0", size === "sm" ? "h-2" : "h-2.5")}
         />
+      ) : rating.source === "imdb" ? (
+        <ImdbMark size={size} label={rating.name} />
+      ) : rating.source === "rt_critic" ? (
+        <TomatoMark size={size} score={rating.score} label={rating.name} />
+      ) : rating.source === "rt_audience" ? (
+        <PopcornMark size={size} label={rating.name} />
       ) : (
         <span
           className={cn(
