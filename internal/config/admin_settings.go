@@ -143,7 +143,7 @@ func splitRatingSourceIcons(raw string) (map[string]RatingSourceIcon, error) {
 	}
 	var decoded map[string]RatingSourceIcon
 	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
-		return out, fmt.Errorf("must be a JSON object of rating source icons")
+		return out, errors.New("must be a JSON object of rating source icons")
 	}
 	var firstErr error
 	for source, icon := range decoded {
@@ -178,10 +178,8 @@ func normalizeRatingSourceIcons(key, value string) (string, error) {
 	if len(icons) == 0 {
 		return "", nil
 	}
-	encoded, err := json.Marshal(icons)
-	if err != nil {
-		return "", err
-	}
+	// A map of string-only structs always encodes.
+	encoded, _ := json.Marshal(icons)
 	return string(encoded), nil
 }
 
