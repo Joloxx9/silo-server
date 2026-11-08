@@ -4,6 +4,7 @@ import type { Season } from "@/api/types";
 import { usePrefetchCatalogSeason } from "@/hooks/queries/catalogRead";
 import { useCarouselEmbla } from "@/hooks/useCarouselEmbla";
 import { buildItemHref } from "@/lib/mediaNavigation";
+import { cn } from "@/lib/utils";
 import { formatSeasonMeta, formatSeasonProgress, getSeasonDisplayTitle } from "./itemDetailLayout";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
 import RequestSeasonButton from "./components/RequestSeasonButton";
@@ -91,20 +92,6 @@ export default function SeasonCarousel({
                       <Check className="size-3.5" strokeWidth={3} />
                     </div>
                   )}
-
-                  {/* Progress bar — inset pill so a full bar doesn't read
-                      as a stray edge along the artwork */}
-                  {(isCompleted || hasProgress) && (
-                    <div className="absolute inset-x-2.5 bottom-2 h-[3px] overflow-hidden rounded-full bg-black/40">
-                      <div
-                        className="h-full rounded-full transition-all duration-300"
-                        style={{
-                          width: isCompleted ? "100%" : `${progressPercent}%`,
-                          background: isCompleted ? "#4caf50" : "var(--primary)",
-                        }}
-                      />
-                    </div>
-                  )}
                 </ViewTransitionLink>
                 {season.play_content_id ? (
                   <CardPlayOverlay
@@ -115,8 +102,23 @@ export default function SeasonCarousel({
                 ) : null}
               </div>
 
+              {/* Progress bar under the poster, so it never covers the
+                  artwork. The slot is kept when there is no progress, so
+                  every season's title sits at the same height. */}
+              <SeasonProgressSlot>
+                {(isCompleted || hasProgress) && (
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: isCompleted ? "100%" : `${progressPercent}%`,
+                      background: isCompleted ? "#4caf50" : "var(--primary)",
+                    }}
+                  />
+                )}
+              </SeasonProgressSlot>
+
               {/* Info — always the same height */}
-              <ViewTransitionLink to={seasonHref} className="block px-0.5 pt-2.5">
+              <ViewTransitionLink to={seasonHref} className="block px-0.5 pt-1.5">
                 <div className="truncate text-[0.8125rem] font-semibold">
                   {getSeasonDisplayTitle(season)}
                 </div>
@@ -131,6 +133,23 @@ export default function SeasonCarousel({
         );
       })}
     </SeasonRail>
+  );
+}
+
+/**
+ * The row under a season poster that holds its watch progress bar. It keeps
+ * its height when empty, so titles line up across the rail.
+ */
+function SeasonProgressSlot({ children }: { children?: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "mx-0.5 mt-2 h-[3px] overflow-hidden rounded-full",
+        children ? "bg-foreground/15" : "bg-transparent",
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -178,9 +197,10 @@ function MissingSeasonSlide({
             />
           )}
         </div>
+        <SeasonProgressSlot />
         <ViewTransitionLink
           to={`/item/${season.content_id}`}
-          className="block px-0.5 pt-2.5 opacity-60"
+          className="block px-0.5 pt-1.5 opacity-60"
         >
           <div className="truncate text-[0.8125rem] font-semibold">
             {getSeasonDisplayTitle(season)}
