@@ -17,7 +17,8 @@ func TestNewRecipeClampsSettings(t *testing.T) {
 	}{
 		{300, 10, Recipe{Width: 300, IntervalMS: 10000}},
 		{301, 10, Recipe{Width: 300, IntervalMS: 10000}},
-		{50, 1, Recipe{Width: 160, IntervalMS: 5000}},
+		{50, 1, Recipe{Width: 160, IntervalMS: 2000}},
+		{300, 2, Recipe{Width: 300, IntervalMS: 2000}},
 		{4000, 600, Recipe{Width: 640, IntervalMS: 60000}},
 	}
 	for _, tt := range tests {

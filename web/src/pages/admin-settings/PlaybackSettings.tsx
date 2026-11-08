@@ -107,6 +107,20 @@ const REMAKE_DEFAULTS: Record<string, string> = {
   [TRICKPLAY_INTERVAL_KEY]: "10",
 };
 
+const TRICKPLAY_INTERVALS = ["2", "5", "10", "15", "30", "60"];
+
+/** The interval choices, keeping a stored value the list does not offer. */
+function trickplayIntervalOptions(current: string | undefined) {
+  const values =
+    current && !TRICKPLAY_INTERVALS.includes(current)
+      ? [...TRICKPLAY_INTERVALS, current].sort((a, b) => Number(a) - Number(b))
+      : TRICKPLAY_INTERVALS;
+  return values.map((value) => ({
+    value,
+    label: value === "10" ? "10 seconds (default)" : `${value} seconds`,
+  }));
+}
+
 /** What saving a new width or interval makes again, for the confirmation. */
 function remakeDescription(widthChanged: boolean, previews: number | null): string {
   const files = previews === null ? "existing" : previews === 1 ? "1 file's" : `${previews} files'`;
@@ -570,9 +584,9 @@ export default function PlaybackSettings() {
               />
               <SettingField
                 label="Seek preview interval"
-                type="number"
-                unit="seconds"
-                description="Time between seek previews, 5 to 60. Changing it makes every library's previews again."
+                type="select"
+                options={trickplayIntervalOptions(form.getValue(TRICKPLAY_INTERVAL_KEY))}
+                description="Time between seek previews. A shorter interval makes seeking more precise but takes more disk space and longer to make: 2 seconds stores five times as many previews as 10. Changing it makes every library's previews again."
                 value={form.getValue("playback.trickplay_interval_seconds")}
                 onChange={(v) => form.setValue("playback.trickplay_interval_seconds", v)}
                 restartRequired={restartKeys.has("playback.trickplay_interval_seconds")}

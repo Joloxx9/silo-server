@@ -900,7 +900,7 @@ func NormalizeAdminSetting(key, raw string) (string, error) {
 		}
 		return normalized, nil
 	case "playback.trickplay_interval_seconds":
-		return normalizeAdminInt(key, value, 5, 60)
+		return normalizeAdminInt(key, value, 2, 60)
 	case PlaybackBandwidthProbeMaxAgeDaysSettingKey:
 		// Rows are retained 30 days after their last update, so a longer
 		// lifetime would outlive the reading it describes.
