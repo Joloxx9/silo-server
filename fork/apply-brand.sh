@@ -47,6 +47,13 @@ edit internal/config/config.go 's/(ServerName:\s*)"Silo"/$1"$ENV{APP_NAME}"/'
 edit internal/mail/mail.go 's/(cfg\.fromName = )"Silo"/$1"$ENV{APP_NAME}"/'
 edit internal/invitations/email.go 's/(product = )"Silo"/$1"$ENV{APP_NAME}"/'
 
+# Built-in plugin catalogs carry the Spark names. The server rewrites the
+# stored repository names from these constants at startup.
+edit internal/plugins/catalog_channels.go 's/(DefaultRepositoryName = )"Silo maintained"/$1"$ENV{APP_NAME} maintained"/'
+edit internal/plugins/catalog_channels.go 's/(ApprovedCommunityRepositoryName = )"Approved community"/$1"$ENV{APP_NAME} community"/'
+edit web/src/lib/pluginPresentation.ts 's/"Approved community"/"$ENV{APP_NAME} community"/g'
+edit web/src/pages/AdminPluginDetail.tsx 's/"Approved community plugins are turned off"/"$ENV{APP_NAME} community plugins are turned off"/'
+
 # Icons, favicon, mark and sidebar wordmark.
 cp -R fork/overlay/. .
 
