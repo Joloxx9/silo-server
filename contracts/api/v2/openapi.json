@@ -49407,6 +49407,58 @@
         ],
         "type": "object"
       },
+      "RequestPersonCredit": {
+        "additionalProperties": false,
+        "properties": {
+          "character": {
+            "description": "The role played; several roles on one title are joined with ' / '. Empty for a crew-only credit",
+            "examples": [
+              "August Walker"
+            ],
+            "type": "string"
+          },
+          "episode_count": {
+            "description": "Series: episodes the person is credited on, when TMDB says",
+            "examples": [
+              24
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "jobs": {
+            "description": "Crew jobs on the title, such as Director or Screenplay. Empty, never null",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "media": {
+            "$ref": "#/components/schemas/RequestMediaResult",
+            "description": "The title as search shows it, with library availability and the viewer's request state"
+          }
+        },
+        "required": [
+          "media",
+          "jobs"
+        ],
+        "type": "object"
+      },
+      "RequestPersonCredits": {
+        "additionalProperties": false,
+        "properties": {
+          "credits": {
+            "description": "Movies and series, announced (undated) titles first, then newest first. Adult titles, talk and news shows, and titles above the viewer's rating ceiling are left out. Empty, never null",
+            "items": {
+              "$ref": "#/components/schemas/RequestPersonCredit"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "credits"
+        ],
+        "type": "object"
+      },
       "RequestSeasonProgress": {
         "additionalProperties": false,
         "properties": {
@@ -213574,6 +213626,174 @@
           }
         ],
         "summary": "List the account's media requests, newest first.",
+        "tags": [
+          "requests"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/requests/people/{tmdb_id}/credits": {
+      "get": {
+        "operationId": "listRequestPersonCredits",
+        "parameters": [
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The person's TMDB identifier (external, not a Silo ID); a catalog person carries it as tmdb_id",
+            "in": "path",
+            "name": "tmdb_id",
+            "required": true,
+            "schema": {
+              "description": "The person's TMDB identifier (external, not a Silo ID); a catalog person carries it as tmdb_id",
+              "examples": [
+                73968
+              ],
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestPersonCredits"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List a person's movies and series from TMDB, each with whether it is in the library and whether the viewer may request it.",
         "tags": [
           "requests"
         ],

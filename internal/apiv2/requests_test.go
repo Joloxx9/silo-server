@@ -67,6 +67,18 @@ func (f *fakeRequests) Search(_ context.Context, viewer mediarequests.Viewer, qu
 	return &mediarequests.MediaPage{Page: page, TotalPages: 3, TotalResults: 41, Results: []mediarequests.MediaResult{fixtureResult(949)}}, nil
 }
 
+func (f *fakeRequests) PersonCredits(_ context.Context, viewer mediarequests.Viewer, personTMDBID int) ([]mediarequests.PersonCredit, error) {
+	if err := f.record(viewer, "person_credits", personTMDBID); err != nil {
+		return nil, err
+	}
+	inLibrary := fixtureResult(353081)
+	inLibrary.Availability, inLibrary.LibraryContentID = mediarequests.AvailabilityAvailable, "movie:fallout-2018"
+	return []mediarequests.PersonCredit{
+		{Media: fixtureResult(949), Character: "Vincent Hanna", Jobs: []string{"Producer"}},
+		{Media: inLibrary, Character: "August Walker"},
+	}, nil
+}
+
 func (f *fakeRequests) DiscoverRow(_ context.Context, viewer mediarequests.Viewer, rowID string, page int) (*mediarequests.DiscoverySection, error) {
 	if err := f.record(viewer, "discover", rowID, page); err != nil {
 		return nil, err
@@ -539,6 +551,47 @@ func TestGetRequestMediaDetail(t *testing.T) {
 	requireProblem(t, do(t, h, http.MethodGet, "/api/v2/requests/detail/movie/abc", "", requestOwner), TypeValidationFailed)
 	svc.err = mediarequests.ErrNotFound
 	requireProblem(t, do(t, h, http.MethodGet, "/api/v2/requests/detail/movie/949", "", requestOwner), TypeNotFound)
+}
+
+// A person's filmography says, title by title, what is in the library and
+// what the viewer may request, with the role; jobs is never null.
+func TestListRequestPersonCredits(t *testing.T) {
+	svc := fixtureRequests()
+	h := newTestHandler(t, requestDeps(svc))
+	rec := do(t, h, http.MethodGet, "/api/v2/requests/people/73968/credits", "", requestOwner)
+	var got struct {
+		Credits []struct {
+			Media struct {
+				TMDBID           int    `json:"tmdb_id"`
+				Availability     string `json:"availability"`
+				LibraryContentID string `json:"library_content_id"`
+				Request          struct {
+					Requestable bool `json:"requestable"`
+				} `json:"request"`
+			} `json:"media"`
+			Character string   `json:"character"`
+			Jobs      []string `json:"jobs"`
+		} `json:"credits"`
+	}
+	decodeBody(t, rec.Body, &got)
+	if rec.Code != 200 || len(got.Credits) != 2 {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	first, second := got.Credits[0], got.Credits[1]
+	if first.Media.TMDBID != 949 || first.Character != "Vincent Hanna" || len(first.Jobs) != 1 || !first.Media.Request.Requestable || first.Media.Availability != "missing" {
+		t.Fatalf("first = %+v", first)
+	}
+	if second.Jobs == nil || second.Media.Availability != "available" || second.Media.LibraryContentID != "movie:fallout-2018" {
+		t.Fatalf("second = %+v", second)
+	}
+	if svc.lastCall != "person_credits" || svc.lastArgs[0] != 73968 {
+		t.Fatalf("call = %s %v", svc.lastCall, svc.lastArgs)
+	}
+	requireProblem(t, do(t, h, http.MethodGet, "/api/v2/requests/people/0/credits", "", requestOwner), TypeValidationFailed)
+	svc.err = mediarequests.ErrNotFound
+	requireProblem(t, do(t, h, http.MethodGet, "/api/v2/requests/people/73968/credits", "", requestOwner), TypeNotFound)
+	svc.err = mediarequests.ErrRequestsDisabled
+	requireProblem(t, do(t, h, http.MethodGet, "/api/v2/requests/people/73968/credits", "", requestOwner), TypeCapabilityDisabled)
 }
 
 func TestDiscover(t *testing.T) {

@@ -453,6 +453,8 @@ func registerRequests(reg *Registry) {
 			})
 		})
 
+	registerRequestPersonCredits(reg)
+
 	studio := humaOp(http.MethodGet, Prefix+"/requests/discover/browse/studio/{slug}", opBrowseDiscoverStudio, requestsTag,
 		"Browse a studio's movies.")
 	studio.Errors = []int{http.StatusConflict}

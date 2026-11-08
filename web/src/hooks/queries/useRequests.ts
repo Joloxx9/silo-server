@@ -23,6 +23,7 @@ import {
   listDiscoverStudiosV2,
   getMediaRequestV2,
   listMyMediaRequestsV2,
+  listRequestPersonCreditsV2,
   searchRequestMediaV2,
 } from "@/api/v2/requests";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
@@ -203,6 +204,24 @@ export function nextBrowsePage(
   lastPageParam: number,
 ): number | undefined {
   return lastPageParam < tmdbPageCount(lastPage.total_pages) ? lastPageParam + 1 : undefined;
+}
+
+/**
+ * A person's filmography from TMDB with library and request state. Requests
+ * invalidate requestKeys.all, so a title requested from the list updates in
+ * place. A server with requests turned off answers with an error, and the
+ * person page then lists only the library's titles.
+ */
+export function useRequestPersonCredits(personTMDBID: number | undefined) {
+  const { profile } = useCurrentProfile();
+  return useQuery({
+    // Request state and the rating ceiling are the viewer's own.
+    queryKey: [...requestKeys.personCredits(personTMDBID ?? 0), profile?.id ?? "anon"],
+    queryFn: ({ signal }) => listRequestPersonCreditsV2(personTMDBID!, signal),
+    enabled: (personTMDBID ?? 0) > 0,
+    staleTime: REQUESTS_STALE_TIME,
+    retry: false,
+  });
 }
 
 export function useRequestMediaDetail(

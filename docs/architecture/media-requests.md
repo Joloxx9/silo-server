@@ -611,6 +611,22 @@ cancels or removes while requests are turned off. Any other profile on an admin'
 such as a child profile, is a requester like any other: it reads, cancels and
 removes its own account's requests, including ones its household's other profiles made.
 
+## A person's filmography
+
+`GET /api/v2/requests/people/{tmdb_id}/credits` (`listRequestPersonCredits`)
+lists a person's movies and series from TMDB's combined credits, keyed by the
+person's TMDB ID (a catalog person's `tmdb_id`). Each credit carries the title
+as search shows it, so `media.availability`, `media.library_content_id` and
+`media.request` say whether it is in the library and whether the viewer may
+request it, plus the role (`character`), crew `jobs` and a series'
+`episode_count`. A title the person both acted in and worked on appears once.
+Announced (undated) titles come first, then newest first. Adult titles, talk
+and news shows, and titles above the viewer's rating ceiling are left out, as
+discovery leaves them out. TMDB's answer is cached per person for 30 minutes;
+availability and request state are read fresh. Like the other request reads
+it answers 409 while requests are turned off, and clients then show only the
+person's titles in the library.
+
 ## Admin queue
 
 The admin queue groups requests by what an admin does next, from status and

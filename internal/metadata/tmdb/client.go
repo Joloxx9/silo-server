@@ -65,6 +65,7 @@ type Client struct {
 	findCache            *cache.TTLCache[*[]MediaResult]
 	certificationCache   *cache.TTLCache[string]
 	mediaDetailCache     *cache.TTLCache[*MediaDetail]
+	personCreditsCache   *cache.TTLCache[*[]PersonCredit]
 	cacheGroup           singleflight.Group
 	flightsMu            sync.Mutex
 	flights              map[string]*sharedFlight
@@ -105,6 +106,7 @@ func NewClientWithLimiter(apiKey string, limiter Limiter) *Client {
 		findCache:            cache.NewTTLCache[*[]MediaResult](),
 		certificationCache:   cache.NewTTLCache[string](),
 		mediaDetailCache:     cache.NewTTLCache[*MediaDetail](),
+		personCreditsCache:   cache.NewTTLCache[*[]PersonCredit](),
 		responseCacheTTL:     defaultResponseCacheTTL,
 	}
 }
@@ -136,6 +138,9 @@ func (c *Client) Close() {
 	}
 	if c.mediaDetailCache != nil {
 		c.mediaDetailCache.Close()
+	}
+	if c.personCreditsCache != nil {
+		c.personCreditsCache.Close()
 	}
 }
 

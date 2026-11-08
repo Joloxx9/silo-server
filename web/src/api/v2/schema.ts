@@ -11583,6 +11583,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/requests/people/{tmdb_id}/credits": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List a person's movies and series from TMDB, each with whether it is in the library and whether the viewer may request it. */
+    get: operations["listRequestPersonCredits"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/requests/search": {
     parameters: {
       query?: never;
@@ -33191,6 +33208,27 @@ export interface components {
        * @example pending
        */
       status?: string;
+    };
+    RequestPersonCredit: {
+      /**
+       * @description The role played; several roles on one title are joined with ' / '. Empty for a crew-only credit
+       * @example August Walker
+       */
+      character?: string;
+      /**
+       * Format: int64
+       * @description Series: episodes the person is credited on, when TMDB says
+       * @example 24
+       */
+      episode_count?: number;
+      /** @description Crew jobs on the title, such as Director or Screenplay. Empty, never null */
+      jobs: string[];
+      /** @description The title as search shows it, with library availability and the viewer's request state */
+      media: components["schemas"]["RequestMediaResult"];
+    };
+    RequestPersonCredits: {
+      /** @description Movies and series, announced (undated) titles first, then newest first. Adult titles, talk and news shows, and titles above the viewer's rating ceiling are left out. Empty, never null */
+      credits: components["schemas"]["RequestPersonCredit"][];
     };
     RequestSeasonProgress: {
       /**
@@ -139019,6 +139057,124 @@ export interface operations {
       };
       /** @description Not Acceptable */
       406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  listRequestPersonCredits: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The household profile acting for this request; it must belong to the authenticated account. */
+        "X-Profile-Id": string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The person's TMDB identifier (external, not a Silo ID); a catalog person carries it as tmdb_id */
+        tmdb_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestPersonCredits"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
         headers: {
           [name: string]: unknown;
         };

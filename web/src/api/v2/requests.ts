@@ -12,6 +12,7 @@ import type {
   RequestMediaPage,
   RequestMediaResult,
   RequestMediaType,
+  RequestPersonCredit,
   RequestSearchMediaType,
   RequestTarget,
   RequestUserState,
@@ -130,6 +131,19 @@ export function getRequestMediaDetailV2(
         ...d,
         recommendations: d.recommendations.map(mediaResultFromV2),
       }) as RequestMediaDetail,
+  );
+}
+
+/** A person's filmography by TMDB person ID, with library and request state. */
+export function listRequestPersonCreditsV2(
+  personTMDBID: number,
+  signal?: AbortSignal,
+): Promise<RequestPersonCredit[]> {
+  return v2("GET /api/v2/requests/people/{tmdb_id}/credits", {
+    path: { tmdb_id: personTMDBID },
+    signal,
+  }).then((body) =>
+    body.credits.map((credit) => ({ ...credit, media: mediaResultFromV2(credit.media) })),
   );
 }
 

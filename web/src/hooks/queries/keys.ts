@@ -167,6 +167,7 @@ export const requestKeys = {
   search: (mediaType: string, query: string, page: number, viewerKey: string) =>
     ["requests", "search", viewerKey, mediaType, query, page] as const,
   detail: (mediaType: string, tmdbID: number) => ["requests", "detail", mediaType, tmdbID] as const,
+  personCredits: (personTMDBID: number) => ["requests", "person-credits", personTMDBID] as const,
   mine: (params: Record<string, unknown>) => ["requests", "mine", params] as const,
   one: (id: string) => ["requests", "one", id] as const,
   // Prefixes for refreshing every params variant at once.

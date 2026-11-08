@@ -8,11 +8,13 @@ import { isNotFoundProblem } from "@/api/v2/request";
 import { createEmptyQueryDefinition, type Person } from "@/api/types";
 import type { CatalogSearchState } from "@/pages/catalogSearchParams";
 import EditPersonDialog from "@/components/EditPersonDialog";
+import PersonFilmography from "@/components/PersonFilmography";
 import ItemGrid from "@/components/ItemGrid";
 import PageBack from "@/components/PageBack";
 import PageUnavailable from "@/components/PageUnavailable";
 import { Button } from "@/components/ui/button";
 import { useCatalogWindow } from "@/hooks/queries/catalog";
+import { useRequestPersonCredits } from "@/hooks/queries/useRequests";
 import { personKeys } from "@/hooks/queries/keys";
 import {
   invalidatePersonItemDetails,
@@ -104,6 +106,14 @@ export default function PersonDetail() {
   }, []);
   useEffect(() => () => clearTimeout(debounceRef.current), []);
   const catalogQuery = useCatalogWindow(catalogState, { limit, visibleRange });
+
+  // The whole filmography from TMDB, with what is in the library and what
+  // can be requested. Without a TMDB ID, or while requests are off, the page
+  // lists the library's titles only.
+  const personTMDBID = Number(person?.tmdb_id) || undefined;
+  const credits = useRequestPersonCredits(personTMDBID);
+  const showFullFilmography = Boolean(credits.data && credits.data.length > 0);
+  const filmographyLoading = Boolean(personTMDBID) && credits.isLoading;
 
   if (personLoading) {
     return <PersonDetailSkeleton />;
@@ -221,39 +231,59 @@ export default function PersonDetail() {
       <div className="border-border/10 border-t" />
 
       {/* Filmography */}
-      <div className="page-shell space-y-6 py-6 sm:py-8">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold tracking-tight">Filmography</h2>
-          <div className="flex gap-1.5">
-            {(["all", "movie", "series"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  setTypeFilter(t);
-                  setVisibleRange([0, limit - 1]);
-                }}
-                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  typeFilter === t
-                    ? "border-border/20 bg-foreground/10 text-foreground"
-                    : "border-border/10 text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t === "all" ? "All" : t === "movie" ? "Movies" : "Series"}
-              </button>
-            ))}
-          </div>
+      {showFullFilmography && credits.data ? (
+        <div className="page-shell py-6 sm:py-8">
+          <PersonFilmography credits={credits.data} />
         </div>
+      ) : filmographyLoading ? (
+        <div className="page-shell space-y-4 py-6 sm:py-8">
+          <Skeleton className="h-7 w-48" />
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="flex gap-4">
+              <Skeleton className="aspect-[2/3] w-[72px] shrink-0 rounded-lg sm:w-[92px]" />
+              <div className="flex-1 space-y-2 pt-1">
+                <Skeleton className="h-5 w-56" />
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-10 w-full max-w-xl" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="page-shell space-y-6 py-6 sm:py-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight">Filmography</h2>
+            <div className="flex gap-1.5">
+              {(["all", "movie", "series"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    setTypeFilter(t);
+                    setVisibleRange([0, limit - 1]);
+                  }}
+                  className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    typeFilter === t
+                      ? "border-border/20 bg-foreground/10 text-foreground"
+                      : "border-border/10 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t === "all" ? "All" : t === "movie" ? "Movies" : "Series"}
+                </button>
+              ))}
+            </div>
+          </div>
 
-        <ItemGrid
-          totalItems={catalogQuery.data?.totalItems ?? 0}
-          knownItems={catalogQuery.data?.knownItems}
-          pages={catalogQuery.data?.pages ?? new Map()}
-          pageSize={limit}
-          loading={catalogQuery.isLoading}
-          onVisibleRangeChange={handleVisibleRangeChange}
-        />
-      </div>
+          <ItemGrid
+            totalItems={catalogQuery.data?.totalItems ?? 0}
+            knownItems={catalogQuery.data?.knownItems}
+            pages={catalogQuery.data?.pages ?? new Map()}
+            pageSize={limit}
+            loading={catalogQuery.isLoading}
+            onVisibleRangeChange={handleVisibleRangeChange}
+          />
+        </div>
+      )}
 
       {isAdmin ? (
         <EditPersonDialog

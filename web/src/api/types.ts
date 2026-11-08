@@ -1934,6 +1934,17 @@ export interface RequestDownload {
   updated_at: string;
 }
 
+/** One title in a person's filmography, with what they did on it. */
+export interface RequestPersonCredit {
+  media: RequestMediaResult;
+  /** The role played; empty for a crew-only credit. */
+  character?: string;
+  /** Crew jobs such as Director; empty, never null. */
+  jobs: string[];
+  /** Series: episodes the person is credited on, when known. */
+  episode_count?: number;
+}
+
 export interface RequestMediaResult {
   media_type: RequestMediaType;
   tmdb_id: number;
