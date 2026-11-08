@@ -187,6 +187,27 @@ func reconcileManagedRepositories(ctx context.Context, executor catalogSettingsE
 			return 0, fmt.Errorf("check managed plugin repository %q: %w", definition.Key, err)
 		}
 
+		// A built-in catalog whose URL changed moves its row to the new URL, so
+		// installations from it stay linked to the same repository. When a row
+		// already holds the new URL, the old row stops being managed instead,
+		// and the upsert below takes the managed key over.
+		if !exists {
+			if _, err := executor.Exec(ctx, `
+				UPDATE plugin_repositories SET url = $1, updated_at = NOW()
+				WHERE managed_key = $2 AND url <> $1
+			`, definition.URL, definition.Key); err != nil {
+				return 0, fmt.Errorf("move managed plugin repository %q: %w", definition.Key, err)
+			}
+			if err := executor.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM plugin_repositories WHERE url = $1)`, definition.URL).Scan(&exists); err != nil {
+				return 0, fmt.Errorf("check managed plugin repository %q: %w", definition.Key, err)
+			}
+		} else if _, err := executor.Exec(ctx, `
+			UPDATE plugin_repositories SET managed_key = NULL, source_kind = 'external', updated_at = NOW()
+			WHERE managed_key = $2 AND url <> $1
+		`, definition.URL, definition.Key); err != nil {
+			return 0, fmt.Errorf("release managed plugin repository %q: %w", definition.Key, err)
+		}
+
 		enabled := definition.Key == OfficialRepositoryManagedKey || includeCommunity
 		if _, err := executor.Exec(ctx, `
 			INSERT INTO plugin_repositories (url, display_name, enabled, managed_key, source_kind)

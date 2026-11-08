@@ -49,6 +49,7 @@ edit internal/invitations/email.go 's/(product = )"Silo"/$1"$ENV{APP_NAME}"/'
 
 # Built-in plugin catalogs carry the Spark names. The server rewrites the
 # stored repository names from these constants at startup.
+edit internal/plugins/catalog_channels.go 's{(DefaultRepositoryURL\s*= )"https://raw\.githubusercontent\.com/Silo-Server/silo-plugins/main/manifest\.json"}{$1"https://raw.githubusercontent.com/Joloxx9/spark-plugins/spark/manifest.json"}'
 edit internal/plugins/catalog_channels.go 's/(DefaultRepositoryName = )"Silo maintained"/$1"$ENV{APP_NAME} maintained"/'
 edit internal/plugins/catalog_channels.go 's/(ApprovedCommunityRepositoryName = )"Approved community"/$1"$ENV{APP_NAME} community"/'
 edit web/src/lib/pluginPresentation.ts 's/"Approved community"/"$ENV{APP_NAME} community"/g'
