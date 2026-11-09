@@ -9,7 +9,6 @@ import {
   type FilmographyFilter,
 } from "@/lib/personFilmography";
 import MediaCardArtwork from "@/components/MediaCardArtwork";
-import CardWatchStatus from "@/components/overlays/CardWatchStatus";
 import { RequestReasonBadge, RequestStatusBadge } from "@/components/RequestStatusBadge";
 import { Button } from "@/components/ui/button";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
@@ -198,9 +197,13 @@ function CreditRow({
           dim={!inLibrary && !media.request.requestable && !state}
         >
           {inLibrary && credit.watched ? (
-            <CardWatchStatus
-              userState={{ played: true, is_favorite: false, in_watchlist: false }}
-            />
+            <span
+              role="img"
+              aria-label="Watched"
+              className="absolute top-1 right-1 z-10 grid size-5 place-items-center rounded-full border border-white/35 bg-emerald-500 text-white shadow-sm"
+            >
+              <Check aria-hidden="true" className="size-3" strokeWidth={3.25} />
+            </span>
           ) : null}
         </MediaCardArtwork>
       </ViewTransitionLink>
