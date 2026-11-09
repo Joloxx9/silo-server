@@ -17,6 +17,7 @@ import { useShowTitleArt } from "@/hooks/useTitleArt";
 import { useUICustomization } from "@/hooks/useUICustomization";
 import { carouselCardWidthClasses, WIDE_CAROUSEL_CARD_WIDTH_CLASSES } from "@/lib/uiCustomization";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
+import TitleLogo from "@/components/TitleLogo";
 import type { CardQuickActionMode } from "@/lib/cardQuickActions";
 import { isEpisodeStill, isEpisodeUnwatched, SPOILER_IMAGE_CLASS } from "@/lib/episodeSpoilers";
 import { cn } from "@/lib/utils";
@@ -350,11 +351,11 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
                  left, drawn on the artwork over a dark fade. */
               <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-end bg-gradient-to-t from-black/90 via-black/35 via-45% to-transparent to-75% px-4 pb-4 text-white sm:px-5">
                 {logoSrc ? (
-                  <img
+                  <TitleLogo
                     src={logoSrc}
-                    alt={heading}
+                    alt={heading ?? ""}
                     onError={() => setLogoFailed(true)}
-                    className="mb-2.5 max-h-10 max-w-[50%] self-start object-contain object-left-bottom drop-shadow-md"
+                    className="mb-2.5 max-h-[26%] max-w-[48%] self-start object-contain object-left-bottom drop-shadow-md"
                   />
                 ) : (
                   <div className="mb-1.5 truncate text-xl leading-tight font-semibold tracking-tight drop-shadow-md">

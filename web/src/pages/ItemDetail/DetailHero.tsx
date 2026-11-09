@@ -7,6 +7,7 @@ import { useShowTitleArt } from "@/hooks/useTitleArt";
 import "./detailLayout.css";
 import DetailOverview from "./components/DetailOverview";
 import DetailTitle from "./DetailTitle";
+import TitleLogo from "@/components/TitleLogo";
 import MachineTranslatedLabel from "./components/MachineTranslatedLabel";
 
 interface DetailHeroProps {
@@ -276,11 +277,10 @@ export default function DetailHero({
                 {titleLogoUrl ? (
                   <>
                     <h1 className="sr-only">{title}</h1>
-                    <img
+                    <TitleLogo
                       src={titleLogoUrl}
                       alt=""
-                      decoding="async"
-                      className="mb-4 h-20 w-full max-w-[420px] object-contain object-left lg:h-28 lg:max-w-[480px]"
+                      className="mb-4 h-20 w-full max-w-[420px] object-contain object-left-bottom lg:h-28 lg:max-w-[480px]"
                     />
                   </>
                 ) : holdTitle ? (
