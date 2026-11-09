@@ -159,6 +159,7 @@ type pushSendResult struct {
 }
 
 type pushSender struct {
+	allowed             func(context.Context, DeliveryRow) (bool, error)
 	devices             *PushDeviceRepository
 	deliveries          *DeliveryRepository
 	cipher              *secret.Cipher
@@ -236,6 +237,16 @@ func (s *pushSender) processAttempt(ctx context.Context, attempt PushDeliveryAtt
 		if row == nil {
 			return s.finalize(ctx, attempt, PushOutcomeFailed, "delivery_missing", "delivery row missing", nil, "", nil)
 		}
+		if s.allowed != nil {
+			ok, err := s.allowed(ctx, *row)
+			if err != nil {
+				return nil
+			}
+			if !ok {
+				return s.finalize(ctx, attempt, PushOutcomeFailed, "preferences_disabled", "push disabled by profile", nil, "", nil)
+			}
+		}
+
 		// A device re-registered under another profile, or under one with the
 		// same ID on another account, no longer gets the old owner's delivery.
 		if row.UserID != device.UserID || row.ProfileID != device.ProfileID {

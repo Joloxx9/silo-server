@@ -1,5 +1,79 @@
 # Notification inbox API
 
+## Profile delivery choices and built-in newsletters
+
+These v2 operations require an authenticated, verified profile:
+
+| Method and suffix under `/api/v2/notifications` | Result |
+| --- | --- |
+| `GET /newsletter/capability` | `preferences` advertises support; `available` also requires enabled, unpaused native delivery, configured SMTP and a usable public link base |
+| `GET /delivery-preferences` | The acting account/profile's delivery choices |
+| `PUT /delivery-preferences` | Full replacement of those choices; naturally idempotent |
+
+The delivery document contains `push`, `push_episodes`, `push_requests`,
+`push_other`, `alerts` (`off`, `instant`, `daily`), `newsletter` (`off`, `daily`,
+`weekly`), `movies`, `episodes`, `personal`, and `popular`. Push defaults to on
+to retain existing device behavior. Both new email subscriptions default to
+off. Email opt-in requires an adult profile with its own verified notification
+address. There is no fallback to the login account's email. Removing that
+address or following its unsubscribe link disables both subscriptions and the
+existing notification-email mode, while retaining push choices.
+
+Push choices apply to registered Apple, Android and web-push destinations for
+that account/profile. They are checked immediately before each durable push
+handoff. Device permission, registration and server transport capabilities
+still apply independently. The in-app inbox and explicit administrator device
+tests retain their existing behavior.
+
+Acting administrators have these operations under
+`/api/v2/admin/notifications/newsletter`:
+
+| Method and suffix | Result |
+| --- | --- |
+| `GET /` | Native delivery enablement, templates, theme, schedule and delivery settings |
+| `PUT /` | Validated replacement; naturally idempotent |
+| `POST /preview` | Subject, HTML and text rendered from synthetic titles; sends no email |
+| `GET /import` | Email Alerts installations and retained import summaries |
+| `POST /import` | Body `{ "installation_id": 123 }`; imports a disabled `community.email-alerts` installation |
+| `GET /import/{installation_id}` | Archived subscriber choices and send history, excluding credentials and capability tokens |
+
+Import requires native delivery to be off. It copies configuration only when
+native configuration does not already exist, and copies SMTP only when the
+shared SMTP host is unset. Copied SMTP and native delivery remain disabled.
+The source state and runtime configuration are decrypted under their original
+row bindings and re-encrypted into a retained snapshot that survives plugin
+removal. Retrying a completed import returns its original result. Archived
+credentials are historical data and are never used for dispatch.
+
+Automatic subscription transfer requires an enabled, verified source
+subscription, its linked enabled account, a matching already verified native
+profile address, and an adult profile. An existing native preference record is
+never overwritten. Source subscriptions with library restrictions or custom
+age windows require review, as do unlinked or unverified destinations. Their
+original records remain in the archive. Historical plugin watermarks and send
+logs are archived; new subscriptions start at import time and do not replay
+old email.
+
+The plugin's public backdrop and app-opener routes are not imported. Native
+emails use standard server item links and embedded poster/still artwork.
+Household-wide recap options are replaced by profile-only personal statistics.
+
+Native newsletter delivery reads committed availability events and checks
+current catalog access for every included title, including personal and
+popular summaries. Personal viewing belongs only to the receiving profile.
+Popularity requires at least two distinct accounts. Calendar schedules and
+quiet hours use the configured timezone, defaulting to UTC. Workers serialize
+each recipient with PostgreSQL row locks and retain independent alert and
+newsletter watermarks. Delivery failures retry with backoff. SMTP has
+at-least-once semantics when acceptance succeeds but the final database commit
+is lost. The source read is bounded to the most recent 2,000 events per window;
+template limits and burst compaction apply after access filtering.
+
+These subscriptions are a native Silo email channel. They do not change the
+Jellyfin protocol surface or require a plugin installation after import.
+
+## Existing inbox operations
+
 The v2 inbox uses the existing durable delivery rows and preference store. The
 inbox routes in the table below require an authenticated, verified profile and
 retain the demo write guard. Other routes below `/api/v2/notifications` set their
@@ -735,10 +809,10 @@ checks, so a demo-mode change that changes `allowed` returns a new revision and
 ETag instead of 304.
 `dispatch_available` follows the dispatcher and sender state described under
 "Email verification dispatch"; the ledger row is ratified with the accepted
-duplicate-after-crash retry policy recorded in its retry note. No native Apple or
-Android caller for the address request exists; both lanes' earlier inventories
-recorded exact absence and that closure is tracked separately from this server
-and web packet.
+duplicate-after-crash retry policy recorded in its retry note. Native Apple and
+Android delivery settings use the same profile-owned address request and retain
+an uncertain draft while their settings screen remains mounted. A known receipt
+completes that draft; a later explicit request uses a new UUID.
 
 The settings web caller captures the email, UUID and render authority synchronously
 before a mutation can pause offline. An uncertain response retains that exact draft

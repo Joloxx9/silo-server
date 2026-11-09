@@ -52,6 +52,8 @@ func destinationAccountsDB(t *testing.T) *pgxpool.Pool {
 		CREATE TABLE notification_deliveries (LIKE public.notification_deliveries INCLUDING ALL);
 		CREATE TABLE notification_preferences (LIKE public.notification_preferences INCLUDING ALL);
 		CREATE TABLE notification_email_prefs (LIKE public.notification_email_prefs INCLUDING ALL);
+		CREATE TABLE notification_delivery_preferences (LIKE public.notification_delivery_preferences INCLUDING ALL);
+		CREATE TABLE notification_newsletter_history (LIKE public.notification_newsletter_history INCLUDING ALL);
 		CREATE TABLE profile_series_interest (LIKE public.profile_series_interest INCLUDING ALL);
 		CREATE TABLE profile_series_notification_mutes (LIKE public.profile_series_notification_mutes INCLUDING ALL)`); err != nil {
 		t.Fatal(err)

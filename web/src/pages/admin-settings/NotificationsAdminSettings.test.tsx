@@ -41,6 +41,12 @@ vi.mock("@/hooks/queries/admin/serverNotificationChannels", () => ({
   useServerNotificationChannels: () => ({ data: [] }),
 }));
 
+// The newsletter section loads its own data under a profile context these
+// tests do not set up; its behavior is not what this page's tests cover.
+vi.mock("./NewsletterAdminSettings", () => ({
+  NewsletterAdminSettings: () => null,
+}));
+
 const makeForm = (overrides: Record<string, string> = {}) =>
   fakeSettingsForm(
     {

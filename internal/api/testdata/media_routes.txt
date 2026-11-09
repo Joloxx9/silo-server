@@ -259,6 +259,12 @@ POST /api/v2/admin/nodes/{id}/force-reload	non-media
 POST /api/v2/admin/nodes/{id}/reprobe	non-media
 POST /api/v2/admin/nodes/{id}/resume	non-media
 POST /api/v2/admin/notifications/discord/test	non-media
+GET /api/v2/admin/notifications/newsletter	non-media
+PUT /api/v2/admin/notifications/newsletter	non-media
+GET /api/v2/admin/notifications/newsletter/import	non-media
+POST /api/v2/admin/notifications/newsletter/import	non-media
+GET /api/v2/admin/notifications/newsletter/import/{installation_id}	non-media
+POST /api/v2/admin/notifications/newsletter/preview	non-media
 POST /api/v2/admin/notifications/push/apple/test	non-media
 POST /api/v2/admin/notifications/push/fcm/test	non-media
 DELETE /api/v2/admin/notifications/push/relay	non-media
@@ -711,6 +717,8 @@ GET /api/v2/not-interested/{item_id}	non-media
 PUT /api/v2/not-interested/{item_id}	non-media
 GET /api/v2/notifications	non-media
 GET /api/v2/notifications/capabilities	non-media
+GET /api/v2/notifications/delivery-preferences	non-media
+PUT /api/v2/notifications/delivery-preferences	non-media
 DELETE /api/v2/notifications/discord-link	non-media
 GET /api/v2/notifications/discord-preferences	non-media
 PUT /api/v2/notifications/discord-preferences	non-media
@@ -724,6 +732,7 @@ GET /api/v2/notifications/email-preferences/address/capabilities	non-media
 GET /api/v2/notifications/email/unsubscribe	non-media
 POST /api/v2/notifications/email/unsubscribe	non-media
 GET /api/v2/notifications/email/verify	non-media
+GET /api/v2/notifications/newsletter/capability	non-media
 GET /api/v2/notifications/preferences	non-media
 PUT /api/v2/notifications/preferences	non-media
 GET /api/v2/notifications/push/apple/display/{delivery_id}	non-media
@@ -1614,6 +1623,12 @@ POST /api/v2/admin/nodes/{id}/force-reload	non-media
 POST /api/v2/admin/nodes/{id}/reprobe	non-media
 POST /api/v2/admin/nodes/{id}/resume	non-media
 POST /api/v2/admin/notifications/discord/test	non-media
+GET /api/v2/admin/notifications/newsletter	non-media
+PUT /api/v2/admin/notifications/newsletter	non-media
+GET /api/v2/admin/notifications/newsletter/import	non-media
+POST /api/v2/admin/notifications/newsletter/import	non-media
+GET /api/v2/admin/notifications/newsletter/import/{installation_id}	non-media
+POST /api/v2/admin/notifications/newsletter/preview	non-media
 POST /api/v2/admin/notifications/push/apple/test	non-media
 POST /api/v2/admin/notifications/push/fcm/test	non-media
 DELETE /api/v2/admin/notifications/push/relay	non-media
@@ -2066,6 +2081,8 @@ GET /api/v2/not-interested/{item_id}	non-media
 PUT /api/v2/not-interested/{item_id}	non-media
 GET /api/v2/notifications	non-media
 GET /api/v2/notifications/capabilities	non-media
+GET /api/v2/notifications/delivery-preferences	non-media
+PUT /api/v2/notifications/delivery-preferences	non-media
 DELETE /api/v2/notifications/discord-link	non-media
 GET /api/v2/notifications/discord-preferences	non-media
 PUT /api/v2/notifications/discord-preferences	non-media
@@ -2079,6 +2096,7 @@ GET /api/v2/notifications/email-preferences/address/capabilities	non-media
 GET /api/v2/notifications/email/unsubscribe	non-media
 POST /api/v2/notifications/email/unsubscribe	non-media
 GET /api/v2/notifications/email/verify	non-media
+GET /api/v2/notifications/newsletter/capability	non-media
 GET /api/v2/notifications/preferences	non-media
 PUT /api/v2/notifications/preferences	non-media
 GET /api/v2/notifications/push/apple/display/{delivery_id}	non-media

@@ -330,6 +330,7 @@ var secretTables = []secretTable{
 	{name: tableUsers, handling: secretRestored, why: "account passwords, restored with the accounts they sign in to"},
 	{name: tableUserProfiles, handling: secretRestored, why: "profile PINs, restored with their profiles"},
 	{name: "marker_edit_audit", handling: secretRestored, why: "names the API key an edit came from"},
+	{name: "notification_newsletter_imports", handling: secretRestored, why: "encrypted historical plugin snapshot; archived credentials are never used for dispatch"},
 	{name: "history_import_sources", handling: secretScrubbed, why: "history import sources' admin tokens", scrub: &scrubSpec{
 		key: "id", fromLive: []string{columnBaseURL, "admin_token"}, cleared: map[string]string{"admin_token": "''"}, off: columnEnabled,
 		describe: `format('history import source %s %L', t.id, t.name)`,

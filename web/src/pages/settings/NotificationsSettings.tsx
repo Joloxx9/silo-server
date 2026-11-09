@@ -1,3 +1,4 @@
+import { DeliveryPreferencesSection } from "./DeliveryPreferencesSection";
 import { captureProfileRequestContext, isCapturedProfileAuthorityActive } from "@/api/client";
 import {
   notificationScope,
@@ -1137,6 +1138,8 @@ export default function NotificationsSettings() {
       />
 
       <PreferencesSection />
+
+      <DeliveryPreferencesSection key={notificationScope()} />
 
       <WebPushSection />
 

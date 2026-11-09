@@ -174,6 +174,10 @@ func (s *System) EmailPreferences(ctx context.Context, userID int, profileID str
 	if err != nil {
 		return state, err
 	}
+	if prefs.UserID != 0 && prefs.UserID != userID {
+		state.IsChild = s.profileIsChild(ctx, userID, profileID)
+		return state, nil
+	}
 	state.Mode = prefs.Mode
 	state.CustomEmail = prefs.CustomEmail
 	state.PendingEmail = prefs.PendingEmail
@@ -199,7 +203,7 @@ func (s *System) SetEmailMode(ctx context.Context, userID int, profileID, mode s
 		if err != nil {
 			return err
 		}
-		if prefs.CustomEmail == "" {
+		if prefs.UserID != userID || prefs.CustomEmail == "" {
 			return ErrEmailNoAddress
 		}
 	}

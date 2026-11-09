@@ -104,6 +104,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/userstore/pgstore"
 	"github.com/Silo-Server/silo-server/internal/watchlist"
 	"github.com/Silo-Server/silo-server/internal/watchstate"
+	"github.com/Silo-Server/silo-server/internal/watchsync"
 	"github.com/Silo-Server/silo-server/internal/watchtogether"
 	"github.com/Silo-Server/silo-server/internal/webhooksync"
 )
@@ -1272,6 +1273,11 @@ func newChiRouter(deps Dependencies) chi.Router {
 		if watchlistTitles != nil {
 			personalDataHandler.SetWatchlistTitles(watchlistTitles)
 			watchlistTitles.SetEffects(personalDataHandler)
+			if watchSync, ok := deps.WatchProviderService.(interface {
+				SetWatchlistTitles(watchsync.WatchlistTitles)
+			}); ok {
+				watchSync.SetWatchlistTitles(watchlistTitles.WatchSync(nil))
+			}
 		}
 		personalDataHandler.EventsHub = deps.EventsHub
 		if dispatcher, ok := deps.WatchProviderService.(handlers.LocalListEventDispatcher); ok {
@@ -1300,6 +1306,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 		collectionHandler.CollectionOwners = collectionOwners
 		collectionHandler.Collages = personalCollages
 		collectionHandler.MemberCounts = personalMemberCounts
+		if dispatcher, ok := deps.WatchProviderService.(handlers.LocalCollectionEventDispatcher); ok {
+			collectionHandler.CollectionSync = dispatcher
+		}
 		// The import handler is built beside the collection handler so the v1
 		// route group and the v2 operations share one instance; the v1 routes
 		// keep their userImportHandler != nil condition.
@@ -1892,6 +1901,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 			imageSvc,
 			deps.PluginImageResolver,
 			detailSvc,
+			providerIDRepo,
 		)
 		adminImageHandler.EventsHub = deps.EventsHub
 		adminImageHandler.EventBus = deps.EventBus
@@ -2926,6 +2936,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		v2deps.AdminNotificationPush = deps.Notifications
 		v2deps.AdminNotificationDiscord = deps.Notifications
 		v2deps.NotificationChannels = deps.Notifications
+		v2deps.NotificationDelivery = deps.Notifications
 		v2deps.NotificationDiscordManagement = newDiscordNotificationsHandler(deps, profileTokenService)
 		v2deps.NotificationEmailVerification = deps.Notifications.EmailVerification
 		v2deps.NotificationEmailLinks = handlers.NewEmailLinkHandler(deps.Notifications)
@@ -3222,6 +3233,14 @@ func newChiRouter(deps Dependencies) chi.Router {
 		if watchlistRequests, ok := requestHandler.Service().(apiv2.WatchlistRequestService); ok && personalDataHandler != nil && watchlistTitles != nil {
 			v2deps.WatchlistTitles = personalDataHandler
 			v2deps.WatchlistRequests = watchlistRequests
+			// Titles watch provider sync adds are requested like ones added
+			// by hand.
+			syncRequests, requestsOK := watchlistRequests.(syncRequestService)
+			if watchSync, ok := deps.WatchProviderService.(interface {
+				SetWatchlistTitles(watchsync.WatchlistTitles)
+			}); ok && requestsOK {
+				watchSync.SetWatchlistTitles(watchlistTitles.WatchSync(watchlistSyncRequests{requests: syncRequests}))
+			}
 		}
 		// *requests.Service implements the usage read (pinned at the top of
 		// this file), so the assertion only fails for a test double.
