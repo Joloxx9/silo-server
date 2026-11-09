@@ -6,25 +6,15 @@ import { useCarouselEmbla } from "@/hooks/useCarouselEmbla";
 import { buildItemHref } from "@/lib/mediaNavigation";
 import { formatSeasonMeta, formatSeasonProgress, getSeasonDisplayTitle } from "./itemDetailLayout";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
-import RequestSeasonButton from "./components/RequestSeasonButton";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
 
 interface SeasonCarouselProps {
   seasons: Season[];
   /** The series page's library scope, kept on each season link. */
   libraryId?: number;
-  /** Requests a season the library lacks entirely; absent when requests are off. */
-  onRequestSeason?: (seasonNumber: number) => void;
-  /** Seasons a request already covers. */
-  requestedSeasons?: ReadonlySet<number>;
 }
 
-export default function SeasonCarousel({
-  seasons,
-  libraryId,
-  onRequestSeason,
-  requestedSeasons,
-}: SeasonCarouselProps) {
+export default function SeasonCarousel({ seasons, libraryId }: SeasonCarouselProps) {
   const sorted = seasons.slice().sort((a, b) => a.season_number - b.season_number);
   const prefetchSeason = usePrefetchCatalogSeason(libraryId);
 
@@ -35,16 +25,6 @@ export default function SeasonCarousel({
   return (
     <SeasonRail count={sorted.length}>
       {sorted.map((season) => {
-        if (season.episode_count === 0 && (season.missing_episode_count ?? 0) > 0) {
-          return (
-            <MissingSeasonSlide
-              key={season.content_id}
-              season={season}
-              onRequest={onRequestSeason}
-              requested={requestedSeasons?.has(season.season_number) ?? false}
-            />
-          );
-        }
         const userData = season.user_data;
         const isCompleted = userData?.played === true;
         const hasProgress =
@@ -144,65 +124,6 @@ function SeasonProgressSlot({ children }: { children?: ReactNode }) {
     <div className="bg-foreground/15 mx-0.5 mt-2 h-[3px] overflow-hidden rounded-full">
       {children}
     </div>
-  );
-}
-
-/**
- * A season with no episode in the library: dimmed, requestable, and still a
- * link, so its page lists the episodes to choose from.
- */
-function MissingSeasonSlide({
-  season,
-  onRequest,
-  requested,
-}: {
-  season: Season;
-  onRequest?: (seasonNumber: number) => void;
-  requested: boolean;
-}) {
-  return (
-    <li className="embla__slide shrink-0" data-availability="missing">
-      <div className="group/season w-[160px] sm:w-[170px]">
-        <div className="relative">
-          <ViewTransitionLink
-            to={`/item/${season.content_id}`}
-            className="media-card-image relative block aspect-[2/3] overflow-hidden rounded-xl"
-          >
-            {season.poster_url ? (
-              <img
-                src={season.poster_url}
-                alt={getSeasonDisplayTitle(season)}
-                className="h-full w-full object-cover opacity-40 grayscale transition-opacity duration-300 group-hover/season:opacity-60"
-                loading="lazy"
-                decoding="async"
-              />
-            ) : (
-              <div className="text-muted-foreground bg-surface flex h-full items-center justify-center p-4 text-center text-sm font-medium">
-                {getSeasonDisplayTitle(season)}
-              </div>
-            )}
-          </ViewTransitionLink>
-          {onRequest && (
-            <RequestSeasonButton
-              target={getSeasonDisplayTitle(season)}
-              requested={requested}
-              onRequest={() => onRequest(season.season_number)}
-              className="absolute inset-x-2.5 bottom-2.5 h-8"
-            />
-          )}
-        </div>
-        <SeasonProgressSlot />
-        <ViewTransitionLink
-          to={`/item/${season.content_id}`}
-          className="block px-0.5 pt-1.5 opacity-60"
-        >
-          <div className="truncate text-[0.8125rem] font-semibold">
-            {getSeasonDisplayTitle(season)}
-          </div>
-          <div className="text-muted-foreground text-xs">{formatSeasonMeta(season)}</div>
-        </ViewTransitionLink>
-      </div>
-    </li>
   );
 }
 

@@ -25,8 +25,6 @@ const (
 	CatalogMetadataLanguageOverrides = "catalog.metadata_language_overrides"
 	// Show advisory age
 	CatalogShowAdvisoryAge = "catalog.show_advisory_age"
-	// Show missing episodes
-	CatalogShowMissingEpisodes = "catalog.show_missing_episodes"
 	// Download quality
 	DownloadsDefaultQuality = "downloads.default_quality"
 	// Keep watched downloads
@@ -179,7 +177,6 @@ var Remote = []string{
 	CatalogMetadataLanguage,
 	CatalogMetadataLanguageOverrides,
 	CatalogShowAdvisoryAge,
-	CatalogShowMissingEpisodes,
 	HomeHideWatchedItems,
 	NavPrimaryMenu,
 	NavShortcuts,

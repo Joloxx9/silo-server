@@ -11,7 +11,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useIsActingAdmin } from "@/hooks/useIsActingAdmin";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useMissingSeasonsRequestable } from "@/hooks/useCanRequest";
-import { useShowMissingEpisodes } from "@/hooks/useShowMissingEpisodes";
 import { RequestSeasonsDialog } from "@/components/RequestSeasonsDialog";
 import CastCarousel from "@/components/CastCarousel";
 import { buildCrewGroups } from "@/components/castCrewGroups";
@@ -25,10 +24,8 @@ import DetailLayout, { DetailSection } from "./DetailLayout";
 import { useDetailWatchTogether } from "@/pages/watchtogether/DetailWatchTogether";
 import { useOnViewTranslation } from "@/hooks/useOnViewTranslation";
 import SeasonCarousel from "./SeasonCarousel";
-import { useMissingSeasonRequest } from "./useMissingSeasonRequest";
 import SeasonEpisodeGrid from "./components/SeasonEpisodeGrid";
 import { useEpisodePlaybackList } from "./useEpisodePlaybackList";
-import SeasonRequestAction from "./components/SeasonRequestAction";
 import MetadataBadges from "./components/MetadataBadges";
 import TrailersSection from "./components/TrailersSection";
 import ExtrasSection from "./components/ExtrasSection";
@@ -90,13 +87,7 @@ export default function SeriesContent({
   const [requestSeasonsOpen, setRequestSeasonsOpen] = useState(false);
   const tmdbID = Number(item.tmdb_id) || 0;
   const canRequestSeasons = useMissingSeasonsRequestable(Boolean(currentProfile?.id) && tmdbID > 0);
-  const showMissing = useShowMissingEpisodes();
-  const missingRequest = useMissingSeasonRequest(tmdbID, item.title ?? "", showMissing !== "none");
-  const { data: seasonsData, isLoading: seasonsLoading } = useSeasons(
-    item.content_id,
-    libraryId,
-    showMissing,
-  );
+  const { data: seasonsData, isLoading: seasonsLoading } = useSeasons(item.content_id, libraryId);
   const { data: similarData, isLoading: similarLoading } = useSimilarItems(item.content_id);
   const seasons = useMemo(() => seasonsData?.seasons ?? [], [seasonsData?.seasons]);
   const crewGroups = useMemo(() => buildCrewGroups(item.crew ?? [], "Creator"), [item.crew]);
@@ -115,16 +106,12 @@ export default function SeriesContent({
   const singleSeason = seasons.length === 1 ? seasons[0] : undefined;
 
   const primaryAction = resolveSeriesPrimaryAction(item);
-  const singleSeasonEpisodesQuery = useItemEpisodes(
-    singleSeason?.content_id,
-    libraryId,
-    showMissing,
-  );
+  const singleSeasonEpisodesQuery = useItemEpisodes(singleSeason?.content_id, libraryId);
   const singleSeasonEpisodes = singleSeasonEpisodesQuery.data?.episodes ?? [];
   const { episodes: singleSeasonPlaybackEpisodes } = useEpisodePlaybackList(
     singleSeason?.content_id,
     libraryId,
-    singleSeasonEpisodes.filter((episode) => !episode.availability),
+    singleSeasonEpisodes,
   );
   // A single-season show lists its episodes here rather than on a season
   // page, so this page starts the season's on-view translation (the season
@@ -282,15 +269,6 @@ export default function SeriesContent({
                       <span className="text-muted-foreground text-sm">
                         {singleSeason.episode_count} total
                       </span>
-                      {(singleSeason.missing_episode_count ?? 0) > 0 && (
-                        <SeasonRequestAction
-                          seasonNumber={singleSeason.season_number}
-                          onRequestSeason={missingRequest.onRequestSeason}
-                          requested={missingRequest.requestedSeasons.has(
-                            singleSeason.season_number,
-                          )}
-                        />
-                      )}
                     </div>
                   </div>
                   <SeasonEpisodeGrid
@@ -299,16 +277,10 @@ export default function SeriesContent({
                     isLoading={singleSeasonEpisodesQuery.isLoading}
                     episodeLinkState={singleSeasonEpisodeLinkState}
                     libraryId={libraryId}
-                    requestedSeasons={missingRequest.requestedSeasons}
                   />
                 </section>
               ) : (
-                <SeasonCarousel
-                  seasons={seasons}
-                  libraryId={libraryId}
-                  onRequestSeason={missingRequest.onRequestSeason}
-                  requestedSeasons={missingRequest.requestedSeasons}
-                />
+                <SeasonCarousel seasons={seasons} libraryId={libraryId} />
               )}
             </div>
           )}
@@ -337,7 +309,6 @@ export default function SeriesContent({
             />
           )}
           {watchTogether.sheet}
-          {missingRequest.dialog}
         </>
       }
     >

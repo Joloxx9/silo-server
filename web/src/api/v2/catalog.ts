@@ -377,7 +377,6 @@ export function episodeFromV2(episode: EpisodeV2): EpisodeListItem {
     overlay_summary: episode.overlay_summary,
     machine_translated_fields: episode.machine_translated_fields,
     pending_translation_language: episode.pending_translation_language,
-    availability: episode.availability,
   };
 }
 
@@ -395,7 +394,6 @@ export function seasonFromV2(season: SeasonV2): Season {
     poster_thumbhash: season.poster_thumbhash ?? "",
     user_data: season.user_data ? watchRollupFromV2(season.user_data) : undefined,
     machine_translated_fields: season.machine_translated_fields,
-    missing_episode_count: season.missing_episode_count,
   };
 }
 

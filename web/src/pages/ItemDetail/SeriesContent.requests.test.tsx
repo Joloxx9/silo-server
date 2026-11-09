@@ -35,12 +35,6 @@ vi.mock("@/hooks/useCurrentProfile", () => ({
   }),
 }));
 vi.mock("@/hooks/useIsActingAdmin", () => ({ useIsActingAdmin: () => false }));
-// Missing-season reads are covered on their own; this test budgets the
-// requests the series page makes with the setting off.
-vi.mock("@/hooks/useShowMissingEpisodes", () => ({ useShowMissingEpisodes: () => "none" }));
-vi.mock("./useMissingSeasonRequest", () => ({
-  useMissingSeasonRequest: () => ({ requestedSeasons: new Set<number>(), dialog: null }),
-}));
 vi.mock("@/hooks/useOnViewTranslation", () => ({
   useOnViewTranslation: () => ({ translating: false, onTranslate: undefined }),
 }));

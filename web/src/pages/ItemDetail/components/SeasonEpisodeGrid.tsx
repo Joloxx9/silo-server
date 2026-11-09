@@ -20,7 +20,6 @@ import { overlayDataFromEpisodeListItem, type CardOverlayPrefs } from "@/lib/ove
 import { cn } from "@/lib/utils";
 import { EpisodeGridSkeleton } from "./SectionSkeletons";
 import EpisodeCardCaption from "./EpisodeCardCaption";
-import MissingEpisodeCard from "./MissingEpisodeCard";
 import { episodeLinkLibraryId, type EpisodeNavigationState } from "../itemDetailLayout";
 
 /**
@@ -46,8 +45,6 @@ interface SeasonEpisodeGridProps {
   episodeLinkState?: EpisodeNavigationState;
   /** The page's library scope, kept on each episode link. */
   libraryId?: number;
-  /** Seasons a request already covers, for episodes the library lacks. */
-  requestedSeasons?: ReadonlySet<number>;
 }
 
 export default function SeasonEpisodeGrid({
@@ -56,7 +53,6 @@ export default function SeasonEpisodeGrid({
   isLoading,
   episodeLinkState,
   libraryId,
-  requestedSeasons,
 }: SeasonEpisodeGridProps) {
   const { prefs: overlayPrefs, quickActionMode } = useOverlayPrefs();
   const spoilerPrefs = useEpisodeSpoilerPrefs();
@@ -87,31 +83,23 @@ export default function SeasonEpisodeGrid({
       // scrollport clips both axes, and the cap adds this padding back.
       className="overlay-scroll -mt-1 grid grid-cols-2 gap-4 overflow-y-auto pt-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
     >
-      {episodes.map((episode) =>
-        episode.availability ? (
-          <MissingEpisodeCard
-            key={episode.content_id}
-            episode={episode}
-            requested={requestedSeasons?.has(episode.season_number) ?? false}
-          />
-        ) : (
-          <SeasonEpisodeCard
-            key={episode.content_id}
-            episode={episode}
-            playbackEpisode={playbackById.get(episode.content_id) ?? episode}
-            episodeLinkState={episodeLinkState}
-            libraryId={libraryId}
-            overlayPrefs={overlayPrefs}
-            quickActionMode={quickActionMode}
-            spoilerPrefs={spoilerPrefs}
-            onPrefetch={() =>
-              (episodeLinkLibraryId(episode, libraryId) === undefined
-                ? prefetchEpisode
-                : prefetchScopedEpisode)(episode.content_id)
-            }
-          />
-        ),
-      )}
+      {episodes.map((episode) => (
+        <SeasonEpisodeCard
+          key={episode.content_id}
+          episode={episode}
+          playbackEpisode={playbackById.get(episode.content_id) ?? episode}
+          episodeLinkState={episodeLinkState}
+          libraryId={libraryId}
+          overlayPrefs={overlayPrefs}
+          quickActionMode={quickActionMode}
+          spoilerPrefs={spoilerPrefs}
+          onPrefetch={() =>
+            (episodeLinkLibraryId(episode, libraryId) === undefined
+              ? prefetchEpisode
+              : prefetchScopedEpisode)(episode.content_id)
+          }
+        />
+      ))}
     </div>
   );
 }

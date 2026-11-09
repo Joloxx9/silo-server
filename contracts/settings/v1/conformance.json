@@ -1150,23 +1150,6 @@
       ]
     },
     {
-      "name": "show_missing_episodes_defaults_off",
-      "keys": ["catalog.show_missing_episodes"],
-      "context": {"profile_id": "p1", "device_id": "browser"},
-      "stored": [],
-      "expected": [{"key": "catalog.show_missing_episodes", "value": false, "source": "default"}]
-    },
-    {
-      "name": "show_missing_episodes_follows_profile",
-      "keys": ["catalog.show_missing_episodes"],
-      "context": {"profile_id": "p1", "device_id": "browser"},
-      "stored": [
-        {"key": "catalog.show_missing_episodes", "scope": "profile", "profile_id": "p1", "value": true},
-        {"key": "catalog.show_missing_episodes", "scope": "profile", "profile_id": "p2", "value": false}
-      ],
-      "expected": [{"key": "catalog.show_missing_episodes", "value": true, "source": "profile"}]
-    },
-    {
       "name": "group_box_sets_in_library_defaults_off",
       "keys": ["catalog.group_box_sets_in_library"],
       "context": {"profile_id": "p1", "device_id": "browser"},
