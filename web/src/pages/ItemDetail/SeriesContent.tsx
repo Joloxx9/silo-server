@@ -155,11 +155,9 @@ export default function SeriesContent({
   const nextUpSeason = item.play_content_id
     ? seasons.find((season) => season.play_content_id === item.play_content_id)
     : undefined;
-  const nextUpEpisode = useItemEpisodes(
-    nextUpSeason?.content_id,
-    libraryId,
-    showMissing,
-  ).data?.episodes.find((episode) => episode.content_id === item.play_content_id);
+  const nextUpEpisode = useItemEpisodes(nextUpSeason?.content_id, libraryId).data?.episodes.find(
+    (episode) => episode.content_id === item.play_content_id,
+  );
   const watchTogether = useDetailWatchTogether({
     item,
     target: nextUpEpisode
