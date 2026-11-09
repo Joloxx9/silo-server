@@ -23,7 +23,7 @@ const (
 	MinWidth               = config.MinPreviewImageWidth
 	MaxWidth               = config.MaxPreviewImageWidth
 	DefaultIntervalSeconds = 10
-	MinIntervalSeconds     = 2
+	MinIntervalSeconds     = 5
 	MaxIntervalSeconds     = 60
 	// Quality is the JPEG quality of every sheet.
 	Quality = 80
