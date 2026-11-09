@@ -1443,6 +1443,8 @@ func main() {
 	tmdbClient := tmdb.NewClientWithLimiter(cfg.TMDBAPIKey,
 		ratelimit.NewOutboundLimiter(tmdbRedisClient, "outbound:tmdb", tmdb.RequestsPerSecond))
 	defer tmdbClient.Close()
+	tmdbPersonCredits := tmdb.NewPGPersonCreditsStore(pool)
+	tmdbClient.SetPersonCreditsStore(tmdbPersonCredits)
 
 	// The playback control relay bounds each lane ownership read and write
 	// at one second; this client's sockets give up at that deadline.
@@ -3333,6 +3335,7 @@ func main() {
 			taskMgr.Register(tasks.NewBackfillHDR10PlusTask(deps.DB, scanner.NewHDR10PlusBackfiller(deps.FileRepo, scanner.FFprobePathFromFFmpeg(cfg.Playback.FFmpegPath))))
 		}
 		taskMgr.Register(tasks.NewRefreshSeriesAirDatesTask(catalog.NewEpisodeRepository(deps.DB)))
+		taskMgr.Register(tasks.NewPrefetchPersonCreditsTask(tmdbPersonCredits, tmdbClient))
 		boxSetSyncer := boxsets.NewSyncer(catalog.NewBoxSetRepository(deps.DB), tmdbClient)
 		if metadataService != nil {
 			boxSetSyncer.WithImages(metadataService.AutoImageCacher)

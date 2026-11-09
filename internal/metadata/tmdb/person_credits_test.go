@@ -1,8 +1,13 @@
 package tmdb
 
 import (
+	"context"
+	"net/http"
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // A filmography lists each title once with every role on it, leaves out adult
@@ -47,5 +52,73 @@ func TestNormalizePersonCredits(t *testing.T) {
 	}
 	if !reflect.DeepEqual(rows, want) {
 		t.Fatalf("credits = %+v\nwant %+v", rows, want)
+	}
+}
+
+type memoryPersonCreditsStore struct {
+	mu        sync.Mutex
+	credits   []PersonCredit
+	fetchedAt time.Time
+	saved     chan struct{}
+}
+
+func (m *memoryPersonCreditsStore) LoadPersonCredits(context.Context, int) ([]PersonCredit, time.Time, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.credits, m.fetchedAt, m.credits != nil, nil
+}
+
+func (m *memoryPersonCreditsStore) SavePersonCredits(_ context.Context, _ int, credits []PersonCredit, fetchedAt time.Time) error {
+	m.mu.Lock()
+	m.credits, m.fetchedAt = credits, fetchedAt
+	m.mu.Unlock()
+	m.saved <- struct{}{}
+	return nil
+}
+
+// A stored filmography answers without TMDB while fresh; a stale one still
+// answers at once and is refreshed from TMDB in the background.
+func TestGetPersonCreditsServesStoredCopy(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		age         time.Duration
+		wantRefresh bool
+	}{
+		{name: "fresh", age: time.Hour},
+		{name: "stale", age: PersonCreditsFreshFor + time.Hour, wantRefresh: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			client := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				_, _ = w.Write([]byte(`{"cast":[{"id":9,"media_type":"movie","title":"Fresh","release_date":"2026-01-01"}]}`))
+			})
+			store := &memoryPersonCreditsStore{
+				credits:   []PersonCredit{{MediaResult: MediaResult{ID: 1, MediaType: "movie", Title: "Stored"}}},
+				fetchedAt: time.Now().Add(-tc.age),
+				saved:     make(chan struct{}, 1),
+			}
+			client.SetPersonCreditsStore(store)
+
+			got, err := client.GetPersonCredits(context.Background(), 42)
+			if err != nil {
+				t.Fatalf("GetPersonCredits: %v", err)
+			}
+			if len(got) != 1 || got[0].Title != "Stored" {
+				t.Fatalf("credits = %+v, want the stored copy", got)
+			}
+			if tc.wantRefresh {
+				select {
+				case <-store.saved:
+				case <-time.After(5 * time.Second):
+					t.Fatal("stale copy was not refreshed")
+				}
+				if calls.Load() != 1 || store.credits[0].Title != "Fresh" {
+					t.Fatalf("calls = %d, stored = %+v, want one refresh storing TMDB's answer", calls.Load(), store.credits)
+				}
+			} else if calls.Load() != 0 {
+				t.Fatalf("TMDB calls = %d, want none for a fresh stored copy", calls.Load())
+			}
+		})
 	}
 }

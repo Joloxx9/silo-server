@@ -594,8 +594,64 @@ func TestSearchMarksSeriesAvailableByHydratedTVDBID(t *testing.T) {
 	if page.Results[0].Request.Reason != "already_available" {
 		t.Fatalf("request reason = %q, want already_available", page.Results[0].Request.Reason)
 	}
-	if len(presence.got) != 1 || presence.got[0].TVDBID == nil || *presence.got[0].TVDBID != 420105 {
+	last := presence.got[len(presence.got)-1]
+	if last.TVDBID == nil || *last.TVDBID != 420105 {
 		t.Fatalf("presence candidates = %+v, want hydrated tvdb id", presence.got)
+	}
+}
+
+// gapReportingPresence is a fakePresence that says whether the library holds
+// items findable only by IMDb or TVDB ID.
+type gapReportingPresence struct {
+	*fakePresence
+	needs bool
+}
+
+func (g gapReportingPresence) NeedsExternalIDs(context.Context, MediaType) (bool, error) {
+	return g.needs, nil
+}
+
+// A title matched by TMDB ID never costs a TMDB external-ID call, and a miss
+// costs one only while the library holds items without a TMDB ID.
+func TestPresenceFetchesExternalIDsOnlyForMissesWhenLibraryNeedsThem(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		needs         bool
+		wantCalls     []int
+		wantAvailable map[int]bool
+	}{
+		{name: "library has items without tmdb id", needs: true, wantCalls: []int{2}, wantAvailable: map[int]bool{1: true, 2: true}},
+		{name: "every item has a tmdb id", needs: false, wantCalls: nil, wantAvailable: map[int]bool{1: true, 2: false}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newFakeStore()
+			store.settings.RequestsEnabled = true
+			tmdbClient := &fakeTMDBClient{
+				page: &tmdb.MediaPage{Page: 1, Results: []tmdb.MediaResult{
+					{ID: 1, MediaType: "series", Title: "By TMDB"},
+					{ID: 2, MediaType: "series", Title: "By TVDB"},
+				}},
+				externalIDsByID: map[int]*tmdb.ExternalIDs{1: {TVDBID: 10}, 2: {TVDBID: 20}},
+			}
+			presence := &fakePresence{
+				available: map[MediaType]map[int]bool{MediaTypeSeries: {1: true}},
+				byTVDB:    map[MediaType]map[int]int{MediaTypeSeries: {20: 2}},
+			}
+			service := NewService(store, tmdbClient, gapReportingPresence{fakePresence: presence, needs: tc.needs})
+
+			page, err := service.Search(context.Background(), testViewer(1), "x", MediaTypeSeries, 1)
+			if err != nil {
+				t.Fatalf("Search returned error: %v", err)
+			}
+			if !slices.Equal(tmdbClient.externalIDCalls, tc.wantCalls) {
+				t.Fatalf("external id calls = %v, want %v", tmdbClient.externalIDCalls, tc.wantCalls)
+			}
+			for _, result := range page.Results {
+				if got := result.Availability == AvailabilityAvailable; got != tc.wantAvailable[result.TMDBID] {
+					t.Fatalf("title %d available = %v, want %v", result.TMDBID, got, tc.wantAvailable[result.TMDBID])
+				}
+			}
+		})
 	}
 }
 

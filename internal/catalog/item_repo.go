@@ -3306,6 +3306,42 @@ func (r *ItemRepository) LookupExternalIDs(
 	return out, nil
 }
 
+// HasItemsMatchableOnlyByIMDbOrTVDB reports whether an enabled library holds
+// an item of mediaType that has an IMDb or TVDB ID but no TMDB ID. Only such
+// items need a TMDB title's external IDs to be found by LookupExternalIDs;
+// when there are none, matching on TMDB IDs alone finds everything.
+func (r *ItemRepository) HasItemsMatchableOnlyByIMDbOrTVDB(ctx context.Context, mediaType string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM media_items mi
+			WHERE mi.type = $1
+			  AND mi.tmdb_id = ''
+			  AND NOT EXISTS (
+				SELECT 1 FROM media_item_provider_ids mip
+				WHERE mip.content_id = mi.content_id AND mip.provider = 'tmdb'
+			  )
+			  AND (
+				mi.imdb_id <> '' OR mi.tvdb_id <> ''
+				OR EXISTS (
+					SELECT 1 FROM media_item_provider_ids mip
+					WHERE mip.content_id = mi.content_id AND mip.provider IN ('imdb', 'tvdb')
+				)
+			  )
+			  AND EXISTS (
+				SELECT 1
+				FROM media_item_libraries mil
+				JOIN media_folders mf ON mf.id = mil.media_folder_id
+				WHERE mil.content_id = mi.content_id AND mf.enabled = true
+			  )
+		)`, mediaType).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("checking items without tmdb id: %w", err)
+	}
+	return exists, nil
+}
+
 func pathPrefixLike(pathPrefix string) string {
 	return pathscope.PrefixLike(pathPrefix)
 }

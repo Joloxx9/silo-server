@@ -4,16 +4,22 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// personCreditsCacheTTL keeps a person's filmography long enough that paging
-// through a person page, or several profiles opening it, share one fetch,
-// while a new role reaches the page within the hour.
+// personCreditsCacheTTL is how long a process keeps a filmography in memory
+// before reading the stored copy again.
 const personCreditsCacheTTL = 30 * time.Minute
+
+// PersonCreditsFreshFor is how old a stored filmography may be before a
+// person page asks TMDB again. An older copy is still shown at once and
+// refreshed in the background, so a new role reaches the page on the visit
+// after it lands on TMDB.
+const PersonCreditsFreshFor = 3 * 24 * time.Hour
 
 // PersonCredit is one title in a person's filmography: the title as request
 // surfaces show it, and what the person did on it. A title the person both
@@ -59,15 +65,23 @@ type personCreditsResponse struct {
 	Crew []personCreditResponse `json:"crew"`
 }
 
+// SetPersonCreditsStore keeps fetched filmographies in store, so they
+// survive restarts and are shared by every node. Call before serving.
+func (c *Client) SetPersonCreditsStore(store PersonCreditsStore) {
+	c.personCreditsStore = store
+}
+
 // GetPersonCredits returns a person's movies and series from TMDB's combined
 // credits, newest first with undated (announced) titles leading. Adult titles
-// and talk or news shows are left out. The list is cached for
-// personCreditsCacheTTL; each caller gets its own copy.
+// and talk or news shows are left out. It answers from memory, then from the
+// PersonCreditsStore, and asks TMDB only when neither holds the person; a
+// stored copy older than PersonCreditsFreshFor is returned and refreshed in
+// the background. Each caller gets its own copy.
 func (c *Client) GetPersonCredits(ctx context.Context, personID int) ([]PersonCredit, error) {
 	if personID <= 0 {
 		return nil, fmt.Errorf("tmdb: person id must be > 0 (got %d)", personID)
 	}
-	key := "person_credits:" + strconv.Itoa(personID)
+	key := personCreditsKey(personID)
 	if cached, ok := c.cachedPersonCredits(key); ok {
 		return clonePersonCredits(cached), nil
 	}
@@ -77,15 +91,14 @@ func (c *Client) GetPersonCredits(ctx context.Context, personID int) ([]PersonCr
 		}
 		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sharedFetchTimeout)
 		defer cancel()
-		var resp personCreditsResponse
-		if err := c.doGet(fetchCtx, fmt.Sprintf("/person/%d/combined_credits", personID), &resp); err != nil {
-			return nil, err
+		if stored, fetchedAt, ok := c.loadStoredPersonCredits(fetchCtx, personID); ok {
+			c.rememberPersonCredits(key, stored)
+			if time.Since(fetchedAt) >= PersonCreditsFreshFor {
+				c.refreshPersonCreditsInBackground(personID)
+			}
+			return stored, nil
 		}
-		credits := normalizePersonCredits(resp)
-		if c.personCreditsCache != nil {
-			c.personCreditsCache.Set(key, &credits, personCreditsCacheTTL)
-		}
-		return credits, nil
+		return c.fetchPersonCredits(fetchCtx, personID)
 	})
 	select {
 	case <-ctx.Done():
@@ -99,6 +112,65 @@ func (c *Client) GetPersonCredits(ctx context.Context, personID int) ([]PersonCr
 			return nil, fmt.Errorf("tmdb: invalid cached person credits")
 		}
 		return clonePersonCredits(credits), nil
+	}
+}
+
+// RefreshPersonCredits fetches a person's filmography from TMDB and stores
+// it, replacing any cached copy.
+func (c *Client) RefreshPersonCredits(ctx context.Context, personID int) error {
+	if personID <= 0 {
+		return fmt.Errorf("tmdb: person id must be > 0 (got %d)", personID)
+	}
+	_, err, _ := c.cacheGroup.Do("refresh:"+personCreditsKey(personID), func() (any, error) {
+		return c.fetchPersonCredits(ctx, personID)
+	})
+	return err
+}
+
+func personCreditsKey(personID int) string {
+	return "person_credits:" + strconv.Itoa(personID)
+}
+
+func (c *Client) fetchPersonCredits(ctx context.Context, personID int) ([]PersonCredit, error) {
+	var resp personCreditsResponse
+	if err := c.doGet(ctx, fmt.Sprintf("/person/%d/combined_credits", personID), &resp); err != nil {
+		return nil, err
+	}
+	credits := normalizePersonCredits(resp)
+	c.rememberPersonCredits(personCreditsKey(personID), credits)
+	if c.personCreditsStore != nil {
+		if err := c.personCreditsStore.SavePersonCredits(ctx, personID, credits, time.Now()); err != nil {
+			slog.WarnContext(ctx, "tmdb: storing person credits failed", "component", "tmdb", "person_id", personID, "error", err)
+		}
+	}
+	return credits, nil
+}
+
+func (c *Client) loadStoredPersonCredits(ctx context.Context, personID int) ([]PersonCredit, time.Time, bool) {
+	if c.personCreditsStore == nil {
+		return nil, time.Time{}, false
+	}
+	credits, fetchedAt, ok, err := c.personCreditsStore.LoadPersonCredits(ctx, personID)
+	if err != nil {
+		slog.WarnContext(ctx, "tmdb: reading stored person credits failed", "component", "tmdb", "person_id", personID, "error", err)
+		return nil, time.Time{}, false
+	}
+	return credits, fetchedAt, ok
+}
+
+func (c *Client) refreshPersonCreditsInBackground(personID int) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), sharedFetchTimeout)
+		defer cancel()
+		if err := c.RefreshPersonCredits(ctx, personID); err != nil {
+			slog.Debug("tmdb: background person credits refresh failed", "component", "tmdb", "person_id", personID, "error", err)
+		}
+	}()
+}
+
+func (c *Client) rememberPersonCredits(key string, credits []PersonCredit) {
+	if c.personCreditsCache != nil {
+		c.personCreditsCache.Set(key, &credits, personCreditsCacheTTL)
 	}
 }
 

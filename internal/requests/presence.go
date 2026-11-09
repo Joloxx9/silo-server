@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/Silo-Server/silo-server/internal/catalog"
 )
@@ -25,6 +27,28 @@ type PresenceResolver interface {
 	Lookup(ctx context.Context, mediaType MediaType, candidates []PresenceCandidate) (map[int]PresenceMatch, error)
 }
 
+// PresenceGapReporter is implemented by a PresenceResolver that can tell
+// whether the library holds items findable only by IMDb or TVDB ID. When it
+// reports none, a title missed by its TMDB ID is not in the library, and the
+// per-title TMDB external-ID lookup that would catch such items is skipped.
+type PresenceGapReporter interface {
+	NeedsExternalIDs(ctx context.Context, mediaType MediaType) (bool, error)
+}
+
+// presenceGapTTL bounds how long a process trusts its answer to
+// NeedsExternalIDs. A newly scanned item without a TMDB ID can read as "not in
+// the library" on request surfaces for at most this long.
+const presenceGapTTL = time.Minute
+
+type presenceGapCheck interface {
+	HasItemsMatchableOnlyByIMDbOrTVDB(ctx context.Context, mediaType string) (bool, error)
+}
+
+type presenceGapEntry struct {
+	needs   bool
+	checked time.Time
+}
+
 type presenceItemLookup interface {
 	LookupExternalIDs(ctx context.Context, mediaType string, candidates []catalog.ExternalIDLookupCandidate) ([]catalog.ExternalIDMatchRow, error)
 }
@@ -37,6 +61,9 @@ type CatalogPresence struct {
 	items        presenceItemLookup
 	seasons      seasonLookup
 	tmdbBackfill tmdbBackfiller
+
+	gapMu sync.Mutex
+	gaps  map[MediaType]presenceGapEntry
 }
 
 type seasonLookup interface {
@@ -133,6 +160,35 @@ func (p *CatalogPresence) Lookup(ctx context.Context, mediaType MediaType, candi
 		}
 	}
 	return out, nil
+}
+
+// NeedsExternalIDs implements PresenceGapReporter from the catalog, caching
+// the answer per media type for presenceGapTTL.
+func (p *CatalogPresence) NeedsExternalIDs(ctx context.Context, mediaType MediaType) (bool, error) {
+	if p == nil || p.items == nil {
+		return false, nil
+	}
+	check, ok := p.items.(presenceGapCheck)
+	if !ok {
+		return true, nil
+	}
+	p.gapMu.Lock()
+	entry, cached := p.gaps[mediaType]
+	p.gapMu.Unlock()
+	if cached && time.Since(entry.checked) < presenceGapTTL {
+		return entry.needs, nil
+	}
+	needs, err := check.HasItemsMatchableOnlyByIMDbOrTVDB(ctx, string(mediaType))
+	if err != nil {
+		return true, err
+	}
+	p.gapMu.Lock()
+	if p.gaps == nil {
+		p.gaps = map[MediaType]presenceGapEntry{}
+	}
+	p.gaps[mediaType] = presenceGapEntry{needs: needs, checked: time.Now()}
+	p.gapMu.Unlock()
+	return needs, nil
 }
 
 func (p *CatalogPresence) LookupTMDB(ctx context.Context, mediaType MediaType, tmdbIDs []int) (map[int]bool, error) {

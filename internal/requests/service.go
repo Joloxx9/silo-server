@@ -1975,12 +1975,58 @@ func (s *Service) lookupAvailable(ctx context.Context, mediaType MediaType, ids 
 			candidates = append(candidates, PresenceCandidate{TMDBID: id})
 		}
 	}
-	candidates = s.hydratePresenceCandidates(ctx, mediaType, candidates)
+	// Match on TMDB IDs first: one catalog query, no TMDB calls. Only titles
+	// it misses can still be in the library under an IMDb or TVDB ID alone,
+	// and only when the library holds such items is each miss's external IDs
+	// fetched from TMDB (one call per title) for a second pass.
 	matches, err := s.lookupPresence(ctx, mediaType, candidates)
 	if err != nil {
 		return nil, err
 	}
+	misses := make([]PresenceCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if _, ok := matches[candidate.TMDBID]; !ok {
+			misses = append(misses, candidate)
+		}
+	}
+	if len(misses) == 0 || !s.presenceNeedsExternalIDs(ctx, mediaType) {
+		return matches, nil
+	}
+	hydrated := s.hydratePresenceCandidates(ctx, mediaType, misses)
+	withIDs := hydrated[:0]
+	for _, candidate := range hydrated {
+		if candidate.IMDbID != "" || candidate.TVDBID != nil {
+			withIDs = append(withIDs, candidate)
+		}
+	}
+	if len(withIDs) == 0 {
+		return matches, nil
+	}
+	more, err := s.lookupPresence(ctx, mediaType, withIDs)
+	if err != nil {
+		return nil, err
+	}
+	for id, match := range more {
+		matches[id] = match
+	}
 	return matches, nil
+}
+
+// presenceNeedsExternalIDs reports whether a title missed by its TMDB ID may
+// still be in the library under another ID. A resolver that cannot say, or a
+// failed check, answers yes: a slower lookup beats a wrong "not in library".
+func (s *Service) presenceNeedsExternalIDs(ctx context.Context, mediaType MediaType) bool {
+	reporter, ok := s.presence.(PresenceGapReporter)
+	if !ok {
+		return true
+	}
+	needs, err := reporter.NeedsExternalIDs(ctx, mediaType)
+	if err != nil {
+		slog.WarnContext(ctx, "requests: checking for library items without a tmdb id failed", "component", "requests",
+			"media_type", mediaType, "error", err)
+		return true
+	}
+	return needs
 }
 
 // enrichExternalIDs fills missing IMDb and TVDB IDs from TMDB and, for a

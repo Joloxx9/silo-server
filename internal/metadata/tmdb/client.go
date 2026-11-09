@@ -66,6 +66,7 @@ type Client struct {
 	certificationCache   *cache.TTLCache[string]
 	mediaDetailCache     *cache.TTLCache[*MediaDetail]
 	personCreditsCache   *cache.TTLCache[*[]PersonCredit]
+	personCreditsStore   PersonCreditsStore
 	cacheGroup           singleflight.Group
 	flightsMu            sync.Mutex
 	flights              map[string]*sharedFlight
