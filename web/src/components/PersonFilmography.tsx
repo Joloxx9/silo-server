@@ -77,7 +77,7 @@ export default function PersonFilmography({ credits }: { credits: RequestPersonC
       {visible.length === 0 ? (
         <p className="text-muted-foreground py-8 text-sm">No titles match this filter.</p>
       ) : (
-        <ol className="divide-border/10 divide-y">
+        <ol className="divide-foreground/15 divide-y">
           {visible.map((credit, index) => {
             const key = `${credit.media.media_type}-${credit.media.tmdb_id}`;
             const year = credit.media.year;
