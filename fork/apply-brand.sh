@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 . fork/brand.env
-export APP_NAME THEME_COLOR
+export APP_NAME THEME_COLOR PUSH_RELAY_URL APNS_TOPIC
 
 if [ -f fork/.applied ]; then
   echo "brand already applied"
@@ -46,6 +46,11 @@ edit internal/config/db_loader.go 's/("jellyfin_compat\.server_name", )"(?:Silo|
 edit internal/config/config.go 's/(ServerName:\s*)"(?:Silo|Spark)"/$1"$ENV{APP_NAME}"/'
 edit internal/mail/mail.go 's/(cfg\.fromName = )"(?:Silo|Spark)"/$1"$ENV{APP_NAME}"/'
 edit internal/invitations/email.go 's/(product = )"(?:Silo|Spark)"/$1"$ENV{APP_NAME}"/'
+
+# Push goes through Spark's relay, which delivers to the Spark apps and
+# forwards the official Silo app's pushes to Silo's relay.
+edit internal/notifications/settings.go 's{(DefaultPushRelayURL = )"https://[^"]+"}{$1"$ENV{PUSH_RELAY_URL}"}'
+edit internal/notifications/push_devices.go 's/if topic != ApplePushTopicSilo \{/if topic != ApplePushTopicSilo && topic != "$ENV{APNS_TOPIC}" {/'
 
 # Spark catalog names are source defaults so local development and images agree.
 
