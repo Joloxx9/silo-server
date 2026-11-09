@@ -73,7 +73,7 @@ func (f *curationImageService) ApplyUploadedItemImage(context.Context, metadata.
 }
 func TestAdminImageSharedBridgeAndEpisodePreflight(t *testing.T) {
 	svc := &curationImageService{fail: true}
-	h := NewAdminImageHandler(curationImageItems{"series": {ContentID: "series", Type: "series", TmdbID: "42"}}, curationImageSeasons{}, curationImageEpisodes{}, nil, svc, nil, nil)
+	h := NewAdminImageHandler(curationImageItems{"series": {ContentID: "series", Type: "series", TmdbID: "42"}}, curationImageSeasons{}, curationImageEpisodes{}, nil, svc, nil, nil, nil)
 	router := chi.NewRouter()
 	router.Get("/{id}/images", h.HandleGetItemImages)
 	router.Post("/{id}/images/apply", h.HandleApplyItemImage)

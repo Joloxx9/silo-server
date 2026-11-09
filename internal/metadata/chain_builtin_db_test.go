@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -114,6 +115,60 @@ func TestChainlessFallback_SkipsDefaultDisabledCapability(t *testing.T) {
 		t.Fatalf("set chain: %v", err)
 	}
 	assertNotResolved(folderID, "all-disabled chain")
+}
+
+// Both chain paths must carry a capability's lookup provider IDs and
+// lookup_images flag into the provider they build: the explicit chain reads
+// them per entry, and the chain-less fallback reads the enabled capability
+// listing.
+func TestResolveChainWithChecker_CarriesProviderIDDeclarations(t *testing.T) {
+	pool := chainBuiltinTestPool(t)
+	ctx := context.Background()
+
+	installationID := insertTestInstallation(t, pool, "plugin", true)
+	capID := fmt.Sprintf("test-lookup-%d", time.Now().UnixNano())
+	insertTestCapability(t, pool, installationID, capID,
+		`{"display_name":"Lookup Plugin","metadata":{"lookup_provider_ids":["imdb","TMDB"],"lookup_images":true,"default_priority":{"movie":8}}}`)
+	chainRepo := NewChainRepository(pool)
+	resolver := stubMetadataResolver{}
+
+	assertLookup := func(folderID int, scenario string) {
+		t.Helper()
+		providers, err := ResolveChainWithChecker(ctx, folderID, "movie", chainRepo, resolver, nil)
+		if err != nil {
+			t.Fatalf("%s: resolve chain: %v", scenario, err)
+		}
+		for _, p := range providers {
+			if p.Slug() != capID {
+				continue
+			}
+			pp, ok := p.(*PluginProvider)
+			if !ok {
+				t.Fatalf("%s: provider type = %T, want *PluginProvider", scenario, p)
+			}
+			if want := []string{"imdb", "tmdb"}; !reflect.DeepEqual(pp.lookupProviderIDs, want) {
+				t.Fatalf("%s: lookupProviderIDs = %q, want %q", scenario, pp.lookupProviderIDs, want)
+			}
+			if !pp.lookupImages {
+				t.Fatalf("%s: lookupImages = false, want true", scenario)
+			}
+			if pp.Name() != "Lookup Plugin" {
+				t.Fatalf("%s: display name = %q, want \"Lookup Plugin\"", scenario, pp.Name())
+			}
+			return
+		}
+		t.Fatalf("%s: capability %s not resolved", scenario, capID)
+	}
+
+	assertLookup(insertTestFolder(t, pool, "movies"), "chain-less fallback")
+
+	folderID := insertTestFolder(t, pool, "movies")
+	if err := chainRepo.SetChain(ctx, folderID, []ChainEntry{
+		{PluginInstallationID: installationID, CapabilityID: capID, ContentLevel: "movie", Priority: 0, Enabled: true},
+	}); err != nil {
+		t.Fatalf("set chain: %v", err)
+	}
+	assertLookup(folderID, "explicit chain")
 }
 
 type stubMetadataResolver struct{}

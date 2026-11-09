@@ -74,7 +74,7 @@ func newUploadImageHandlerForTest(svc *localImageServiceFake, publisher ...*reco
 		ContentID: "season-2", SeriesID: "series", SeasonNumber: 2,
 		PosterPath: "local/series/series/seasons/2/ef56/poster/original.webp", PosterSourcePath: "upload://sha256:ef56",
 	}}
-	h := NewAdminImageHandler(items, seasons, curationImageEpisodes{}, nil, svc, cardImageResolver{}, nil)
+	h := NewAdminImageHandler(items, seasons, curationImageEpisodes{}, nil, svc, cardImageResolver{}, nil, nil)
 	if len(publisher) > 0 {
 		h.detailSvc = publisher[0]
 	}

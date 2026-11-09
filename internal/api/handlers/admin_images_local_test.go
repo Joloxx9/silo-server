@@ -91,7 +91,7 @@ func newLocalImageHandlerForTest(svc *localImageServiceFake) *AdminImageHandler 
 		"series":       {ContentID: "series", Type: "series", TmdbID: "42"},
 		"book":         {ContentID: "book", Type: "audiobook"},
 	}
-	return NewAdminImageHandler(items, curationImageSeasons{}, curationImageEpisodes{}, nil, svc, nil, nil)
+	return NewAdminImageHandler(items, curationImageSeasons{}, curationImageEpisodes{}, nil, svc, nil, nil, nil)
 }
 
 func TestAdminItemImagesOffersPreviewableLocalImages(t *testing.T) {

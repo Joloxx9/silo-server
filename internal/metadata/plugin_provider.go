@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/codes"
+	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -35,6 +36,8 @@ type pluginMetadataClient interface {
 }
 
 type pluginMetadataClientFactory func(ctx context.Context, installationID int, capabilityID string) (pluginMetadataClient, error)
+
+const imageRequestPurposeHeader = "silo-image-request-purpose"
 
 // PluginResolverAdapter wraps a concrete resolver (like *plugins.Service)
 // whose MetadataProviderClient returns *pluginhost.MetadataProviderClient,
@@ -333,9 +336,15 @@ func (p *PluginProvider) GetMetadata(ctx context.Context, req MetadataRequest) (
 }
 
 // hasLookupProviderID reports whether ids holds a non-empty value for any of
-// the provider's declared lookup keys.
+// the provider's metadata lookup keys.
 func (p *PluginProvider) hasLookupProviderID(ids map[string]string) bool {
-	for _, key := range p.lookupProviderIDs {
+	return hasProviderID(ids, p.lookupProviderIDs)
+}
+
+// hasProviderID reports whether ids holds a non-empty value for any declared
+// provider-ID key.
+func hasProviderID(ids map[string]string, keys []string) bool {
+	for _, key := range keys {
 		if ids[key] != "" {
 			return true
 		}
@@ -431,7 +440,7 @@ func (p *PluginProvider) GetImages(ctx context.Context, req ImageRequest) ([]Rem
 		pluginRequest.SeasonNumber = &seasonNumber
 	}
 
-	response, err := client.GetImages(ctx, pluginRequest)
+	response, err := client.GetImages(imageRequestPurposeContext(ctx, req.ForPicker), pluginRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -463,6 +472,22 @@ func (p *PluginProvider) GetImages(ctx context.Context, req ImageRequest) ([]Rem
 		images = append(images, ri)
 	}
 	return images, nil
+}
+
+func imageRequestPurposeContext(ctx context.Context, forPicker bool) context.Context {
+	const (
+		automaticPurpose = "automatic"
+		galleryPurpose   = "gallery"
+	)
+	purpose := automaticPurpose
+	if forPicker {
+		purpose = galleryPurpose
+	}
+
+	metadata, _ := grpcmetadata.FromOutgoingContext(ctx)
+	metadata = metadata.Copy()
+	metadata.Set(imageRequestPurposeHeader, purpose)
+	return grpcmetadata.NewOutgoingContext(ctx, metadata)
 }
 
 // remoteArtwork returns an artwork path or URL a plugin returned, or "" when

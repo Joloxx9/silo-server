@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -29,6 +30,7 @@ type fakePluginMetadataClient struct {
 	searchReq      *pluginv1.SearchMetadataRequest
 	getMetadataReq *pluginv1.GetMetadataRequest
 	getImagesReq   *pluginv1.GetImagesRequest
+	getImagesCtx   context.Context
 	getSeasonsReq  *pluginv1.GetSeasonsRequest
 	getEpisodesReq *pluginv1.GetEpisodesRequest
 }
@@ -53,9 +55,64 @@ func (f *fakePluginMetadataClient) GetEpisodes(_ context.Context, req *pluginv1.
 	return f.episodesResp, nil
 }
 
-func (f *fakePluginMetadataClient) GetImages(_ context.Context, req *pluginv1.GetImagesRequest) (*pluginv1.GetImagesResponse, error) {
+func (f *fakePluginMetadataClient) GetImages(ctx context.Context, req *pluginv1.GetImagesRequest) (*pluginv1.GetImagesResponse, error) {
+	f.getImagesCtx = ctx
 	f.getImagesReq = req
 	return f.imagesResponse, nil
+}
+
+func TestPluginProviderGetImages_RequestPurposeHeader(t *testing.T) {
+	cases := []struct {
+		name           string
+		providerIDs    map[string]string
+		imageLookupIDs []string
+		forPicker      bool
+		wantPurpose    string
+	}{
+		{name: "automatic own ID", providerIDs: map[string]string{"mediux": "m-1"}, wantPurpose: "automatic"},
+		{name: "gallery own ID", providerIDs: map[string]string{"mediux": "m-1"}, forPicker: true, wantPurpose: "gallery"},
+		{name: "automatic external ID", providerIDs: map[string]string{"tmdb": "550"}, imageLookupIDs: []string{"tmdb"}, wantPurpose: "automatic"},
+		{name: "gallery external ID", providerIDs: map[string]string{"tmdb": "550"}, imageLookupIDs: []string{"tmdb"}, forPicker: true, wantPurpose: "gallery"},
+		{name: "gallery custom external ID", providerIDs: map[string]string{"custom": "custom-1"}, imageLookupIDs: []string{"custom"}, forPicker: true, wantPurpose: "gallery"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fakePluginMetadataClient{imagesResponse: &pluginv1.GetImagesResponse{}}
+			provider, err := NewPluginProviderWithClientFactory(map[string]string{
+				pluginInstallationIDSetting: "1",
+				capabilityIDSetting:         "mediux",
+			}, func(context.Context, int, string) (pluginMetadataClient, error) {
+				return client, nil
+			})
+			if err != nil {
+				t.Fatalf("NewPluginProviderWithClientFactory() error = %v", err)
+			}
+			if len(tc.imageLookupIDs) > 0 {
+				provider.lookupProviderIDs = tc.imageLookupIDs
+				provider.lookupImages = true
+			}
+
+			ctx := grpcmetadata.NewOutgoingContext(context.Background(), grpcmetadata.Pairs(
+				"unrelated-header", "preserved",
+				imageRequestPurposeHeader, "stale",
+				imageRequestPurposeHeader, "duplicate",
+			))
+			if _, err := provider.GetImages(ctx, ImageRequest{ProviderIDs: tc.providerIDs, ContentType: "movie", ForPicker: tc.forPicker}); err != nil {
+				t.Fatalf("GetImages() error = %v", err)
+			}
+			metadata, ok := grpcmetadata.FromOutgoingContext(client.getImagesCtx)
+			if !ok {
+				t.Fatal("GetImages context has no outgoing metadata")
+			}
+			if got := metadata.Get(imageRequestPurposeHeader); !reflect.DeepEqual(got, []string{tc.wantPurpose}) {
+				t.Fatalf("purpose header = %v, want [%s]", got, tc.wantPurpose)
+			}
+			if got := metadata.Get("unrelated-header"); !reflect.DeepEqual(got, []string{"preserved"}) {
+				t.Fatalf("unrelated header = %v, want [preserved]", got)
+			}
+		})
+	}
 }
 
 func (f *fakePluginMetadataClient) GetPersonDetail(_ context.Context, _ *pluginv1.GetPersonDetailRequest) (*pluginv1.GetPersonDetailResponse, error) {
