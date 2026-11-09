@@ -93,7 +93,6 @@ export default function SeasonEpisodeGrid({
             key={episode.content_id}
             episode={episode}
             requested={requestedSeasons?.has(episode.season_number) ?? false}
-            spoilerPrefs={spoilerPrefs}
           />
         ) : (
           <SeasonEpisodeCard

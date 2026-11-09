@@ -1,16 +1,11 @@
 import { CalendarClock } from "lucide-react";
 import type { EpisodeListItem } from "@/api/types";
-import type { EpisodeSpoilerPrefs } from "@/hooks/useEpisodeSpoilerPrefs";
-import { isEpisodeStill, SPOILER_IMAGE_CLASS } from "@/lib/episodeSpoilers";
-import { cn } from "@/lib/utils";
 import EpisodeCardCaption from "./EpisodeCardCaption";
 
 interface MissingEpisodeCardProps {
   episode: EpisodeListItem;
   /** A request or a download server already covers the episode's season. */
   requested?: boolean;
-  /** No one has watched an episode the library lacks, so the unwatched rules apply. */
-  spoilerPrefs: EpisodeSpoilerPrefs;
 }
 
 /**
@@ -21,9 +16,7 @@ interface MissingEpisodeCardProps {
 export default function MissingEpisodeCard({
   episode,
   requested = false,
-  spoilerPrefs,
 }: MissingEpisodeCardProps) {
-  const hideImage = spoilerPrefs.hideImages && isEpisodeStill(episode.still_is_episode_still);
   const unaired = episode.availability === "unaired";
   const label = requested ? "Requested" : unaired ? "Not aired yet" : "Not in library";
 
@@ -36,10 +29,7 @@ export default function MissingEpisodeCard({
             alt=""
             decoding="async"
             loading="lazy"
-            className={cn(
-              "h-full w-full object-cover opacity-40 grayscale",
-              hideImage && SPOILER_IMAGE_CLASS,
-            )}
+            className="h-full w-full object-cover opacity-40 grayscale"
           />
         ) : (
           <div className="bg-surface flex h-full w-full items-center justify-center">
@@ -51,7 +41,7 @@ export default function MissingEpisodeCard({
         </span>
       </div>
       <div className="opacity-60">
-        <EpisodeCardCaption episode={episode} hideOverview={spoilerPrefs.hideOverviews} />
+        <EpisodeCardCaption episode={episode} hideOverview={false} />
       </div>
     </div>
   );
