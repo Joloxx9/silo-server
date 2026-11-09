@@ -233,7 +233,7 @@ describe("SeasonContent", () => {
       </MemoryRouter>,
     );
 
-    expect(mocks.useItemEpisodes).toHaveBeenCalledWith(item.content_id, 4, "none");
+    expect(mocks.useItemEpisodes).toHaveBeenCalledWith(item.content_id, 4);
     // Every episode has a file in the library, so no unscoped read starts.
     expect(mocks.useItemEpisodes).toHaveBeenCalledWith(undefined);
     expect(markup).toContain('href="/item/episode-1?libraryId=4"');
