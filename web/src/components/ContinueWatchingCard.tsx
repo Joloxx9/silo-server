@@ -15,7 +15,7 @@ import { buildItemHref, buildMediaPlayHref, isVideoWatchHref } from "@/lib/media
 import { type EpisodeSpoilerPrefs, useEpisodeSpoilerPrefs } from "@/hooks/useEpisodeSpoilerPrefs";
 import { useShowTitleArt } from "@/hooks/useTitleArt";
 import { useUICustomization } from "@/hooks/useUICustomization";
-import { carouselCardWidthClasses } from "@/lib/uiCustomization";
+import { carouselCardWidthClasses, WIDE_CAROUSEL_CARD_WIDTH_CLASSES } from "@/lib/uiCustomization";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
 import type { CardQuickActionMode } from "@/lib/cardQuickActions";
 import { isEpisodeStill, isEpisodeUnwatched, SPOILER_IMAGE_CLASS } from "@/lib/episodeSpoilers";
@@ -236,9 +236,7 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
   const playableContentId = card.contentId ?? "";
   const containerWidth = isPoster
     ? carouselCardWidthClasses(cardPresentation.poster_size)
-    : // Wide resume cards are the row's focus: most of a phone's width, a
-      // little larger than other wide cards on bigger screens.
-      "w-[84vw] max-w-[400px] shrink-0 sm:w-[360px] lg:w-[400px]";
+    : WIDE_CAROUSEL_CARD_WIDTH_CLASSES;
   const showCaption = cardPresentation.caption !== "artwork";
   const showMetadata = cardPresentation.caption === "title_metadata";
   // Audiobook covers are square (Audible-style); use 1:1 for the poster
@@ -356,7 +354,7 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
                     src={logoSrc}
                     alt={heading}
                     onError={() => setLogoFailed(true)}
-                    className="-ml-3 mb-2.5 max-h-9 max-w-[45%] self-start object-contain object-left-bottom drop-shadow-md"
+                    className="mb-2.5 max-h-9 max-w-[45%] self-start object-contain object-left-bottom drop-shadow-md"
                   />
                 ) : (
                   <div className="mb-1.5 truncate text-xl leading-tight font-semibold tracking-tight drop-shadow-md">
