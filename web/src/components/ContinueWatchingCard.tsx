@@ -356,7 +356,7 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
                     src={logoSrc}
                     alt={heading}
                     onError={() => setLogoFailed(true)}
-                    className="mb-2.5 max-h-9 max-w-[45%] self-start object-contain object-left-bottom drop-shadow-md"
+                    className="-ml-3 mb-2.5 max-h-9 max-w-[45%] self-start object-contain object-left-bottom drop-shadow-md"
                   />
                 ) : (
                   <div className="mb-1.5 truncate text-xl leading-tight font-semibold tracking-tight drop-shadow-md">
