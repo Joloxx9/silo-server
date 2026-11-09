@@ -21,6 +21,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/models"
 	"github.com/Silo-Server/silo-server/internal/playback"
 	"github.com/Silo-Server/silo-server/internal/userstore"
+	"github.com/Silo-Server/silo-server/internal/watchsync"
 )
 
 const (
@@ -1228,4 +1229,59 @@ func (s *claimRacePlanStoreV3) ClaimStopFinalization(ctx context.Context, sessio
 		s.race()
 	}
 	return s.MemoryPlanStoreV3.ClaimStopFinalization(ctx, sessionID, lease)
+}
+
+// cancelAfterStopPlanStoreV3 cancels the request once the stop's CAS lands,
+// as a player that hangs up right after sending its stop does.
+type cancelAfterStopPlanStoreV3 struct {
+	*playback.MemoryPlanStoreV3
+	cancel context.CancelFunc
+}
+
+func (s *cancelAfterStopPlanStoreV3) StopAttempt(ctx context.Context, sessionID, stopID string, final *playback.ProgressSampleV3) (playback.StopReceiptV3, bool, error) {
+	receipt, first, err := s.MemoryPlanStoreV3.StopAttempt(ctx, sessionID, stopID, final)
+	s.cancel()
+	return receipt, first, err
+}
+
+// contextBoundWatchScrobbler fails on a canceled context, as the watch-sync
+// service's database reads do.
+type contextBoundWatchScrobbler struct {
+	recordingPlaybackWatchScrobbler
+}
+
+func (s *contextBoundWatchScrobbler) ScrobbleStop(ctx context.Context, event watchsync.ScrobbleEvent) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.recordingPlaybackWatchScrobbler.ScrobbleStop(ctx, event)
+}
+
+// TestStopPlaybackV2FinishesAfterClientHangsUp covers a stop whose client
+// drops the connection once the stop is accepted: the live session is gone,
+// so the play must still reach watch history and providers.
+func TestStopPlaybackV2FinishesAfterClientHangsUp(t *testing.T) {
+	f := newPlaybackServiceFixture(t)
+	userStore := newPlaybackTestStore(t)
+	scrobbler := &contextBoundWatchScrobbler{}
+	f.handler.WatchScrobbler = scrobbler
+	f.handler.StoreProvider = testUserStoreProvider{store: userStore}
+	f.handler.fileResolver = testPlaybackFileResolver{file: &models.MediaFile{ID: 100, ContentID: "movie-1", Duration: 3600}}
+	if _, err := f.handler.ApplyProgressV2(f.ctx, f.caller, f.session.ID, PlaybackProgressCommand{Sequence: 1, Position: 900}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(f.ctx)
+	defer cancel()
+	f.handler.PlanStoreV3 = &cancelAfterStopPlanStoreV3{MemoryPlanStoreV3: f.handler.PlanStoreV3.(*playback.MemoryPlanStoreV3), cancel: cancel}
+
+	if _, err := f.handler.StopPlaybackV2(ctx, f.caller, f.session.ID, PlaybackStopCommand{StopID: uuid.NewString()}); err != nil {
+		t.Fatal(err)
+	}
+	if len(scrobbler.stops) != 1 {
+		t.Fatalf("provider stops = %d, want 1", len(scrobbler.stops))
+	}
+	history, err := userStore.ListHistory(t.Context(), "profile-1", 10, 0)
+	if err != nil || len(history) != 1 {
+		t.Fatalf("watch history = %+v, %v; want one row", history, err)
+	}
 }

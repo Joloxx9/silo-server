@@ -32,6 +32,10 @@ func (h *PlaybackHandler) stopPlaybackSessionWithResult(ctx context.Context, ses
 	if h == nil || session == nil || session.ID == "" {
 		return watchstate.PlaybackStopResult{}, playback.ErrSessionNotFound
 	}
+	// A stop that arrived must finish even when its caller hangs up: once the
+	// live session is gone nothing else records the play or tells watch
+	// providers it ended.
+	ctx = context.WithoutCancel(ctx)
 	unlock := h.tm.LockSessionLifecycle(session.ID)
 	defer unlock()
 	current, err := h.endPlaybackSessionAuthority(ctx, session, reason.userInitiated())

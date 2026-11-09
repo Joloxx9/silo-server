@@ -476,7 +476,10 @@ func (h *PlaybackHandler) writeProgressSideEffectsV2(ctx context.Context, record
 		if current, getErr := h.sessionMgr.GetSession(sessionID); getErr == nil && current != nil {
 			h.syncSessionsOnPauseChange(ctx, wasPaused, current.IsPaused)
 			h.persistProgress(ctx, current)
-			h.scrobblePauseTransitionV2(ctx, current, wasPaused)
+			// The live session already took the new pause state, so no later
+			// sample sees this transition: a client that hangs up after
+			// reporting it must not drop it.
+			h.scrobblePauseTransitionV2(context.WithoutCancel(ctx), current, wasPaused)
 			return
 		}
 	}
@@ -596,7 +599,12 @@ const stopFinalizationLease = 30 * time.Second
 // the finalized receipt. When the claim is lost the stored receipt is returned
 // unchanged. The request cannot fail from here: the receipt is already durable.
 func (h *PlaybackHandler) finalizeStopV2(ctx context.Context, store playback.ProgressStoreV3, record *playback.AttemptRecordV3, sessionID string, receipt playback.StopReceiptV3) playback.StopReceiptV3 {
-	claimed, err := store.ClaimStopFinalization(ctx, sessionID, time.Now().Add(stopFinalizationLease))
+	// The stop is durable from here. Players often drop the connection right
+	// after sending it, and its writers must still finish: the live copy is
+	// gone once they start, so no expiry would end the play for providers.
+	// The wait for another caller's claim stays bound to the request.
+	finalizeCtx := context.WithoutCancel(ctx)
+	claimed, err := store.ClaimStopFinalization(finalizeCtx, sessionID, time.Now().Add(stopFinalizationLease))
 	if err != nil {
 		slog.WarnContext(ctx, "failed to claim playback stop finalization", "component", "api", "session", sessionID, "playback_session_id", sessionID, "error", err)
 		return receipt
@@ -614,7 +622,7 @@ func (h *PlaybackHandler) finalizeStopV2(ctx context.Context, store playback.Pro
 				receipt = replay
 			}
 			if !receipt.FinalizingUntil.IsZero() && !time.Now().Before(receipt.FinalizingUntil) {
-				claimed, err = store.ClaimStopFinalization(ctx, sessionID, time.Now().Add(stopFinalizationLease))
+				claimed, err = store.ClaimStopFinalization(finalizeCtx, sessionID, time.Now().Add(stopFinalizationLease))
 				if err == nil && claimed {
 					break
 				}
@@ -628,9 +636,9 @@ func (h *PlaybackHandler) finalizeStopV2(ctx context.Context, store playback.Pro
 			}
 		}
 	}
-	receipt.HistoryID = h.finishStopV2(ctx, record, sessionID, receipt.Accepted, endReasonForStop(sessionID, receipt.StopID))
+	receipt.HistoryID = h.finishStopV2(finalizeCtx, record, sessionID, receipt.Accepted, endReasonForStop(sessionID, receipt.StopID))
 	receipt.Finalized = true
-	if err := store.RecordStopReceipt(ctx, sessionID, receipt); err != nil {
+	if err := store.RecordStopReceipt(finalizeCtx, sessionID, receipt); err != nil {
 		slog.WarnContext(ctx, "failed to record playback stop receipt", "component", "api", "session", sessionID, "playback_session_id", sessionID, "error", err)
 	}
 	return receipt
