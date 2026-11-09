@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/Silo-Server/silo-server/internal/api/handlers"
+	"github.com/Silo-Server/silo-server/internal/imagesize"
+	"github.com/Silo-Server/silo-server/internal/models"
 	mediarequests "github.com/Silo-Server/silo-server/internal/requests"
 )
 
@@ -14,6 +17,13 @@ const opListRequestPersonCredits = "listRequestPersonCredits"
 // MediaRequestService fakes need not.
 type MediaRequestPersonCreditsService interface {
 	PersonCredits(ctx context.Context, viewer mediarequests.Viewer, personTMDBID int) ([]mediarequests.PersonCredit, error)
+}
+
+// CatalogPlayedService reports which catalog items the viewer has finished.
+// *handlers.ItemsHandler implements it; checked by type assertion on
+// CatalogAccess so fakes need not.
+type CatalogPlayedService interface {
+	PlayedContentIDs(ctx context.Context, v handlers.ItemViewer, items []*models.MediaItem) map[string]bool
 }
 
 // RequestPersonCreditsInput names a person by TMDB ID.
@@ -27,6 +37,7 @@ type RequestPersonCredit struct {
 	Character    string             `json:"character,omitempty" doc:"The role played; several roles on one title are joined with ' / '. Empty for a crew-only credit" example:"August Walker"`
 	Jobs         []string           `json:"jobs" doc:"Crew jobs on the title, such as Director or Screenplay. Empty, never null"`
 	EpisodeCount int                `json:"episode_count,omitempty" doc:"Series: episodes the person is credited on, when TMDB says" example:"24"`
+	Watched      bool               `json:"watched" doc:"The viewing profile has finished the library copy: a movie watched, or every episode of a series. False for a title not in the library" example:"false"`
 }
 
 // RequestPersonCredits is a person's filmography.
@@ -65,6 +76,7 @@ func (reg *Registry) listRequestPersonCredits(ctx context.Context, in *RequestPe
 	}
 	results := requestMediaResultsOf(media)
 	reg.markInWatchlist(ctx, watchlistMarksOf(results))
+	played := reg.playedLibraryResults(ctx, results)
 	out := RequestPersonCredits{Credits: make([]RequestPersonCredit, 0, len(credits))}
 	for i, credit := range credits {
 		jobs := credit.Jobs
@@ -73,7 +85,37 @@ func (reg *Registry) listRequestPersonCredits(ctx context.Context, in *RequestPe
 		}
 		out.Credits = append(out.Credits, RequestPersonCredit{
 			Media: results[i], Character: credit.Character, Jobs: jobs, EpisodeCount: credit.EpisodeCount,
+			Watched: results[i].LibraryContentID != "" && played[results[i].LibraryContentID],
 		})
 	}
 	return &RequestPersonCreditsOutput{Body: out}, nil
+}
+
+// playedLibraryResults reads which in-library results the viewer has
+// finished. It never fails the page: without a catalog seam or a viewer it
+// reports nothing played.
+func (reg *Registry) playedLibraryResults(ctx context.Context, results []RequestMediaResult) map[string]bool {
+	svc, ok := reg.deps.CatalogAccess.(CatalogPlayedService)
+	if !ok {
+		return nil
+	}
+	items := make([]*models.MediaItem, 0, len(results))
+	for _, r := range results {
+		if r.LibraryContentID == "" {
+			continue
+		}
+		itemType := "movie"
+		if r.MediaType == string(mediarequests.MediaTypeSeries) {
+			itemType = "series"
+		}
+		items = append(items, &models.MediaItem{ContentID: r.LibraryContentID, Type: itemType})
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	viewer, p := reg.itemViewer(ctx, imagesize.Request{}, "", "")
+	if p != nil {
+		return nil
+	}
+	return svc.PlayedContentIDs(ctx, viewer, items)
 }

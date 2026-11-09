@@ -50040,11 +50040,19 @@
           "media": {
             "$ref": "#/components/schemas/RequestMediaResult",
             "description": "The title as search shows it, with library availability and the viewer's request state"
+          },
+          "watched": {
+            "description": "The viewing profile has finished the library copy: a movie watched, or every episode of a series. False for a title not in the library",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           }
         },
         "required": [
           "media",
-          "jobs"
+          "jobs",
+          "watched"
         ],
         "type": "object"
       },

@@ -9,6 +9,7 @@ import {
   type FilmographyFilter,
 } from "@/lib/personFilmography";
 import MediaCardArtwork from "@/components/MediaCardArtwork";
+import CardWatchStatus from "@/components/overlays/CardWatchStatus";
 import { RequestReasonBadge, RequestStatusBadge } from "@/components/RequestStatusBadge";
 import { Button } from "@/components/ui/button";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
@@ -195,7 +196,13 @@ function CreditRow({
           mediaType={media.media_type}
           lazy
           dim={!inLibrary && !media.request.requestable && !state}
-        />
+        >
+          {inLibrary && credit.watched ? (
+            <CardWatchStatus
+              userState={{ played: true, is_favorite: false, in_watchlist: false }}
+            />
+          ) : null}
+        </MediaCardArtwork>
       </ViewTransitionLink>
       <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start sm:gap-4">
         <div className="min-w-0 flex-1">

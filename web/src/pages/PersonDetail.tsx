@@ -201,7 +201,7 @@ export default function PersonDetail() {
             </div>
 
             {/* Metadata badges */}
-            <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {person.birth_date && (
                 <span className="metadata-badge">Born {formatBirthDate(person.birth_date)}</span>
               )}
@@ -216,13 +216,6 @@ export default function PersonDetail() {
               )}
               {person.birthplace && <span className="metadata-badge">{person.birthplace}</span>}
             </div>
-
-            {/* Bio */}
-            {person.bio && (
-              <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
-                {person.bio}
-              </p>
-            )}
           </div>
         </div>
       </section>

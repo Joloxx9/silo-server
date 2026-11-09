@@ -33502,6 +33502,11 @@ export interface components {
       jobs: string[];
       /** @description The title as search shows it, with library availability and the viewer's request state */
       media: components["schemas"]["RequestMediaResult"];
+      /**
+       * @description The viewing profile has finished the library copy: a movie watched, or every episode of a series. False for a title not in the library
+       * @example false
+       */
+      watched: boolean;
     };
     RequestPersonCredits: {
       /** @description Movies and series, announced (undated) titles first, then newest first. Adult titles, talk and news shows, and titles above the viewer's rating ceiling are left out. Empty, never null */

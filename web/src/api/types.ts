@@ -1943,6 +1943,8 @@ export interface RequestPersonCredit {
   jobs: string[];
   /** Series: episodes the person is credited on, when known. */
   episode_count?: number;
+  /** The viewing profile has finished the library copy (every episode of a series). */
+  watched: boolean;
 }
 
 export interface RequestMediaResult {

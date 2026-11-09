@@ -2845,3 +2845,18 @@ func hasMaskedMetadataCuration(ctx context.Context, user *models.User, groups ac
 	}
 	return slices.Contains(auth.PolicyPermissions(effective), string(auth.PermissionMetadataCuration))
 }
+
+// PlayedContentIDs reports which of a page of catalog items the viewer has
+// finished: a movie by its own watch progress, a series once every episode is
+// watched. Only ContentID and Type of each item are read. A read failure
+// leaves every item unplayed.
+func (h *ItemsHandler) PlayedContentIDs(ctx context.Context, v ItemViewer, items []*models.MediaItem) map[string]bool {
+	states := h.listItemUserStates(ctx, v, items)
+	played := make(map[string]bool, len(states))
+	for id, state := range states {
+		if state != nil && state.Played {
+			played[id] = true
+		}
+	}
+	return played
+}
