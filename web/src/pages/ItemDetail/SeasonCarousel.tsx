@@ -4,7 +4,6 @@ import type { Season } from "@/api/types";
 import { usePrefetchCatalogSeason } from "@/hooks/queries/catalogRead";
 import { useCarouselEmbla } from "@/hooks/useCarouselEmbla";
 import { buildItemHref } from "@/lib/mediaNavigation";
-import { cn } from "@/lib/utils";
 import { formatSeasonMeta, formatSeasonProgress, getSeasonDisplayTitle } from "./itemDetailLayout";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
 import RequestSeasonButton from "./components/RequestSeasonButton";
@@ -137,17 +136,12 @@ export default function SeasonCarousel({
 }
 
 /**
- * The row under a season poster that holds its watch progress bar. It keeps
- * its height when empty, so titles line up across the rail.
+ * The row under a season poster that holds its watch progress bar. The empty
+ * track shows even with no progress, so every season in the rail looks alike.
  */
 function SeasonProgressSlot({ children }: { children?: ReactNode }) {
   return (
-    <div
-      className={cn(
-        "mx-0.5 mt-2 h-[3px] overflow-hidden rounded-full",
-        children ? "bg-foreground/15" : "bg-transparent",
-      )}
-    >
+    <div className="bg-foreground/15 mx-0.5 mt-2 h-[3px] overflow-hidden rounded-full">
       {children}
     </div>
   );
