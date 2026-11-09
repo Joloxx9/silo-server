@@ -57,15 +57,16 @@ func NewEmailPrefsRepository(pool *pgxpool.Pool) *EmailPrefsRepository {
 	return &EmailPrefsRepository{pool: pool}
 }
 
-// Get returns the profile's email prefs; missing rows default to mode off.
-func (r *EmailPrefsRepository) Get(ctx context.Context, profileID string) (EmailPrefs, error) {
-	prefs := EmailPrefs{ProfileID: profileID, Mode: EmailModeOff}
+// Get returns the account profile's email prefs; missing rows default to mode
+// off.
+func (r *EmailPrefsRepository) Get(ctx context.Context, userID int, profileID string) (EmailPrefs, error) {
+	prefs := EmailPrefs{ProfileID: profileID, UserID: userID, Mode: EmailModeOff}
 	err := r.pool.QueryRow(ctx, `
 		SELECT user_id, mode, custom_email, pending_email, pending_expires_at,
 		       watermark_created_at, watermark_id, last_digest_at,
 		       last_attempt_at, consecutive_failures
-		FROM notification_email_prefs WHERE profile_id = $1`,
-		profileID,
+		FROM notification_email_prefs WHERE user_id = $1 AND profile_id = $2`,
+		userID, profileID,
 	).Scan(&prefs.UserID, &prefs.Mode, &prefs.CustomEmail, &prefs.PendingEmail,
 		&prefs.PendingExpiresAt, &prefs.WatermarkCreatedAt, &prefs.WatermarkID,
 		&prefs.LastDigestAt, &prefs.LastAttemptAt, &prefs.ConsecutiveFailures)
@@ -83,7 +84,7 @@ func (r *EmailPrefsRepository) Get(ctx context.Context, profileID string) (Email
 	return prefs, nil
 }
 
-// SetMode upserts the profile's email mode. Enabling from off (or creating
+// SetMode upserts the account profile's email mode. Enabling from off (or creating
 // the row) resets the watermark to now so the backlog never floods a fresh
 // opt-in, and clears failure backoff so the first send happens promptly.
 // The unsubscribe token is not minted here: the send path backfills it under
@@ -92,12 +93,11 @@ func (r *EmailPrefsRepository) SetMode(ctx context.Context, userID int, profileI
 	if !ValidChannelMode(mode) {
 		return fmt.Errorf("invalid email mode %q", mode)
 	}
-	tag, err := r.pool.Exec(ctx, `
+	_, err := r.pool.Exec(ctx, `
 		INSERT INTO notification_email_prefs (profile_id, user_id, mode)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (profile_id) DO UPDATE SET
+		ON CONFLICT (user_id, profile_id) DO UPDATE SET
 			mode = EXCLUDED.mode,
-			user_id = EXCLUDED.user_id,
 			watermark_created_at = CASE
 				WHEN notification_email_prefs.mode = 'off' THEN now()
 				ELSE notification_email_prefs.watermark_created_at
@@ -108,14 +108,10 @@ func (r *EmailPrefsRepository) SetMode(ctx context.Context, userID int, profileI
 			END,
 			last_attempt_at = NULL,
 			consecutive_failures = 0,
-			updated_at = now()
-		WHERE notification_email_prefs.user_id=EXCLUDED.user_id`,
+			updated_at = now()`,
 		profileID, userID, mode)
 	if err != nil {
 		return fmt.Errorf("set email mode: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrEmailVerificationConflict
 	}
 	return nil
 }
@@ -127,16 +123,17 @@ var (
 )
 
 // addressInUse reports whether the address is already claimed: verified for
-// another profile, or identifying another login account (its email, or a
-// username that is an email address). The requesting profile and its own
-// account are excluded — pointing a profile at its own account email is the
-// expected common case.
+// another profile (of any account), or identifying another login account (its
+// email, or a username that is an email address). The requesting account
+// profile and its own account are excluded — pointing a profile at its own
+// account email is the expected common case.
 func addressInUse(ctx context.Context, q querier, address, profileID string, userID int) (bool, error) {
 	var inUse bool
 	err := q.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1 FROM notification_email_prefs
-			WHERE lower(custom_email) = lower($1) AND profile_id <> $2
+			WHERE lower(custom_email) = lower($1)
+			  AND NOT (user_id = $3 AND profile_id = $2)
 		) OR EXISTS (
 			SELECT 1 FROM users
 			WHERE id <> $3
@@ -171,7 +168,7 @@ func (r *EmailPrefsRepository) RequestPendingAddress(ctx context.Context, userID
 		return err
 	}
 	var adopted bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM notification_email_verifications WHERE profile_id=$1)`, profileID).Scan(&adopted); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM notification_email_verifications WHERE user_id=$1 AND profile_id=$2)`, userID, profileID).Scan(&adopted); err != nil {
 		return err
 	}
 	if adopted {
@@ -182,8 +179,8 @@ func (r *EmailPrefsRepository) RequestPendingAddress(ctx context.Context, userID
 	var sendsToday int
 	err = tx.QueryRow(ctx, `
 		SELECT pending_last_sent_at, verify_sends_today
-		FROM notification_email_prefs WHERE profile_id = $1 FOR UPDATE`,
-		profileID,
+		FROM notification_email_prefs WHERE user_id = $1 AND profile_id = $2 FOR UPDATE`,
+		userID, profileID,
 	).Scan(&lastSentAt, &sendsToday)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("read verify rate state: %w", err)
@@ -215,8 +212,7 @@ func (r *EmailPrefsRepository) RequestPendingAddress(ctx context.Context, userID
 			(profile_id, user_id, pending_email, pending_token_hash,
 			 pending_expires_at, pending_last_sent_at, verify_sends_today)
 		VALUES ($1, $2, $3, $4, $5, now(), $6)
-		ON CONFLICT (profile_id) DO UPDATE SET
-			user_id = EXCLUDED.user_id,
+		ON CONFLICT (user_id, profile_id) DO UPDATE SET
 			pending_email = EXCLUDED.pending_email,
 			pending_token_hash = EXCLUDED.pending_token_hash,
 			pending_expires_at = EXCLUDED.pending_expires_at,
@@ -287,8 +283,8 @@ func (r *EmailPrefsRepository) ConsumeVerifyToken(ctx context.Context, tokenHash
 				pending_token_hash = '',
 				pending_expires_at = NULL,
 				updated_at = now()
-			WHERE profile_id = $1`,
-			profileID)
+			WHERE user_id = $1 AND profile_id = $2`,
+			userID, profileID)
 		if err != nil {
 			return EmailVerifyInvalid, fmt.Errorf("clear pending address: %w", err)
 		}
@@ -313,13 +309,13 @@ func (r *EmailPrefsRepository) ConsumeVerifyToken(ctx context.Context, tokenHash
 			pending_token_hash = '',
 			pending_expires_at = NULL,
 			updated_at = now()
-		WHERE profile_id = $1`,
-		profileID)
+		WHERE user_id = $1 AND profile_id = $2`,
+		userID, profileID)
 	if isUniqueViolation(err) {
 		// Lost a same-instant race with another profile verifying the same
 		// address; the unique index decided the winner.
 		_ = tx.Rollback(ctx)
-		return r.consumeConflictLoser(ctx, profileID)
+		return r.consumeConflictLoser(ctx, userID, profileID)
 	}
 	if err != nil {
 		return EmailVerifyInvalid, fmt.Errorf("consume verify token: %w", err)
@@ -333,15 +329,15 @@ func (r *EmailPrefsRepository) ConsumeVerifyToken(ctx context.Context, tokenHash
 // consumeConflictLoser clears the pending state of a profile that lost a
 // concurrent-verification race, in a fresh transaction (the racing one is
 // poisoned by the constraint violation).
-func (r *EmailPrefsRepository) consumeConflictLoser(ctx context.Context, profileID string) (EmailVerifyOutcome, error) {
+func (r *EmailPrefsRepository) consumeConflictLoser(ctx context.Context, userID int, profileID string) (EmailVerifyOutcome, error) {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE notification_email_prefs SET
 			pending_email = '',
 			pending_token_hash = '',
 			pending_expires_at = NULL,
 			updated_at = now()
-		WHERE profile_id = $1`,
-		profileID)
+		WHERE user_id = $1 AND profile_id = $2`,
+		userID, profileID)
 	if err != nil {
 		return EmailVerifyInvalid, fmt.Errorf("clear losing pending address: %w", err)
 	}
@@ -361,7 +357,7 @@ func isUniqueViolation(err error) bool {
 // re-arm delivery the moment a new address verifies.
 func (r *EmailPrefsRepository) ClearCustomAddress(ctx context.Context, userID int, profileID string) error {
 	_, err := r.pool.Exec(ctx, `
-		WITH owner AS (SELECT user_id, profile_id FROM notification_email_prefs WHERE profile_id=$1 AND user_id=$2),
+		WITH owner AS (SELECT user_id, profile_id FROM notification_email_prefs WHERE user_id = $1 AND profile_id = $2),
 		stopped AS (UPDATE notification_delivery_preferences p SET preferences=p.preferences || '{"alerts":"off","newsletter":"off"}'::jsonb
 			FROM owner o WHERE p.user_id=o.user_id AND p.profile_id=o.profile_id RETURNING p.profile_id)
 		UPDATE notification_email_prefs SET
@@ -371,8 +367,8 @@ func (r *EmailPrefsRepository) ClearCustomAddress(ctx context.Context, userID in
 			pending_expires_at = NULL,
 			mode = 'off',
 			updated_at = now()
-		WHERE profile_id = $1 AND user_id=$2 AND (SELECT count(*) FROM stopped)>=0`,
-		profileID, userID)
+		WHERE user_id = $1 AND profile_id = $2 AND (SELECT count(*) FROM stopped) >= 0`,
+		userID, profileID)
 	if err != nil {
 		return fmt.Errorf("clear custom address: %w", err)
 	}
