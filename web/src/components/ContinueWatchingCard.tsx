@@ -15,7 +15,7 @@ import { buildItemHref, buildMediaPlayHref, isVideoWatchHref } from "@/lib/media
 import { type EpisodeSpoilerPrefs, useEpisodeSpoilerPrefs } from "@/hooks/useEpisodeSpoilerPrefs";
 import { useShowTitleArt } from "@/hooks/useTitleArt";
 import { useUICustomization } from "@/hooks/useUICustomization";
-import { carouselCardWidthClasses, WIDE_CAROUSEL_CARD_WIDTH_CLASSES } from "@/lib/uiCustomization";
+import { carouselCardWidthClasses } from "@/lib/uiCustomization";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
 import type { CardQuickActionMode } from "@/lib/cardQuickActions";
 import { isEpisodeStill, isEpisodeUnwatched, SPOILER_IMAGE_CLASS } from "@/lib/episodeSpoilers";
@@ -236,7 +236,9 @@ function ContinueWatchingCardView({ spoilerPrefs, ...props }: ContinueWatchingCa
   const playableContentId = card.contentId ?? "";
   const containerWidth = isPoster
     ? carouselCardWidthClasses(cardPresentation.poster_size)
-    : WIDE_CAROUSEL_CARD_WIDTH_CLASSES;
+    : // Wide resume cards are the row's focus: most of a phone's width, a
+      // little larger than other wide cards on bigger screens.
+      "w-[84vw] max-w-[400px] shrink-0 sm:w-[360px] lg:w-[400px]";
   const showCaption = cardPresentation.caption !== "artwork";
   const showMetadata = cardPresentation.caption === "title_metadata";
   // Audiobook covers are square (Audible-style); use 1:1 for the poster
