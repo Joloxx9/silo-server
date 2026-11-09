@@ -2,7 +2,7 @@ import { useMemo, useRef } from "react";
 import { Play } from "lucide-react";
 import type { EpisodeListItem } from "@/api/types";
 import CardPlayOverlay from "@/components/CardPlayOverlay";
-import { WatchedCheckIndicator } from "@/components/CardWatchedBadge";
+import CardWatchStatus from "@/components/overlays/CardWatchStatus";
 import { toEpisodeUserState } from "@/components/episodeUserState";
 import MediaItemMenu from "@/components/MediaItemMenu";
 import UnreadableFileBadge, { episodeFilesUnreadable } from "@/components/UnreadableFileBadge";
@@ -169,6 +169,7 @@ function SeasonEpisodeCard({
                 variant="wide"
               />
             )}
+            <CardWatchStatus userState={toEpisodeUserState(episode.user_data)} />
             {/* Hover dim behind the play button */}
             {playable && <div className="media-card-hover-dim absolute inset-0" />}
             {hasPartialProgress && (
@@ -213,7 +214,6 @@ function SeasonEpisodeCard({
         <EpisodeCardCaption
           episode={episode}
           hideOverview={hideOverview}
-          badges={episode.user_data?.played && <WatchedCheckIndicator />}
           notice={unreadable && <UnreadableFileBadge />}
         />
       </ViewTransitionLink>

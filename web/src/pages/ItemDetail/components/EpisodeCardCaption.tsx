@@ -9,8 +9,6 @@ interface EpisodeCardCaptionProps {
   /** Spoiler protection leaves the description out; the title and metadata stay. */
   hideOverview: boolean;
   isCurrent?: boolean;
-  /** Icons at the end of the title line, such as the watched check. */
-  badges?: ReactNode;
   /** A short notice on the date line, such as a damaged-file warning. */
   notice?: ReactNode;
 }
@@ -24,7 +22,6 @@ export default function EpisodeCardCaption({
   episode,
   hideOverview,
   isCurrent = false,
-  badges,
   notice,
 }: EpisodeCardCaptionProps) {
   const metadata = episodeCardMetadata(episode);
@@ -34,16 +31,13 @@ export default function EpisodeCardCaption({
 
   return (
     <div className="mt-2 space-y-1">
-      <div className="flex items-center gap-2">
-        <p
-          className="text-foreground min-w-0 flex-1 truncate text-sm font-semibold"
-          style={isCurrent ? { color: "var(--primary)" } : undefined}
-        >
-          <span aria-hidden="true">{episodeCardTitle(episode)}</span>
-          <span className="sr-only">{episodeCardSpokenTitle(episode)}</span>
-        </p>
-        {badges && <span className="flex shrink-0 items-center gap-2">{badges}</span>}
-      </div>
+      <p
+        className="text-foreground truncate text-sm font-semibold"
+        style={isCurrent ? { color: "var(--primary)" } : undefined}
+      >
+        <span aria-hidden="true">{episodeCardTitle(episode)}</span>
+        <span className="sr-only">{episodeCardSpokenTitle(episode)}</span>
+      </p>
       {(metadata || notice || showsTranslationLabel) && (
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
           {metadata && <span className="min-w-0 truncate">{metadata}</span>}
