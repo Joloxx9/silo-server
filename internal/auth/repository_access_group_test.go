@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -328,4 +329,53 @@ func insertAuthAccessGroupTestUser(t *testing.T, ctx context.Context, pool *pgxp
 		t.Fatalf("insert user: %v", err)
 	}
 	return id
+}
+
+func TestUserRepositoryUpdateUsernameRenamesPrimaryProfileDB(t *testing.T) {
+	ctx, pool, suffix := newAccessGroupUserRepoDBTest(t)
+	users := NewUserRepository(pool)
+	for _, tc := range []struct {
+		name        string
+		primaryName func(username string) string
+		nameTaken   bool
+		wantRenamed bool
+	}{
+		{name: "named after the account", primaryName: func(username string) string { return username }, wantRenamed: true},
+		{name: "same name in another case", primaryName: strings.ToUpper, wantRenamed: true},
+		{name: "renamed by the household", primaryName: func(string) string { return "Living room" }},
+		{name: "new name already taken", primaryName: func(username string) string { return username }, nameTaken: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			userID := insertAuthAccessGroupTestUser(t, ctx, pool, suffix+"-"+strings.ReplaceAll(tc.name, " ", "-"))
+			var username string
+			if err := pool.QueryRow(ctx, `SELECT username FROM users WHERE id = $1`, userID).Scan(&username); err != nil {
+				t.Fatalf("read username: %v", err)
+			}
+			next := username + "-renamed"
+			primaryID, primaryName := fmt.Sprintf("primary-%d", userID), tc.primaryName(username)
+			if _, err := pool.Exec(ctx, `INSERT INTO user_profiles (id, user_id, name, is_primary) VALUES ($1, $2, $3, true)`, primaryID, userID, primaryName); err != nil {
+				t.Fatalf("insert primary profile: %v", err)
+			}
+			if tc.nameTaken {
+				if _, err := pool.Exec(ctx, `INSERT INTO user_profiles (id, user_id, name) VALUES ($1, $2, $3)`, fmt.Sprintf("other-%d", userID), userID, strings.ToUpper(next)); err != nil {
+					t.Fatalf("insert other profile: %v", err)
+				}
+			}
+
+			if err := users.Update(ctx, userID, models.UpdateUserInput{Username: &next}); err != nil {
+				t.Fatalf("Update(username) error: %v", err)
+			}
+			var got string
+			if err := pool.QueryRow(ctx, `SELECT name FROM user_profiles WHERE id = $1`, primaryID).Scan(&got); err != nil {
+				t.Fatalf("read primary profile: %v", err)
+			}
+			want := primaryName
+			if tc.wantRenamed {
+				want = next
+			}
+			if got != want {
+				t.Fatalf("primary profile name = %q, want %q", got, want)
+			}
+		})
+	}
 }

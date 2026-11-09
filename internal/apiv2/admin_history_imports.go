@@ -55,6 +55,7 @@ type AdminHistoryImportMapping struct {
 	ExternalUserName string `json:"external_user_name"`
 	SiloUserID       ID     `json:"silo_user_id"`
 	SiloProfileID    ID     `json:"silo_profile_id"`
+	SiloProfileName  string `json:"silo_profile_name,omitempty" doc:"Display name of the target profile; absent when the profile no longer exists"`
 }
 type AdminHistoryImportIDInput struct {
 	ID ID `path:"id" pattern:"^[1-9][0-9]*$"`
@@ -80,7 +81,7 @@ func adminHistorySourceOf(s *historyimport.Source) AdminHistoryImportSource {
 	return AdminHistoryImportSource{NeedsReconfiguration: needsReview, ID: ID(strconv.Itoa(s.ID)), Name: s.Name, SourceType: s.SourceType, BaseURL: safeURL, SystemID: s.SystemID, Enabled: s.Enabled, SortOrder: s.SortOrder, HasAdminToken: s.HasAdminToken}
 }
 func adminHistoryMappingOf(m *historyimport.UserMapping) AdminHistoryImportMapping {
-	return AdminHistoryImportMapping{ID: ID(strconv.Itoa(m.ID)), SourceID: ID(strconv.Itoa(m.SourceID)), ExternalUserID: m.ExternalUserID, ExternalUserName: m.ExternalUserName, SiloUserID: ID(strconv.Itoa(m.SiloUserID)), SiloProfileID: ID(m.SiloProfileID)}
+	return AdminHistoryImportMapping{ID: ID(strconv.Itoa(m.ID)), SourceID: ID(strconv.Itoa(m.SourceID)), ExternalUserID: m.ExternalUserID, ExternalUserName: m.ExternalUserName, SiloUserID: ID(strconv.Itoa(m.SiloUserID)), SiloProfileID: ID(m.SiloProfileID), SiloProfileName: m.SiloProfileName}
 }
 func adminHistoryTag(ctx context.Context, kind string, id int, revision int64) EntityTag {
 	return RenderETag("admin-history-imports/"+strconv.Itoa(claimsFrom(ctx).UserID)+"/"+profileFrom(ctx)+"/"+kind, strconv.Itoa(id), revision)

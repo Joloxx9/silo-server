@@ -139,7 +139,7 @@ func (h *AdminHandler) ListAdminPlaybackHistoryPage(ctx context.Context, filter 
 			h.user_id,
 			COALESCE(u.username, ''),
 			h.profile_id,
-			COALESCE(NULLIF(h.profile_name, ''), h.profile_id),
+			COALESCE(NULLIF(up.name, ''), NULLIF(h.profile_name, ''), h.profile_id),
 			h.media_item_id,
 			h.media_file_id,
 			COALESCE(ep.title, mi.title, ''),
@@ -170,6 +170,7 @@ func (h *AdminHandler) ListAdminPlaybackHistoryPage(ctx context.Context, filter 
 			ep.episode_number
 		FROM admin_playback_history h
 		LEFT JOIN users u ON u.id = h.user_id
+		LEFT JOIN user_profiles up ON up.user_id = h.user_id AND up.id = h.profile_id
 		LEFT JOIN media_items mi ON mi.content_id = h.media_item_id
 		LEFT JOIN episodes ep ON ep.content_id = h.media_item_id
 		LEFT JOIN media_items sm ON sm.content_id = ep.series_id`

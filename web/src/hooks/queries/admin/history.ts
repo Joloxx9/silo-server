@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   captureProfileRequestContext,
   isCapturedProfileAuthorityActive,
@@ -67,11 +67,15 @@ export function useAdminPlaybackHistory(params: AdminPlaybackHistoryParams) {
   });
 }
 
-export function useAdminUserProfiles(userId?: number) {
-  const c = captureProfileRequestContext();
-  const scope = c ? `${c.serverOrigin}:${c.authContextVersion}:${c.profileId}` : "unavailable";
-  return useQuery({
-    queryKey: [...adminKeys.userProfiles(userId), scope],
+type ProfileRequestContext = ReturnType<typeof captureProfileRequestContext>;
+
+function profileContextScope(c: ProfileRequestContext) {
+  return c ? `${c.serverOrigin}:${c.authContextVersion}:${c.profileId}` : "unavailable";
+}
+
+function adminUserProfilesQuery(c: ProfileRequestContext, userId?: number) {
+  return {
+    queryKey: [...adminKeys.userProfiles(userId), profileContextScope(c)],
     queryFn: async () => {
       if (!c || !isCapturedProfileAuthorityActive(c)) throw new StaleApiRequestContextError();
       const result = await v2("GET /api/v2/admin/users/{id}/profiles", {
@@ -86,5 +90,33 @@ export function useAdminUserProfiles(userId?: number) {
     enabled: Boolean(userId),
     retry: false,
     staleTime: ADMIN_HISTORY_STALE_TIME,
+  };
+}
+
+export function useAdminUserProfiles(userId?: number) {
+  return useQuery(adminUserProfilesQuery(captureProfileRequestContext(), userId));
+}
+
+/**
+ * Profile names of the given accounts, keyed by `${userId}:${profileId}`.
+ * `loaded` holds the accounts whose full profile list arrived, so a key
+ * missing for one of them means the profile no longer exists.
+ */
+export function useAdminProfileNames(userIds: number[]) {
+  const c = captureProfileRequestContext();
+  const unique = [...new Set(userIds)].sort((a, b) => a - b);
+  return useQueries({
+    queries: unique.map((userId) => adminUserProfilesQuery(c, userId)),
+    combine: (results) => {
+      const names = new Map<string, string>();
+      const loaded = new Set<number>();
+      unique.forEach((userId, i) => {
+        const result = results[i];
+        if (!result?.isSuccess) return;
+        loaded.add(userId);
+        for (const p of result.data) names.set(`${userId}:${p.id}`, p.name);
+      });
+      return { names, loaded };
+    },
   });
 }

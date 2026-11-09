@@ -77,10 +77,11 @@ import {
   useCreateAdminMapping,
   useCreateAdminRunForMapping,
   useDeleteAdminMapping,
+  useUpdateAdminMapping,
   useAdminHistoryImportMappings,
 } from "@/hooks/queries/admin/history-import-admin";
 import { useAdminUsers } from "@/hooks/queries/admin/users";
-import { useAdminUserProfiles } from "@/hooks/queries/admin/history";
+import { useAdminProfileNames, useAdminUserProfiles } from "@/hooks/queries/admin/history";
 import type {
   CreateHistoryImportSourceRequest,
   HistoryImportExternalUser,
@@ -94,6 +95,11 @@ import { formatDateTime as formatPreferredDateTime } from "@/lib/datetime";
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+/** "account (profile)", or the account alone when the profile name is unknown. */
+function siloTargetLabel(username: string, profileName?: string) {
+  return profileName ? `${username} (${profileName})` : username;
+}
 
 const STATUS_CONFIG = {
   queued: { icon: Clock, color: "text-info", bg: "bg-info/10 border-info/20", label: "Queued" },
@@ -897,6 +903,126 @@ function DiscoverDialog({
 }
 
 // ---------------------------------------------------------------------------
+// Edit mapping dialog
+// ---------------------------------------------------------------------------
+
+function EditMappingDialog({
+  mapping,
+  onClose,
+}: {
+  mapping: HistoryImportUserMapping;
+  onClose: () => void;
+}) {
+  const { data: users = [] } = useAdminUsers();
+  const updateMapping = useUpdateAdminMapping();
+  const [current, setCurrent] = useState(mapping);
+  const [conflict, setConflict] = useState(false);
+  const fieldId = useId();
+  const [userId, setUserId] = useState(String(mapping.silo_user_id));
+  const [profileId, setProfileId] = useState(mapping.silo_profile_id);
+  const { data: profiles = [], isSuccess: profilesLoaded } = useAdminUserProfiles(Number(userId));
+  const profileExists = profiles.some((p) => p.id === profileId);
+  const unchanged =
+    Number(userId) === current.silo_user_id && profileId === current.silo_profile_id;
+
+  async function reload() {
+    const fresh = await getAdminImportMapping(current.id);
+    setCurrent(fresh);
+    setUserId(String(fresh.silo_user_id));
+    setProfileId(fresh.silo_profile_id);
+    setConflict(false);
+  }
+
+  function handleSave() {
+    updateMapping.mutate(
+      {
+        id: current.id,
+        body: { silo_user_id: Number(userId), silo_profile_id: profileId },
+        etag: current.etag,
+      },
+      {
+        onSuccess: onClose,
+        onError: (error) => setConflict(isAdminImportConflict(error)),
+      },
+    );
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            Edit mapping for {current.external_user_name || current.external_user_id}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor={`${fieldId}-user`} className="text-xs">
+              Silo user
+            </Label>
+            <Select
+              value={userId}
+              onValueChange={(v) => {
+                setUserId(v);
+                setProfileId("");
+              }}
+            >
+              <SelectTrigger id={`${fieldId}-user`}>
+                <SelectValue placeholder="Select user…" />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${fieldId}-profile`} className="text-xs">
+              Profile
+            </Label>
+            <Select value={profileExists ? profileId : ""} onValueChange={setProfileId}>
+              <SelectTrigger id={`${fieldId}-profile`}>
+                <SelectValue placeholder="Select profile…" />
+              </SelectTrigger>
+              <SelectContent>
+                {profiles.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {profilesLoaded && profileId && !profileExists ? (
+          <p className="text-warning flex items-center gap-1.5 text-xs" role="alert">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            The mapped profile no longer exists. Choose another profile.
+          </p>
+        ) : null}
+        {conflict ? <ImportEditorConflict onReload={reload} /> : null}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={
+              !profileExists || unchanged || conflict || !current.etag || updateMapping.isPending
+            }
+          >
+            {updateMapping.isPending ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Source selector bar
 // ---------------------------------------------------------------------------
 
@@ -1054,7 +1180,13 @@ function MappingsSection({
   const bulkRun = useAdminBulkRun();
   const [deleteTarget, setDeleteTarget] = useState<HistoryImportUserMapping | null>(null);
   const [deleteConflict, setDeleteConflict] = useState(false);
+  const [editTarget, setEditTarget] = useState<HistoryImportUserMapping | null>(null);
   const { data: users = [] } = useAdminUsers();
+  const profileNames = useAdminProfileNames(mappings.map((m) => m.silo_user_id));
+  // Only a loaded profile list can prove a profile gone; until then trust the mapping.
+  const profileMissing = (m: HistoryImportUserMapping) =>
+    profileNames.loaded.has(m.silo_user_id) &&
+    !profileNames.names.has(`${m.silo_user_id}:${m.silo_profile_id}`);
   const { data: capabilities } = useAdminHistoryImportCapabilities();
   const [lookback, setLookback] = useState("full");
   // Only Jellyfin sources accept a lookback; the server refuses it elsewhere.
@@ -1166,11 +1298,19 @@ function MappingsSection({
                   </TableCell>
                   <TableCell>
                     <p className="text-sm">
-                      {users.find((user) => user.id === m.silo_user_id)?.username ||
-                        `User ${m.silo_user_id}`}
+                      {siloTargetLabel(
+                        users.find((user) => user.id === m.silo_user_id)?.username ||
+                          m.silo_username ||
+                          `User ${m.silo_user_id}`,
+                        profileNames.names.get(`${m.silo_user_id}:${m.silo_profile_id}`) ||
+                          m.silo_profile_name,
+                      )}
                     </p>
-                    {m.silo_profile_name && (
-                      <p className="text-muted-foreground text-xs">{m.silo_profile_name}</p>
+                    {profileMissing(m) && (
+                      <p className="text-warning flex items-center gap-1 text-xs" role="alert">
+                        <AlertTriangle className="h-3 w-3" />
+                        Profile no longer exists. Edit the mapping before importing.
+                      </p>
                     )}
                   </TableCell>
 
@@ -1180,12 +1320,24 @@ function MappingsSection({
                         size="sm"
                         variant="ghost"
                         onClick={() => createRun.mutate({ id: m.id, lookbackHours })}
-                        disabled={createRun.isPending}
+                        disabled={createRun.isPending || profileMissing(m)}
                         title={
-                          lookbackHours ? `Run import (${lookbackChoice?.label})` : "Run import"
+                          profileMissing(m)
+                            ? "The mapped profile no longer exists"
+                            : lookbackHours
+                              ? `Run import (${lookbackChoice?.label})`
+                              : "Run import"
                         }
                       >
                         <Play className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditTarget(m)}
+                        title="Edit mapping"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         size="sm"
@@ -1205,6 +1357,14 @@ function MappingsSection({
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {editTarget && (
+        <EditMappingDialog
+          key={editTarget.id}
+          mapping={editTarget}
+          onClose={() => setEditTarget(null)}
+        />
       )}
 
       {discoverOpen && (
@@ -1263,6 +1423,7 @@ function RunsSection({ sourceId }: { sourceId: number }) {
     error,
   } = useAdminHistoryImportRuns(sourceId);
   const { data: users = [] } = useAdminUsers();
+  const profileNames = useAdminProfileNames(allRuns.map((r) => r.user_id));
   const cancelRun = useCancelAdminRun();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<RunFilter>("all");
@@ -1340,7 +1501,10 @@ function RunsSection({ sourceId }: { sourceId: number }) {
                         )}
                       </div>
                       <p className="text-muted-foreground text-xs">
-                        {userMap.get(run.user_id) ?? `User ${run.user_id}`}
+                        {siloTargetLabel(
+                          userMap.get(run.user_id) ?? `User ${run.user_id}`,
+                          profileNames.names.get(`${run.user_id}:${run.profile_id}`),
+                        )}
                         {" · "}
                         {formatDate(run.created_at)}
                         {run.played_since ? ` · Plays since ${formatDate(run.played_since)}` : ""}
