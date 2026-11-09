@@ -52,6 +52,7 @@ export interface WatchProviderCapabilities {
   import_ratings: boolean;
   export_ratings: boolean;
   sync_dropped: boolean;
+  sync_collections: boolean;
 }
 
 export interface WatchProviderConnection {
@@ -77,6 +78,7 @@ export interface WatchProviderConnection {
   import_ratings_enabled: boolean;
   export_ratings_enabled: boolean;
   sync_dropped_enabled: boolean;
+  sync_collections_enabled: boolean;
   /** Values of the provider's connection_settings, defaults included. Present once connected. */
   connection_settings?: Record<string, unknown>;
   credentials_configured: boolean;
@@ -155,6 +157,7 @@ export type UpdateWatchProviderConnection = Partial<
     | "import_ratings_enabled"
     | "export_ratings_enabled"
     | "sync_dropped_enabled"
+    | "sync_collections_enabled"
   >
 > & {
   /** Values to change, keyed by setting key; settings left out keep their value. */

@@ -57,6 +57,7 @@ function makeConnection(): WatchProviderConnection {
       import_ratings: false,
       export_ratings: false,
       sync_dropped: false,
+      sync_collections: false,
     },
     auth_method: "device_code",
     connected: true,
@@ -76,6 +77,7 @@ function makeConnection(): WatchProviderConnection {
     import_ratings_enabled: false,
     export_ratings_enabled: false,
     sync_dropped_enabled: false,
+    sync_collections_enabled: false,
     credentials_configured: true,
   };
 }

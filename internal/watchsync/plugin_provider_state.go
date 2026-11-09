@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -28,8 +29,14 @@ const (
 	// pluginDroppedCursorKey contains droppedCursorSegment, so it resets with
 	// the agreed drops when the connection moves to another provider account.
 	pluginDroppedCursorKey = "plugin.remote.dropped"
-	maxRemoteStatePages    = 10_000
-	maxRemoteStateItems    = 100_000
+	// COLLECTION traversals are always complete snapshots, so their cursor is
+	// never persisted; the key only names the traversal.
+	pluginCollectionsCursorKey = "plugin.remote.collections"
+	maxRemoteStatePages        = 10_000
+	maxRemoteStateItems        = 100_000
+	// maxRemoteCollections caps the named lists one COLLECTION traversal may
+	// report, so a misbehaving plugin cannot create collections without bound.
+	maxRemoteCollections = 500
 	// A traversal keeps at most maxRemoteStateWarnings plugin page warnings,
 	// each at most maxRemoteStateWarningBytes long, and counts the rest in one
 	// closing note, so a plugin cannot flood the sync run's warning.
@@ -47,6 +54,9 @@ type pluginRemoteTraversal struct {
 	completeSnapshot bool
 	warnings         []string
 	omittedWarnings  int
+	// collections is the union of WatchSyncListRemoteStateResponse.collections
+	// over every page, keyed by collection key, for COLLECTION traversals.
+	collections map[string]*pluginv1.WatchSyncRemoteCollection
 }
 
 // addWarnings keeps one page's warnings. They follow the fault safe_message
@@ -395,6 +405,19 @@ func (p *PluginProvider) listRemoteState(
 			return pluginRemoteTraversal{}, errors.New("watch sync plugin exceeded the remote-state item limit")
 		}
 		result.items = append(result.items, items...)
+		for _, collection := range response.GetCollections() {
+			key := strings.TrimSpace(collection.GetCollectionKey())
+			if key == "" {
+				continue
+			}
+			if result.collections == nil {
+				result.collections = make(map[string]*pluginv1.WatchSyncRemoteCollection)
+			}
+			if _, seen := result.collections[key]; !seen && len(result.collections) >= maxRemoteCollections {
+				return pluginRemoteTraversal{}, errors.New("watch sync plugin exceeded the collection limit")
+			}
+			result.collections[key] = collection
+		}
 		result.addWarnings(response.GetWarnings(),
 			append(authenticatedContextSecrets(authContext), conn.AccessToken, conn.RefreshToken)...)
 
@@ -433,6 +456,99 @@ func (p *PluginProvider) ExportWatchlist(ctx context.Context, _ ServerConfig, co
 
 func (p *PluginProvider) RemoveWatchlist(ctx context.Context, _ ServerConfig, conn Connection, items []LocalFavorite) (ExportResult, error) {
 	return p.applyListEvents(ctx, conn, items, pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_REMOVE_FROM_WATCHLIST)
+}
+
+// FetchCollections reads the account's named lists. The contract requires a
+// complete snapshot, since a list or item missing from a delta would read as
+// deleted.
+func (p *PluginProvider) FetchCollections(ctx context.Context, _ ServerConfig, conn Connection) (CollectionImportBatch, error) {
+	traversal, err := p.listRemoteState(ctx, conn, pluginCollectionsCursorKey,
+		pluginv1.WatchSyncRemoteStateKind_WATCH_SYNC_REMOTE_STATE_KIND_COLLECTION)
+	if err != nil {
+		return CollectionImportBatch{}, err
+	}
+	if !traversal.completeSnapshot {
+		return CollectionImportBatch{}, errors.New("watch sync plugin returned an incremental collection traversal")
+	}
+	batch := CollectionImportBatch{
+		Rows:     make(map[string][]RemoteFavorite, len(traversal.collections)),
+		Warnings: traversal.warnings,
+	}
+	keys := make([]string, 0, len(traversal.collections))
+	for key := range traversal.collections {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		collection := traversal.collections[key]
+		batch.Collections = append(batch.Collections, RemoteCollection{
+			Key:         key,
+			Name:        strings.TrimSpace(collection.GetName()),
+			Description: strings.TrimSpace(collection.GetDescription()),
+		})
+	}
+	for _, state := range traversal.items {
+		listed := state.GetCollection()
+		if listed == nil {
+			continue
+		}
+		key := strings.TrimSpace(listed.GetCollectionKey())
+		if _, ok := traversal.collections[key]; !ok {
+			batch.Warnings = append(batch.Warnings, "watch sync plugin returned an item for an unlisted collection")
+			continue
+		}
+		row, err := remoteFavoriteFromProto(p.Key(), state, &pluginv1.WatchSyncRemoteListState{ListedAt: listed.GetListedAt()})
+		if err != nil {
+			batch.Warnings = append(batch.Warnings, err.Error())
+			continue
+		}
+		if row.Kind != historyimport.KindMovie && row.Kind != historyimport.KindSeries {
+			batch.Warnings = append(batch.Warnings, "watch sync plugin returned a collection item that is not a movie or series")
+			continue
+		}
+		batch.Rows[key] = append(batch.Rows[key], row)
+	}
+	return batch, nil
+}
+
+func (p *PluginProvider) ExportCollectionItems(ctx context.Context, _ ServerConfig, conn Connection, collectionKey string, items []LocalFavorite) (ExportResult, error) {
+	return p.applyCollectionEvents(ctx, conn, collectionKey, items, pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_ADD_TO_COLLECTION)
+}
+
+func (p *PluginProvider) RemoveCollectionItems(ctx context.Context, _ ServerConfig, conn Connection, collectionKey string, items []LocalFavorite) (ExportResult, error) {
+	return p.applyCollectionEvents(ctx, conn, collectionKey, items, pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_REMOVE_FROM_COLLECTION)
+}
+
+func (p *PluginProvider) applyCollectionEvents(
+	ctx context.Context,
+	conn Connection,
+	collectionKey string,
+	items []LocalFavorite,
+	operation pluginv1.WatchSyncOperation,
+) (ExportResult, error) {
+	result := ExportResult{Failed: make(map[string]string)}
+	events := make([]*pluginv1.WatchSyncEvent, 0, len(items))
+	keys := make([]string, 0, len(items))
+	for _, item := range items {
+		media := mediaFromLocalFavorite(item)
+		if !p.supportsMedia(media.GetMediaType()) {
+			result.Failed[item.MediaItemID] = unsupportedWatchSyncMediaMessage(media.GetMediaType())
+			continue
+		}
+		events = append(events, &pluginv1.WatchSyncEvent{
+			// One item can be on several lists, so the key is part of the ID.
+			EventId:         fmt.Sprintf("%s:%s:%s", operation.String(), collectionKey, item.MediaItemID),
+			Operation:       operation,
+			Origin:          pluginv1.WatchSyncOrigin_WATCH_SYNC_ORIGIN_MANUAL,
+			OccurredAt:      timestampOrNil(item.FavoritedAt),
+			Media:           media,
+			ProviderItemKey: item.ProviderItemKey,
+			CollectionKey:   collectionKey,
+		})
+		keys = append(keys, item.MediaItemID)
+	}
+	applied, err := p.applyPluginEvents(ctx, conn, events, keys)
+	return mergeExportFailures(applied, result.Failed), err
 }
 
 func (p *PluginProvider) applyListEvents(

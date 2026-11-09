@@ -92,7 +92,7 @@ const connectionColumns = `
 	import_favorites_enabled, export_favorites_enabled, sync_favorite_removals_enabled,
 	import_watchlist_enabled, export_watchlist_enabled, sync_watchlist_removals_enabled,
 	sync_watchlist_order_enabled, scrobble_enabled, import_ratings_enabled,
-	export_ratings_enabled, sync_dropped_enabled, last_inbound_sync_at,
+	export_ratings_enabled, sync_dropped_enabled, sync_collections_enabled, last_inbound_sync_at,
 	last_progress_sync_at, last_outbound_sync_at, last_favorites_sync_at,
 	last_watchlist_sync_at, last_scrobble_error_at, last_error,
 	rate_limited_until, sync_cursors, connection_settings, created_at, updated_at`
@@ -331,13 +331,13 @@ func (r *PostgresRepository) UpsertConnection(ctx context.Context, conn Connecti
 			sync_watchlist_order_enabled, scrobble_enabled, last_inbound_sync_at, last_progress_sync_at,
 			last_outbound_sync_at, last_favorites_sync_at, last_watchlist_sync_at, last_scrobble_error_at,
 			last_error, rate_limited_until, sync_cursors, import_ratings_enabled, export_ratings_enabled,
-			sync_dropped_enabled, connection_settings
+			sync_dropped_enabled, connection_settings, sync_collections_enabled
 		)
 		VALUES (
 			COALESCE(NULLIF($1, '')::uuid, gen_random_uuid()),
 			$2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
 			$15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31::jsonb,
-			$32, $33, $34, $35::jsonb
+			$32, $33, $34, $35::jsonb, $36
 		)
 		ON CONFLICT (provider, user_id, profile_id) DO UPDATE SET
 			provider_account_id = EXCLUDED.provider_account_id,
@@ -393,6 +393,7 @@ func (r *PostgresRepository) UpsertConnection(ctx context.Context, conn Connecti
 		conn.ExportRatingsEnabled,
 		conn.SyncDroppedEnabled,
 		encodeStoredConnectionSettings(conn.ConnectionSettings),
+		conn.SyncCollectionsEnabled,
 	)
 	saved, err := r.scanConnection(row)
 	if err != nil {
@@ -523,6 +524,7 @@ func (r *PostgresRepository) ListConnectionsDueForSync(
 				OR import_ratings_enabled
 				OR export_ratings_enabled
 				OR sync_dropped_enabled
+				OR sync_collections_enabled
 			)
 		ORDER BY provider, user_id, profile_id
 	`, now)
@@ -2071,6 +2073,7 @@ func (r *PostgresRepository) scanConnection(row pgx.Row) (Connection, error) {
 		&conn.ImportRatingsEnabled,
 		&conn.ExportRatingsEnabled,
 		&conn.SyncDroppedEnabled,
+		&conn.SyncCollectionsEnabled,
 		&conn.LastInboundSyncAt,
 		&conn.LastProgressSyncAt,
 		&conn.LastOutboundSyncAt,

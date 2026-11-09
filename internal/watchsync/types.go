@@ -35,6 +35,9 @@ type Capabilities struct {
 	// SyncDropped means the provider can read, drop, and undrop dropped
 	// shows. Like the rating flags it is served only by /api/v2.
 	SyncDropped bool `json:"-"`
+	// SyncCollections means the provider syncs the account's own named lists
+	// both ways with collections on the profile. Served only by /api/v2.
+	SyncCollections bool `json:"-"`
 }
 
 // ListKind identifies which personal list a sync operates on. The favorites and
@@ -299,6 +302,7 @@ type Connection struct {
 	ImportRatingsEnabled         bool
 	ExportRatingsEnabled         bool
 	SyncDroppedEnabled           bool
+	SyncCollectionsEnabled       bool
 	LastInboundSyncAt            *time.Time
 	LastProgressSyncAt           *time.Time
 	LastOutboundSyncAt           *time.Time
@@ -906,9 +910,10 @@ type ConnectionStatus struct {
 
 	// The rating toggles are served only by /api/v2, which maps them
 	// explicitly; the frozen v1 response keeps its original fields.
-	ImportRatingsEnabled bool `json:"-"`
-	ExportRatingsEnabled bool `json:"-"`
-	SyncDroppedEnabled   bool `json:"-"`
+	ImportRatingsEnabled   bool `json:"-"`
+	ExportRatingsEnabled   bool `json:"-"`
+	SyncDroppedEnabled     bool `json:"-"`
+	SyncCollectionsEnabled bool `json:"-"`
 	// The provider's declared connection settings and their values for this
 	// connection, defaults included, are likewise served only by /api/v2.
 	ConnectionSettings      []ConnectionSetting `json:"-"`
@@ -931,6 +936,7 @@ type ConnectionUpdate struct {
 	ImportRatingsEnabled         *bool `json:"import_ratings_enabled,omitempty"`
 	ExportRatingsEnabled         *bool `json:"export_ratings_enabled,omitempty"`
 	SyncDroppedEnabled           *bool `json:"sync_dropped_enabled,omitempty"`
+	SyncCollectionsEnabled       *bool `json:"sync_collections_enabled,omitempty"`
 	// ConnectionSettings sets values of the provider's declared connection
 	// settings, keyed by setting key. Settings it leaves out keep their value.
 	ConnectionSettings map[string]any `json:"connection_settings,omitempty" doc:"Values for the provider's declared connection_settings, keyed by setting key: true or false for a boolean setting. Settings left out keep their current value."`

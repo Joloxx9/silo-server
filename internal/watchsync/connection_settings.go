@@ -55,8 +55,9 @@ func (r *PostgresRepository) UpdateConnectionSettings(ctx context.Context, provi
  export_ratings_enabled=COALESCE($15,export_ratings_enabled),
  sync_dropped_enabled=COALESCE($16,sync_dropped_enabled),
  connection_settings=connection_settings||$17::jsonb,
+ sync_collections_enabled=COALESCE($18,sync_collections_enabled),
  updated_at=GREATEST(clock_timestamp(),updated_at+interval '1 microsecond')
- WHERE id=$1 RETURNING `+connectionColumns, current.ID, update.ImportWatchedEnabled, update.ImportProgressEnabled, update.ExportWatchedEnabled, update.ExportUnwatchedEnabled, update.ImportFavoritesEnabled, update.ExportFavoritesEnabled, update.SyncFavoriteRemovalsEnabled, update.ImportWatchlistEnabled, update.ExportWatchlistEnabled, update.SyncWatchlistRemovalsEnabled, update.SyncWatchlistOrderEnabled, update.ScrobbleEnabled, update.ImportRatingsEnabled, update.ExportRatingsEnabled, update.SyncDroppedEnabled, encodeConnectionSettingsPatch(update.ConnectionSettings)))
+ WHERE id=$1 RETURNING `+connectionColumns, current.ID, update.ImportWatchedEnabled, update.ImportProgressEnabled, update.ExportWatchedEnabled, update.ExportUnwatchedEnabled, update.ImportFavoritesEnabled, update.ExportFavoritesEnabled, update.SyncFavoriteRemovalsEnabled, update.ImportWatchlistEnabled, update.ExportWatchlistEnabled, update.SyncWatchlistRemovalsEnabled, update.SyncWatchlistOrderEnabled, update.ScrobbleEnabled, update.ImportRatingsEnabled, update.ExportRatingsEnabled, update.SyncDroppedEnabled, encodeConnectionSettingsPatch(update.ConnectionSettings), update.SyncCollectionsEnabled))
 	if err != nil {
 		return Connection{}, fmt.Errorf("update watch provider settings: %w", err)
 	}

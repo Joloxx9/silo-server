@@ -17,6 +17,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/blobstore"
 	"github.com/Silo-Server/silo-server/internal/catalog"
 	"github.com/Silo-Server/silo-server/internal/userstore"
+	"github.com/Silo-Server/silo-server/internal/watchsync"
 )
 
 // CollectionHandler handles personal collection CRUD endpoints.
@@ -45,6 +46,15 @@ type CollectionHandler struct {
 	// imported collections and remembers the counts between reads; nil
 	// counts on every read.
 	MemberCounts *catalog.PersonalCollectionMemberCounts
+	// CollectionSync mirrors item edits to watch provider lists linked to the
+	// collection; nil when watch provider sync is not configured.
+	CollectionSync LocalCollectionEventDispatcher
+}
+
+// LocalCollectionEventDispatcher receives collection item edits for watch
+// provider list sync. watchsync.Service implements it.
+type LocalCollectionEventDispatcher interface {
+	HandleLocalCollectionEvent(ctx context.Context, event watchsync.LocalCollectionEvent) error
 }
 
 // itemPosterSigner resolves item poster paths to delivery URLs in one batch;
