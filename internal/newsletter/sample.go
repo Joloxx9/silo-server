@@ -50,5 +50,5 @@ func sampleEntries() []Entry {
 }
 
 func Preview(ctx context.Context, settings Settings) (*Rendered, error) {
-	return Render(ctx, RenderEnv{Settings: settings, ServerName: "Spark", PublicURL: "https://example.test", Recipient: Recipient{Name: "Viewer"}, Mode: "preview", Now: time.Now(), Preview: true, Recap: sampleRecap(time.Now())}, sampleEntries(), nil)
+	return Render(ctx, RenderEnv{Settings: settings, ServerName: "Silo", PublicURL: "https://example.test", Recipient: Recipient{Name: "Viewer"}, Mode: "preview", Now: time.Now(), Preview: true, Recap: sampleRecap(time.Now())}, sampleEntries(), nil)
 }

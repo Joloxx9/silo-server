@@ -1,5 +1,5 @@
-# Personal image build for this fork's `spark` branch (the Spark build of
-# Silo; `main` mirrors upstream Silo and is never built here). Upstream's publisher
+# Personal image build for this fork's `silo` branch (upstream Silo plus the
+# fork's own fixes; `main` mirrors upstream Silo and is never built here). Upstream's publisher
 # (.github/workflows/docker.yml -> trusted-linux-build.yml) is gated on
 # github.repository == 'Silo-Server/silo-server', so it never runs here.
 # This builds the single architecture Unraid needs and pushes it to the
@@ -9,8 +9,7 @@
 # `frontend` stage when no named build context is supplied, so this build is
 # self-contained and needs no prebuilt bundle from CI.
 #
-# The image is branded Spark by fork/apply-brand.sh before the build and
-# published as ghcr.io/joloxx9/spark-server, tagging `latest` for day-to-day
+# The image is published as ghcr.io/joloxx9/silo-server, tagging `latest` for day-to-day
 # Unraid use. That package must be linked to this
 # repository with the Write role (package settings -> Manage Actions access),
 # or recreated by this repo; while it sits unlinked, GITHUB_TOKEN is denied
@@ -19,7 +18,7 @@ name: Fork image
 
 on:
   push:
-    branches: [spark]
+    branches: [silo]
   workflow_dispatch:
 
 concurrency:
@@ -28,7 +27,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  PACKAGE: spark-server
+  PACKAGE: silo-server
   GOPROXY: https://proxy.golang.org,direct
   GOPRIVATE: github.com/Silo-Server/*
   GONOSUMDB: github.com/Silo-Server/*
@@ -49,9 +48,6 @@ jobs:
 
       # The runtime stage pulls jellyfin-ffmpeg, libvips and the Intel compute
       # runtime, so the hosted runner's default free space is tight.
-      - name: Apply the Spark brand
-        run: fork/apply-brand.sh
-
       - name: Reclaim runner disk space
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
@@ -92,8 +88,8 @@ jobs:
           labels: |
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=spark
-            org.opencontainers.image.title=Spark
+            org.opencontainers.image.version=silo
+            org.opencontainers.image.title=Silo
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=fork-image-amd64
           cache-to: type=gha,scope=fork-image-amd64,mode=max

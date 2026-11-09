@@ -111,7 +111,7 @@ function NewsletterAdminForm() {
   return (
     <SettingsGroup
       title="Newsletter and new-release emails"
-      description="Built into Spark. Uses the shared outgoing-mail settings. Each profile chooses whether to subscribe and verifies its own address."
+      description="Built into Silo. Uses the shared outgoing-mail settings. Each profile chooses whether to subscribe and verifies its own address."
     >
       <fieldset
         disabled={save.isPending || migrate.isPending || render.isPending}
