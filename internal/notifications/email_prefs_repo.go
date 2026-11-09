@@ -92,7 +92,7 @@ func (r *EmailPrefsRepository) SetMode(ctx context.Context, userID int, profileI
 	if !ValidChannelMode(mode) {
 		return fmt.Errorf("invalid email mode %q", mode)
 	}
-	_, err := r.pool.Exec(ctx, `
+	tag, err := r.pool.Exec(ctx, `
 		INSERT INTO notification_email_prefs (profile_id, user_id, mode)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (profile_id) DO UPDATE SET
@@ -108,10 +108,14 @@ func (r *EmailPrefsRepository) SetMode(ctx context.Context, userID int, profileI
 			END,
 			last_attempt_at = NULL,
 			consecutive_failures = 0,
-			updated_at = now()`,
+			updated_at = now()
+		WHERE notification_email_prefs.user_id=EXCLUDED.user_id`,
 		profileID, userID, mode)
 	if err != nil {
 		return fmt.Errorf("set email mode: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrEmailVerificationConflict
 	}
 	return nil
 }
@@ -355,8 +359,11 @@ func isUniqueViolation(err error) bool {
 // verification. The channel switches off in the same statement: without an
 // address there is no destination, and leaving the mode on would silently
 // re-arm delivery the moment a new address verifies.
-func (r *EmailPrefsRepository) ClearCustomAddress(ctx context.Context, profileID string) error {
+func (r *EmailPrefsRepository) ClearCustomAddress(ctx context.Context, userID int, profileID string) error {
 	_, err := r.pool.Exec(ctx, `
+		WITH owner AS (SELECT user_id, profile_id FROM notification_email_prefs WHERE profile_id=$1 AND user_id=$2),
+		stopped AS (UPDATE notification_delivery_preferences p SET preferences=p.preferences || '{"alerts":"off","newsletter":"off"}'::jsonb
+			FROM owner o WHERE p.user_id=o.user_id AND p.profile_id=o.profile_id RETURNING p.profile_id)
 		UPDATE notification_email_prefs SET
 			custom_email = '',
 			pending_email = '',
@@ -364,8 +371,8 @@ func (r *EmailPrefsRepository) ClearCustomAddress(ctx context.Context, profileID
 			pending_expires_at = NULL,
 			mode = 'off',
 			updated_at = now()
-		WHERE profile_id = $1`,
-		profileID)
+		WHERE profile_id = $1 AND user_id=$2 AND (SELECT count(*) FROM stopped)>=0`,
+		profileID, userID)
 	if err != nil {
 		return fmt.Errorf("clear custom address: %w", err)
 	}
@@ -376,11 +383,11 @@ func (r *EmailPrefsRepository) ClearCustomAddress(ctx context.Context, profileID
 // false when no row carries the token.
 func (r *EmailPrefsRepository) UnsubscribeByToken(ctx context.Context, token string) (ok bool, err error) {
 	tag, err := r.pool.Exec(ctx, `
-		UPDATE notification_email_prefs SET
-			mode = 'off',
-			updated_at = now()
-		WHERE unsubscribe_token = $1 AND unsubscribe_token <> ''`,
-		token)
+        WITH owner AS (SELECT user_id, profile_id FROM notification_email_prefs WHERE unsubscribe_token=$1 AND unsubscribe_token<>''),
+        stopped AS (UPDATE notification_delivery_preferences p SET preferences=p.preferences || '{"alerts":"off","newsletter":"off"}'::jsonb
+            FROM owner o WHERE p.user_id=o.user_id AND p.profile_id=o.profile_id RETURNING p.profile_id)
+        UPDATE notification_email_prefs SET mode='off', updated_at=now()
+        WHERE unsubscribe_token=$1 AND unsubscribe_token<>'' AND (SELECT count(*) FROM stopped)>=0`, token)
 	if err != nil {
 		return false, fmt.Errorf("unsubscribe by token: %w", err)
 	}

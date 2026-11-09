@@ -240,6 +240,7 @@ type Dependencies struct {
 	AdminPluginCatalogSettings    AdminPluginCatalogSettingsService
 	AdminRecommendations          AdminRecommendationsService
 	AdminLiteraryWorks            AdminLiteraryWorkService
+	NotificationDelivery          NotificationDeliveryService
 	NotificationChannels          NotificationChannelService
 	NotificationDiscordManagement NotificationDiscordManagementService
 	NotificationRelay             NotificationRelayService

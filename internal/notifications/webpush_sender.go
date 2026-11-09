@@ -67,6 +67,7 @@ func buildWebPushPayload(row DeliveryRow, posterURL string) ([]byte, error) {
 // webPushSender delivers claimed web push attempts. Shared by the
 // post-commit dispatcher and the retry worker.
 type webPushSender struct {
+	allowed       func(context.Context, DeliveryRow) (bool, error)
 	subscriptions *WebPushRepository
 	deliveries    *DeliveryRepository
 	service       *WebPushService
@@ -145,6 +146,16 @@ func (s *webPushSender) processAttempt(ctx context.Context, attempt DeliveryAtte
 		return
 	}
 
+	if s.allowed != nil {
+		ok, err := s.allowed(ctx, *row)
+		if err != nil {
+			return
+		}
+		if !ok {
+			_ = s.subscriptions.FinalizeAttempt(ctx, attempt.ID, WebhookOutcomeFailed, attempt.AttemptNumber+1, nil, "push disabled by profile", nil)
+			return
+		}
+	}
 	publicKey, privateKey, err := s.service.vapidKeys(ctx)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "VAPID keys unavailable", "error", err)

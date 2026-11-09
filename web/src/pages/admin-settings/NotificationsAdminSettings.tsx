@@ -1,3 +1,4 @@
+import { NewsletterAdminSettings } from "./NewsletterAdminSettings";
 import { useId, useMemo, useRef, useState } from "react";
 import { MobilePushPrivacyDisclosure } from "@/components/notifications/MobilePushPrivacyDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1356,6 +1357,8 @@ export default function NotificationsAdminSettings() {
           </AdvancedSection>
         </FieldGroup>
       </div>
+
+      <NewsletterAdminSettings />
 
       <SaveBar
         dirtyCount={form.dirtyCount}

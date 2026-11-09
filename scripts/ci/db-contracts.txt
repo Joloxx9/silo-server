@@ -996,3 +996,9 @@
 ./internal/backup TestBeforeUpgradeWaitsForANightlyBackupDB
 ./internal/backup TestBeforeUpgradeDestinationsDB
 ./internal/backup TestBeforeUpgradeRetriesDB
+
+# Built-in newsletter subscription isolation and unsubscribe.
+./internal/notifications TestNewsletterPreferenceIsolationAndUnsubscribeDB
+./internal/notifications TestNewsletterPluginImportArchiveDB
+./internal/notifications TestNewsletterBackoffDoesNotStarveOtherProfilesDB
+./internal/notifications TestNewsletterSendRetainsWindowUntilAcceptedDB

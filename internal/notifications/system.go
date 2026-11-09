@@ -71,6 +71,7 @@ type System struct {
 	EmailVerification *EmailVerificationService
 
 	mailSender                mail.Sender
+	newsletterCipher          *secret.Cipher
 	emailBrand                *mail.BrandLoader
 	emailVerificationDispatch *emailVerificationDispatcher
 	emailWorker               *accountChannelWorker[profileKey]
@@ -256,6 +257,7 @@ func NewSystem(
 		EmailPrefs:          emailPrefs,
 		DiscordPrefs:        discordPrefs,
 		mailSender:          mailSender,
+		newsletterCipher:    cipher,
 		emailBrand:          emailBrand,
 		emailWorker:         emailWorker,
 		discordWorker:       discordWorker,
@@ -297,6 +299,10 @@ func NewSystem(
 	}
 	if webPushSenderInst != nil {
 		webPushSenderInst.payload = system.PayloadForRow
+		webPushSenderInst.allowed = system.allowNotificationPush
+	}
+	if system.pushSender != nil {
+		system.pushSender.allowed = system.allowNotificationPush
 	}
 	return system
 }
@@ -401,6 +407,8 @@ func (s *System) Start(ctx context.Context) {
 	}
 	if s.emailWorker != nil {
 		s.wg.Add(1)
+		go func() { defer s.wg.Done(); s.runNewsletters(ctx) }()
+		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 			s.emailWorker.Run(ctx)
@@ -462,6 +470,14 @@ func (s *System) Wait() {
 func (s *System) PurgeProfile(ctx context.Context, userID int, profileID string) error {
 	if s == nil || profileID == "" {
 		return nil
+	}
+	if s.pool != nil {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM notification_delivery_preferences WHERE user_id=$1 AND profile_id=$2`, userID, profileID); err != nil {
+			return err
+		}
+		if _, err := s.pool.Exec(ctx, `DELETE FROM notification_newsletter_history WHERE user_id=$1 AND profile_id=$2`, userID, profileID); err != nil {
+			return err
+		}
 	}
 	if err := s.Interests.DeleteAllForProfile(ctx, userID, profileID); err != nil {
 		return fmt.Errorf("purge interest rows: %w", err)

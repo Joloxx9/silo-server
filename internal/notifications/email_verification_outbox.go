@@ -155,5 +155,8 @@ func lockEmailVerificationProfile(ctx context.Context, tx pgx.Tx, user int, prof
 	if err := tx.QueryRow(ctx, `SELECT user_id FROM notification_email_prefs WHERE profile_id=$1 FOR UPDATE`, profile).Scan(&owner); err != nil {
 		return fmt.Errorf("lock email verification profile: %w", err)
 	}
+	if owner != user {
+		return ErrEmailVerificationConflict
+	}
 	return nil
 }
