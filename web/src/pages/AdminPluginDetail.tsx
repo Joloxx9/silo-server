@@ -289,7 +289,7 @@ function InstalledPluginPage({
   // community catalog is disabled by hiding it.
   const pausedBy =
     tier === "approved_community"
-      ? "Approved community plugins are turned off"
+      ? "Spark community plugins are turned off"
       : installation.repository_name
         ? `Its repository, ${installation.repository_name}, is disabled`
         : "Its repository is disabled";

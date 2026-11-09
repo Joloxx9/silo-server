@@ -211,7 +211,7 @@ func writeInvitationSendError(w http.ResponseWriter, err error) {
 			"Password sign-in is turned off on this server, so invitations can't be claimed")
 	case errors.Is(err, invitations.ErrNoLinkBase):
 		writeError(w, http.StatusConflict, "no_link_base",
-			"Configure the Silo public URL so invitation links can be built")
+			"Configure the Spark public URL so invitation links can be built")
 	default:
 		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to send invitation")
 	}

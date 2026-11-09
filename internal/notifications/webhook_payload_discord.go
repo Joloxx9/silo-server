@@ -119,7 +119,7 @@ func BuildDiscordDMPayload(rows []DeliveryRow) ([]byte, error) {
 	overflow += dropped
 	body := discordDMBody{Embeds: embeds}
 	if overflow > 0 {
-		body.Content = fmt.Sprintf("…and %d more in your Silo inbox", overflow)
+		body.Content = fmt.Sprintf("…and %d more in your Spark inbox", overflow)
 	}
 	return json.Marshal(body)
 }
@@ -129,16 +129,16 @@ func BuildDiscordDMPayload(rows []DeliveryRow) ([]byte, error) {
 func discordEmbedAuthorLine(row DeliveryRow) string {
 	switch row.Type {
 	case DeliveryTypeEpisodeAvailable:
-		return "New episode on Silo"
+		return "New episode on Spark"
 	case DeliveryTypeRequestFulfilled:
 		if parseRequestFlags(row.ReasonFlags).Follower {
-			return "Now available on Silo"
+			return "Now available on Spark"
 		}
-		return "Your request is now available on Silo"
+		return "Your request is now available on Spark"
 	case DeliveryTypeRequestApproved:
-		return "Your request was approved on Silo"
+		return "Your request was approved on Spark"
 	case DeliveryTypeRequestDeclined:
-		return "Your request was declined on Silo"
+		return "Your request was declined on Spark"
 	default:
 		return genericNotificationTitle
 	}
@@ -148,7 +148,7 @@ func discordEmbedAuthorLine(row DeliveryRow) string {
 // content rating when known so the advisory rides along unobtrusively.
 func discordEmbedFooterText(contentRating string, test bool) string {
 	if test {
-		return "Silo test notification"
+		return "Spark test notification"
 	}
 	if contentRating != "" {
 		return siloSenderName + " • " + truncateWithEllipsis(contentRating, 32)

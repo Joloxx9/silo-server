@@ -161,8 +161,8 @@ func TestParseEbookEPUBMetadata(t *testing.T) {
 	if got.Year != 2024 {
 		t.Fatalf("Year = %d, want 2024", got.Year)
 	}
-	if got.Publisher != "Silo Press" {
-		t.Fatalf("Publisher = %q, want Silo Press", got.Publisher)
+	if got.Publisher != "Spark Press" {
+		t.Fatalf("Publisher = %q, want Spark Press", got.Publisher)
 	}
 	wantPublishedAt := time.Date(2024, 3, 10, 0, 0, 0, 0, time.UTC)
 	if !got.PublishedAt.Equal(wantPublishedAt) {

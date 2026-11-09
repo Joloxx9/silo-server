@@ -1,6 +1,6 @@
 # Observability
 
-Silo emits structured **logs** and distributed **traces** via OpenTelemetry (OTLP),
+Spark emits structured **logs** and distributed **traces** via OpenTelemetry (OTLP),
 in addition to the existing stderr and `opslog` database pipeline. The feature is
 **opt-in and default-off**: with no `OTEL_*` / `SILO_OTEL_ENABLED` configuration the
 server behaves exactly as before (stderr + `opslog` only).
@@ -24,7 +24,7 @@ Telemetry turns on when **either** `SILO_OTEL_ENABLED` is truthy **or**
 | `OTEL_TRACES_SAMPLER_ARG` | Trace-id ratio for the ratio-based samplers (0–1; clamps >1 to 1). | `0.01` |
 
 The node identity is attached as the `service.instance.id` resource attribute, so
-multiple Silo nodes sharing one `service.name` stay distinguishable in the backend.
+multiple Spark nodes sharing one `service.name` stay distinguishable in the backend.
 
 All other `OTEL_EXPORTER_OTLP_*` knobs (headers, TLS, per-signal endpoints) are read
 directly from the environment by the OTLP exporters — the environment is the single
@@ -126,7 +126,7 @@ writers never block and never log. Neither Redis nor Postgres is on that path.
   logging is persisted and reaches other nodes. A node that dies loses the entries
   still in its buffer, including the record that `log.Fatalf` writes just before it
   exits.
-- Earlier Silo versions pushed entries into the Redis lists `ops_log:buffer` and
+- Earlier Spark versions pushed entries into the Redis lists `ops_log:buffer` and
   `activity_log:buffer`. Current versions never read them. Once no node runs an earlier
   version, delete both keys.
 
@@ -220,14 +220,14 @@ service:
     logs:   { receivers: [otlp], exporters: [debug] }
 ```
 
-Run Silo with `SILO_OTEL_ENABLED=1 OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317` and watch
+Run Spark with `SILO_OTEL_ENABLED=1 OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317` and watch
 logs + traces arrive at the collector. Swap `debug` for Loki/Tempo (or a vendor OTLP
 endpoint) for real storage; Grafana can then show traces alongside the unchanged
 Prometheus metrics.
 
 ## Log retention & rotation
 
-Silo does **not** write or rotate its own log files. Rotation/retention is handled by the
+Spark does **not** write or rotate its own log files. Rotation/retention is handled by the
 layer that owns each sink, which is the intended cloud-native split:
 
 - **Console (stderr)** is owned by the container runtime. Under Docker, configure the
@@ -344,7 +344,7 @@ sampling run in bounded background work, never in HTTP handlers or scrapes.
 Missing sources omit values; stale snapshots carry explicit timestamps and flags.
 Use node-exporter, a container exporter, GPU vendor exporters and dependency
 exporters for device latency, network drops, host pressure, PostgreSQL locks/WAL,
-Redis evictions and object-store capacity. Silo measures the calls it owns.
+Redis evictions and object-store capacity. Spark measures the calls it owns.
 
 Go heap profiles describe sampled Go allocations only: not libvips or other
 native allocations, FFmpeg memory, plugin internals, filesystem cache, or GPU
@@ -383,7 +383,7 @@ application listener; the API process serves it only on `SILO_METRICS_LISTEN`.
   last good numbers marked `stale` and never delays a health response; a path
   the process cannot see reports `unavailable`, not an empty disk.
 - **GPU sources.** Intel (i915, xe) and AMD (amdgpu) busyness comes from DRM
-  fdinfo, which needs no privileges beyond `/dev/dri` and counts only Silo's own
+  fdinfo, which needs no privileges beyond `/dev/dri` and counts only Spark's own
   FFmpeg processes. NVIDIA exposes no fdinfo, so `nvidia-smi` supplies
   whole-GPU utilization, encoder and decoder utilization, and VRAM, including
   other tenants; a missing or repeatedly failing binary reports
@@ -531,7 +531,7 @@ Off adds no `db_*` request fields, events, summaries, metrics or span attributes
 
 SQL enters only the shape function inside `queryattr`; the normalized text is hashed and discarded; no log, span, or metric carries SQL text, table or column names, argument values, or error text.
 
-A site is the first Silo function and line outside `internal/database` and its subpackages; `main` qualifies.
+A site is the first Spark function and line outside `internal/database` and its subpackages; `main` qualifies.
 Names omit module and `internal/` prefixes; no eligible frame in 32 frames gives `unknown`.
 Shapes are 16 lowercase hex digits from FNV-64a of `go-sqllexer` normalized text. Each site holds eight shapes,
 then a ninth `other` row for further shapes or normalization errors. Fixed `batch` and `copy` shapes count toward eight.
@@ -684,7 +684,7 @@ with their tests, and a Grafana dashboard. Targets carry a `cluster` label and u
 `process_role` for the deployment role, because `role` already names
 database, cache and storage pools. Prometheus owns metric retention; the OTLP
 backend owns trace/log retention. Profiles remain private incident artifacts
-with deliberate deletion. Silo adds no time-series database or automatic profile
+with deliberate deletion. Spark adds no time-series database or automatic profile
 upload. Dashmetrics retains its existing bounded summary behavior.
 
 ### Validating observability changes

@@ -1,6 +1,6 @@
 # Sonyflake ID generation
 
-`internal/idgen` mints the locally generated IDs Silo stores: rows such as
+`internal/idgen` mints the locally generated IDs Spark stores: rows such as
 people, collections, sections, downloads and admin jobs, and the `content_id` of
 items that have no provider anchor. An ID is a 63-bit Sonyflake: 39 bits of time
 in 10 ms units since 2024-01-01 UTC, 8 bits of sequence, and 16 bits of machine

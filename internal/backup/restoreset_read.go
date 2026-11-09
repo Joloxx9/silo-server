@@ -23,7 +23,7 @@ import (
 )
 
 // ErrRestoreSetTooNew refuses a restore set from a newer format.
-var ErrRestoreSetTooNew = errors.New("This backup is from a newer Silo. Upgrade this server first.") //nolint:staticcheck // shown to admins as written
+var ErrRestoreSetTooNew = errors.New("This backup is from a newer Spark. Upgrade this server first.") //nolint:staticcheck // shown to admins as written
 
 // ErrNoRestoreSet reports a backup without a restore set: a before-upgrade
 // backup, or one taken before selective restore existed.
@@ -412,7 +412,7 @@ func (p *restoreSetParser) readIndex(data []byte) error {
 		return fmt.Errorf("%s: %w", restoreSetIndexName, err)
 	}
 	if head.Format != restoreSetFormat {
-		return fmt.Errorf("%s: format %q is not a Silo restore set", restoreSetIndexName, head.Format)
+		return fmt.Errorf("%s: format %q is not a Spark restore set", restoreSetIndexName, head.Format)
 	}
 	if head.Version > restoreSetVersion {
 		return ErrRestoreSetTooNew

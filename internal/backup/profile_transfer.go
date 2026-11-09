@@ -58,7 +58,7 @@ type ProfileExport struct {
 
 // Errors a profile import answers with.
 var (
-	ErrProfileExportTooNew = errors.New("this profile export is from a newer Silo; upgrade this server first")
+	ErrProfileExportTooNew = errors.New("this profile export is from a newer Spark; upgrade this server first")
 	// ErrProfileImportAccessFields refuses a document carrying account or
 	// access fields: an import only ever merges a profile's own data.
 	ErrProfileImportAccessFields = errors.New("a profile import cannot carry account or access fields")

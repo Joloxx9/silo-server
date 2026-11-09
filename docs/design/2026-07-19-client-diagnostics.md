@@ -10,11 +10,11 @@ Repos affected: `silo-server`, `silo-android`, `silo-apple`
 
 ## Summary
 
-Add an opt-in, self-hosted diagnostics pipeline: Silo clients detect crashes
+Add an opt-in, self-hosted diagnostics pipeline: Spark clients detect crashes
 and abnormal exits, collect structured debug logs (playback, TV focus,
 network, lifecycle) plus a hardware snapshot (device model, display/HDMI,
 audio path, codec capabilities), and — only with explicit user consent —
-upload a compressed diagnostics bundle to the user's own Silo server. Admins
+upload a compressed diagnostics bundle to the user's own Spark server. Admins
 review bundles through new acting-admin API endpoints alongside the existing
 server logs tooling.
 
@@ -25,7 +25,7 @@ Everything ships **disabled by default**:
   object storage is configured and validated.
 - Client: verbose "debug logging" is a per-device setting (default off).
   Crash reporting defaults to **Ask** — after an abnormal exit the app shows
-  an incident-specific prompt (e.g. *"Silo closed unexpectedly during
+  an incident-specific prompt (e.g. *"Spark closed unexpectedly during
   playback. Send a diagnostic report to your server?"*) with
   **Send / Don't send / Always send**. Nothing uploads without one of: an
   explicit prompt confirmation, a prior "Always send" election bound to this
@@ -96,11 +96,11 @@ Today we are blind to client-side failures:
 
 ## Why this route
 
-**Upload to the user's own Silo server, not a third-party crash service.**
+**Upload to the user's own Spark server, not a third-party crash service.**
 Crashlytics/Sentry SaaS would send user data to a third party, require vendor
 accounts/keys we'd have to ship, and put the reports in front of *us* rather
 than the person who can actually act — the self-hosting admin. Requiring
-every admin to also run self-hosted Sentry is far too heavy. The Silo server
+every admin to also run self-hosted Sentry is far too heavy. The Spark server
 is the natural, privacy-aligned destination, and it already has auth, admin
 tooling, object storage, and retention patterns to build on.
 
@@ -677,7 +677,7 @@ daily, while the app runs), not "next launch".
 - **tvOS abnormal-exit detection**: no crash stacks in v1. A dirty-exit
   sentinel (marker written at launch, cleared on clean
   background/termination) plus the breadcrumb journal yields
-  `type: abnormal_exit` reports — "Silo did not shut down cleanly last
+  `type: abnormal_exit` reports — "Spark did not shut down cleanly last
   time" — with breadcrumbs and device snapshot but no stack. An in-process
   crash reporter for tvOS is explicitly deferred (see Non-goals).
 - **Device snapshot**: `AppleDeviceIdentity.current` +

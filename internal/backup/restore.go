@@ -26,10 +26,10 @@ var (
 	// the operator accepts losing its encrypted settings and credentials.
 	ErrKeyMismatch = errors.New("this backup was taken with a different SECRET_KEY")
 	// ErrNewerSchema refuses a backup whose schema this binary cannot run.
-	ErrNewerSchema = errors.New("this backup is from a newer Silo; upgrade this binary first")
+	ErrNewerSchema = errors.New("this backup is from a newer Spark; upgrade this binary first")
 	// ErrUnknownMigrations refuses a backup whose database has a migration
 	// this binary does not carry, such as one from another build's branch.
-	ErrUnknownMigrations = errors.New("this backup's database has migrations this Silo does not carry")
+	ErrUnknownMigrations = errors.New("this backup's database has migrations this Spark does not carry")
 	// ErrRollbackIncomplete reports a swap whose rollback stopped partway: the
 	// databases stay closed and the journal names what remains.
 	ErrRollbackIncomplete = errors.New("the rollback did not finish")
@@ -375,7 +375,7 @@ func (p postLoad) carry(ctx context.Context, loader DatabaseLoader, dbURL, liveU
 		"turning off every restored plugin", func() error {
 			off, err := loader.DisablePlugins(ctx, dbURL)
 			if err == nil && len(off) > 0 {
-				_, _ = fmt.Fprintf(p.out, "Turned off %d plugins; check and enable them after Silo starts: %s.\n", len(off), strings.Join(off, ", "))
+				_, _ = fmt.Fprintf(p.out, "Turned off %d plugins; check and enable them after Spark starts: %s.\n", len(off), strings.Join(off, ", "))
 			}
 			return err
 		}); err != nil {
@@ -422,7 +422,7 @@ func (opts ValidateOptions) checkMigrations(applied []int64, where string) error
 	if len(unknown) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%w: %s %s; restore it with the Silo build that applied them", ErrUnknownMigrations, where, strings.Join(unknown, ", "))
+	return fmt.Errorf("%w: %s %s; restore it with the Spark build that applied them", ErrUnknownMigrations, where, strings.Join(unknown, ", "))
 }
 
 // Validate checks every input before anything changes: checksums, the
@@ -496,7 +496,7 @@ func unauthenticatedError(m *Manifest, keyCheck string) error {
 	case keyCheck == "":
 		return fmt.Errorf("%w: SECRET_KEY is not set, so its manifest cannot be checked. Set SECRET_KEY, or pass --accept-lost-credentials to restore it unverified", ErrUnauthenticatedBackup)
 	case m.KeyCheck == "":
-		return fmt.Errorf("%w: its manifest records no SECRET_KEY check value, which every Silo backup has, so it may have been changed. Pass --accept-lost-credentials to restore it unverified, encrypted settings and credentials included as lost", ErrUnauthenticatedBackup)
+		return fmt.Errorf("%w: its manifest records no SECRET_KEY check value, which every Spark backup has, so it may have been changed. Pass --accept-lost-credentials to restore it unverified, encrypted settings and credentials included as lost", ErrUnauthenticatedBackup)
 	}
 	return fmt.Errorf("%w (backup %s, this key %s): %w; encrypted settings and credentials in it cannot be read with this key, and its manifest cannot be verified, so it may have been changed. Pass --accept-lost-credentials to restore it anyway",
 		ErrUnauthenticatedBackup, m.KeyCheck, keyCheck, ErrKeyMismatch)
@@ -632,7 +632,7 @@ func clearLostSettings(ctx context.Context, loader DatabaseLoader, dbURL string,
 		return fmt.Errorf("clearing the settings this SECRET_KEY cannot read: %w", err)
 	}
 	if len(keys) > 0 {
-		_, _ = fmt.Fprintf(out, "Cleared %d encrypted settings this SECRET_KEY cannot read; enter them again after Silo starts: %s\n", len(keys), strings.Join(keys, ", "))
+		_, _ = fmt.Fprintf(out, "Cleared %d encrypted settings this SECRET_KEY cannot read; enter them again after Spark starts: %s\n", len(keys), strings.Join(keys, ", "))
 	}
 	return nil
 }
@@ -651,7 +651,7 @@ func dropOmittedSubtitles(ctx context.Context, loader DatabaseLoader, dbURL stri
 		return fmt.Errorf("removing the downloaded subtitles the backup left out: %w", err)
 	}
 	if n > 0 {
-		_, _ = fmt.Fprintf(out, "Removed %d downloaded subtitles the backup left out; Silo downloads them again when they are chosen.\n", n)
+		_, _ = fmt.Fprintf(out, "Removed %d downloaded subtitles the backup left out; Spark downloads them again when they are chosen.\n", n)
 	}
 	return nil
 }
@@ -814,7 +814,7 @@ func RestoreSeparate(ctx context.Context, src *Source, loader DatabaseLoader, op
 		_, _ = fmt.Fprintf(out, "Wrote %d files to %s.\n", n, opts.BlobsInto)
 	}
 	printMissing(out, src.Manifest)
-	_, _ = fmt.Fprintln(out, "Restored. Point DATABASE_URL and the artwork storage settings at the new locations, then start Silo.")
+	_, _ = fmt.Fprintln(out, "Restored. Point DATABASE_URL and the artwork storage settings at the new locations, then start Spark.")
 	return report, nil
 }
 

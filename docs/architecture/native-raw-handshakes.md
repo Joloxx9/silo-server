@@ -57,7 +57,7 @@ The v2 events, playback-control, watch-together and admin-log sockets share a
 strict browser Origin check (`socketOriginAllowed`). It accepts an `http` or `https`
 Origin only on an exact scheme and host match against any of:
 
-- the admin-configured Silo public URL, which must identify this deployment;
+- the admin-configured Spark public URL, which must identify this deployment;
 - the request's own scheme and Host (including port), so a browser that loaded the
   web UI from a LAN address or IP:port can open that page's sockets while the public
   URL names a different, proxied hostname;

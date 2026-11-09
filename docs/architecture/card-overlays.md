@@ -72,11 +72,11 @@ not finished. An untouched show shows nothing, so a library of new shows is not 
 ## Uploaded images
 
 An administrator can upload images (PNG, JPEG or WebP, up to 4 MiB) to a server-wide library of up
-to 256 images. Silo re-encodes each one as WebP fitted within 600 by 300 pixels and stores it under
+to 256 images. Spark re-encodes each one as WebP fitted within 600 by 300 pixels and stores it under
 the `overlay-images/` blob prefix, keyed by the SHA-256 of the stored bytes, so the reference names
 the content and `GET /api/v2/overlay-images/{ref}` can be cached forever. The overlay-config
 endpoint lists the library, and `supports_overlay_images` on the settings contract capabilities
-says whether the server has one. Silo ships no logo artwork of its own: rating and format owners
+says whether the server has one. Spark ships no logo artwork of its own: rating and format owners
 restrict their marks, and an uploaded image is the administrator's to license.
 
 A badge uses images two ways:

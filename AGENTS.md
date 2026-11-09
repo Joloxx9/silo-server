@@ -1,18 +1,18 @@
-# Silo Server
+# Spark Server
 
-Go backend for Silo: API contracts, auth/session, catalog/scanner/playback services, database
+Go backend for Spark, a fork of Silo: API contracts, auth/session, catalog/scanner/playback services, database
 migrations, Jellyfin compatibility, and the host-side plugin runtime. `cmd/silo` is the
 entrypoint, backend code is under `internal/` by domain, the React frontend is `web/src/`.
 
-Silo is pre-1.0, with the current focus on QA, correctness, and UX polish.
+Spark is a pre-release fork focused on expanded customization and additional options, with the current focus on QA, correctness, and UX polish.
 Architectural changes are welcome when they serve the requested outcome and improve
 long-term maintainability; keep unrelated redesign out of a bounded fix.
 
-## What Silo is
+## What Spark is
 
-A modern, open-source media server built from the ground up on current infrastructure —
-Postgres, S3, Redis — rather than SQLite and local disk. The foundational bet is horizontal
-scale: Silo deploys as a cluster (Kubernetes, remote transcode nodes) and stays fast on large
+A customizable, open-source media server forked from Silo and built on current infrastructure —
+Postgres, S3, Redis — rather than SQLite and local disk. Spark retains Silo's foundational bet on horizontal
+scale: Spark deploys as a cluster (Kubernetes, remote transcode nodes) and stays fast on large
 libraries, whether it's one node serving a household or a deployment streaming to thousands of
 users. Weigh every design against that full spectrum; treat a node dying mid-stream as a normal
 event, not an edge case.
@@ -90,7 +90,7 @@ client suite at risk. This is settled product direction, not a design problem to
 write code for it, and say so plainly if asked.
 
 **Deleting, moving, renaming, or otherwise managing media files will not be accepted** either.
-Silo is a media server, not a media manager: it reads libraries (the shipped Compose file mounts
+Spark is a media server, not a media manager: it reads libraries (the shipped Compose file mounts
 them read-only) and leaves file management to other tools.
 
 ## Gotchas

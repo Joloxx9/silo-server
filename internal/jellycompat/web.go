@@ -161,7 +161,7 @@ func compatWebDisabledMessage(ctx context.Context, deps Dependencies) string {
 	case !proxyEnabled:
 		return "Jellyfin Web UI is disabled because the Jellyfin compatibility proxy is disabled"
 	case !webEnabled:
-		return "Jellyfin Web UI is disabled in Silo settings"
+		return "Jellyfin Web UI is disabled in Spark settings"
 	default:
 		return "Jellyfin Web UI is disabled"
 	}

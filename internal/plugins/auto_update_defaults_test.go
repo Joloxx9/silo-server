@@ -97,7 +97,7 @@ func TestAutoUpdateInstallsRequiredPluginsFromTheSiloRepository(t *testing.T) {
 	}
 	if summary.DefaultPluginsInstalled != 1 || len(catalog.resolveRequests) != 1 ||
 		catalog.resolveRequests[0].PluginID != "silo.watchprovider.trakt" || catalog.resolveRequests[0].RepositoryID != 7 {
-		t.Fatalf("installs = %d, resolved = %+v, want only Trakt from the Silo repository", summary.DefaultPluginsInstalled, catalog.resolveRequests)
+		t.Fatalf("installs = %d, resolved = %+v, want only Trakt from the Spark repository", summary.DefaultPluginsInstalled, catalog.resolveRequests)
 	}
 }
 

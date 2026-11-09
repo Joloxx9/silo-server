@@ -10,7 +10,7 @@ also export and import its own data (see [Profile export](#profile-export)).
 The endpoints are in [backups-api.md](../backups-api.md).
 
 A backup is a recovery point for this server's own data. It does not include
-media files (Silo never manages them, see [non-goals](../non-goals.md)),
+media files (Spark never manages them, see [non-goals](../non-goals.md)),
 rebuildable data (provider artwork, chapter images, trickplay, Redis,
 Meilisearch, transcode and download folders), `SECRET_KEY`, `.env`, or
 Compose files. It is not point-in-time recovery; deployments that need that
@@ -98,7 +98,7 @@ the private bucket ([Destinations](#destinations), [Encryption](#encryption)).
 
 `manifest.json` has `format: "silo-backup"` and `version: 1`. Readers accept
 every version up to theirs and refuse a newer one. It records the id, kind,
-server id, start and completion times, Silo version, goose version (the
+server id, start and completion times, Spark version, goose version (the
 highest applied `goose_db_version`), `applied_migrations` (every applied
 goose version, ascending, without goose's version 0; it must end at the goose
 version), PostgreSQL server version, `pg_dump`
@@ -156,7 +156,7 @@ write a `mac` that verifies. Every read checks it before trusting anything
 else in the manifest: the listing, downloads and download links, a
 selective restore's preview and restore, `silo backup restore`, and
 `silo backup verify`. The check is a strict state machine, with no legacy
-path (every Silo that writes manifests signs them):
+path (every Spark that writes manifests signs them):
 
 - The manifest names this server's check value: its `mac` must verify, or
   it is refused (`ErrManifestTampered`), a missing `mac` included, even with
@@ -253,7 +253,7 @@ Blob keys come from the snapshot's references, never from listing the store:
 A backup taken with `backup.include_subtitles` off still dumps every
 `downloaded_subtitles` row. A full restore deletes the provider rows whose
 object is not in the storage the restored server uses (in separate mode,
-all of them), so players do not list tracks with no content; Silo downloads
+all of them), so players do not list tracks with no content; Spark downloads
 them again when they are chosen. Storing a subtitle whose row exists but
 whose object is gone writes the object back under the row.
 
@@ -682,7 +682,7 @@ columns it has.
 ## Restore set
 
 `restore-set.tar` duplicates a small part of the database as versioned JSON
-so that selective restore never loads the dump, works across Silo versions,
+so that selective restore never loads the dump, works across Spark versions,
 and works on another server.
 
 ```
@@ -701,7 +701,7 @@ blobs/<object key>
 added the users section; version 3 the home sections section, template
 collections in `collections.json`, and an omitted item's `cause` and
 `error`; version 4 a home section's `web_only`), the source
-server id and name, Silo version, creation time, `SECRET_KEY` check value, and
+server id and name, Spark version, creation time, `SECRET_KEY` check value, and
 a section index: for each section its item count, each of its files with
 size and SHA-256, and the blob keys its documents reference. Plugin archive
 digests are computed in the snapshot (`sha256(archive_bytes)`), so the index
@@ -718,7 +718,7 @@ sections the same restore wrote. Each names its document (or per-item
 files) and the blob prefixes it may carry, which are disjoint across
 sections, and the first format version that may hold it. A reader refuses a
 section, and a document field, it does not know, so adding either is a new
-format version: an older reader refuses a newer set as "from a newer Silo"
+format version: an older reader refuses a newer set as "from a newer Spark"
 instead of failing on what it does not know, and a set that claims an older
 version while holding something added later (`users` in version 1,
 `home_sections` or template collections in version 2, a `web_only` section
@@ -791,7 +791,7 @@ entries, pointers, strings, raw values). A document is refused when that is
 over 8 times its size plus 64 KiB, when the set's other documents together
 would decode to over 256 MiB, or when one array or object holds over
 1,000,000 elements. A short document of empty elements (`[{},{},…]`) would otherwise
-decode to a whole struct per three bytes; documents Silo writes decode to
+decode to a whole struct per three bytes; documents Spark writes decode to
 about their size.
 
 Account documents grow with a server's households and watch history: a large
@@ -836,7 +836,7 @@ leaves out, and one more entry counting the rest, so a preview of a set of
 malformed entries stays small. A plugin archive is checked against its
 digest and discarded, never installed ([Plugins](#plugins)). Readers accept
 every format version up to theirs and refuse a newer one with "This backup is
-from a newer Silo. Upgrade this server first."
+from a newer Spark. Upgrade this server first."
 
 **Nothing inside a restore set is decoded before it is verified,** with
 one exception: an uploaded restore set sent without a SHA-256. One sent
@@ -990,7 +990,7 @@ it is never offered and the preview says so.
 
 A restore never installs or runs a plugin from a backup. Its archive is
 vouched for only by the backup's own checksums, and anyone who can write the
-backup destination could replace it with code that would run as the Silo
+backup destination could replace it with code that would run as the Spark
 user. A plugin missing here is not selectable (`needs_install`): the preview
 and the report tell the admin to install that plugin id and version from a
 plugin catalog, through the normal install path and its checks, and to
@@ -1650,7 +1650,7 @@ and sent again.
 - `backup_uploads` holds each session: its size, part size, optional
   declared SHA-256, status (`uploading`, `checking`, `complete`,
   `rejected`), and once complete the frozen digest and what the set says
-  about itself (source server id and name, Silo version, creation time,
+  about itself (source server id and name, Spark version, creation time,
   format version). `backup_upload_parts` names, for each received part, the
   object that counts.
 - Before a byte of a part is stored, the send records an attempt
@@ -1830,7 +1830,7 @@ by its goose version alone, and the restored database's applied versions are
 checked against the binary in the verification step instead. An encrypted
 backup needs the key it was taken with. An unencrypted backup taken with
 another key needs `--accept-lost-credentials`: its encrypted settings and credentials cannot be
-read with this key. Silo refuses to start on a setting it cannot decrypt, so
+read with this key. Spark refuses to start on a setting it cannot decrypt, so
 after verification such a restore deletes, in the restored database, every
 encrypted `server_settings` row this key cannot open and prints their key
 names (never values) for the admin to enter again. Rows are only deleted,
@@ -1867,7 +1867,7 @@ checks every classified one.
 ### Interrupted work
 
 Nothing the backup had queued or running runs by itself after a full
-restore (either mode). In the restored database, before Silo starts on it,
+restore (either mode). In the restored database, before Spark starts on it,
 `InterruptWork` cancels admin jobs of every kind (backups, restores,
 imports, storage transitions, scans, exports), history import runs, and scan
 runs that were queued or running; fails running collection syncs and pending
@@ -1882,7 +1882,7 @@ trickplay state) are local work a server reclaims when they expire.
 
 Stores kept outside Postgres whose bookkeeping is in it are rebuilt from the
 restored data: the search index state is deleted, so the indexer rebuilds
-the search engine's index from the restored catalog when Silo starts (its
+the search engine's index from the restored catalog when Spark starts (its
 change events are not in the dump), and every taste profile is marked
 stale, so recommendations are rebuilt with the live server's embedding
 settings. Files the catalog points at (artwork, trickplay, chapter images)
@@ -1917,7 +1917,7 @@ that holds a bearer secret or a public capability, each one way:
   rows out, so a restore never brings back a session or token revoked
   after the backup, and after a full restore every client signs in again.
 - Carried from the live server: long-lived credentials that clients and
-  other services present to Silo (API keys, pending invitations, invite
+  other services present to Spark (API keys, pending invitations, invite
   codes, autoscan webhook tokens, audiobook RSS feed links, Plex and
   Jellyfin webhook sync secrets with their profile mappings, external
   sign-in links and sign-in providers), and the
@@ -1993,7 +1993,7 @@ so a new table needs a decision before it ships; a layer that adds one
 classifies it.
 
 Sensitive settings (`catalog.SensitiveSettingKeys`) are classified the same
-way in `internal/backup/settings_secrets.go`. The signing keys Silo
+way in `internal/backup/settings_secrets.go`. The signing keys Spark
 generates for the tokens it issues (`auth.jwt_secret`, which signs sessions,
 download and artwork links, backup object links, OAuth state, and cursors,
 and `audiobooks.abs.jwt_secret`) are replaced on every restore, swap or
@@ -2170,7 +2170,7 @@ artwork, avatars, and branding will be missing. Separate mode clears no
 Redis: the live deployment may still be running on it, and which Redis a
 server on the restored database will use is not known here. The command
 says to run `FLUSHDB` on that Redis database, or use an empty one, before
-starting Silo on the restored database.
+starting Spark on the restored database.
 
 A database URL given on the command line (`--into`, `silo backup verify
 --scratch`) must not carry a password, an `sslpassword`, or inline key
@@ -2205,7 +2205,7 @@ kept, because they pick the server, which stays the same.
 ### Swap mode: never destroy first
 
 `silo backup restore --from <dir>` replaces the live database and restores
-blobs into the live stores. Before running it the operator stops Silo on
+blobs into the live stores. Before running it the operator stops Spark on
 every server and turns off automatic restarts (Compose `restart`, Kubernetes
 replicas set to 0), so nothing can write blobs. The command cannot prove that,
 so it refuses while any other client is connected to the live database and
@@ -2274,10 +2274,10 @@ database, so neither preflight would see the other.
    coordination state from before the restore. A deployment without Redis
    skips this. The restore has finished by now, so a Redis that cannot be
    reached or cleared does not fail it: the command warns and prints the
-   `redis-cli -n <db> FLUSHDB` to run before starting Silo. When the
+   `redis-cli -n <db> FLUSHDB` to run before starting Spark. When the
    restored settings cannot be read, it clears nothing, since the Redis the
    database named before the swap may not be the restored server's, and
-   warns the operator to clear the one Silo uses.
+   warns the operator to clear the one Spark uses.
 
 A failure in step 6, or before the second rename completes, rolls back with
 connections blocked throughout and the live database reopened last:

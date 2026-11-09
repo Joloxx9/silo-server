@@ -1,6 +1,6 @@
 # Playback session lifecycle
 
-How Silo decides when a playback session starts, pauses, resumes and ends, across API
+How Spark decides when a playback session starts, pauses, resumes and ends, across API
 servers, and what the admin sessions channel and history promise a monitor. The wire
 contract is in [realtime-api.md](../realtime-api.md#playback-session-lifecycle-events).
 Commands assume the repository root is the cwd.

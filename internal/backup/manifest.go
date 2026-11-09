@@ -317,10 +317,10 @@ func ParseManifest(data []byte) (*Manifest, error) {
 		return nil, fmt.Errorf("manifest: %w", err)
 	}
 	if m.Format != manifestFormat {
-		return nil, fmt.Errorf("manifest: format %q is not a Silo backup", m.Format)
+		return nil, fmt.Errorf("manifest: format %q is not a Spark backup", m.Format)
 	}
 	if m.Version < 1 || m.Version > manifestVersion {
-		return nil, fmt.Errorf("manifest: version %d is from a newer Silo; upgrade this server first", m.Version)
+		return nil, fmt.Errorf("manifest: version %d is from a newer Spark; upgrade this server first", m.Version)
 	}
 	if err := m.validate(); err != nil {
 		return nil, fmt.Errorf("manifest: %w", err)

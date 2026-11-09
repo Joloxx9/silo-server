@@ -1,6 +1,6 @@
 # apibench — hot-path performance harness
 
-Drives the named API hot paths against a running Silo server and writes a JSON
+Drives the named API hot paths against a running Spark server and writes a JSON
 report. It measures; it does not judge. Budgets and material-regression
 thresholds are maintainer execution input (plan input 6) and are applied by
 whoever compares two reports.

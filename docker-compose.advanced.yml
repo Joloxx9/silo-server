@@ -1,13 +1,13 @@
-# Silo, PostgreSQL, Redis, and optionally Meilisearch, each in a container of
-# its own: the layout docker-compose.yml ran before Silo moved to one
+# Spark, PostgreSQL, Redis, and optionally Meilisearch, each in a container of
+# its own: the layout docker-compose.yml ran before Spark moved to one
 # container, for installs that run or tune those services separately. An
 # install of that layout keeps running on it when its .env selects this file
 # (named docker-compose.split.yml in earlier builds):
 #
 #   COMPOSE_FILE=docker-compose.advanced.yml
 #
-# Silo's Docker image bundles PostgreSQL and Redis, and leaves both off here
-# because DATABASE_URL and REDIS_URL name the services below. It runs Silo as
+# Spark's Docker image bundles PostgreSQL and Redis, and leaves both off here
+# because DATABASE_URL and REDIS_URL name the services below. It runs Spark as
 # PUID:PGID rather than root, so that account needs read access to MEDIA_ROOT,
 # and it takes ownership of the plugins, artwork, compat, transcode, and
 # download directories on start.
@@ -73,17 +73,17 @@ services:
       - ${SILO_DATA_ROOT:-/opt/silo}/meilisearch:/meili_data
 
   silo:
-    image: ${SILO_IMAGE:-ghcr.io/silo-server/silo-server:latest}
+    image: ${SILO_IMAGE:-ghcr.io/joloxx9/spark-server:latest}
     restart: unless-stopped
-    # On stop Silo fails readiness, keeps serving for SILO_SHUTDOWN_DELAY
+    # On stop Spark fails readiness, keeps serving for SILO_SHUTDOWN_DELAY
     # (default 5s), then finishes in-flight requests. Docker kills a container
     # 10s after asking it to stop, which would cut that short. A single server
     # with no load balancer in front can set SILO_SHUTDOWN_DELAY=0.
     stop_grace_period: 2m
-    # NET_ADMIN lets Silo use kernel BBR congestion control on its client
+    # NET_ADMIN lets Spark use kernel BBR congestion control on its client
     # connections and force a larger TCP send buffer for remote clients on
     # long, fast links. A small startup helper holds it until the listeners are
-    # configured, then exits; Silo and its child processes never keep it.
+    # configured, then exits; Spark and its child processes never keep it.
     # NET_ADMIN can change this container's interfaces, routes and firewall
     # rules; see docs/architecture/tcp-congestion.md. Undo: remove this line.
     # SILO_NET_TCP_CONGESTION=off and SILO_NET_TCP_SEND_BUFFER=off in .env turn
@@ -96,7 +96,7 @@ services:
       PORT: "8080"
       JF_PORT: "8096"
       ABS_PORT: "13378"
-      # The account that runs Silo and owns its directories. It needs read
+      # The account that runs Spark and owns its directories. It needs read
       # access to the media. To start without root instead, see
       # https://siloserver.org/docs/docker#run-silo-without-root
       PUID: ${PUID:-1000}
@@ -121,7 +121,7 @@ services:
       - ${SILO_DATA_ROOT:-/opt/silo}/compat:/var/lib/silo/compat
       - ${SILO_DATA_ROOT:-/opt/silo}/transcode:/tmp/silo-transcode
       # Prepared downloads. While "Prepared file directory" (download.artifact_dir)
-      # is blank, Silo keeps them beside the transcode directory rather than in
+      # is blank, Spark keeps them beside the transcode directory rather than in
       # it, so they need their own mount to survive image updates. This path
       # assumes the default playback.transcode_dir; with another one, mount the
       # silo-download-artifacts directory beside that instead. No storage budget
@@ -134,7 +134,7 @@ services:
       # sits on a cgroup this container cannot see. lxcfs rewrites them to the
       # LXC's limits, so mounting them makes CPU, load, and memory report this
       # container's share instead of the whole machine's. On bare metal or a VM
-      # they are the same files Silo reads anyway, so they do no harm. Silo uses
+      # they are the same files Spark reads anyway, so they do no harm. Spark uses
       # each one separately; removing one only reverts that reading. See
       # docs/architecture/observability.md#node-resource-sampling.
       - /proc/meminfo:/host/proc/meminfo:ro

@@ -2,7 +2,7 @@
 
 Every watch provider is a `watch_sync_provider.v1` plugin. Simkl and MDBList
 used to be compiled into the server. They now ship as first-party plugins
-(`silo.watchprovider.simkl`, `silo.watchprovider.mdblist`) from the Silo plugin
+(`silo.watchprovider.simkl`, `silo.watchprovider.mdblist`) from the Spark plugin
 repository. Trakt took the same path and was later retired (see
 [Retired providers](#retired-providers)). The host side of the contract lives in
 `internal/watchsync/plugin_provider*.go`, and the first-party rules described
@@ -32,7 +32,7 @@ protect this:
   `silo.watchprovider.simkl` gets a per-installation key. It never receives
   the tokens of existing Simkl connections. Replacing an installation records
   the new package's repository, and none for an upload, so a package from
-  elsewhere installed over a Silo one loses the key too.
+  elsewhere installed over a Spark one loses the key too.
 - **One installation holds a legacy key.** If two Silo-managed installations of
   the same plugin exist, for example after two API nodes auto-installed it at
   once, the older one registers and the other is skipped with a warning.
@@ -66,7 +66,7 @@ built-ins did for their app credentials.
 
 ## Retired providers
 
-Silo no longer supports Trakt. `RetiredPlugin` lists `silo.watchprovider.trakt`,
+Spark no longer supports Trakt. `RetiredPlugin` lists `silo.watchprovider.trakt`,
 and the host never registers an installation of it, from any repository, so a
 copy left installed cannot sync, scrobble, or claim a key. The `trakt` key is no
 longer a first-party key: no plugin can claim it, and no auto-install follows
@@ -136,7 +136,7 @@ existed before the feature, on for new ones.
 - `watch_provider_collection_links` maps each `(connection_id, collection_key)` to
   the collection that mirrors it. A list new on the provider gets a new manual
   collection named after it. A list gone from the provider is unlinked, and its
-  collection stays as an ordinary collection. A linked collection deleted in Silo
+  collection stays as an ordinary collection. A linked collection deleted in Spark
   is created again on the next sync while the list exists.
 - Each linked list runs through the favorites and watchlist pipeline with the list
   kind `collection:<collection_key>`, so its rows in `watch_provider_list_items`
@@ -146,7 +146,7 @@ existed before the feature, on for new ones.
   them off the provider instead of the import adding them back.
 - Adding or removing a collection item through the collections API sends the
   change to every linked provider list at once; the next sync retries a failure.
-- A collection made in Silo is not created on the provider.
+- A collection made in Spark is not created on the provider.
 - When the connection moves to another provider account, its links and their list
   rows are deleted; the collections stay.
 
@@ -244,14 +244,14 @@ ends the run and defers the connection until the provider's retry time. A run
 with a deadline (a manual sync) stops starting calls three minutes before it,
 and an export created after the run read local history waits for the next run
 rather than being retired as missing. The same `max_batch_size` also bounds
-every other `ApplyEvents` call and the page size Silo asks for in
+every other `ApplyEvents` call and the page size Spark asks for in
 `ListRemoteState`. A
 plugin must answer each play on its own. It reports `APPLIED` or `NO_CHANGE`
 only for a play the provider accepted, `REJECTED` for one the provider cannot
-take, and `RETRY` for one it cannot confirm. Silo records `APPLIED` as sent and
+take, and `RETRY` for one it cannot confirm. Spark records `APPLIED` as sent and
 never sends that play again.
 
-Mark unwatched keeps the plays in Silo's history, so Silo sends a provider no
+Mark unwatched keeps the plays in Spark's history, so Spark sends a provider no
 history removals: the server reports the `export_unwatched` capability as false
 whatever a plugin's descriptor declares, and the `export_unwatched_enabled`
 connection setting has no effect. A play stops being exported once a mark
@@ -292,7 +292,7 @@ a secret field that holds a JSON object or array.
 
 ## Upgrade path
 
-Plugin auto-update installs a first-party plugin from the Silo repository when
+Plugin auto-update installs a first-party plugin from the Spark repository when
 its key still has connections and the migration has not completed. It does so
 at startup and on every later update check, so a catalog that was unreachable at
 boot is retried. The migration completes when the plugin first registers under

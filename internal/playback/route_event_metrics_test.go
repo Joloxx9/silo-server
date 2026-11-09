@@ -30,12 +30,12 @@ func TestObserveStoredRouteEventCountsOnlyUsableFirstFrames(t *testing.T) {
 	android := firstFrameSampleCount(t, "android")
 	other := firstFrameSampleCount(t, "other")
 	for _, ignored := range []RouteEventRecordV3{
-		record(RouteEventPlanSelectedV3, "900", "Silo Android"),
-		record(RouteEventFirstFrameV3, "", "Silo Android"),
-		record(RouteEventFirstFrameV3, "soon", "Silo Android"),
-		record(RouteEventFirstFrameV3, "-5", "Silo Android"),
-		record(RouteEventFirstFrameV3, "NaN", "Silo Android"),
-		record(RouteEventFirstFrameV3, "600001", "Silo Android"),
+		record(RouteEventPlanSelectedV3, "900", "Spark Android"),
+		record(RouteEventFirstFrameV3, "", "Spark Android"),
+		record(RouteEventFirstFrameV3, "soon", "Spark Android"),
+		record(RouteEventFirstFrameV3, "-5", "Spark Android"),
+		record(RouteEventFirstFrameV3, "NaN", "Spark Android"),
+		record(RouteEventFirstFrameV3, "600001", "Spark Android"),
 	} {
 		ObserveStoredRouteEvent(ignored)
 	}
@@ -43,8 +43,8 @@ func TestObserveStoredRouteEventCountsOnlyUsableFirstFrames(t *testing.T) {
 		t.Fatalf("unusable events observed: %d samples", got-android)
 	}
 
-	ObserveStoredRouteEvent(record(RouteEventFirstFrameV3, "900", "Silo Android TV"))
-	ObserveStoredRouteEvent(record(RouteEventFirstFrameV3, "0", "Silo Android"))
+	ObserveStoredRouteEvent(record(RouteEventFirstFrameV3, "900", "Spark Android TV"))
+	ObserveStoredRouteEvent(record(RouteEventFirstFrameV3, "0", "Spark Android"))
 	ObserveStoredRouteEvent(record(RouteEventFirstFrameV3, "1200", "a private client name"))
 	if got := firstFrameSampleCount(t, "android"); got != android+2 {
 		t.Fatalf("android samples = %d, want 2", got-android)

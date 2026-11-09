@@ -62,7 +62,7 @@ func redisFlushCommand(rc config.RedisConfig) string {
 	if db, ok := rc.Database(); ok {
 		return fmt.Sprintf("redis-cli -n %d FLUSHDB", db)
 	}
-	return "FLUSHDB on the Redis database Silo uses"
+	return "FLUSHDB on the Redis database Spark uses"
 }
 
 // clearRedisAfterRestore runs plan after a replace finished. It runs FLUSHDB
@@ -75,7 +75,7 @@ func clearRedisAfterRestore(ctx context.Context, plan redisPlan, dial func(confi
 		_, _ = fmt.Fprintln(out, "Left Redis as it is (--keep-redis); it can still hold state cached from before the restore.")
 		return
 	case plan.readErr != nil:
-		_, _ = fmt.Fprintf(out, "Warning: could not read the restored server's Redis settings (%v), so no Redis was cleared. If Silo uses Redis, run FLUSHDB on its database before starting Silo (redis-cli -n <database> FLUSHDB), or give it an empty one.\n", plan.readErr)
+		_, _ = fmt.Fprintf(out, "Warning: could not read the restored server's Redis settings (%v), so no Redis was cleared. If Spark uses Redis, run FLUSHDB on its database before starting Spark (redis-cli -n <database> FLUSHDB), or give it an empty one.\n", plan.readErr)
 		return
 	case strings.TrimSpace(plan.config.URL) == "":
 		return
@@ -83,10 +83,10 @@ func clearRedisAfterRestore(ctx context.Context, plan redisPlan, dial func(confi
 	db, _ := plan.config.Database()
 	err := flushRedis(ctx, plan.config, dial)
 	if err != nil {
-		_, _ = fmt.Fprintf(out, "Warning: could not clear Redis database %d: %v. Clear it before starting Silo: %s\n", db, err, redisFlushCommand(plan.config))
+		_, _ = fmt.Fprintf(out, "Warning: could not clear Redis database %d: %v. Clear it before starting Spark: %s\n", db, err, redisFlushCommand(plan.config))
 		return
 	}
-	_, _ = fmt.Fprintf(out, "Cleared Redis database %d, so Silo serves nothing cached from before the restore.\n", db)
+	_, _ = fmt.Fprintf(out, "Cleared Redis database %d, so Spark serves nothing cached from before the restore.\n", db)
 }
 
 func flushRedis(ctx context.Context, rc config.RedisConfig, dial func(config.RedisConfig) (redisFlusher, error)) error {
@@ -103,4 +103,4 @@ func flushRedis(ctx context.Context, rc config.RedisConfig, dial func(config.Red
 // separateRestoreRedisNote is what a separate-mode restore prints: it
 // touches nothing live, and the Redis a server on the restored database will
 // use is not known here, so it clears none.
-const separateRestoreRedisNote = "Redis was not cleared: before starting Silo on the restored database, run FLUSHDB on the Redis database it will use, or give it an empty one."
+const separateRestoreRedisNote = "Redis was not cleared: before starting Spark on the restored database, run FLUSHDB on the Redis database it will use, or give it an empty one."

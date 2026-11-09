@@ -18,7 +18,7 @@ var (
 	}, []string{labelLocation, "reason"})
 	storageBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "silo_download_storage_bytes",
-		Help: "Prepared download bytes by location: in_use and cached from Silo's records, on_disk and untracked from the files. Set by the replica that last ran storage maintenance; read with max and check silo_download_storage_sample_timestamp_seconds.",
+		Help: "Prepared download bytes by location: in_use and cached from Spark's records, on_disk and untracked from the files. Set by the replica that last ran storage maintenance; read with max and check silo_download_storage_sample_timestamp_seconds.",
 	}, []string{labelLocation, "state"})
 	storageSampleAt = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "silo_download_storage_sample_timestamp_seconds",

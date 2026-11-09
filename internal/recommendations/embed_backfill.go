@@ -763,7 +763,7 @@ func checkStorableVector(vector []float32) error {
 	case n == 0:
 		return errors.New("embedding model returned an empty vector")
 	case n > CanonicalEmbeddingDimensions:
-		return fmt.Errorf("embedding model returns %d dimensions; Silo stores at most %d", n, CanonicalEmbeddingDimensions)
+		return fmt.Errorf("embedding model returns %d dimensions; Spark stores at most %d", n, CanonicalEmbeddingDimensions)
 	}
 	return nil
 }

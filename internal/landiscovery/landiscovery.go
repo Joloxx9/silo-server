@@ -145,7 +145,7 @@ func advertise(ctx context.Context, opts Options) error {
 	}
 	r.activate(svc)
 	r.announce(svc, r.servedInterfaces())
-	slog.InfoContext(ctx, "advertising Silo on the local network",
+	slog.InfoContext(ctx, "advertising Spark on the local network",
 		"service", ServiceType, "name", svc.instance, "host", svc.hostName(), "port", svc.port)
 
 	// RFC 6762 §8.3: announce at least twice, a second apart.

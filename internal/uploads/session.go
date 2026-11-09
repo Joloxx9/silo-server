@@ -535,7 +535,7 @@ func (m *Manager) openRoot() (*os.Root, error) {
 		return nil, fmt.Errorf("upload root %q: %w", m.rootDir, err)
 	}
 	if err := m.checkRoot(checked); err != nil {
-		return nil, fmt.Errorf("%w; remove it, or set TMPDIR to a directory only the Silo user can write", err)
+		return nil, fmt.Errorf("%w; remove it, or set TMPDIR to a directory only the Spark user can write", err)
 	}
 	root, err := os.OpenRoot(m.rootDir)
 	if err != nil {

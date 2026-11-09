@@ -15,7 +15,7 @@ import (
 const maxPAXRecord = 8 << 10
 
 // errTarShape refuses an archive entry the writer never makes.
-var errTarShape = errors.New("archive entry is not one a Silo backup holds")
+var errTarShape = errors.New("archive entry is not one a Spark backup holds")
 
 // tarGuard sits between an archive's bytes and tar.Reader and checks each
 // raw 512-byte header before tar.Reader sees it. tar.Reader expands

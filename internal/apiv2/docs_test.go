@@ -12,7 +12,7 @@ func TestAPIDocsAssets(t *testing.T) {
 	for _, tc := range []struct {
 		path, mediaType, contains string
 	}{
-		{"/api/v2/docs", "text/html", "<title>Silo API documentation</title>"},
+		{"/api/v2/docs", "text/html", "<title>Spark API documentation</title>"},
 		{"/api/v2/docs/init.js", "text/javascript", "openapi.json"},
 		{"/api/v2/docs/swagger-ui-bundle.js", "text/javascript", "SwaggerUIBundle"},
 		{"/api/v2/docs/swagger-ui.css", "text/css", ".swagger-ui"},

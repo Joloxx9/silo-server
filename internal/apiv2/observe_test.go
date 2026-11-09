@@ -55,7 +55,7 @@ func TestRequestLabelsAreStable(t *testing.T) {
 	// A public success by a named client.
 	before := counterValue(t, requestsTotal, prometheus.Labels{"api_major": "2", "operation_id": "getSystemInfo", "method": "GET",
 		"status_class": "2xx", "error_code": "none", "auth_class": "public", "client": "apple"})
-	rec := do(t, h, http.MethodGet, "/api/v2/system/info", "", map[string]string{"X-Silo-Client": " Silo Apple TV\t", "X-Silo-Client-Version": "1.2.3"})
+	rec := do(t, h, http.MethodGet, "/api/v2/system/info", "", map[string]string{"X-Silo-Client": " Spark Apple TV\t", "X-Silo-Client-Version": "1.2.3"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
@@ -66,7 +66,7 @@ func TestRequestLabelsAreStable(t *testing.T) {
 	}
 	line := buf.String()
 	for _, want := range []string{`"component":"apiv2"`, `"api_major":2`, `"operation_id":"getSystemInfo"`, `"status_class":"2xx"`,
-		`"error_code":"none"`, `"auth_class":"public"`, `"client_name":"Silo Apple TV"`, `"client_version":"1.2.3"`,
+		`"error_code":"none"`, `"auth_class":"public"`, `"client_name":"Spark Apple TV"`, `"client_version":"1.2.3"`,
 		`"path_pattern":"/api/v2/system/info"`, `"request_id":"` + requestIDHeader(rec) + `"`} {
 		if !strings.Contains(line, want) {
 			t.Errorf("log line lacks %s: %s", want, line)

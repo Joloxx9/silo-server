@@ -1,6 +1,6 @@
 # Admin API
 
-> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Silo
+> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Spark
 > 1.0. The frozen alpha `/api/v1` admin routes are summarized in
 > [Bridge note](#bridge-note) and are retired after the pre-1.0 bridge window. See
 > [the native API contract](architecture/api-contract.md).
@@ -356,7 +356,7 @@ fetch.
 
 ### Proxy origins by access path
 
-A request reaches Silo on an *access path*: the default path (LAN, `public_url`,
+A request reaches Spark on an *access path*: the default path (LAN, `public_url`,
 a reverse proxy) or the overlay of a network access provider plugin, which
 stamps the requests it forwards with a per-process ingress token. Stream and
 download URLs that name a proxy node are built for the path the request came
@@ -533,7 +533,7 @@ Each entry in `last_stats.gpu`:
 |---|---|---|
 | `device` | string | The render node path (`/dev/dri/renderD128`), or `cuda:N` for an NVIDIA GPU with no readable DRM node. |
 | `vendor` | string | `intel`, `nvidia` or `amd`. Omitted when sysfs names a vendor we do not recognize. |
-| `sessions` | int | GPU workloads this node currently has pinned to the device. It comes from the playback device balancer, so it is exact for Silo's own work and blind to any other tenant's. With no `playback.hw_device` configured the workload is counted against the render device the transcode will actually open — the one auto-detection verified the backend on, or the first available render node when the backend was named explicitly and no detection walk ran. It goes uncounted only on a host with no render device at all. |
+| `sessions` | int | GPU workloads this node currently has pinned to the device. It comes from the playback device balancer, so it is exact for Spark's own work and blind to any other tenant's. With no `playback.hw_device` configured the workload is counted against the render device the transcode will actually open — the one auto-detection verified the backend on, or the first available render node when the backend was named explicitly and no detection walk ran. It goes uncounted only on a host with no render device at all. |
 | `video_busy_pct`, `render_busy_pct` | int | Engine busy percentages over the sampling interval. |
 | `total_busy_pct` | int | Whole-GPU utilization *including other tenants*. |
 | `vram_used_mb`, `vram_total_mb` | int | GPU memory. |
@@ -549,7 +549,7 @@ device's.
 
 `source` is what tells an operator how far to trust the busy percentages that
 are present. `fdinfo` is the unprivileged DRM baseline and covers **only this
-node's own ffmpeg children** — a GPU shared with anything outside Silo reads as
+node's own ffmpeg children** — a GPU shared with anything outside Spark reads as
 less busy than it is. `nvidia-smi` is whole-GPU. `unavailable` means nothing
 could measure the device this interval, so it carries no percentages at all.
 
@@ -904,7 +904,7 @@ The additive `attribution` object contains:
 | `instance_id` | Random identifier for this sampler lifetime; identifies which process answered through a load balancer without exposing a hostname. |
 | `sample_interval_seconds`, `sample_duration_seconds` | Sampling cadence and duration of the last completed pass. |
 | `cpu`, `memory`, `load`, `network` | Scope, source and availability of each corresponding `system` reading. Scopes include `host`, `virtualized_host`, `cgroup`, and `network_namespace`. |
-| `process` | Silo process RSS, virtual memory, CPU seconds, threads, open FD count/limit, last-GC live Go heap, runtime memory reservation and goroutine count. Linux storage I/O byte counters include waited-for children. Unreadable values are omitted. |
+| `process` | Spark process RSS, virtual memory, CPU seconds, threads, open FD count/limit, last-GC live Go heap, runtime memory reservation and goroutine count. Linux storage I/O byte counters include waited-for children. Unreadable values are omitted. |
 | `cgroup_cpu` | Usage, capacity in cores, throttling, bandwidth periods and CPU pressure at the selected visible cgroup level. A tighter cpuset can set the reported capacity. |
 | `cgroup_memory` | Raw charge, concrete limit, working set, swap, limit/OOM events and memory pressure. Usage and limit are read from the same visible level. |
 | `children` | Bounded snapshot of live owned FFmpeg children. Reports partial/unavailable and truncated sampling explicitly. CPU totals can decrease when children exit; RSS can count shared pages more than once. |
@@ -1439,8 +1439,8 @@ for 5 minutes — a seven-day ranking barely moves within minutes — with the s
 playback stop writes a row, completed only past the watched threshold, so a
 title watched in several sittings is one play and a title abandoned partway is
 none; the time spent in those sittings still counts toward `total_seconds`.
-Playback from Silo and Jellyfin clients both writes `playback` rows. Marking something watched is
-not a play: `manual` rows from Silo clients and `jellycompat` rows from
+Playback from Spark and Jellyfin clients both writes `playback` rows. Marking something watched is
+not a play: `manual` rows from Spark clients and `jellycompat` rows from
 Jellyfin clients are all marks, and marking a series writes one row per
 episode, so both are excluded. Episodes are rolled up to their series, so a
 season binge reads as one show and a title's `media_item_id` is a series
@@ -1755,7 +1755,7 @@ cutoff is fixed at admission and stored with the run, so a run that waits in the
 queue still reads its window, and a bulk start gives every run one cutoff.
 Resume positions and favorites are still read in full. A lookback never removes
 or un-marks anything: items outside the window are left as they are. Because
-favorites are read in full, an item un-favorited in Silo but still a favorite in
+favorites are read in full, an item un-favorited in Spark but still a favorite in
 Jellyfin is favorited again by every run, as a full import already does;
 scheduled lookback runs make that more noticeable. If Jellyfin does not return
 plays newest first, the run reads the full played history instead and records a
@@ -2268,7 +2268,7 @@ first and then transcode nodes by name, plus the settings that govern them
 carries its `key` (`server` or `node:<id>`), `name`, `online`, `dir` (for a node,
 the directory it was last listed in, which is the one it uses), `dir_source` (where
 the configured directory comes from), `pending_dir` (a node's configured directory
-when it differs from `dir`; the node moves there when it restarts), the latest on-disk `usage` (absent until one is reported), what Silo's
+when it differs from `dir`; the node moves there when it restarts), the latest on-disk `usage` (absent until one is reported), what Spark's
 records say is `in_use` and `cached` (files and bytes), `waiting_downloads`,
 `stale_waiting_bytes` (in-use bytes kept only for devices not seen within
 `stale_device_days`), `untracked_files` and `untracked_bytes` from the last
@@ -2297,7 +2297,7 @@ reported as untracked). Devices that finished keep their copies. A file a downlo
 one location now and returns `freed_bytes`; `0` when nothing was due or another
 replica was already cleaning up. An unknown location is `404`.
 `POST /api/v2/admin/downloads/storage/locations/{location}/untracked/delete` lists
-the directory again and deletes files named like Silo's prepared files that no
+the directory again and deletes files named like Spark's prepared files that no
 prepared-file record accounts for and that nothing has written to for an hour,
 returning `files` and `bytes` deleted and `failed_files` it could not delete (they stay
 untracked); other files in the directory are never touched. It

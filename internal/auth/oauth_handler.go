@@ -502,7 +502,7 @@ func (h *OAuthHandler) consumeLinkTicket(ctx context.Context, value string, inst
 // written or the browser is bounced.
 func (h *OAuthHandler) checkStart(ctx context.Context, req OAuthStartRequest) error {
 	if h.currentHostBaseURL() == "" {
-		return &OAuthHandshakeError{Status: http.StatusConflict, Message: "Silo public URL is not configured"}
+		return &OAuthHandshakeError{Status: http.StatusConflict, Message: "Spark public URL is not configured"}
 	}
 	if req.LinkTicket != "" && !req.Native {
 		return &OAuthHandshakeError{Status: http.StatusBadRequest, Message: "link_ticket is accepted by the native start only; web linking starts with startAccountIdentityLink"}

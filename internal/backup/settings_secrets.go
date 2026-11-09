@@ -98,7 +98,7 @@ func rotateSigningSecrets(ctx context.Context, loader DatabaseLoader, dbURL stri
 	if wrote {
 		_, _ = fmt.Fprintf(out, "Replaced the backup's signing keys (%s) with new ones.\n", keys)
 	} else {
-		_, _ = fmt.Fprintf(out, "Cleared the backup's signing keys (%s); Silo generates new ones when it starts.\n", keys)
+		_, _ = fmt.Fprintf(out, "Cleared the backup's signing keys (%s); Spark generates new ones when it starts.\n", keys)
 	}
 	return nil
 }

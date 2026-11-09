@@ -219,7 +219,7 @@ func (i *CatalogSearchIndexer) SyncOutbox(ctx context.Context, progress SearchIn
 			stats.Skipped = true
 			stats.Reason = "saved search settings are waiting for a server restart"
 			setSearchIndexTaskResult(progress, stats)
-			reportSearchIndexProgress(progress, 100, "Restart Silo before rebuilding the catalog search index")
+			reportSearchIndexProgress(progress, 100, "Restart Spark before rebuilding the catalog search index")
 			return stats, nil
 		}
 		stats.RebuildAttempted = true
@@ -399,7 +399,7 @@ func (i *CatalogSearchIndexer) Rebuild(ctx context.Context, progress SearchIndex
 		stats.Skipped = true
 		stats.Reason = "saved search settings are waiting for a server restart"
 		setSearchIndexTaskResult(progress, stats)
-		reportSearchIndexProgress(progress, 100, "Restart Silo before rebuilding the catalog search index")
+		reportSearchIndexProgress(progress, 100, "Restart Spark before rebuilding the catalog search index")
 		return stats, nil
 	}
 

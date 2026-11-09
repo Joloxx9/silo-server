@@ -18,7 +18,7 @@ var errBackendClosed = errors.New("librarymonitor: backend closed")
 // while its walk ran (the root was lost, or recording a directory created
 // under it failed). Reporting success would claim coverage the backend no
 // longer holds.
-var errRootReleased = errors.New("the folder was released while Silo recorded it; Silo retries")
+var errRootReleased = errors.New("the folder was released while Spark recorded it; Spark retries")
 
 // BackendInotify is the backend name reported in the status.
 const BackendInotify = "inotify"

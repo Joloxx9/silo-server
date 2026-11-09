@@ -120,7 +120,7 @@ func verify(r *http.Request, secret string, now time.Time) error {
 			return ErrUnauthorized
 		}
 		if suppressed, ok := legacyBearerLog.allow(); ok {
-			slog.WarnContext(r.Context(), "accepted a legacy bearer credential from an older Silo API server or proxy; upgrade it, because the next release accepts only signed requests",
+			slog.WarnContext(r.Context(), "accepted a legacy bearer credential from an older Spark API server or proxy; upgrade it, because the next release accepts only signed requests",
 				"component", "nodeauth", "remote_addr", r.RemoteAddr, "suppressed", suppressed)
 		}
 		return nil

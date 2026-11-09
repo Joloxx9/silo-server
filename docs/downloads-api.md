@@ -1,6 +1,6 @@
 # Downloads & Offline Sync API (client integration guide)
 
-> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Silo
+> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Spark
 > 1.0. The frozen alpha `/api/v1` surface is summarized in
 > [section 16](#16-bridge-the-frozen-apiv1-surface) and is retired after the pre-1.0 bridge
 > window. See [the native API contract](architecture/api-contract.md).

@@ -1,9 +1,9 @@
-# Contributing to Silo
+# Contributing to Spark
 
 > [!IMPORTANT]
-> The most helpful way to contribute to Silo right now is a clear, accurate
-> issue. Pull requests are welcome from contributors who've had one merged in a
-> Silo repository, or when a maintainer asks for one. We close other pull
+> The most helpful way to contribute to Spark is a clear, accurate issue.
+> Pull requests are welcome from contributors who've had one merged in a
+> Spark repository, or when a maintainer asks for one. We close other pull
 > requests without review.
 
 ## Why we're asking for issues
@@ -15,25 +15,25 @@ the change ourselves from a precise issue takes less time, and it keeps every
 change on one workflow with the same tests and the same review.
 
 This is about review capacity, not the quality of anyone's work, and it applies
-whether or not you used AI. We'll revisit it as Silo approaches 1.0. Thank you
+whether or not you used AI. We'll revisit this as Spark's release matures. Thank you
 for taking the time to write things up well.
 
 ## Write a useful issue
 
-Use the [GitHub issue forms](https://github.com/Silo-Server/silo-server/issues/new/choose).
+Use the [Spark GitHub issue forms](https://github.com/Joloxx9/spark-server/issues/new/choose).
 Problems that only affect a native client belong in
 [`silo-apple`](https://github.com/Silo-Server/silo-apple) or
 [`silo-android`](https://github.com/Silo-Server/silo-android). Search first; if
 an issue already covers the problem, add what's new there.
 
 Using Claude Code or Codex? The
-[Silo troubleshooting skill](https://github.com/Silo-Server/silo-troubleshooting-skill)
+[upstream Silo troubleshooting skill](https://github.com/Silo-Server/silo-troubleshooting-skill)
 helps you collect these details and drafts the issue, then has independent
 reviewers check it against your evidence before you post it.
 
 - One problem or proposal per issue.
 - Describe what you observed before any theory about the cause.
-- Give exact steps to reproduce, expected and actual behavior, the Silo version
+- Give exact steps to reproduce, expected and actual behavior, the Spark version
   or commit, your deployment, and the clients involved.
 - Paste raw logs rather than a summary. Redact credentials, tokens, personal
   data, and private media details, mark each redaction, and leave the rest
@@ -52,7 +52,7 @@ the repository's Security tab, not in a public issue.
 ## Pull requests
 
 Pull requests are welcome from contributors who've had a pull request merged in
-a Silo repository, and from anyone a maintainer has asked for one, usually in
+a Spark repository, and from anyone a maintainer has asked for one, usually in
 an issue comment. The rest of this guide applies to those pull requests.
 
 We close other pull requests without review. That isn't a judgment of the
@@ -66,7 +66,7 @@ pull request; we may use the code as a reference.
 > pull request itself: what breaks or is missing, who it affects, and why this
 > change is the right answer. Link an issue when one already covers the work.
 
-Silo is pre-1.0 and moves quickly. For features, API or behavior changes, schema
+Spark is a pre-release fork of Silo and moves quickly. For features, API or behavior changes, schema
 migrations, large refactors, or anything else that changes product scope, opening
 an issue or discussion first is still the cheapest way to learn that the work is
 already in flight or outside scope. That is a judgment call, not a gate; the risk
@@ -83,8 +83,8 @@ in the repository.
 
 Documentation in this repository is for people and coding agents changing the
 code: architecture, invariants, API contracts, and development setup. Guides
-for installing, configuring, operating, or troubleshooting Silo belong in the
-[user manual](https://siloserver.org/docs), which lives in
+for installing, configuring, operating, or troubleshooting Spark belong in the
+upstream [Silo user manual](https://siloserver.org/docs), which lives in
 [Silo-Server/siloserver.org](https://github.com/Silo-Server/siloserver.org).
 This repository does not accept operator or user guides; open those pull
 requests against the website repository instead.
@@ -331,46 +331,17 @@ checks that were skipped or failed, and include short output excerpts only when
 they help explain a failure. Describe the test environment without identifying
 private infrastructure. Never claim a check passed or ran on a target it did not.
 
-## Update the user manual
+## User documentation
 
-The user manual and feature pages on [siloserver.org](https://siloserver.org)
-live in a separate repository,
-[Silo-Server/siloserver.org](https://github.com/Silo-Server/siloserver.org),
-and nothing updates them automatically. To write or fix a guide, open a pull
-request there. When a code change here leaves the site wrong or incomplete,
-open an issue there.
-
-A change needs a docs issue when it:
-
-- adds, renames, or removes a setting, menu item, or screen, or changes a
-  default;
-- changes what a feature does or supports, or how to set it up, including
-  installation, Docker, environment variables, storage, and plugins;
-- makes anything else on the site inaccurate, such as a feature description.
-
-Fixes that make Silo behave the way the manual already says, internal
-refactors, and changes users cannot see do not need one. If you are unsure,
-search the site for the feature.
-
-Open the issue when the pull request is ready for review, or as soon as you
-notice that an already merged change needs one. Reference the pull request as
-`Silo-Server/silo-server#NNN` so GitHub links the two, and say that the site
-update waits for it to merge. In the issue:
-
-- say what changed for users;
-- list the pages to update and what each now gets wrong, with labels and
-  defaults copied from the app source;
-- note what is out of scope, such as apps that need no change.
-
-[#29](https://github.com/Silo-Server/siloserver.org/issues/29) and
-[#30](https://github.com/Silo-Server/siloserver.org/issues/30) are examples.
-If an open issue already covers the same pages, comment on it instead. Update
-the issue when review changes the behavior, and close it if the pull request
-closes without merging.
+The [Silo user manual](https://siloserver.org/docs) documents upstream Silo and
+may not match Spark. Do not submit Spark-specific behavior changes to the
+upstream manual repository. Keep this repository's documentation focused on
+code, contracts, and development; user and operator guides belong on a future
+Spark documentation site.
 
 ## AI-assisted contributions
 
-AI-assisted work is welcome; most of Silo was written with AI assistance.
+AI-assisted work is welcome when it follows the review and evidence standards below.
 Whoever submits the work is responsible for understanding it, testing it, and
 explaining it; that applies to maintainers and external contributors alike.
 
@@ -383,7 +354,7 @@ template or issue form.
 
 Use a [Conventional Commit](https://www.conventionalcommits.org/) title and fill
 in the pull request template. For each issue the change fully resolves, add a
-`Closes #NNN` line (`Closes Silo-Server/<repo>#NNN` for another repository) so
+`Closes #NNN` line (`Closes <owner>/<repo>#NNN` for another repository) so
 GitHub closes the issue when the pull request merges into `main`; the
 `Related issue:` line alone does not close anything. Name an epic, scope item,
 or partly addressed issue on `Related issue:`, and write `Related issue: N/A`
@@ -397,7 +368,7 @@ describes.
 
 ### Write the description
 
-Write for a maintainer who knows Silo but has not seen your working session or
+Write for a maintainer who knows Spark but has not seen your working session or
 the diff. The first paragraph should tell them what is broken and what this
 change does; the rest should help them decide how closely to review.
 
@@ -457,27 +428,8 @@ one of two places:
   excerpts in a code block, under the pull request's Evidence heading.
   Everything on GitHub is public, so crop or blur hostnames, URLs, account
   names, and personal library contents.
-- **On [evidence.siloserver.org](https://evidence.siloserver.org/) (optional):**
-  only you and Silo maintainers can open what you publish there, after signing
-  in with GitHub, so captures need no cropping or blurring. Captions that start
-  with `Before:` and `After:` become a side-by-side comparison, and recordings
-  get a player. Upload from the Details link of the pull request's `Evidence`
-  check, or with the command line (Node.js 22 or later):
-  `npx @silo-server/evidence login` once on each computer, then
-  `npx @silo-server/evidence publish <folder> --pr <number>`. The
-  [package README](https://www.npmjs.com/package/@silo-server/evidence) describes
-  the folder. Then write
-  `Evidence: https://evidence.siloserver.org/r/silo-server/pr-<number>/` under
-  the Evidence heading. Until a pull request of yours has merged here, a
-  maintainer approves you once before your first upload.
-
-The pull request's `Evidence` check passes once evidence is published or
-attached. It asks for evidence when the change touches the web app, the native
-API, or jellycompat, or when a maintainer adds the `evidence-required` label; a
-maintainer adds `evidence-not-needed` when nothing visible changed. Changes
-users cannot see write `Evidence: none, no user-visible change`. If you could
-not capture evidence, say why; the reviewer decides whether the pull request
-can merge without it.
+Attach captures directly to the pull request. Changes users cannot see write
+`Evidence: none, no user-visible change`.
 
 ## Review expectations
 
@@ -488,7 +440,7 @@ building.
 
 ## Licensing of contributions
 
-Silo Server is licensed under `AGPL-3.0-or-later` with the platform library
+Spark is licensed under `AGPL-3.0-or-later` with the platform library
 additional permission in [PLATFORM-EXCEPTION.md](PLATFORM-EXCEPTION.md).
 
 By submitting a contribution, you agree that it is licensed under those

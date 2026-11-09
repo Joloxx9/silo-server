@@ -94,7 +94,7 @@ func externalSignInFixtureCases() []fixtureCase {
 			body:   `{"code":"` + fixtureLinkCode + `","code_verifier":"wrong-verifier-wrong-verifier-wrong-verifier-x"}`,
 			status: http.StatusBadRequest, assertHeaders: json, schema: problem},
 		{name: "get_provider_logout_ok", operationID: "getProviderLogout",
-			scenario: "The web client asks for the provider sign-out URL before it ends the Silo session.",
+			scenario: "The web client asks for the provider sign-out URL before it ends the Spark session.",
 			method:   http.MethodGet, path: "/api/v2/auth/provider-logout", headers: bearer(memberToken),
 			status: http.StatusOK, assertHeaders: json, schema: schema("ProviderLogout")},
 		{name: "refresh_session_provider_unavailable", operationID: "refreshSession",

@@ -221,7 +221,7 @@ func checkAIChatConnectionWithToken(ctx context.Context, cfg *config.Config, con
 	defer cancel()
 	if _, err := client.Chat(checkCtx, []llm.Message{
 		{Role: "system", Content: "Return a JSON object with status set to ok."},
-		{Role: "user", Content: "Check this Silo text translation connection."},
+		{Role: "user", Content: "Check this Spark text translation connection."},
 	}, true); err != nil {
 		return connectionCheckResponse{
 			Success:     false,
@@ -579,7 +579,7 @@ func checkRedisConnection(ctx context.Context, cfg *config.Config) connectionChe
 
 // errRedisChannelsRefused wraps the error Redis answers a subscription to the
 // event bus channels with.
-var errRedisChannelsRefused = errors.New("redis refused a subscription to Silo's event channels")
+var errRedisChannelsRefused = errors.New("redis refused a subscription to Spark's event channels")
 
 // errRedisURLUnreadable wraps the error a redis.url the Redis clients cannot
 // read gives, such as a bare host:port an older build saved.
@@ -660,7 +660,7 @@ func checkRecommendationsEmbeddingConnection(
 	}
 	dimensions := len(vectors[0])
 	if dimensions > embeddingvectors.CanonicalDimensions {
-		return failed(fmt.Sprintf("The model returns %d dimensions; Silo stores at most %d.", dimensions, embeddingvectors.CanonicalDimensions))
+		return failed(fmt.Sprintf("The model returns %d dimensions; Spark stores at most %d.", dimensions, embeddingvectors.CanonicalDimensions))
 	}
 	lock, err := recommendations.ParseEmbeddingLock(rawLock)
 	if err != nil {

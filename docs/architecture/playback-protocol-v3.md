@@ -1,6 +1,6 @@
 # Playback protocol v3
 
-The wire contract between a Silo client and a Silo server for deciding *how* a
+The wire contract between a Spark client and a Spark server for deciding *how* a
 piece of media will play, and for recovering when that decision turns out to be
 wrong on the device in front of the user.
 
@@ -12,7 +12,7 @@ wrong on the device in front of the user.
 > bug in one of them — file it.
 
 This is written to be sufficient on its own. A third-party client should be able
-to implement playback against a Silo server from this document plus the schemas,
+to implement playback against a Spark server from this document plus the schemas,
 without reading any client repository and without reading the server source.
 
 Paths are repository-relative; assume the repository root is the cwd.
@@ -695,13 +695,13 @@ and active-output HDR are separate facts — browsers tone-map HDR content onto 
 outputs, and Safari 26 reports `dynamic-range: standard` even on an XDR display —
 so the media query survives only as the best-effort `hdr` output boolean. Format
 claims come from exact shape probes matched to the bytes the remux delivers:
-HDR10 requires Media Capabilities support for Silo's progressive 2160p HEVC
+HDR10 requires Media Capabilities support for Spark's progressive 2160p HEVC
 Main10, Rec. 2020, PQ, SMPTE ST 2086 shape, probed under exactly the `hvc1`
 sample entry because the explicit v3 HDR10 strip remux labels its output `hvc1`
 (legacy and automatic strip paths retain FFmpeg's default `hev1`). Dolby Vision
 requires a definitive media-element answer for exactly `dvh1.05.06` or
 `dvh1.08.06`, because the preserve remux tags its output `dvh1`. An answer only
-for the other spelling (`hev1`/`dvhe`) is evidence for a file Silo never sends
+for the other spelling (`hev1`/`dvhe`) is evidence for a file Spark never sends
 and earns no claim. When native HLS is available, these media-element `dvh1` and
 `hvc1` claims are scoped to `hls`, and `progressive` does not inherit them. When
 native HLS is unavailable, they remain scoped to `progressive`; the hls.js MSE
@@ -1312,7 +1312,7 @@ Three scoping rules keep the stop from firing where it cannot help:
   stream from the device profile and the catalog version, never from the
   copy-safety verdict, so a stopped compat client reconnects onto the identical
   remux. The stop is only correct for clients whose recovery re-decides the
-  route, which for a Silo client means planning against the persisted verdict.
+  route, which for a Spark client means planning against the persisted verdict.
 
 That persisted verdict is read from the `media_files` row on every path that
 plans a route — start, replan, and the v2 resolver — not only from the probe

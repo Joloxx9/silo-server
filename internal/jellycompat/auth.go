@@ -39,7 +39,7 @@ const (
 	tokenRefreshTimeout = 30 * time.Second
 )
 
-// tokenRefresher exchanges a session's Silo refresh token for a new pair;
+// tokenRefresher exchanges a session's Spark refresh token for a new pair;
 // *auth.Service implements it.
 type tokenRefresher interface {
 	Refresh(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
@@ -49,7 +49,7 @@ type tokenRefresher interface {
 type Authenticator struct {
 	sessions *SessionStore
 	// refresher is nil when no auth service is configured; sessions then
-	// keep their Silo tokens unrefreshed.
+	// keep their Spark tokens unrefreshed.
 	refresher tokenRefresher
 	now       func() time.Time
 }
@@ -134,7 +134,7 @@ func (a *Authenticator) RequireSession(next http.Handler) http.Handler {
 			return
 		}
 
-		// Refresh underlying Silo tokens if they're about to expire.
+		// Refresh underlying Spark tokens if they're about to expire.
 		// Use a detached context so a client aborting the request mid-refresh
 		// (common on flaky mobile networks) doesn't revoke the compat session.
 		if a.refresher != nil && !session.StreamAppTokenExpiry.IsZero() &&

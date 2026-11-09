@@ -2,18 +2,18 @@
 
 A profile's movie and series ratings sync with a connected watch provider in either
 direction or both. Each connection has two settings: `import_ratings_enabled` brings
-provider ratings into Silo, and `export_ratings_enabled` sends Silo ratings to the
+provider ratings into Spark, and `export_ratings_enabled` sends Spark ratings to the
 provider and clears ones the profile removes. New connections start with both on;
 connections that existed before rating sync start with both off. A provider takes part
 only when it advertises the matching `import_ratings` or `export_ratings` capability.
-Season and episode ratings are not synced, because Silo rates only movies and series.
+Season and episode ratings are not synced, because Spark rates only movies and series.
 
 ## Scale
 
-Silo stores integer stars from 1 to 5. Providers and the plugin contract use integers
+Spark stores integer stars from 1 to 5. Providers and the plugin contract use integers
 from 1 to 10. Import rounds half up (`stars = (rating + 1) / 2`, so 7 and 8 are both
 4 stars) and export doubles (`rating = stars × 2`). Every sync decision compares stars,
-so a provider change within one star, such as 7 to 8, is not a change, and Silo never
+so a provider change within one star, such as 7 to 8, is not a change, and Spark never
 overwrites a provider's 7 with the 8 its 4 stars map to.
 
 ## Agreed rating
@@ -27,7 +27,7 @@ rating, the provider rating, and the agreed rating:
 - Only one side moved from the agreed rating: that side wins, including removals.
 - Both moved to different values: a rating beats a removal, so a conflict never
   deletes; otherwise the newer change wins, and ties or unknown provider times go to
-  Silo.
+  Spark.
 
 A decision the connection's direction settings do not allow is skipped without
 recording agreement, so it is reconsidered when the direction is turned on.
@@ -53,7 +53,7 @@ that outlives a re-bind cannot write for the old account. Agreed rows are writte
 share lock on the connection row, so a re-bind waits for them and then clears them.
 
 The row's `provider_item_key` is the provider's own key for the title once a read has
-returned one, and Silo's key (`imdb:`, `tmdb:`, or `tvdb:`) before that. Rating writes
+returned one, and Spark's key (`imdb:`, `tmdb:`, or `tvdb:`) before that. Rating writes
 carry the same key, so a provider can name the title in later tombstones and writes.
 
 ## Provider reads
@@ -75,11 +75,11 @@ An item missing from a read counts as removed on the provider only when all hold
 A missing item whose rating was sent but never seen is sent again instead of removed
 locally. A read row with no IMDb, TMDB, or TVDB id could be any title, so its kind is
 dropped from `SnapshotKinds`. A complete snapshot that returns nothing for a kind while
-Silo holds two or more confirmed ratings of that kind is treated as a failed read:
+Spark holds two or more confirmed ratings of that kind is treated as a failed read:
 removals for that kind are skipped and the run records a warning. Any other missing item
 keeps its agreed value.
 
-Silo reads the profile's ratings in one query, and a rated item the sync skips (no longer
+Spark reads the profile's ratings in one query, and a rated item the sync skips (no longer
 in the catalog, or without external ids) never counts as a local removal.
 
 ## Concurrency
@@ -127,7 +127,7 @@ row's kind is unknown, and the run records a warning.
 
 A provider that records a rated title as watched implements `RatingExportWatchGate`.
 A plugin declares the rule by listing the media types in `rating_export_requires_watched`;
-the Simkl plugin lists `MOVIE`. Silo then sends a new rating of that kind only once the
+the Simkl plugin lists `MOVIE`. Spark then sends a new rating of that kind only once the
 profile has a completed play of the title; until then the rating stays pending and each
 run records a warning. A title the provider already holds a rating for is not held back,
 and neither are removals. The check looks for a completed play of the rated item itself.

@@ -1,6 +1,6 @@
 # Server identity and connection discovery
 
-A phone and a TV can reach one Silo deployment through different addresses:
+A phone and a TV can reach one Spark deployment through different addresses:
 the configured public URL, a LAN address, or the overlay origin a network
 access provider exposes ([network-access.md](network-access.md)). Clients used
 to derive a server's identity from its URL, so two addresses looked like two

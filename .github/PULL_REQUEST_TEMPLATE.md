@@ -6,7 +6,7 @@ title and body before posting. -->
 
 Closes #NNN
 <!-- One "Closes #NNN" line per issue this change fully resolves, so GitHub closes it
-when the PR merges into main. Use "Closes Silo-Server/<repo>#NNN" for an issue in
+when the PR merges into main. Use "Closes <owner>/<repo>#NNN" for an issue in
 another repository. Delete the line when the PR only partly addresses an issue. -->
 Related issue: #NNN
 <!-- An epic, sub-issue, or partly addressed issue this work serves and that should
@@ -48,10 +48,7 @@ CONTRIBUTING.md. Use before-and-after screenshots of the same screen and data fo
 affected surface, and a short recording when motion, timing, or focus matters. For web
 app and web admin changes also visible at phone width, include desktop and mobile web
 captures (or show that mobile is unaffected). Crop or blur private details in
-anything attached here. To keep captures private instead, publish them to
-evidence.siloserver.org, where only you and Silo maintainers can open them, and
-replace the table with
-`Evidence: https://evidence.siloserver.org/r/silo-server/pr-<number>/`. When nothing
+anything attached here. When nothing
 visible changes, replace this section's content with "Evidence: none, no user-visible
 change". -->
 

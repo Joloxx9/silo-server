@@ -45,7 +45,7 @@ Existing installations retain their configured marker mode, which accepts `off`,
 
 Both paths honor provider selection, manual edits and deletions, and provider quota limits.
 
-When several providers return a marker of the same kind, Silo uses the
+When several providers return a marker of the same kind, Spark uses the
 provider whose best marker of that kind has the highest confidence, then the
 lower `fetch_priority`, then the higher submission count, then the provider ID,
 and keeps every range that provider returned for the kind. A marker without a

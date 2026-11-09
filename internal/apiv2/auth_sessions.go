@@ -26,7 +26,7 @@ import (
 // AuthProvider is one way to sign in.
 type AuthProvider struct {
 	ID                string `json:"id" doc:"Provider id; the value login takes as provider" example:"local"`
-	DisplayName       string `json:"display_name" doc:"Label for the sign-in button" example:"Silo account"`
+	DisplayName       string `json:"display_name" doc:"Label for the sign-in button" example:"Spark account"`
 	Mode              string `json:"mode" doc:"How the provider authenticates: credentials (login), oauth (the OAuth handshake) or network (signInWithNetworkIdentity: the provider's network says who owns the device; listed only to a request that arrived through that network). Clients ignore modes they do not know" example:"credentials"`
 	Default           bool   `json:"default" doc:"Whether this is the provider login uses when none is named" example:"true"`
 	IconURL           string `json:"icon_url,omitempty" format:"uri-reference" doc:"Icon shown next to the button; absent when the provider ships none" example:"https://plugins.example.test/icon.svg"`

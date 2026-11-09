@@ -32,7 +32,7 @@ const (
 )
 
 // ErrTooManyObjects refuses a listing beyond its cap.
-var ErrTooManyObjects = errors.New("the backup destination holds more objects there than Silo writes")
+var ErrTooManyObjects = errors.New("the backup destination holds more objects there than Spark writes")
 
 // skipFolder is the after that lists past every key under prefix+name+"/":
 // "0" sorts right after "/".

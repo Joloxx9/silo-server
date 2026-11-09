@@ -139,7 +139,7 @@ func TestNativeSessionsListLifecycleDB(t *testing.T) {
 	lifecycle(ended, LifecycleStopped, map[string]any{})
 	lifecycle(unheld, LifecyclePlaying, map[string]any{
 		"session_id": unheld, "user_id": account, "profile_id": "p-1", "media_file_id": file,
-		"play_method": "direct_play", "started_at": time.Now().UTC(), "client_name": "Silo Web",
+		"play_method": "direct_play", "started_at": time.Now().UTC(), "client_name": "Spark Web",
 	})
 	if _, err := pool.Exec(ctx, `INSERT INTO playback_v3_attempts
 		(playback_attempt_id, session_id, user_id, profile_id, requested_media_file_id, effective_media_file_id,
@@ -164,7 +164,7 @@ func TestNativeSessionsListLifecycleDB(t *testing.T) {
 	if _, ok := got[ended]; ok {
 		t.Error("a session the lifecycle says stopped is listed")
 	}
-	if row, ok := got[unheld]; !ok || row.PositionSeconds != 1234.5 || row.ClientName != "Silo Web" || row.ReportingNode != "" {
+	if row, ok := got[unheld]; !ok || row.PositionSeconds != 1234.5 || row.ClientName != "Spark Web" || row.ReportingNode != "" {
 		t.Errorf("unheld row = %+v (listed %v), want the start row at the attempt's position", row, ok)
 	}
 }

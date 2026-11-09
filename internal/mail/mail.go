@@ -12,7 +12,7 @@
 //	email.smtp_username  optional
 //	email.smtp_password  optional; encrypted at rest (SensitiveSettingKeys)
 //	email.from_address   required to enable
-//	email.from_name      default "Silo"
+//	email.from_name      default "Spark"
 package mail
 
 import (
@@ -192,7 +192,7 @@ func (s *SMTPSender) loadConfig(ctx context.Context) (*smtpConfig, error) {
 		return nil, fmt.Errorf("invalid email.smtp_security %q", cfg.security)
 	}
 	if cfg.fromName == "" {
-		cfg.fromName = "Silo"
+		cfg.fromName = "Spark"
 	}
 	return cfg, nil
 }

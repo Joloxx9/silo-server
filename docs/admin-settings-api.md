@@ -61,7 +61,7 @@ message asking for the final address. Checks without a key retain the HTTP
 client's ordinary redirect behavior. Because Meilisearch answers `/health`
 without a key, the check then lists one index, which needs the `indexes.get`
 action, and searches a nonexistent index under the configured index name,
-which needs the `search` action and an index scope covering Silo's indexes.
+which needs the `search` action and an index scope covering Spark's indexes.
 A key Meilisearch refuses for either request, or a missing one on a secured
 instance, fails with a message asking for another key. The check does not
 prove the key can write documents.
@@ -146,7 +146,7 @@ while `ai.auth_mode` is `api_key`. Its default, an empty string, omits OpenAI's
 requests Fast/Priority processing through Chat Completions; `ultrafast` uses
 API-key-authenticated Responses with storage disabled. Only completed text
 output is accepted; incomplete responses and refusals never replace source text.
-OpenAI decides whether the account and model support the requested tier. Silo
+OpenAI decides whether the account and model support the requested tier. Spark
 does not silently fall back after a provider rejection. Switching to another
 provider or a ChatGPT plan keeps the setting but omits it from requests. Speech
 and embedding requests do not use this setting.
@@ -273,10 +273,10 @@ retry, or blocked and expose its last durable progress. Error and progress
 messages are fixed summaries; raw storage errors, object keys, and locations
 remain in internal diagnostics. These fields clear when
 recovery completes; completed historical transitions do not reappear.
-If the committed staged setting cannot be read, decrypted, or decoded, Silo
+If the committed staged setting cannot be read, decrypted, or decoded, Spark
 continues booting and reports recovery as blocked. It does not rewrite the
 setting or accept another transition until the operator repairs it. A committed
-target identity mismatch remains fatal so Silo cannot serve from the wrong store.
+target identity mismatch remains fatal so Spark cannot serve from the wrong store.
 `POST /api/v2/admin/storage-transitions` (`createAdminStorageTransition`) queues
 a managed transition using `start_fresh`, `preserve_uploads`, or `migrate_all`.
 The operation accepts only storage settings, retains the old location, and

@@ -39,7 +39,7 @@ func TestDescriptorFromMetadataReadsDeclaredContract(t *testing.T) {
 			"connection":         "none",
 			"connection_kinds":   []any{"sonarr", "radarr"},
 			"emits_native_paths": true,
-			"summary":            "  Pushes to Silo.  ",
+			"summary":            "  Pushes to Spark.  ",
 			"icon_url":           "/assets/icon.svg",
 		},
 	})
@@ -53,7 +53,7 @@ func TestDescriptorFromMetadataReadsDeclaredContract(t *testing.T) {
 	if !got.EmitsNativePaths {
 		t.Error("emits_native_paths not read")
 	}
-	if got.Summary != "Pushes to Silo." {
+	if got.Summary != "Pushes to Spark." {
 		t.Errorf("summary = %q, want trimmed", got.Summary)
 	}
 	if len(got.ConnectionKinds) != 2 {

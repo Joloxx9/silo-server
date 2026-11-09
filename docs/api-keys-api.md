@@ -1,6 +1,6 @@
 # API Keys API
 
-> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Silo
+> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Spark
 > 1.0. The frozen alpha `/api/v1` key routes are summarized in
 > [Bridge note](#bridge-note) and are served through the pre-1.0 bridge window. See
 > [the native API contract](architecture/api-contract.md).

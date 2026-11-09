@@ -77,7 +77,7 @@ func TestAdminSettingsRefuseRedisSettingsTheServerCannotStartWith(t *testing.T) 
 			name:  "a host nothing answers on",
 			key:   "redis.url",
 			value: unreachable,
-			want:  "Silo could not connect to Redis",
+			want:  "Spark could not connect to Redis",
 		},
 		{
 			name:  "a database number in redis.url the server does not have",
@@ -86,10 +86,10 @@ func TestAdminSettingsRefuseRedisSettingsTheServerCannotStartWith(t *testing.T) 
 			want:  "Redis refused the connection",
 		},
 		{
-			name:  "a Redis user whose ACL does not grant Silo's channels",
+			name:  "a Redis user whose ACL does not grant Spark's channels",
 			key:   "redis.url",
 			value: aclDenied + "/2",
-			want:  "Redis refused a subscription to Silo's event channels",
+			want:  "Redis refused a subscription to Spark's event channels",
 		},
 		{
 			name:   "a redis.db the server does not have",
@@ -236,7 +236,7 @@ func TestAdminSettingsRefuseRedisSaveWhenTheConnectionMovedDuringTheCheck(t *tes
 			concurrent:              map[string]string{"redis.url": moved},
 		}
 		rec := saveRedisSetting(t, &AdminHandler{SettingsRepo: settings}, config.RedisDBSettingKey, "5", single)
-		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "changed while Silo was checking") {
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "changed while Spark was checking") {
 			t.Errorf("single=%v: status = %d, body = %s; want the save refused", single, rec.Code, rec.Body.String())
 		}
 		if got, stored := settings.values[config.RedisDBSettingKey]; stored {

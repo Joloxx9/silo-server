@@ -298,7 +298,7 @@ type AdminBackupRestoreSetInput struct {
 
 func registerAdminBackupRestore(reg *Registry, op func(method, path, id, summary string) Operation) {
 	preview := op(http.MethodGet, "/{id}/restore-set", "getAdminBackupRestoreSet",
-		"Read a backup's restore set and compare each section with this server: per-item status, the library mapping, per-setting differences with encrypted values masked, and the digest a restore request must carry. 409 when the backup has no restore set or is from a newer Silo, and 409 backup_unauthenticated, before anything inside the restore set is read, when this server cannot authenticate the backup's manifest and accept_unauthenticated is not set.")
+		"Read a backup's restore set and compare each section with this server: per-item status, the library mapping, per-setting differences with encrypted values masked, and the digest a restore request must carry. 409 when the backup has no restore set or is from a newer Spark, and 409 backup_unauthenticated, before anything inside the restore set is read, when this server cannot authenticate the backup's manifest and accept_unauthenticated is not set.")
 	preview.Errors = []int{http.StatusConflict}
 	Register(reg, preview, func(ctx context.Context, in *AdminBackupRestoreSetInput) (*AdminBackupRestoreSetOutput, error) {
 		svc, p := reg.backups()

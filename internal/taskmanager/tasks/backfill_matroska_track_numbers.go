@@ -48,7 +48,7 @@ func (t *BackfillMatroskaTrackNumbersTask) Name() string {
 	return "Record Matroska Subtitle Track Numbers"
 }
 func (t *BackfillMatroskaTrackNumbersTask) Description() string {
-	return "Reads the track list of MKV files with text subtitles scanned before Silo recorded subtitle track numbers, once per file, so apps can show embedded subtitles without server extraction."
+	return "Reads the track list of MKV files with text subtitles scanned before Spark recorded subtitle track numbers, once per file, so apps can show embedded subtitles without server extraction."
 }
 func (t *BackfillMatroskaTrackNumbersTask) Category() taskmanager.TaskCategory {
 	return taskmanager.TaskCategoryLibrary

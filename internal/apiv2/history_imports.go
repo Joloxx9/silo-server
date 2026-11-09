@@ -626,7 +626,7 @@ func historyImportProblem(err error) *Problem {
 	return serviceProblem(err)
 }
 
-const historyImportUnreachableMessage = "Couldn't reach the source server. Check that it's online and reachable from Silo, then try again."
+const historyImportUnreachableMessage = "Couldn't reach the source server. Check that it's online and reachable from Spark, then try again."
 
 // historyImportInputMessage returns the detail an ErrInvalidInput wraps as a
 // sentence: "invalid history import input: choose a server" becomes

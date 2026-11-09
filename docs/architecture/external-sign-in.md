@@ -1,8 +1,8 @@
 # External sign-in
 
-People can sign in with an account that lives outside Silo: an OIDC identity
+People can sign in with an account that lives outside Spark: an OIDC identity
 provider or an LDAP directory. An `auth_provider.v1` plugin talks to the
-provider and returns typed facts about the person; the host owns Silo accounts,
+provider and returns typed facts about the person; the host owns Spark accounts,
 identities, roles, sessions and the local-password policy. The host side lives
 in `internal/auth` (`account_resolution.go`, `identity_*.go`,
 `local_login_policy.go`, `provider_registry.go`, `provider_recheck.go`,
@@ -58,7 +58,7 @@ node create one account:
    installation. An email the provider asserts never hands it an admin: when
    an admin, the Owner or a break-glass account holds the email, creation
    below refuses with `email_in_use`, and an administrator links the account
-   explicitly. Silo does not verify account emails (registration, invitations
+   explicitly. Spark does not verify account emails (registration, invitations
    and profile edits store what was typed), so the account matched is whichever
    one registered or set that address first, and its holder may not be the
    person signing in. The link therefore ends every credential the provider
@@ -190,7 +190,7 @@ sign-in refused by the sign-in policy (`local_login_disabled`,
 directory password) answers 401 `InvalidUsernameOrPassword` with the reason
 as its message; a provider that cannot answer is 503 `ServiceUnavailable`.
 
-Every password Silo sends to the directory, from sign-in on any listener or
+Every password Spark sends to the directory, from sign-in on any listener or
 from linking, first spends the sign-in attempt budget of the name it was sent
 with ([Sign-in attempts per name](../auth-api.md#sign-in-attempts-per-name)).
 Guessing at a directory name therefore stops at that budget however many
@@ -300,7 +300,7 @@ step.
 - **Switch account.** A sign-in start may carry `prompt=select_account`,
   which the host passes to the plugin's `InitAuthorize` as the OIDC `prompt`
   so the provider lets the person choose another provider account. The web
-  "Not you? Switch account" path signs out of Silo only and then starts with
+  "Not you? Switch account" path signs out of Spark only and then starts with
   it. Any other `prompt` value is refused with 400; linking flows always ask
   for `prompt=login`.
 - **Registration URLs.** The administrator registers the callback,
@@ -500,7 +500,7 @@ flow: the same `identity_linked_elsewhere` and `already_linked` refusals, the
 provider's managed role, local password sign-in turned off unless the account
 is break-glass, and the `identity_linked` audit event. The plugin's denials
 keep their sign-in meaning, except that a disabled directory account is
-`account_disabled`, distinct from a disabled Silo account. The call spends
+`account_disabled`, distinct from a disabled Spark account. The call spends
 the login rate-limit budget. `getExternalSignInCapabilities` reports it as
 `credentials_linking`. An administrator can also link any identity by its
 subject (`createAdminUserIdentity`), and email auto-match links on sign-in.
@@ -526,7 +526,7 @@ the SDK's `NetworkIdentityAuth`.
   request is `network_identity_required`. The plugin answers like
   `Authenticate`: a stable subject for the person (Tailscale: control host
   and user ID), names, and `managed_role` when the overlay's policy sets the
-  Silo role, or a denial (an unknown or tagged device, one its policy leaves
+  Spark role, or a denial (an unknown or tagged device, one its policy leaves
   out).
 - **Sign-in** (`signInWithNetworkIdentity`,
   `POST /auth/network/{id}/sign-in`) runs the answer through the account
@@ -598,7 +598,7 @@ the SDK's `NetworkIdentityAuth`.
   auto-match: whoever uses a device is its owner, which proves nothing about
   an email address.
 - **Trust.** Anyone who controls a device signed in to the overlay as a
-  person can sign in to Silo as that person, with that person's role, within
+  person can sign in to Spark as that person, with that person's role, within
   what the overlay's policy allows them, and can link that person's identity
   to their own account. Everyone using a shared TV signs in as whoever signed
   that TV in to the overlay; profiles separate viewers. The same holds for
@@ -607,7 +607,7 @@ the SDK's `NetworkIdentityAuth`.
   overlay makes everyone behind it that device's owner. The Tailscale plugin
   names no peer for a request carrying forwarding headers, but a plain TCP
   forwarder adds none, so relays must be tagged devices, which never sign in.
-  Subjects are scoped to the control plane, not the tailnet: moving the Silo
+  Subjects are scoped to the control plane, not the tailnet: moving the Spark
   node to another tailnet gives everyone new user IDs, so re-checks of the
   old identities answer not found.
 
@@ -616,7 +616,7 @@ the SDK's `NetworkIdentityAuth`.
 
 ### Provider logout
 
-The Silo logout never waits long for the provider: the server bounds the
+The Spark logout never waits long for the provider: the server bounds the
 plugin lookup at 2 seconds (answering empty past it), and the web client
 bounds its wait for the answer before it sends `logout`. `getProviderLogout`
 answers empty for an API key or an impersonation session, so an
@@ -635,7 +635,7 @@ that keeps the ID token there can add `id_token_hint`.
 ## Provider re-check
 
 Refresh slides a login session's expiry, so without a re-check a person the
-provider removed would keep Silo access for as long as a device keeps
+provider removed would keep Spark access for as long as a device keeps
 refreshing. The host therefore asks the provider again.
 
 - **Which sessions.** `auth_sessions.identity_id` names the identity a

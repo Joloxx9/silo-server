@@ -506,7 +506,7 @@ func (s *Service) linkBase(ctx context.Context) string {
 }
 
 // serverName reads the branded server name for email copy and the claim
-// screen, defaulting to "Silo".
+// screen, defaulting to "Spark".
 func (s *Service) serverName(ctx context.Context) string {
 	return mail.ServerName(ctx, s.settings)
 }

@@ -1,17 +1,22 @@
 <p align="center">
-  <img src="assets/icon.png" alt="Silo logo" width="112" height="112">
+  <img src="assets/spark-mark.svg" alt="Spark" width="112" height="112">
 </p>
 
-<h1 align="center">Silo</h1>
+<h1 align="center">Spark</h1>
 
 <p align="center">
-  A self-hosted media server for films, series, audiobooks, ebooks, podcasts, and manga.
+  A customizable, self-hosted media server for films, series, audiobooks, ebooks, podcasts, and manga.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Silo-Server/silo-server/releases"><img alt="Latest GitHub release" src="https://img.shields.io/github/v/release/Silo-Server/silo-server?include_prereleases&amp;sort=semver&amp;display_name=tag&amp;style=flat-square&amp;label=release"></a>
-  <a href="https://github.com/orgs/Silo-Server/packages/container/package/silo-server"><img alt="Container image on GHCR" src="https://img.shields.io/badge/container-GHCR-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white"></a>
-  <a href="https://github.com/Silo-Server/silo-server/actions/workflows/ci.yml"><img alt="Continuous integration" src="https://img.shields.io/github/actions/workflow/status/Silo-Server/silo-server/ci.yml?branch=main&amp;style=flat-square&amp;label=CI"></a>
+  Spark is a fork of <a href="https://github.com/Silo-Server/silo-server">Silo</a>,
+  focused on more customization and additional options.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Joloxx9/spark-server/releases"><img alt="Latest GitHub release" src="https://img.shields.io/github/v/release/Joloxx9/spark-server?include_prereleases&amp;sort=semver&amp;display_name=tag&amp;style=flat-square&amp;label=release"></a>
+  <a href="https://github.com/users/Joloxx9/packages/container/spark-server"><img alt="Spark container image on GHCR" src="https://img.shields.io/badge/container-GHCR-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white"></a>
+  <a href="https://github.com/Joloxx9/spark-server/actions/workflows/fork-image.yml"><img alt="Spark image build" src="https://img.shields.io/github/actions/workflow/status/Joloxx9/spark-server/fork-image.yml?branch=spark&amp;style=flat-square&amp;label=Spark%20image"></a>
   <img alt="Go 1.26" src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&amp;logo=go&amp;logoColor=white">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?style=flat-square&amp;logo=react&amp;logoColor=white">
   <a href="LICENSE"><img alt="AGPL-3.0-or-later license" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-555555?style=flat-square"></a>
@@ -19,30 +24,28 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a>
-  · <a href="https://siloserver.org/docs">Documentation</a>
+  · <a href="DEVELOPMENT.md">Documentation</a>
+  · <a href="https://github.com/Joloxx9/spark-plugins">Plugin catalog</a>
   · <a href="docs/release-versioning.md">Builds &amp; releases</a>
-  · <a href="https://discord.gg/siloserver">Discord</a>
-  · <a href="#supporting-silo">Support Silo</a>
+  · <a href="https://github.com/Joloxx9/spark-server/issues">Issues</a>
+  · <a href="#supporting-spark">Supporting Spark</a>
   · <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 ---
 
 > [!WARNING]
-> Silo is pre-release. APIs, configuration, and database migrations may change
+> Spark is pre-release. APIs, configuration, and database migrations may change
 > before the first stable release. Back up your deployment before updating.
 
-## 1.0 release scope
+## Inherited feature scope
 
-The [1.0 milestone](https://siloserver.org/milestone/1.0/) covers movies and
-series. Audiobooks, ebooks, and Audiobookshelf compatibility keep working as
-they do today and are labeled **beta**: they are outside the 1.0 support
-promise and will be replaced by a consolidated Books effort with no assigned
-release date. The broader capabilities below include those beta
-implementations, not a promise that every media type is supported in 1.0.
-Existing library data is preserved when upgrading.
+Spark is based on Silo and currently inherits its [1.0 milestone](https://siloserver.org/milestone/1.0/)
+scope: movies and series. Audiobooks, ebooks, and Audiobookshelf compatibility
+remain **beta** features. Spark-specific changes and options are tracked in this
+fork.
 
-## What Silo does
+## What Spark does
 
 <table>
   <tr>
@@ -54,7 +57,8 @@ Existing library data is preserved when upgrading.
     <td width="33%" valign="top">
       <strong>Organize</strong><br><br>
       One catalog for films, series, audiobooks, ebooks, podcasts, and manga,
-      matched through metadata plugins such as TMDB and TVDB.
+      matched through metadata plugins such as TMDB and TVDB. Spark's catalog
+      includes upstream plugins and Spark additions.
     </td>
     <td width="33%" valign="top">
       <strong>Connect</strong><br><br>
@@ -86,12 +90,12 @@ Existing library data is preserved when upgrading.
 ## Quick start
 
 Requires Docker Compose 2.24 or newer. The default Compose file runs the
-omnibus image: Silo with a bundled PostgreSQL (with pgvector) and Redis, plus
+Spark omnibus image with a bundled PostgreSQL (with pgvector) and Redis, plus
 Meilisearch when you turn it on.
 
 ```sh
-git clone https://github.com/Silo-Server/silo-server.git
-cd silo-server
+git clone --branch spark https://github.com/Joloxx9/spark-server.git
+cd spark-server
 cp .env.example .env
 chmod 600 .env
 key="$(openssl rand -base64 48)" && printf '\nSECRET_KEY=%s\n' "$key" >> .env
@@ -111,7 +115,7 @@ lines you need.
 
 ### Updating an install from before the omnibus image
 
-An install that runs Silo, PostgreSQL, and Redis in separate containers keeps
+An install that runs Spark, PostgreSQL, and Redis in separate containers keeps
 that layout when its `.env` sets `COMPOSE_FILE=docker-compose.advanced.yml`; set
 it before updating. `docker-compose.yml` is an example of a new install and
 does not look for an earlier one: started on that data folder, it replaces
@@ -122,10 +126,8 @@ that names one fails until it names only the deployment file you use, with
 the matching lines in it uncommented. See [Moving from the multi-container
 stack](docs/architecture/omnibus-image.md#moving-from-the-multi-container-stack).
 
-The [user manual](https://siloserver.org/docs) covers the rest, starting with
-[installation](https://siloserver.org/docs/install): backing up `SECRET_KEY`,
-storage, GPU acceleration, Meilisearch, external PostgreSQL and Redis,
-transcode nodes, PostgreSQL tuning, backups, and updates.
+The [Silo user manual](https://siloserver.org/docs) describes upstream Silo.
+Spark-specific setup notes and changes are tracked in this repository.
 
 ## Builds and releases
 
@@ -136,20 +138,18 @@ defines each tag and the SemVer contract.
 
 ## Documentation
 
-- [User manual](https://siloserver.org/docs) — installing, configuring, and running Silo
+- [Silo user manual](https://siloserver.org/docs) — upstream operating guide; Spark may differ
 - [Development guide](DEVELOPMENT.md) — source setup, builds, tests, migrations
 - [Settings API](docs/settings-api.md), [Downloads API](docs/downloads-api.md), and [Apple Push Display Token](docs/notifications-push-api.md) — client contracts
 
 ## Community and contributions
 
-Questions and discussion: [Discord](https://discord.gg/siloserver).
-Bugs, install problems, and performance issues: the
-[GitHub issue forms](https://github.com/Silo-Server/silo-server/issues/new/choose),
-which ask for reproduction steps and raw logs.
+Questions, bugs, and feature requests: [Spark GitHub issues](https://github.com/Joloxx9/spark-server/issues).
 
 Native clients are developed in
 [`silo-apple`](https://github.com/Silo-Server/silo-apple) and
-[`silo-android`](https://github.com/Silo-Server/silo-android). Client-visible
+[`silo-android`](https://github.com/Silo-Server/silo-android). These are upstream
+Silo clients; client-visible
 API, authentication, playback, or metadata changes should consider both.
 
 Right now, the most helpful way to contribute is a clear, accurate issue. We
@@ -158,36 +158,23 @@ has outgrown what we can review carefully, so a good issue usually helps us
 more than a pull request.
 
 Pull requests are still welcome from contributors who've had one merged in a
-Silo repository, or when a maintainer asks for one. We close other pull
+Spark repository, or when a maintainer asks for one. We close other pull
 requests without review. [CONTRIBUTING.md](CONTRIBUTING.md) explains what makes
 an issue useful.
 
-## Supporting Silo
+## Supporting Spark
 
-Silo is developed in spare time and funded out of pocket, and will stay free and
-open source. [GitHub Sponsors](https://github.com/sponsors/quick104) covers AI
-development tooling (Claude, Codex), push-notification relay infrastructure, and
-future project costs. Bug reports, code, and documentation help just as much.
-
-Code review is supported by [Macroscope](https://macroscope.com) through its
-open source program.
-
-<p>
-  <a href="https://macroscope.com">
-    <img alt="Sponsored by Macroscope" src="assets/macroscope-banner.png" width="400">
-  </a>
-</p>
+Spark is free and open source. Bug reports, feature requests, and code
+contributions are welcome through [GitHub issues](https://github.com/Joloxx9/spark-server/issues).
 
 ## License and trademarks
 
-Silo's source code is licensed under the
+Spark's source code is licensed under the
 **GNU Affero General Public License v3.0 or later** (`AGPL-3.0-or-later`), with
 an additional permission to combine it with platform SDKs such as the Windows
 App SDK. See [LICENSE](LICENSE) and [PLATFORM-EXCEPTION.md](PLATFORM-EXCEPTION.md).
 
-The **Silo name, logo, and wordmark are trademarks of Silo Media L.L.C.** and
-are not covered by the AGPL. Forks and redistributions may use the code but must
-not use the Silo brand as their identity and must remove or replace the brand
-assets. Publishing a Silo-branded app to an app store requires written
-permission. See [TRADEMARK.md](TRADEMARK.md) for permitted referential use,
-including phrases such as "compatible with Silo."
+Spark is an independent fork of Silo. The upstream Silo name, logo, and wordmark
+are trademarks of Silo Media L.L.C. and are not covered by the AGPL. Spark does
+not claim to be an official Silo project. See [TRADEMARK.md](TRADEMARK.md) for
+the upstream trademark terms.

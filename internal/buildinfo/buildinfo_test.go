@@ -247,10 +247,10 @@ func TestUserAgentForKeepsHeaderTokenCharacters(t *testing.T) {
 		info Info
 		want string
 	}{
-		{info: Info{Available: true, Display: "ce6a0f53+dirty"}, want: "Silo/ce6a0f53+dirty"},
-		{info: Info{Available: true, Display: "ce6a 0f53\r\n"}, want: "Silo/ce6a0f53"},
-		{info: Info{Available: true, Display: "\n"}, want: "Silo/dev"},
-		{info: unavailableInfo(), want: "Silo/dev"},
+		{info: Info{Available: true, Display: "ce6a0f53+dirty"}, want: "Spark/ce6a0f53+dirty"},
+		{info: Info{Available: true, Display: "ce6a 0f53\r\n"}, want: "Spark/ce6a0f53"},
+		{info: Info{Available: true, Display: "\n"}, want: "Spark/dev"},
+		{info: unavailableInfo(), want: "Spark/dev"},
 	}
 	for _, tt := range tests {
 		if got := userAgentFor(tt.info); got != tt.want {

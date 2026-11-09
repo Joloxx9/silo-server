@@ -4520,7 +4520,7 @@ func manifestStartupTransportErrorV3(running bool, cause error) *transportErrorV
 // log, that the file failed the tone-map check, so a retry gets the same
 // answer. The check also rejects an executor's bad output, so the message
 // names both causes.
-const sourcePreflightRejectedMessageV3 = "This file's HDR video failed Silo's conversion check, so trying again won't help. Its HDR metadata may not match the video, or the transcoder may not convert it correctly."
+const sourcePreflightRejectedMessageV3 = "This file's HDR video failed Spark's conversion check, so trying again won't help. Its HDR metadata may not match the video, or the transcoder may not convert it correctly."
 
 func toneMapExecutionTransportErrorV3(cause error, message string) *transportErrorV3 {
 	if errors.Is(cause, tonemap.ErrSourcePreflightRejected) {

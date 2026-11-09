@@ -455,7 +455,7 @@ var adminSettingDefaults = map[string]string{
 	"server.log_level":          "info",
 	"server.log_quiet":          "",
 	"server.public_url":         "",
-	"branding.server_name":      "Silo",
+	"branding.server_name":      "Spark",
 	"branding.login_subtitle":   "Sign in with an existing account.",
 	"clientip.trusted_proxies":  "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, ::1/128",
 	"theme.catalog_url":         DefaultThemeCatalogURL,
@@ -545,7 +545,7 @@ var adminSettingDefaults = map[string]string{
 	"jellyfin_compat.enabled":                 "true",
 	"jellyfin_compat.public_url":              "http://127.0.0.1:8096",
 	"jellyfin_compat.emulated_server_version": DefaultJellyfinCompatEmulatedServerVersion,
-	"jellyfin_compat.server_name":             "Silo",
+	"jellyfin_compat.server_name":             "Spark",
 	"jellyfin_compat.web_enabled":             "true",
 	"jellyfin_compat.web_version":             DefaultJellyfinWebVersion,
 	"jellyfin_compat.web_install_dir":         DefaultJellyfinWebInstallDir,
@@ -603,7 +603,7 @@ var adminSettingDefaults = map[string]string{
 	"email.enabled":       "false",
 	"email.smtp_port":     "587",
 	"email.smtp_security": "starttls",
-	"email.from_name":     "Silo",
+	"email.from_name":     "Spark",
 
 	"notifications.release_events_enabled":                     "true",
 	"notifications.fanout_enabled":                             "true",
@@ -1413,7 +1413,7 @@ func ParseRedisURL(raw string) (*redisv9.Options, *redisv9.FailoverOptions, erro
 		// These options are for reading from replicas. Silo's clients write,
 		// and go-redis panics when a single client is built with a routing
 		// option.
-		return nil, nil, errors.New("redis: route_by_latency, route_randomly, replica_only and use_disconnected_replicas are not supported; Silo reads and writes on the master")
+		return nil, nil, errors.New("redis: route_by_latency, route_randomly, replica_only and use_disconnected_replicas are not supported; Spark reads and writes on the master")
 	}
 	if failover.DialTimeout < 0 || failover.ReadTimeout < 0 {
 		// go-redis reads a read timeout of 0 or less as no timeout. A

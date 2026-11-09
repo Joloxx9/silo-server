@@ -1,5 +1,5 @@
 name: v1 capability proposal
-description: Propose a user-facing capability for the Silo v1 scope lock
+description: Propose a user-facing capability for Spark's API
 title: "[v1] <capability name>"
 labels: ["v1-proposed"]
 body:
@@ -10,7 +10,7 @@ body:
         not per PR or per endpoint. Locked capabilities are what the client teams plan against —
         the **API surface** section is mandatory for a capability to be lockable.
         Capability scope state and lock rules: `docs/architecture/v1-scope.md`.
-        New API surface targets `/api/v2`, Silo 1.0's stable native contract; `/api/v1` is frozen
+        Spark is based on Silo's pre-1.0 API. New API surface targets `/api/v2`; `/api/v1` remains frozen for compatibility.
         and takes no new capability work. Contract rules: `docs/architecture/api-contract.md`.
   - type: textarea
     id: summary

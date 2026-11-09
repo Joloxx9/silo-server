@@ -432,7 +432,7 @@ func runBackupRecover(ctx context.Context, stamp string, out io.Writer) error {
 	if err := backup.RecoverSwap(ctx, backup.JournalPath(workDir, stamp), ctl, cipher, journalKey, liveURL, storesFromConfig, out); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(out, "If the restore went ahead, run FLUSHDB on the Redis database Silo uses before starting Silo.")
+	_, _ = fmt.Fprintln(out, "If the restore went ahead, run FLUSHDB on the Redis database Spark uses before starting Spark.")
 	return nil
 }
 

@@ -82,16 +82,16 @@ func TestPlaybackV2CallerResolvesClientIdentity(t *testing.T) {
 	}
 	deps.Playback = fake
 	h := newTestHandler(t, deps)
-	siloApp := map[string]string{"X-Silo-Client": "Silo Android TV", "X-Silo-Client-Version": "1.0.0", "X-Silo-Client-Build": "5", "X-Silo-Client-Channel": "beta"}
+	siloApp := map[string]string{"X-Silo-Client": "Spark Android TV", "X-Silo-Client-Version": "1.0.0", "X-Silo-Client-Build": "5", "X-Silo-Client-Channel": "beta"}
 	for _, tc := range []struct {
 		name    string
 		headers map[string]string
 		want    playback.ClientInfo
 	}{
-		{name: "first-party app", headers: siloApp, want: playback.ClientInfo{Name: "Silo Android TV", Version: "1.0.0", Build: "5", Channel: "beta"}},
+		{name: "first-party app", headers: siloApp, want: playback.ClientInfo{Name: "Spark Android TV", Version: "1.0.0", Build: "5", Channel: "beta"}},
 		{name: "declared headers", headers: map[string]string{"X-Client-Name": "Third Party", "X-Client-Version": "2.1", "X-Client-Build": "77", "X-Client-Channel": "release"}, want: playback.ClientInfo{Name: "Third Party", Version: "2.1", Build: "77", Channel: "release"}},
 		{name: "declared name wins as a set", headers: with(siloApp, "X-Client-Name", "Third Party"), want: playback.ClientInfo{Name: "Third Party"}},
-		{name: "blank declared name", headers: with(with(siloApp, "X-Client-Name", " "), "X-Client-Version", "9"), want: playback.ClientInfo{Name: "Silo Android TV", Version: "1.0.0", Build: "5", Channel: "beta"}},
+		{name: "blank declared name", headers: with(with(siloApp, "X-Client-Name", " "), "X-Client-Version", "9"), want: playback.ClientInfo{Name: "Spark Android TV", Version: "1.0.0", Build: "5", Channel: "beta"}},
 		{name: "clamped", headers: map[string]string{"X-Silo-Client": " " + strings.Repeat("n", 200) + " ", "X-Silo-Client-Channel": strings.Repeat("c", 40)}, want: playback.ClientInfo{Name: strings.Repeat("n", 128), Channel: strings.Repeat("c", 32)}},
 		{name: "nameless", headers: map[string]string{}},
 	} {

@@ -1,7 +1,7 @@
-# Silo server docs
+# Spark server docs
 
-**Running Silo?** Guides for installing, configuring, and troubleshooting a
-server are in the [user manual](https://siloserver.org/docs). Its source is
+# Spark is a fork of Silo. The upstream guides for installing, configuring, and
+troubleshooting a server are in the [Silo user manual](https://siloserver.org/docs). Its source is
 [Silo-Server/siloserver.org](https://github.com/Silo-Server/siloserver.org);
 send documentation fixes there.
 

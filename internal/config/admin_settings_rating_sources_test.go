@@ -65,6 +65,6 @@ func TestNormalizeRatingSourceIconsSetting(t *testing.T) {
 		}
 	}
 	if got, ok := adminSettingDefaults[CatalogRatingSourceIconsSettingKey]; !ok || got != "" {
-		t.Errorf("default = %q (present %v), want empty: Silo ships no third-party logos", got, ok)
+		t.Errorf("default = %q (present %v), want empty: Spark ships no third-party logos", got, ok)
 	}
 }

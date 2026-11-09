@@ -1,11 +1,11 @@
 # Images API
 
-> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Silo
+> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Spark
 > 1.0. The frozen alpha `/api/v1` surface carries the same artwork ladder through the pre-1.0
 > bridge window and is then retired. See
 > [the native API contract](architecture/api-contract.md).
 
-Silo caches artwork at a fixed ladder of widths and returns a URL for one of them.
+Spark caches artwork at a fixed ladder of widths and returns a URL for one of them.
 The URL is either a direct object-storage URL or a signed server route. By default the server picks the width from context — card rows get
 narrow images, hero areas get wide ones. A client that knows better can ask for a
 specific size instead.
@@ -200,7 +200,7 @@ Catalog reads select cached artwork from durable publication records. They
 never issue storage HEAD requests or fetch artwork delivery URLs. The publisher
 records the exact variant keys after every upload succeeds; a rung a ladder
 change added is advertised only once a publication includes it. The revision remains part of each key, so an old
-manifest cannot establish availability for new artwork. Silo is the only writer
+manifest cannot establish availability for new artwork. Spark is the only writer
 to the assets store and deletes a revision only after retiring it, so a
 published key is served as stored on every backend.
 

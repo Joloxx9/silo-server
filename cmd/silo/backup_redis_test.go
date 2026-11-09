@@ -38,7 +38,7 @@ func TestClearRedisAfterRestore(t *testing.T) {
 		{name: "kept", plan: redisPlan{keep: true, config: config.RedisConfig{URL: "redis://cache:6379/3"}}, wantOut: "--keep-redis"},
 		{name: "settings unreadable", plan: redisPlan{readErr: errors.New("no settings")}, wantOut: "so no Redis was cleared"},
 		{name: "unreachable", plan: redisPlan{config: config.RedisConfig{URL: "redis://cache:6379/2"}}, dialErr: errors.New("refused"),
-			wantDial: true, wantOut: "Clear it before starting Silo: redis-cli -n 2 FLUSHDB"},
+			wantDial: true, wantOut: "Clear it before starting Spark: redis-cli -n 2 FLUSHDB"},
 		{name: "flush fails", plan: redisPlan{config: config.RedisConfig{URL: "redis://cache:6379"}}, flushErr: errors.New("READONLY"),
 			wantDial: true, wantFlush: 1, wantOut: "redis-cli -n 0 FLUSHDB"},
 	}

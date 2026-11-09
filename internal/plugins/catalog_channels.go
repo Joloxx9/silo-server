@@ -1,11 +1,11 @@
 package plugins
 
 const (
-	DefaultRepositoryURL  = "https://raw.githubusercontent.com/Silo-Server/silo-plugins/main/manifest.json"
-	DefaultRepositoryName = "Silo maintained"
+	DefaultRepositoryURL  = "https://raw.githubusercontent.com/Joloxx9/spark-plugins/spark/manifest.json"
+	DefaultRepositoryName = "Spark maintained"
 
 	ApprovedCommunityRepositoryURL  = "https://raw.githubusercontent.com/Silo-Community/silo-plugins/main/manifest.json"
-	ApprovedCommunityRepositoryName = "Approved community"
+	ApprovedCommunityRepositoryName = "Spark community"
 
 	OfficialRepositoryManagedKey          = "official"
 	ApprovedCommunityRepositoryManagedKey = "approved-community"

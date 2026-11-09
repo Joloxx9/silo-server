@@ -68,7 +68,7 @@ one series per bucket plus count/sum, so include those in capacity estimates.
 
 Start a new deployment with a 20,000-series scrape limit and a 10-second timeout,
 then compare the actual scrape before changing that cap. That limit is an operator
-starting point, not a guarantee of all possible existing Silo series. Alert well
+starting point, not a guarantee of all possible existing Spark series. Alert well
 before hitting it: a rejected scrape loses the whole target. Retention and total
 memory depend on scrape frequency, series churn, replica count and Prometheus
 storage settings; measure the fleet instead of multiplying per-node host/GPU data.

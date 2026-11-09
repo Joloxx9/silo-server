@@ -30,7 +30,7 @@ const (
 	maxStoredWarnings      = 20
 	maxUnmatchedSamples    = 10
 	maxUnmatchedLogSamples = 40
-	connectApplicationName = "Silo/1.0.0"
+	connectApplicationName = "Spark/1.0.0"
 )
 
 // Source is an admin-configured external media server used as an import source.

@@ -165,7 +165,7 @@ func (g captureGuard) wrap(name string, next http.Handler) http.Handler {
 
 func (g captureGuard) index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprintf(w, "<!doctype html><html><head><title>Silo process profiles</title></head><body><h1>Silo process profiles</h1><p>Instance: %s. Go: %s. Revision: %s.</p><ul>", html.EscapeString(g.instance), html.EscapeString(runtime.Version()), html.EscapeString(g.revision))
+	_, _ = fmt.Fprintf(w, "<!doctype html><html><head><title>Spark process profiles</title></head><body><h1>Spark process profiles</h1><p>Instance: %s. Go: %s. Revision: %s.</p><ul>", html.EscapeString(g.instance), html.EscapeString(runtime.Version()), html.EscapeString(g.revision))
 	for _, name := range []string{profileName, traceName, heapName, allocsName, goroutineName, threadcreateName, blockName, mutexName} {
 		if (name == blockName && g.config.BlockRate == 0) || (name == mutexName && g.config.MutexFraction == 0) {
 			_, _ = fmt.Fprintf(w, "<li>%s: sampling disabled</li>", name)

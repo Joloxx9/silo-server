@@ -1,7 +1,7 @@
 # Release versioning
 
-Silo uses GitHub Releases as the public record of shipped versions and their
-changes. There is no historical Silo release series yet: the repository has no
+Spark uses GitHub Releases as the public record of shipped versions and their
+changes. There is no historical Spark release series yet: the repository has no
 release tags. Newly published default-branch container images are identified by
 an ordered `build-N`, `latest`, and the full commit SHA.
 
@@ -24,14 +24,14 @@ applicable.
 Administrators take a backup before every release upgrade and verify that it can
 be restored. This applies to every upgrade, not only to major versions.
 
-Silo also backs up the database itself before it applies migrations at startup,
+Spark also backs up the database itself before it applies migrations at startup,
 unless backups are turned off (see [before upgrades](architecture/backups.md#before-upgrades)).
 That copy holds the database only, keeps the two newest, and sits at the backup
 destination, which by default is this server's own storage. It does not replace
 the administrator's verified backup, which should also include the files,
 configuration, and `SECRET_KEY`, and be kept off the server.
 
-Silo does not guarantee downgrade or in-place rollback compatibility between
+Spark does not guarantee downgrade or in-place rollback compatibility between
 releases. A newer release may write or migrate data that an older release cannot
 read, and there is no supported in-place database downgrade. Recovery from a
 failed upgrade means stopping the new version, restoring the verified
@@ -47,7 +47,7 @@ release notes do not certify as unsupported.
 
 The Git tag and matching GitHub Release are the authoritative product version.
 Other version-like values in the repository describe dependencies, protocols,
-or compatibility targets and are not Silo release numbers. The build details in
+or compatibility targets and are not Spark release numbers. The build details in
 the admin interface show both values for numbered container builds and retain
 the commit SHA alone for older or local builds.
 
@@ -92,9 +92,9 @@ from branches other than `main`. It also refuses to reuse a release tag or creat
 a release when there are no commits since the previous one.
 
 GitHub's manual-workflow permission is the release access boundary: only users
-with repository write access can dispatch it. If Silo later requires a second
+with repository write access can dispatch it. If Spark later requires a second
 approval, maintainers should configure a protected release environment with
 required reviewers and attach the release job to it before use.
 
-This process does not choose or create Silo's first version. The first tag must
+This process does not choose or create Spark's first version. The first tag must
 be agreed by the maintainers before the workflow is run.

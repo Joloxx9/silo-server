@@ -59,7 +59,7 @@ func TestJellyfinCompatSettingsRequireRestartFollowsRestartRegistry(t *testing.T
 			name: "live identity settings",
 			updates: map[string]string{
 				"jellyfin_compat.public_url":              "https://compat.example.test",
-				"jellyfin_compat.server_name":             "Silo Compat",
+				"jellyfin_compat.server_name":             "Spark Compat",
 				"jellyfin_compat.emulated_server_version": "10.11.6",
 			},
 		},

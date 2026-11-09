@@ -40,7 +40,7 @@ stays pending and shows as `failed` in each sweep's `result`.
 
 `lock_conflict` is empty unless the stored embedding lock rejects the
 embedding endpoint or model this server runs with (including running with no
-embedding provider chosen), or records a vector size Silo cannot store. It is
+embedding provider chosen), or records a vector size Spark cannot store. It is
 then a sentence for the administrator that never quotes a base URL. The
 embedding provider and model take effect after a restart, so a saved but not
 yet applied change does not show here; the embedding connection check reports

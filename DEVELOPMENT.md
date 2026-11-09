@@ -1,6 +1,6 @@
-# Developing Silo
+# Developing Spark
 
-How to build, run, and test the Silo server from source. To run Silo without
+How to build, run, and test Spark Server from source. To run Spark without
 building it, see the [README](README.md). Contribution rules and the
 pre-submission gate are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -16,7 +16,7 @@ pre-submission gate are in [CONTRIBUTING.md](CONTRIBUTING.md).
 - Redis
 - FFmpeg (transcoding). On macOS, install Homebrew's keg-only full build so
   text-subtitle burn-in and the complete filter set are available alongside
-  VideoToolbox: `brew install ffmpeg-full`. Silo discovers the Apple Silicon
+  VideoToolbox: `brew install ffmpeg-full`. Spark discovers the Apple Silicon
   and Intel keg paths automatically when the FFmpeg Path setting is blank; a
   custom build can be selected explicitly in Admin Settings.
 - A C compiler and build toolchain (CGO dependencies)
@@ -86,7 +86,7 @@ testing libraries against real media.
 
 ### Working on the plugin SDK at the same time
 
-If a change spans Silo and `silo-plugin-sdk`, use an untracked local `go.work`
+If a change spans Spark and the upstream `silo-plugin-sdk`, use an untracked local `go.work`
 workspace. `go.work` and `go.work.sum` are gitignored developer conveniences: CI
 runs from a clean checkout without them, and release builds set `GOWORK=off`.
 Any SDK package or symbol this repository uses must therefore be pushed and
@@ -120,8 +120,8 @@ the remaining settings in the web interface.
 | `make dev-transcode` | Run a standalone transcode node |
 | `make migrate-create NAME=add_thing` | Create a timestamped Goose SQL migration |
 | `make migrate-validate` | Validate Goose migration files without touching a database |
-| `make migrate-status` | Show Goose migration status using Silo's bootstrapping runner |
-| `make migrate-up` | Apply pending Goose migrations using Silo's bootstrapping runner |
+| `make migrate-status` | Show Goose migration status using Spark's bootstrapping runner |
+| `make migrate-up` | Apply pending Goose migrations using Spark's bootstrapping runner |
 | `make clean` | Remove build artifacts |
 
 ## Database migrations

@@ -8,7 +8,7 @@ Repos affected: `silo-server` (contract, migration, web), `silo-android`, `silo-
 
 Replace the boolean `playback.auto_skip_intro` with a three-way
 `playback.intro_skip_mode` setting — `never`, `ask`, `always` — and define one
-intro-skip prompt state machine that every Silo client implements identically:
+intro-skip prompt state machine that every Spark client implements identically:
 web (browser), Android (phone, tablet, TV) and Apple (iPhone, iPad, tvOS, macOS).
 
 The boolean already encodes two of the three modes: `true` is "count down, then

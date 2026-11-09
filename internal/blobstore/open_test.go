@@ -351,7 +351,7 @@ func TestOpenUpgradesLegacyLowercasedS3Identity(t *testing.T) {
 	}
 	// The legacy fingerprint kept key-prefix case, so a case-only prefix
 	// change is a real move and must not ride the endpoint upgrade.
-	prefixCase := &identityStore{Store: store.Store, identity: BackendS3 + "|https://gateway.example/TenantA|artwork|Silo"}
+	prefixCase := &identityStore{Store: store.Store, identity: BackendS3 + "|https://gateway.example/TenantA|artwork|Spark"}
 	prefixSettings := &testSettings{values: map[string]string{IdentitySettingKey: BackendS3 + "|https://gateway.example/tenanta|artwork|silo"}}
 	if _, _, err := openRecorded(context.Background(), prefixCase, prefixSettings); err == nil {
 		t.Fatal("key-prefix case change accepted")

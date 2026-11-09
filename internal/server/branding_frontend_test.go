@@ -125,7 +125,7 @@ func TestFrontendCustomSvgFaviconIsHardened(t *testing.T) {
 	store := &fakeAssetStore{data: map[string][]byte{"branding/favicon/abc.svg": []byte("<svg/>")}}
 	prevFS, prevBranding := WebDistFS, Branding
 	WebDistFS = fstest.MapFS{
-		"index.html":  &fstest.MapFile{Data: []byte("<title>Silo</title>")},
+		"index.html":  &fstest.MapFile{Data: []byte("<title>Spark</title>")},
 		"favicon.ico": &fstest.MapFile{Data: []byte("STATIC_ICO")},
 	}
 	Branding = branding.NewService(fakeSettings{"branding.favicon_ref": "abc.svg"}, store)
@@ -209,7 +209,7 @@ func TestFrontendCustomFaviconRevalidatesAfterReplace(t *testing.T) {
 	settings := fakeSettings{"branding.favicon_ref": "old.png"}
 	prevFS, prevBranding := WebDistFS, Branding
 	WebDistFS = fstest.MapFS{
-		"index.html":  &fstest.MapFile{Data: []byte("<title>Silo</title>")},
+		"index.html":  &fstest.MapFile{Data: []byte("<title>Spark</title>")},
 		"favicon.ico": &fstest.MapFile{Data: []byte("STATIC_ICO")},
 	}
 	Branding = branding.NewService(settings, store)

@@ -95,7 +95,7 @@ const (
 const (
 	jwtSecret     = "scenario-catalog-fixture-jwt-secret-0000000000000000"
 	masterKey     = "scenario-catalog-fixture-master-key-000000000000000"
-	serverName    = "Silo Fixture"
+	serverName    = "Spark Fixture"
 	serverID      = "00000000-0000-4000-8000-0000000000f1"
 	publicURL     = "https://silo.example.test"
 	adminUsername = "fixture-admin"

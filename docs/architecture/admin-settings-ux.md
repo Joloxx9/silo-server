@@ -36,7 +36,7 @@ sidebar's pages with each topic as its own group, so "Settings" always reads
 under its topic, and it finds every indexed setting.
 
 A setting lives on the page whose name covers it. Public signups and
-self-service password reset only work with Silo passwords, so they sit with
+self-service password reset only work with Spark passwords, so they sit with
 password sign-in on Sign-in. Logging holds every log setting, the server log
 and the activity log retention alike. General holds what the whole server runs
 on: its name and address, the trusted proxies beside the public URL (as the
@@ -120,7 +120,7 @@ the fields inside drop their chips. Provider credentials are `ProviderTile` rows
 that expand in place to Test before saving; the state is a dot plus a word
 beside the provider's button. Provider setup lives on
 the Providers page, not on the page that owns the
-feature: Playback decides *whether* Silo looks for intro and
+feature: Playback decides *whether* Spark looks for intro and
 credits markers, while *which provider answers, in what order, and on what
 terms* is a row beside the subtitle and list providers, with a cross-link
 each way. Watch providers (Simkl, MDBList) open the Providers page, since each

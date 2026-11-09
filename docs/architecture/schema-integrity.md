@@ -56,7 +56,7 @@ WHERE child.user_id IS NOT NULL
 Review affected records and choose an explicit repair: restore the missing
 account/reference from a verified backup, correct a mistaken reference, or
 approve removal of an obsolete record. Set account role/enabled values according
-to the intended access policy. Retry through Silo's migration runner after the
+to the intended access policy. Retry through Spark's migration runner after the
 repair. Do not copy record contents into public issues or logs.
 
 The three migrations commit separately. Completed index builds and FK migrations

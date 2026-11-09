@@ -121,7 +121,7 @@ it.each([
   [
     503,
     "dependency_unavailable",
-    "Silo couldn't read the Silo maintained catalog. Try again in a moment.",
+    "Spark couldn't read the Spark maintained catalog. Try again in a moment.",
   ],
 ] as const)(
   "shows the server's reason when an install fails with %i",

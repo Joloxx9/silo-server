@@ -72,8 +72,8 @@ describe("pluginPresentation", () => {
   });
 
   it("labels every tier and gives community and external plugins a notice", () => {
-    expect(sourceLabel("silo")).toBe("Silo maintained");
-    expect(sourceLabel("approved_community")).toBe("Approved community");
+    expect(sourceLabel("silo")).toBe("Spark maintained");
+    expect(sourceLabel("approved_community")).toBe("Spark community");
     expect(sourceLabel("external")).toBe("External source");
     expect(tierNotice("silo")).toBeNull();
     expect(tierNotice("approved_community")).toMatch(/Reviewed by Silo maintainers/);

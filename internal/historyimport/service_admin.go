@@ -133,7 +133,7 @@ func (s *Service) BulkCreateAdminRuns(ctx context.Context, sourceID int, opts Ad
 				outcome.Error = "Mapping no longer exists."
 			}
 			if errors.Is(err, ErrProfileNotFound) {
-				outcome.Error = "The mapped Silo profile no longer exists. Edit the mapping to choose another profile."
+				outcome.Error = "The mapped Spark profile no longer exists. Edit the mapping to choose another profile."
 			}
 		}
 		result.Outcomes = append(result.Outcomes, outcome)

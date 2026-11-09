@@ -1,6 +1,6 @@
 # At-rest credential encryption
 
-Silo encrypts third-party integration credentials and other server-owned secrets
+Spark encrypts third-party integration credentials and other server-owned secrets
 at rest. Sonarr/Radarr API keys, S3 keys, watch-sync OAuth tokens, the
 Audiobookshelf-compat signing key, and the sensitive `server_settings` entries
 are stored as ciphertext in PostgreSQL and decrypted only in memory. The key that
@@ -162,7 +162,7 @@ server channel URLs and signing secrets (`notification_webhooks`,
 history-import admin/session tokens, temporary server-list credentials and
 personal run credentials (`history_import_run_credentials.payload`),
 subtitle provider `api_key`/`password`,
-the Jellyfin-compat session's bridged Silo access/refresh tokens
+the Jellyfin-compat session's bridged Spark access/refresh tokens
 (`jellycompat_sessions.streamapp_access_token` / `streamapp_refresh_token`),
 the ABS signing key, and an external sign-in plugin's per-identity refresh
 state (`plugin_auth_identities.refresh_state`, AAD

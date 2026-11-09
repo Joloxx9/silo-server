@@ -2,7 +2,7 @@
 
 History imports persist a versioned dispatch intent in `history_import_runs`
 before reporting acceptance. Administrative intent references source and mapping revisions,
-the external user locator, the original Silo account/profile target, and an optional
+the external user locator, the original Spark account/profile target, and an optional
 lookback cutoff (`played_since`, Jellyfin only) fixed at admission; only a full
 import updates the mapping's `last_imported_at`. Admin tokens
 remain in the source's encrypted storage. Personal intent retains the original target,
@@ -26,7 +26,7 @@ establish media identity. Watch provider sync and webhook sync use the same matc
   and no longer serves the `/emby` route prefix, so Jellyfin sign-in is attempted once at
   the entered address. Jellyfin stores a whole-show or whole-season "mark played" on each
   episode, so those markers arrive as episode records. Season favorites are skipped because
-  Silo has no season favorite.
+  Spark has no season favorite.
 - Emby: played and resumable movies and episodes, plus favorite movies, shows, and episodes.
   Hiding an item from Emby's Continue Watching leaves its user data unchanged; only
   `GET /Users/{id}/Items/Resume` leaves it out. That list shows at most one episode per show,
@@ -43,29 +43,29 @@ A provider that reports its source's own Continue Watching row
 (`ContinueWatchingRowReporter`, Emby today) gets a final pass after the run's records,
 before the run completes. Since Emby 4.6 merged Next Up into Continue Watching, the row
 lists one episode per show: the one in progress, or the next unstarted one. The pass drops,
-for the profile, each show the run imported episodes of that Silo would surface in Continue
+for the profile, each show the run imported episodes of that Spark would surface in Continue
 Watching or Next Up (a series-scoped `ListNextUp` with resumable episodes) but that the row
-leaves out, as Silo's own Next Up dismissal drops a series.
+leaves out, as Spark's own Next Up dismissal drops a series.
 
 - A show missing from the row is taken as hidden only with evidence the row would
   otherwise list it: its most recently played episode was imported in progress, or the row lists at
   least one unstarted episode (so Emby includes shows between episodes) and the series'
   `UnplayedItemCount` says episodes remain. A show finished at the source is left alone,
-  even when Silo has episodes the source lacks.
+  even when Spark has episodes the source lacks.
 - A show counts as listed when any copy of it at the source is in the row: by the source
   series of the imported episodes, or by the listed series' provider IDs, which mark every
-  Silo series with that ID. A listed show the run imported nothing of and that has no
+  Spark series with that ID. A listed show the run imported nothing of and that has no
   provider ID stops the pass, since it could be a copy of any of them.
-- The drop is dated at the run, taken before Silo activity is read, so the next playback,
-  in Silo or at the source followed by another import, ends it. A show with Silo activity
+- The drop is dated at the run, taken before Spark activity is read, so the next playback,
+  in Spark or at the source followed by another import, ends it. A show with Spark activity
   newer than its last imported play is skipped, as is one with an active drop or one the
   profile dropped and watched again after that play. After writing, the pass reads activity
   again and takes back, fenced on its `dropped_at`, any drop that playback saved in the
   meantime would otherwise keep. An ended drop older than that play is replaced, fenced on
-  its `dropped_at`. A show whose last play at the source is stamped after Silo's clock is
+  its `dropped_at`. A show whose last play at the source is stamped after Spark's clock is
   left for a later import. Re-running an import drops nothing new.
 - Listed shows are matched by provider ID in the matcher's order (TVDB, then TMDB, then
-  IMDb, or TMDB first when the record prefers TMDB), and every Silo series with the first
+  IMDb, or TMDB first when the record prefers TMDB), and every Spark series with the first
   ID that matches counts as listed.
   Imported episodes are resolved to their series in batches.
 - Drops sync to watch providers that support dropped shows, like any other drop.
@@ -80,13 +80,13 @@ Emby list queries omit the production year, play count, and last-played date unl
 last-played date is what creates history rows and orders imported progress against local
 activity, so a missing date would leave re-imports unable to update anything. Emby lists
 are read in pages and item lookups in batches. Movie, series, and episode favorites are
-imported; Silo has no season favorites, so those are counted in a run warning. A played
+imported; Spark has no season favorites, so those are counted in a run warning. A played
 multi-episode file (S01E01-E02) marks each episode in its range watched, up to ten; a
 partly watched one stays on its first episode because its position cannot be split.
 
 A Jellyfin or Emby record without a last-played time carries an unknown timestamp, which
 sorts before any local activity: it can create missing progress but never replaces newer
-Silo progress. Favorite-only records add the favorite without creating progress.
+Spark progress. Favorite-only records add the favorite without creating progress.
 
 Source servers are user-supplied, so what an import reads from one is bounded
 (`internal/historyimport/upstream_limits.go`): each successful response is decoded only up

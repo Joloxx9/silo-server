@@ -157,7 +157,7 @@ type PlaybackRequestHeaders struct {
 	ClientModel     string `header:"X-Client-Model"`
 	ClientPlatform  string `header:"X-Client-Platform"`
 	ClientOSVersion string `header:"X-Client-OS-Version"`
-	SiloClient      string `header:"X-Silo-Client" doc:"App name the first-party clients send on every request; when non-blank and X-Client-Name is absent or blank, the X-Silo-Client* headers supply the client identity" example:"Silo Android TV"`
+	SiloClient      string `header:"X-Silo-Client" doc:"App name the first-party clients send on every request; when non-blank and X-Client-Name is absent or blank, the X-Silo-Client* headers supply the client identity" example:"Spark Android TV"`
 	SiloVersion     string `header:"X-Silo-Client-Version" doc:"Marketing version paired with X-Silo-Client" example:"1.0.0"`
 	SiloBuild       string `header:"X-Silo-Client-Build" doc:"Opaque build identifier paired with X-Silo-Client" example:"5"`
 	SiloChannel     string `header:"X-Silo-Client-Channel" doc:"Opaque distribution channel paired with X-Silo-Client" example:"release"`

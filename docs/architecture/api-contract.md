@@ -1,19 +1,19 @@
 # Native API contract: Huma and `/api/v2`
 
-**Status: accepted for Silo 1.0; implemented, not yet locked.** Tracking issue:
+**Status: accepted for Spark 1.0; implemented, not yet locked.** Tracking issue:
 [#135](https://github.com/Silo-Server/silo-server/issues/135). Commands assume the repository
 root is the cwd.
 
-This document records the contract and release decision for Silo's native API. It is durable
+This document records the contract and release decision for Spark's native API. It is durable
 architecture, not an implementation schedule: sequencing and progress belong in issue #135 and
 its pull requests.
 
 ## Decision
 
-Silo 1.0's first stable native API is `/api/v2`.
+Spark 1.0's first stable native API is `/api/v2`.
 
 The current `/api/v1` surface is an alpha contract. It will be frozen, carried only through a
-bounded pre-1.0 bridge, and removed from the 1.0 server except for a retirement tombstone. Silo will
+bounded pre-1.0 bridge, and removed from the 1.0 server except for a retirement tombstone. Spark will
 not maintain two native business APIs indefinitely.
 
 The pre-1.0 native HTTP surface is broader than that prefix. The proxy and transcode-node
@@ -41,7 +41,7 @@ endpoint merely for aesthetic consistency when no concrete contract problem is b
 
 ## Why v2 instead of converting v1 in place
 
-Silo is still alpha and the server, web client, and first-party native apps can ship a coordinated
+Spark is still alpha and the server, web client, and first-party native apps can ship a coordinated
 transition before 1.0. That is the one inexpensive opportunity to remove accidental shapes and
 make Huma's validation behavior part of an intentionally designed contract.
 
@@ -63,7 +63,7 @@ only to sequence releases safely; it is not a support policy.
 - `contracts/api/v2/openapi.json` is a deterministic generated artifact. It is never edited by
   hand.
 - It is the single native OpenAPI artifact. Huma contributes structured operations and a small
-  typed raw-operation registry contributes stable raw HTTP handshakes that OpenAPI can describe; Silo
+  typed raw-operation registry contributes stable raw HTTP handshakes that OpenAPI can describe; Spark
   does not publish separate structured and raw specifications.
 - Stable operation IDs and schema names are contract identifiers. After the 1.0 lock, renaming
   either is treated as a breaking change even when the HTTP path and JSON happen to be unchanged.
@@ -83,7 +83,7 @@ sidecar protocols. That boundary does not apply to structured JSON: subtitle fon
 the shared typed service and return the native `items` envelope without recording or decoding a
 v1 HTTP response.
 
-Huma validates v2 requests in production. Silo does not schema-validate every response at runtime.
+Huma validates v2 requests in production. Spark does not schema-validate every response at runtime.
 Instead, deterministic fixtures and representative handler responses are validated against the
 committed artifact in tests through the real router and middleware, covering serialization,
 headers, statuses, and problems. Plain-chi binary, range, redirect, and WebSocket handshakes use
@@ -307,7 +307,7 @@ The foundation configures the framework rather than inheriting convenience defau
   falling back to JSON;
 - add a structured-body media-type guard because Huma otherwise treats a missing `Content-Type`
   as JSON and accepts `+json` formats; missing, parameter-incompatible, and vendor media types use
-  Silo's `415` problem exactly as specified below;
+  Spark's `415` problem exactly as specified below;
 - disable Huma's default array nullability and require response builders to initialize slices and
   maps, with schema-validated response tests proving that collections never serialize as `null`;
 - use a named v2 instant transport type or canonical mapper; ordinary `time.Time` marshaling does
@@ -316,11 +316,11 @@ The foundation configures the framework rather than inheriting convenience defau
 - require explicit Huma `explode` metadata for slice query parameters and lint/test every array
   parameter so the accepted repeated-key wire form is not replaced by comma-separated values;
 - disable the built-in OpenAPI, documentation, and schema routes and remove the default schema-link
-  response transformer; Silo serves the exact committed artifact and omits production `$schema`
+  response transformer; Spark serves the exact committed artifact and omits production `$schema`
   additions as specified above; and
 - set the structured-body read deadline to 30 seconds, the server's own `ReadTimeout` baseline,
   rather than inheriting Huma's audited five-second default, which would silently supersede it.
-  The deadline, its boundary, and Silo's `408` Problem Details response have integration tests.
+  The deadline, its boundary, and Spark's `408` Problem Details response have integration tests.
 
 #### Foundation
 
@@ -589,7 +589,7 @@ The foundation is `internal/apiv2`. These facts about it are not derivable from 
 
 ### Problem Details
 
-Every v2 error uses RFC 9457 Problem Details and `application/problem+json`. Silo requires these
+Every v2 error uses RFC 9457 Problem Details and `application/problem+json`. Spark requires these
 members even where RFC 9457 makes them optional:
 
 - `type`: a stable HTTPS URI under a permanent project-controlled documentation origin; its final
@@ -630,7 +630,7 @@ session is valid but the access token predates a change to the account's role, s
 refreshes and retries instead of signing out.
 
 The foundation adapter replaces Huma's default problem output where necessary: every response has
-a Silo type and instance; validation details add stable codes and omit Huma's rejected `value`;
+a Spark type and instance; validation details add stable codes and omit Huma's rejected `value`;
 the production body omits Huma's optional `$schema` member. Malformed syntax uses `400`,
 authentication `401`, authorization `403` (or hidden `404`), missing resources `404`, state or
 idempotency conflicts `409`, unacceptable representation `406`, configured request-body timeout
@@ -801,7 +801,7 @@ with documented trust and size boundaries.
 
 ### Credential continuity
 
-Credentials belong to the Silo server, not an API major. Existing login sessions, access and
+Credentials belong to the Spark server, not an API major. Existing login sessions, access and
 refresh tokens, profile-lock state, and API keys remain valid through the bridge and 1.0 cutover
 until their normal expiry or revocation. V1 and v2 share one session/revocation model during the
 bridge; v2 does not mint a parallel credential universe. `Authorization`, `X-Profile-Id`, and
@@ -943,7 +943,7 @@ public browser OAuth and Discord-link handshakes.
 
 Exposing the server build version and contract digest before authentication is a deliberate,
 reviewed decision. An updated client must be able to tell a v2 server from a v1-only alpha server
-before it holds a credential, and version obscurity is not a control Silo relies on. That trade is
+before it holds a credential, and version obscurity is not a control Spark relies on. That trade is
 accepted for these fields only; `request_origin` echoes back only what the caller sent or what its
 own path to the server supplied, and the endpoint carries nothing else an unauthenticated caller
 should not see.
@@ -1046,7 +1046,7 @@ never fired directly from a request in a way that can escape the mutation's dura
 duplicated after a lost response.
 
 An `Idempotency-Key` request field appears in OpenAPI only for an operation that implements and
-documents its semantics. Silo never advertises or validates the field while silently ignoring it.
+documents its semantics. Spark never advertises or validates the field while silently ignoring it.
 Adding supported idempotency to an operation later is additive. Before foundation implementation,
 the v1 inventory classifies every durable-effect operation by the strategies above and identifies
 any residual group that can justify one shared implementation.
@@ -1124,7 +1124,7 @@ The shared job representation has an opaque string ID, stable `kind`, `state`, `
 time, optional start/finish times, `cancelable`, optional honest progress, and a typed terminal
 result/link or safe typed failure. Common states are `queued`, `running`, `canceling`, `succeeded`,
 `failed`, and `canceled`. Clients use `terminal` instead of inferring completion from an exhaustive
-state list. Progress exists only with a meaningful numerator, denominator, and unit; Silo does not
+state list. Progress exists only with a meaningful numerator, denominator, and unit; Spark does not
 manufacture percentages for indeterminate work.
 
 Polling the job returns `200`, supports ETag/`If-None-Match`, and includes `Retry-After` while
@@ -1169,7 +1169,7 @@ structurally ambiguous input before processing any item. After the envelope is a
 is independently authorized, validated, and committed. A synchronously completed batch returns
 `200` with a named result even when some items failed. An asynchronous batch returns `202` with a
 job whose terminal result is the same named batch result or a link to it. V2 does not use `207
-Multi-Status`; that status belongs to the WebDAV XML `multistatus` contract rather than Silo's
+Multi-Status`; that status belongs to the WebDAV XML `multistatus` contract rather than Spark's
 native JSON semantics.
 
 The per-item result contains a required `items` array in request order and an exact `summary` with
@@ -1201,14 +1201,14 @@ Authentication and authorization run before any conditional response is evaluate
 never bypasses current access checks. Validators are deterministic across replicas and represent
 the authorized response or durable resource version rather than process-local state.
 
-This default applies to the structured Huma surface, not to every response emitted by Silo. Raw
+This default applies to the structured Huma surface, not to every response emitted by Spark. Raw
 media, ranges, downloads, thumbnails, frontend assets, `Vary`, and TTL behavior remain explicit
 endpoint concerns. Their existing deliberate policies are preserved or redesigned with the
 owning section instead of being flattened by foundation middleware.
 
 ### Browser origins
 
-The native `/api/v2` JSON surface has no global CORS middleware. Silo's bundled web application
+The native `/api/v2` JSON surface has no global CORS middleware. Spark's bundled web application
 and plugin pages use the server's own origin, while Apple, Android, and other native clients are
 not governed by browser CORS. The narrow plugin launch cookie remains same-origin and path-scoped;
 it does not authorize cross-origin API access.
@@ -1252,7 +1252,7 @@ promised a common failure status. Webhooks, OAuth/browser callbacks, tokenized e
 media-session URLs, download-manifest assets, and dynamic plugin URLs move to their v2 forms
 without legacy aliases. Active playback, background downloads, cached plugin resources,
 previously sent email links, and externally configured integrations may therefore need to be
-restarted, regenerated, or reconfigured after the upgrade. Silo is alpha, and 1.0 is expected to
+restarted, regenerated, or reconfigured after the upgrade. Spark is alpha, and 1.0 is expected to
 be a coordinated or fresh deployment; accepting that bounded break keeps the stable contract and
 routers honest.
 
@@ -1818,7 +1818,7 @@ empty arrays rather than `null`.
 3. Ship Apple and Android builds that require v2 and clearly require a server update when
    connected to an older v1-only alpha server. Ship the web client on v2 in the bridge server.
 4. Verify the release matrix and observe v2 operation/error metrics through the bridge window.
-5. Ship Silo 1.0 with the legacy native route registrations removed or moved to their accepted v2
+5. Ship Spark 1.0 with the legacy native route registrations removed or moved to their accepted v2
    forms. On the main API listener, explicit retirement handlers cover `/api/v1`, `/api/v1/`, and every descendant and
    return `410 Gone` with the existing v1-shaped `client_upgrade_required` error, pointing the
    user toward a v2-capable client and the administrator upgrade guide. They contain no business
@@ -1840,13 +1840,13 @@ contract. Administrators drain or stop active work, take every API replica and r
 playback/transcode node out of service, deploy the matching 1.0 components, and then return the
 homogeneous deployment to service. Active playback and transfers may need to restart.
 
-Silo does not support a fleet that mixes v1-only alpha API replicas or workers with 1.0
+Spark does not support a fleet that mixes v1-only alpha API replicas or workers with 1.0
 components. API-to-worker handshakes and readiness must fail closed: an accidentally outdated or
 incompatible worker is unschedulable rather than receiving work that may fail later. Supporting
 rolling N/N-1 worker or API upgrades within the stable 1.x line is a separate post-1.0 decision;
 this migration does not carry alpha protocols merely to provide it.
 
-Silo's standing release policy requires a verified backup before every upgrade and does not
+Spark's standing release policy requires a verified backup before every upgrade and does not
 guarantee downgrade or in-place rollback compatibility between releases. For 1.0, the final
 dual-stack bridge remains published as an immutable recovery artifact. The supported recovery path
 is to stop 1.0, restore the complete pre-upgrade database and configuration, and deploy that bridge;
@@ -1991,7 +1991,7 @@ Before the v2 lock, a breaking v2 change is allowed only when its migration-ledg
 spec diff, fixtures, client impact, and release consequence are reviewed together. A route is not
 “done” merely because its server handler exists.
 
-At the Silo 1.0 lock, `/api/v2` becomes additive-only and binding:
+At the Spark 1.0 lock, `/api/v2` becomes additive-only and binding:
 
 - do not remove or rename an operation, parameter, response field, error code, operation ID, or
   schema name;

@@ -237,7 +237,7 @@ var reconcileContinueWatchingDropDecisionsCases = func() []reconcileDropCase {
 		{
 			// A listed show Silo doesn't have, recognizable by its provider IDs, hides
 			// nothing and doesn't stop the pass.
-			name:     "listed shows Silo lacks are ignored",
+			name:     "listed shows Spark lacks are ignored",
 			seriesOf: map[string]string{"hidden-1": "s-hidden"},
 			row: ContinueWatchingRow{
 				SourceSeriesIDs:        map[string]bool{"src-elsewhere": true},
@@ -299,7 +299,7 @@ var reconcileContinueWatchingDropDecisionsCases = func() []reconcileDropCase {
 		},
 		{
 			// One source series can span several Silo series; listing it lists them all.
-			name:     "listing a source show lists every Silo series it spans",
+			name:     "listing a source show lists every Spark series it spans",
 			seriesOf: map[string]string{"s1e1": "s-part-1", "s2e1": "s-part-2"},
 			row: ContinueWatchingRow{
 				SourceSeriesIDs:        map[string]bool{"src-show": true},

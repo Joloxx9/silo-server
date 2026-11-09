@@ -59,7 +59,7 @@ func TestPublicWarningSummarizesKnownDiagnostics(t *testing.T) {
 
 	cases := map[string]string{
 		fmt.Sprintf(unmatchedWarningFormat, 3, missingProviderIDsReason):      "Not matched (3): The source item has no TMDB, IMDb, or TVDB ID.",
-		fmt.Sprintf(warnEmbySeasonFavorites, 2):                               "Season favorites skipped (2): Silo can't favorite a season.",
+		fmt.Sprintf(warnEmbySeasonFavorites, 2):                               "Season favorites skipped (2): Spark can't favorite a season.",
 		warnEmbyFavoritesUnavailable:                                          embyFavoritesUnavailableSummary,
 		legacyEmbyFavoritesPrefix + "emby http 500: <html>stack trace</html>": embyFavoritesUnavailableSummary,
 		warnEmbySeriesUnavailable:                                             embySeriesUnavailableSummary,

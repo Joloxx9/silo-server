@@ -58,7 +58,7 @@ func (s pluginLibrarySource) foldersFor(ctx context.Context, userID string) ([]*
 	}
 	id, err := strconv.Atoi(userID)
 	if err != nil || id <= 0 {
-		return nil, fmt.Errorf("user_id %q is not a Silo user id", userID)
+		return nil, fmt.Errorf("user_id %q is not a Spark user id", userID)
 	}
 	if s.users == nil {
 		// No way to check the account: refuse rather than list everything.

@@ -1,25 +1,25 @@
-# Update an alpha installation to Silo 1.0
+# Update an alpha installation to Spark 1.0
 
 **Status: draft administrator checklist. The receiver paths below are taken from
 `contracts/api/v2/openapi.json` and `contracts/api/v2/migration.json`; the exact release
 commands, image tags, and administration-UI locations are still to be filled in before
 release.** Commands assume the repository root is the cwd.
 
-This guide is for administrators moving a pre-1.0 Silo installation to Silo 1.0. The native API
+This guide is for administrators moving a pre-1.0 Spark installation to Spark 1.0. The native API
 changes from the alpha contract to the stable `/api/v2` contract. The alpha native surface
 includes `/api/v1` and version-neutral paths currently served by the proxy and transcode-node
-listeners. Silo does not retain aliases for either class after cutover. A fresh 1.0 deployment is
+listeners. Spark does not retain aliases for either class after cutover. A fresh 1.0 deployment is
 recommended where practical. Existing installations use a maintenance window; zero-downtime
 alpha-to-1.0 upgrades are not supported.
 
 1.0 is not reachable directly from an arbitrary alpha build. Existing installations update
 0.x → the final bridge release → 1.0. The bridge is the last release that carries the full
 historical migration chain, the Go data migrations, and the one-way SQLite-to-Postgres per-user
-store import. Silo 1.0 ships one squashed schema baseline behind a guard that accepts only an
+store import. Spark 1.0 ships one squashed schema baseline behind a guard that accepts only an
 empty database or a database left at exactly the bridge's final migration version; anything else
 refuses to start and tells the administrator to update to the bridge first.
 
-Silo's general release policy requires a verified backup before every upgrade and does not
+Spark's general release policy requires a verified backup before every upgrade and does not
 guarantee downgrade or in-place rollback compatibility between releases. See
 [release versioning](release-versioning.md#backups-and-rollback). The 1.0 procedure below follows
 that same rule rather than creating a special downgrade promise.
@@ -49,18 +49,18 @@ including:
 - Discord-link callbacks and similar integration callbacks;
 - verification, unsubscribe, invitation, or other tokenized links sent before the upgrade.
 
-Silo does not redirect these URLs. Some contain bearer tokens or secrets that must not be copied
+Spark does not redirect these URLs. Some contain bearer tokens or secrets that must not be copied
 into a redirect location. Generate new URLs from the 1.0 server instead of editing an old path by
 hand.
 
-Operational probes are the exception to the versioned namespace and are not tombstoned. Silo 1.0
+Operational probes are the exception to the versioned namespace and are not tombstoned. Spark 1.0
 retains `GET /api/v1/health` and `GET /api/v1/ready` on the API listener and `GET /api/v1/health`
 on the proxy and transcode-node listeners exactly as they answer today; no root `/health` or
 `/ready` route is added. Existing probe configuration keeps working.
 
 ## Beta Books functionality
 
-Silo 1.0 supports Movies and Series. Audiobooks, ebooks, and Audiobookshelf
+Spark 1.0 supports Movies and Series. Audiobooks, ebooks, and Audiobookshelf
 compatibility remain available on 1.0 builds exactly as they work today, labeled
 **beta** and outside the 1.0 support promise. A consolidated Books effort will
 replace them later, with no assigned release date. See the
@@ -79,7 +79,7 @@ unavailable.
   migrations have finished before deploying 1.0. The 1.0 startup guard refuses a database that has
   not reached the bridge's final migration version.
 - [ ] Back up PostgreSQL using the deployment's normal tested procedure, and verify that the
-  backup can be restored. Silo takes its own database backup before startup migrations when
+  backup can be restored. Spark takes its own database backup before startup migrations when
   backups are on (see [before upgrades](architecture/backups.md#before-upgrades)), but that copy
   stays at the backup destination, by default on the same server, so keep an off-server copy too.
 - [ ] If `userdb.backend=sqlite` is configured, back up the local SQLite user store at
@@ -89,10 +89,10 @@ unavailable.
   persist it (see the deployment guide).
 - [ ] Preserve the current server configuration, secret material, deployment manifests, and the
   exact bridge server image or binary needed for the documented recovery procedure.
-- [ ] Record the public Silo URL and every reverse-proxy or load-balancer route that refers to
+- [ ] Record the public Spark URL and every reverse-proxy or load-balancer route that refers to
   `/api/v1`, `/stream`, `/downloads`, `/transcode`, or another alpha-native path named by the
   release ledger.
-- [ ] Inventory every external service configured with a Silo callback or webhook URL. Common
+- [ ] Inventory every external service configured with a Spark callback or webhook URL. Common
   examples are Sonarr/Radarr autoscan, the legacy Plex-sync receiver, webhook sync, OAuth
   providers, and notification integrations.
 - [ ] Inventory installed plugins and any plugin-provided pages or links used outside the bundled
@@ -108,9 +108,9 @@ unavailable.
 - [ ] If users are waiting on verification, invitation, unsubscribe, or other emailed links,
   expect to resend them after 1.0 is running.
 - [ ] Optional: copy the `cap_add: [NET_ADMIN]` line and its comment from the new
-  `docker-compose.yml` into your Compose file. With it, Silo uses kernel BBR on its client
+  `docker-compose.yml` into your Compose file. With it, Spark uses kernel BBR on its client
   connections and a larger TCP send buffer for remote clients on long, fast links. Read its risk
-  in [TCP congestion control](architecture/tcp-congestion.md) first. Without it, Silo still asks
+  in [TCP congestion control](architecture/tcp-congestion.md) first. Without it, Spark still asks
   for BBR where the host allows it, keeps the kernel's send buffer limits, and logs at start what
   it could not change and how to fix it.
 
@@ -122,7 +122,7 @@ unavailable.
    version.
 2. Stop or drain the entire alpha deployment according to the release-specific instructions,
    including every API replica and remote playback/transcode node.
-3. Deploy the matching Silo 1.0 API, proxy, and worker components and run only the documented
+3. Deploy the matching Spark 1.0 API, proxy, and worker components and run only the documented
    database migration procedure. An incompatible node must remain unschedulable.
 4. Keep operational checks on `GET /api/v1/health` and `GET /api/v1/ready` (and node
    `GET /api/v1/health`); these probes are retained unversioned and are not redirected or
@@ -139,7 +139,7 @@ unavailable.
 8. Reconnect OAuth-backed authentication or notification integrations so the provider records the
    1.0 callback URL.
 9. Open every installed plugin page through the 1.0 UI. Refresh or reinstall a plugin when its
-   own release notes require a version compatible with Silo 1.0.
+   own release notes require a version compatible with Spark 1.0.
 10. Restart downloads and playback instead of attempting to resume an alpha-issued URL.
 11. Resend any pre-1.0 tokenized email action that still needs to be completed.
 
@@ -158,7 +158,7 @@ administration-UI location for each row before the release candidate is promoted
 | Tokenized email | `/api/v1/notifications/email/verify`, `/api/v1/notifications/email/unsubscribe` | `GET /api/v2/notifications/email/verify`, `GET` and `POST /api/v2/notifications/email/unsubscribe` | Resend the action from 1.0; pre-upgrade links stop working | Open the newly sent link successfully |
 | Downloads | `/api/v1/downloads/...` control plus `/downloads/file/{token}` and node artifact paths | `/api/v2/downloads/...` control; the node listener keeps `/downloads/file/{token}` at its version-neutral path | Restart unfinished downloads and use only URLs issued by 1.0 | Verify `HEAD`, ranged transfer, manifest, artwork, and subtitles |
 | Playback | `/api/v1/playback/...` control plus `/api/v1/stream/...` media delivery | `/api/v2/playback/...` control plus `/api/v2/stream/...` media delivery | Start a new playback session and use only URLs issued by 1.0 | Verify start, seek/resume, subtitles, and stop reporting |
-| Plugins | `/api/v1/plugins/{installation_id}/...` and `/api/v1/plugin-assets/{installation_id}/...` | `/api/v2/plugin-content/plugins/{installation_id}/...` and `/api/v2/plugin-content/plugin-assets/{installation_id}/...` | Reopen through the 1.0 UI and update the plugin if required. A plugin that emits absolute links or redirects needs its own compatibility check; Silo does not rewrite them | Verify plugin page, assets, authorization, and one core action |
+| Plugins | `/api/v1/plugins/{installation_id}/...` and `/api/v1/plugin-assets/{installation_id}/...` | `/api/v2/plugin-content/plugins/{installation_id}/...` and `/api/v2/plugin-content/plugin-assets/{installation_id}/...` | Reopen through the 1.0 UI and update the plugin if required. A plugin that emits absolute links or redirects needs its own compatibility check; Spark does not rewrite them | Verify plugin page, assets, authorization, and one core action |
 | Operational probes | Main API probes plus proxy/transcode-node `/api/v1/health` | Unchanged | None; the probes are retained at their current paths | Observe healthy and ready states through each real proxy/load-balancer route |
 
 Every `/api/v1` path in the left column answers `410 Gone` with the `client_upgrade_required`
@@ -259,7 +259,7 @@ this checklist does not require Jellyfin clients to adopt the native schemas.
 The preserved pre-1.0 artifact is the bridge release itself — the version the deployment ran
 immediately before 1.0 — not an arbitrary earlier alpha build. Keep that immutable bridge image or
 binary, its exact configuration, the matching client builds, and the verified pre-update database
-backup until the 1.0 validation checklist passes. Silo does not guarantee that the bridge can read
+backup until the 1.0 validation checklist passes. Spark does not guarantee that the bridge can read
 a database migrated or written by 1.0. Unless the release notes explicitly certify that exact
 combination, the recovery procedure is:
 
@@ -275,7 +275,7 @@ recovery artifact, but it is not a continuing supported API line and receives no
 
 ## Release gate for this guide
 
-Before Silo 1.0 ships, the release owner must:
+Before Spark 1.0 ships, the release owner must:
 
 - replace every generic instruction above with the exact administration UI location or command;
 - reconcile the integration table against the complete pre-1.0-native-to-v2 route ledger;

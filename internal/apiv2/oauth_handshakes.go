@@ -333,7 +333,7 @@ func registerOAuthAccountOperations(reg *Registry) {
 				return nil, p
 			}
 			if r := requestFrom(ctx); r == nil || !svc.OnPublicOrigin(r) {
-				return nil, NewProblem(TypeConflict, "Open Silo at its public URL to link a sign-in.")
+				return nil, NewProblem(TypeConflict, "Open Spark at its public URL to link a sign-in.")
 			}
 			result, err := svc.StartLink(ctx, claims.UserID, Prefix, in.Body.LinkTicket, in.Body.Next)
 			if err != nil {
@@ -341,7 +341,7 @@ func registerOAuthAccountOperations(reg *Registry) {
 				case errors.Is(err, auth.ErrOAuthLinkTicketInvalid), errors.Is(err, auth.ErrUnknownAuthInstallation):
 					return nil, NewProblem(TypeNotFound, "The link ticket is unknown, used or expired.")
 				case errors.Is(err, auth.ErrOAuthPublicOriginRequired):
-					return nil, NewProblem(TypeConflict, "Open Silo at its public URL to link a sign-in.")
+					return nil, NewProblem(TypeConflict, "Open Spark at its public URL to link a sign-in.")
 				case errors.Is(err, auth.ErrProviderUnavailable):
 					return nil, NewProblem(TypeProviderUnavailable, "The sign-in provider could not start the link.")
 				case errors.Is(err, auth.ErrLinkTicketUnavailable):
@@ -378,7 +378,7 @@ func registerOAuthAccountOperations(reg *Registry) {
 
 	logout := humaOp(http.MethodGet, Prefix+"/auth/provider-logout", "getProviderLogout", oauthTag,
 		"Get the OAuth provider sign-out URL for the caller's web logout.")
-	logout.Description = "Call before logout while the session is still valid, then end the Silo session with logout and send the browser to end_session_url when it is not empty. It is empty unless the caller is the account's own login session (not an API key or an impersonation session), the account is linked to an enabled OAuth provider and the provider plugin offers an end-session URL; the plugin's own configuration turns provider logout on or off. The provider returns the browser to /login on the public origin."
+	logout.Description = "Call before logout while the session is still valid, then end the Spark session with logout and send the browser to end_session_url when it is not empty. It is empty unless the caller is the account's own login session (not an API key or an impersonation session), the account is linked to an enabled OAuth provider and the provider plugin offers an end-session URL; the plugin's own configuration turns provider logout on or off. The provider returns the browser to /login on the public origin."
 	Register(reg, Operation{Operation: logout, Class: ClassAuthenticated, ServiceBacked: true},
 		func(ctx context.Context, _ *struct{}) (*ProviderLogoutOutput, error) {
 			svc := reg.deps.OAuth

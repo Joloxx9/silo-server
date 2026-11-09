@@ -174,7 +174,7 @@ func TestDescribeEmbeddingLockConflict(t *testing.T) {
 		{"no provider chosen", lock, "", "", 0, `No embedding provider is chosen. Choose a provider that serves "model-a"`},
 		{"other model", lock, lock.BaseURL, "model-b", 768, `model "model-a", not "model-b"`},
 		{"other dimensions", lock, lock.BaseURL, "model-a", 1024, "768-dimension vectors, but the model now returns 1024"},
-		{"unstorable lock", EmbeddingLock{BaseURL: "http://ollama", Model: "qwen3-embedding:latest", SourceDimensions: 4096}, "http://ollama", "qwen3-embedding:latest", 0, "records 4096-dimension vectors; Silo stores 1 to 3072"},
+		{"unstorable lock", EmbeddingLock{BaseURL: "http://ollama", Model: "qwen3-embedding:latest", SourceDimensions: 4096}, "http://ollama", "qwen3-embedding:latest", 0, "records 4096-dimension vectors; Spark stores 1 to 3072"},
 		{"zero-dimension lock", EmbeddingLock{BaseURL: "http://ollama", Model: "m"}, "http://ollama", "m", 0, "records 0-dimension vectors"},
 		{"other storage", EmbeddingLock{Model: "m", SourceDimensions: 768, StorageDimensions: 1536}, "", "m", 768, "stored at 1536 dimensions"},
 		{"other storage, dimensions unknown", EmbeddingLock{Model: "m", SourceDimensions: 768, StorageDimensions: 1536}, "", "m", 0, "stored at 1536 dimensions"},

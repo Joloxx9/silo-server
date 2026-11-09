@@ -87,7 +87,7 @@ func carryPolicies(ctx context.Context, loader DatabaseLoader, dbURL, liveURL st
 		return fmt.Errorf("keeping the live server's access policies: %w", err)
 	}
 	if len(off) > 0 {
-		_, _ = fmt.Fprintf(out, "Turned off %d custom access policies this server does not run; review and enable them after Silo starts: %s.\n", len(off), strings.Join(off, ", "))
+		_, _ = fmt.Fprintf(out, "Turned off %d custom access policies this server does not run; review and enable them after Spark starts: %s.\n", len(off), strings.Join(off, ", "))
 	}
 	return nil
 }

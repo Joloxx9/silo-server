@@ -122,7 +122,7 @@ type WatchProviderSettings struct {
 	ImportWatchedEnabled         bool           `json:"import_watched_enabled"`
 	ImportProgressEnabled        bool           `json:"import_progress_enabled"`
 	ExportWatchedEnabled         bool           `json:"export_watched_enabled"`
-	ExportUnwatchedEnabled       bool           `json:"export_unwatched_enabled" doc:"Has no effect: mark unwatched keeps watch history, so Silo sends providers no history removals."`
+	ExportUnwatchedEnabled       bool           `json:"export_unwatched_enabled" doc:"Has no effect: mark unwatched keeps watch history, so Spark sends providers no history removals."`
 	ImportFavoritesEnabled       bool           `json:"import_favorites_enabled"`
 	ExportFavoritesEnabled       bool           `json:"export_favorites_enabled"`
 	SyncFavoriteRemovalsEnabled  bool           `json:"sync_favorite_removals_enabled"`
@@ -134,7 +134,7 @@ type WatchProviderSettings struct {
 	ImportRatingsEnabled         bool           `json:"import_ratings_enabled" doc:"Import the provider's movie and series ratings as stars (1-2 is 1 star, 9-10 is 5 stars)."`
 	ExportRatingsEnabled         bool           `json:"export_ratings_enabled" doc:"Send the profile's star ratings to the provider (stars times two) and clear removed ones."`
 	SyncDroppedEnabled           bool           `json:"sync_dropped_enabled" doc:"Sync dropped shows both ways: dismissing a show, or one of its episodes, from Home drops the show on the provider, shows dropped on the provider are hidden from Continue Watching and the profile-wide Next Up (a single series' Next Up still lists them), and watching a dropped show again undrops it on both sides."`
-	SyncCollectionsEnabled       bool           `json:"sync_collections_enabled" doc:"Sync the provider account's own named lists both ways with collections on this profile: each list gets a hand-picked collection, and titles added to or removed from either side follow. A collection made in Silo stays local."`
+	SyncCollectionsEnabled       bool           `json:"sync_collections_enabled" doc:"Sync the provider account's own named lists both ways with collections on this profile: each list gets a hand-picked collection, and titles added to or removed from either side follow. A collection made in Spark stays local."`
 	ConnectionSettings           map[string]any `json:"connection_settings" doc:"The value of every setting in the provider's connection_settings, keyed by setting key: true or false for a boolean setting. A setting the profile has not changed has its default. Empty when the provider declares none."`
 }
 
@@ -496,7 +496,7 @@ type WatchProviderCapabilities struct {
 	ImportWatched   bool `json:"import_watched"`
 	ImportProgress  bool `json:"import_progress"`
 	ExportWatched   bool `json:"export_watched"`
-	ExportUnwatched bool `json:"export_unwatched" doc:"Always false: mark unwatched keeps watch history, so Silo sends providers no history removals."`
+	ExportUnwatched bool `json:"export_unwatched" doc:"Always false: mark unwatched keeps watch history, so Spark sends providers no history removals."`
 	ImportFavorites bool `json:"import_favorites"`
 	ExportFavorites bool `json:"export_favorites"`
 	RemoveFavorites bool `json:"remove_favorites"`
@@ -544,7 +544,7 @@ type WatchProviderConnection struct {
 	ImportWatchedEnabled         bool                      `json:"import_watched_enabled"`
 	ImportProgressEnabled        bool                      `json:"import_progress_enabled"`
 	ExportWatchedEnabled         bool                      `json:"export_watched_enabled"`
-	ExportUnwatchedEnabled       bool                      `json:"export_unwatched_enabled" doc:"Has no effect: mark unwatched keeps watch history, so Silo sends providers no history removals."`
+	ExportUnwatchedEnabled       bool                      `json:"export_unwatched_enabled" doc:"Has no effect: mark unwatched keeps watch history, so Spark sends providers no history removals."`
 	ImportFavoritesEnabled       bool                      `json:"import_favorites_enabled"`
 	ExportFavoritesEnabled       bool                      `json:"export_favorites_enabled"`
 	SyncFavoriteRemovalsEnabled  bool                      `json:"sync_favorite_removals_enabled"`

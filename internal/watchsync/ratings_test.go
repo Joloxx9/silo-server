@@ -517,7 +517,7 @@ func TestSyncRatingsNeverRemovesARatingItSkipped(t *testing.T) {
 	h.provider.batch = RatingImportBatch{SnapshotKinds: []string{historyimport.KindMovie}}
 	h.sync()
 	if len(h.provider.removed) != 0 {
-		t.Fatalf("removed = %#v, want no removal for a rating Silo still holds", h.provider.removed)
+		t.Fatalf("removed = %#v, want no removal for a rating Spark still holds", h.provider.removed)
 	}
 }
 

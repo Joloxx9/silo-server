@@ -260,7 +260,7 @@ func TestInstallArchiveRefusesUnsupportedOrUnlistedPlugins(t *testing.T) {
 		req  InstallArchiveRequest
 		want string
 	}{
-		{name: "unsupported API", req: InstallArchiveRequest{}, want: `needs Silo plugin API "v2"`},
+		{name: "unsupported API", req: InstallArchiveRequest{}, want: `needs Spark plugin API "v2"`},
 		{name: "other plugin", req: InstallArchiveRequest{PluginID: "test.other", Version: "1.0.0"}, want: "not the test.other 1.0.0 its catalog lists"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -316,7 +316,7 @@ func TestServiceInstallLocalRefusesBeforeStoppingInstalledPlugin(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{name: "unsupported API", want: `needs Silo plugin API "v2"`, write: func(t *testing.T, path string) {
+		{name: "unsupported API", want: `needs Spark plugin API "v2"`, write: func(t *testing.T, path string) {
 			writePluginArchive(t, path, future)
 		}},
 		// Extraction writes each entry to its cleaned path, so a second entry

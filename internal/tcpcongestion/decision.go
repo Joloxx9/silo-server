@@ -120,7 +120,7 @@ func congestionAction(reason string) string {
 	case reasonNotAllowed:
 		return "Add bbr to net.ipv4.tcp_allowed_congestion_control on the host, or grant NET_ADMIN (cap_add: [NET_ADMIN], as in the shipped docker-compose.yml)."
 	case reasonKernelError:
-		return "Report the errno in a Silo issue."
+		return "Report the errno in a Spark issue."
 	case reasonOverridden:
 		return "A route congctl setting or host policy overrides the socket; check ip route."
 	default:

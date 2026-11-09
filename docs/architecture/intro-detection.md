@@ -577,7 +577,7 @@ when an admin contribution of that file reaches it, as it sends its own saves
 that keep a provider's marker, until the last older replica is replaced.
 
 The rule exists because TheIntroDB's terms forbid using its data to seed other
-databases, so Silo must not pass a provider's marker on as if a person had
+databases, so Spark must not pass a provider's marker on as if a person had
 found it. It applies to every provider, the one the marker came from
 included, so it stays one simple rule.
 

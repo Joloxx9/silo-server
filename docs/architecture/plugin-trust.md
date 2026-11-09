@@ -1,7 +1,7 @@
 # Plugin trust model
 
-An installed plugin is trusted code with the same access as the Silo process
-that runs it. Silo does not sandbox plugins. An admin who installs a plugin
+An installed plugin is trusted code with the same access as the Spark process
+that runs it. Spark does not sandbox plugins. An admin who installs a plugin
 grants it that access; the defense against a plugin you don't trust is not to
 install it.
 
@@ -41,7 +41,7 @@ the manifest checksum it is checked against. The default root,
 refuses to start when it already exists as a symlink, belongs to another user,
 or is writable by its group or other users. A root set with
 `SILO_PLUGIN_CACHE_DIR` is not checked; the operator keeps it writable only by
-Silo's user.
+Spark's user.
 
 Chunked plugin uploads spool under `<tmp>/silo-uploads`, and chunked
 diagnostics uploads under `<tmp>/silo-diagnostics-uploads`, both through
@@ -51,7 +51,7 @@ operation when they fail. Each chunk write and each completed upload reopens
 the session file through the verified root and must find the file `Create`
 made, so a swapped session directory or file cannot redirect uploaded bytes.
 A bare plugin binary is installed from that checked handle; a zip archive is
-still read by path, which only Silo's user can change while the root's parent
+still read by path, which only Spark's user can change while the root's parent
 directory is sticky or private, as the shared temp directory is.
 
 ## What RuntimeHost scoping is for

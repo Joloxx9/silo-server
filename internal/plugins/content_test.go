@@ -142,7 +142,7 @@ func TestContentHandlerRefusesOffOriginRedirects(t *testing.T) {
 		want     int
 	}{
 		{"relative", http.StatusSeeOther, ContentPrefix + "/plugins/1/done", http.StatusSeeOther},
-		{"absolute same origin", http.StatusFound, "https://Silo.Test:443/elsewhere", http.StatusFound},
+		{"absolute same origin", http.StatusFound, "https://Spark.Test:443/elsewhere", http.StatusFound},
 		{"another host", http.StatusFound, "https://elsewhere.example/x", http.StatusBadGateway},
 		{"scheme relative", http.StatusTemporaryRedirect, "//elsewhere.example/x", http.StatusBadGateway},
 		{"downgrade", http.StatusPermanentRedirect, "http://silo.test/x", http.StatusBadGateway},

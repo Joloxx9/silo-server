@@ -42,8 +42,8 @@ func Current() Info {
 }
 
 // UserAgent names this Silo build for third-party APIs that ask callers to
-// identify their application and version, for example "Silo/ce6a0f53". A build
-// without revision metadata reports "Silo/dev".
+// identify their application and version, for example "Spark/ce6a0f53". A build
+// without revision metadata reports "Spark/dev".
 func UserAgent() string { return userAgent() }
 
 var userAgent = sync.OnceValue(func() string { return userAgentFor(Current()) })
@@ -64,7 +64,7 @@ func userAgentFor(info Info) string {
 	if version == "" {
 		version = "dev"
 	}
-	return "Silo/" + version
+	return "Spark/" + version
 }
 
 func resolve(settings []debug.BuildSetting, fallbackRevision string, fallbackDirty bool, buildNumber uint64, builtAt string) Info {

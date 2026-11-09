@@ -36,7 +36,7 @@ func TestMeilisearchConnectionCheckRedirectPolicy(t *testing.T) {
 		{name: "credential 3xx without location is not a redirect", key: "SYNTHETIC_CREDENTIAL", status: http.StatusFound, wantCalls: 1},
 		{name: "credential rejected by authenticated read", key: "SYNTHETIC_CREDENTIAL", indexStatus: http.StatusForbidden, wantCalls: 2, wantKeyRejected: true},
 		{name: "credential read unavailable is not a key error", key: "SYNTHETIC_CREDENTIAL", indexStatus: http.StatusServiceUnavailable, wantCalls: 2},
-		{name: "credential scoped away from Silo's indexes", key: "SYNTHETIC_CREDENTIAL", searchStatus: http.StatusForbidden, wantCalls: 3, wantKeyRejected: true},
+		{name: "credential scoped away from Spark's indexes", key: "SYNTHETIC_CREDENTIAL", searchStatus: http.StatusForbidden, wantCalls: 3, wantKeyRejected: true},
 		{name: "credential search answered by a proxy 404", key: "SYNTHETIC_CREDENTIAL", proxyNotFound: true, wantCalls: 3},
 		{name: "no credential rejected by secured instance", indexStatus: http.StatusUnauthorized, wantCalls: 2, wantKeyRejected: true},
 		{name: "no credential direct", wantCalls: 3, wantSuccess: true},

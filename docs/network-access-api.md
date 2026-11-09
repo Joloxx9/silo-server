@@ -1,9 +1,9 @@
 # Network Access API
 
-Network access providers are plugins that give a Silo deployment an identity on
+Network access providers are plugins that give a Spark deployment an identity on
 an overlay network (Tailscale first; the contract is provider-neutral) so
 clients reach it without port forwarding or a public reverse proxy. The plugin
-owns the overlay client and reverse-proxies to the local Silo listeners; the
+owns the overlay client and reverse-proxies to the local Spark listeners; the
 server owns supervision, state storage, status and this admin surface. The
 design is in [docs/architecture/network-access.md](architecture/network-access.md).
 

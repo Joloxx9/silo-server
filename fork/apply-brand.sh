@@ -30,8 +30,8 @@ mapfile -t web_files < <(grep -rlw --include='*.ts' --include='*.tsx' 'Silo' web
   | grep -v -e '\.test\.' -e '^web/src/api/v2/schema\.ts$' -e '^web/src/api/v2/operations\.ts$')
 [ "${#web_files[@]}" -gt 0 ] || { echo "apply-brand: no web strings found" >&2; exit 1; }
 perl -pi -e 's/(?<![-\w])Silo(?![-\w])/$ENV{APP_NAME}/g' "${web_files[@]}"
-edit web/index.html 's{<title>Silo</title>}{<title>$ENV{APP_NAME}</title>}'
-edit web/public/site.webmanifest 's/"(name|short_name)": "Silo"/"$1": "$ENV{APP_NAME}"/g'
+edit web/index.html 's{<title>(?:Silo|Spark)</title>}{<title>$ENV{APP_NAME}</title>}'
+edit web/public/site.webmanifest 's/"(name|short_name)": "(?:Silo|Spark)"/"$1": "$ENV{APP_NAME}"/g'
 edit web/public/site.webmanifest 's/"(theme_color|background_color)": "#[0-9a-fA-F]{6}"/"$1": "$ENV{THEME_COLOR}"/g'
 
 # The lockup (spark + name) is wider than Silo's: widen its boxes, same height.
@@ -41,19 +41,13 @@ edit web/src/components/AdminSidebar.tsx 's/<SiloBrand className="h-12 w-\[112px
 
 # Server defaults: the name a fresh server shows, Jellyfin clients see and
 # emails come from. A name an administrator saved is kept.
-edit internal/config/admin_settings.go 's/("(?:branding\.server_name|jellyfin_compat\.server_name|email\.from_name)":\s*)"Silo"/$1"$ENV{APP_NAME}"/g'
-edit internal/config/db_loader.go 's/("jellyfin_compat\.server_name", )"Silo"/$1"$ENV{APP_NAME}"/'
-edit internal/config/config.go 's/(ServerName:\s*)"Silo"/$1"$ENV{APP_NAME}"/'
-edit internal/mail/mail.go 's/(cfg\.fromName = )"Silo"/$1"$ENV{APP_NAME}"/'
-edit internal/invitations/email.go 's/(product = )"Silo"/$1"$ENV{APP_NAME}"/'
+edit internal/config/admin_settings.go 's/("(?:branding\.server_name|jellyfin_compat\.server_name|email\.from_name)":\s*)"(?:Silo|Spark)"/$1"$ENV{APP_NAME}"/g'
+edit internal/config/db_loader.go 's/("jellyfin_compat\.server_name", )"(?:Silo|Spark)"/$1"$ENV{APP_NAME}"/'
+edit internal/config/config.go 's/(ServerName:\s*)"(?:Silo|Spark)"/$1"$ENV{APP_NAME}"/'
+edit internal/mail/mail.go 's/(cfg\.fromName = )"(?:Silo|Spark)"/$1"$ENV{APP_NAME}"/'
+edit internal/invitations/email.go 's/(product = )"(?:Silo|Spark)"/$1"$ENV{APP_NAME}"/'
 
-# Built-in plugin catalogs carry the Spark names. The server rewrites the
-# stored repository names from these constants at startup.
-edit internal/plugins/catalog_channels.go 's{(DefaultRepositoryURL\s*= )"https://raw\.githubusercontent\.com/Silo-Server/silo-plugins/main/manifest\.json"}{$1"https://raw.githubusercontent.com/Joloxx9/spark-plugins/spark/manifest.json"}'
-edit internal/plugins/catalog_channels.go 's/(DefaultRepositoryName = )"Silo maintained"/$1"$ENV{APP_NAME} maintained"/'
-edit internal/plugins/catalog_channels.go 's/(ApprovedCommunityRepositoryName = )"Approved community"/$1"$ENV{APP_NAME} community"/'
-edit web/src/lib/pluginPresentation.ts 's/"Approved community"/"$ENV{APP_NAME} community"/g'
-edit web/src/pages/AdminPluginDetail.tsx 's/"Approved community plugins are turned off"/"$ENV{APP_NAME} community plugins are turned off"/'
+# Spark catalog names are source defaults so local development and images agree.
 
 # Icons, favicon, mark and sidebar wordmark.
 cp -R fork/overlay/. .

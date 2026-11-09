@@ -22,7 +22,7 @@ func AccountLinkBase(ctx context.Context, settings SettingReader, fallback strin
 }
 
 // ServerName is the branded server name account emails and their landing
-// screens show, defaulting to "Silo".
+// screens show, defaulting to "Spark".
 func ServerName(ctx context.Context, settings SettingReader) string {
 	if settings != nil {
 		if name, err := settings.Get(ctx, branding.KeyServerName); err == nil {

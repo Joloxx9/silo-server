@@ -1,11 +1,11 @@
 # Network access providers
 
-Network access providers let an installed plugin give a Silo deployment an
+Network access providers let an installed plugin give a Spark deployment an
 overlay-network identity (Tailscale via tsnet first, NetBird later) so clients
 reach it without port forwarding or a public reverse proxy. Phase one covers
 one API server plus any number of proxy nodes; transcode nodes are never
 exposed because clients never talk to them. The plugin owns the overlay client
-and reverse-proxies to the local Silo listeners; the server owns supervision,
+and reverse-proxies to the local Spark listeners; the server owns supervision,
 per-instance state, the access path, status, and the admin API
 ([docs/network-access-api.md](../network-access-api.md)). Tracking issue:
 Silo-Server/silo-server#1001.
@@ -22,7 +22,7 @@ Silo-Server/silo-server#1001.
 ## Why a plugin
 
 The overlay client (tsnet) updates on its own cadence; shipping it as a plugin
-lets it release without a Silo release. The capability
+lets it release without a Spark release. The capability
 `network_access_provider.v1` is provider-neutral so a second provider is a
 second plugin, not a new server surface. Providers are discovered from the
 manifest's typed descriptor (`network_access_provider.provider`, the stable
@@ -89,7 +89,7 @@ plugin's loopback source is indistinguishable from any other local proxy.
   Operators who narrow `clientip.trusted_proxies` must keep loopback.
 - `socketOriginAllowed` accepts the overlay origins of providers currently
   connected on this host (`StatusCache.ConnectedOrigins`) next to
-  `server.public_url` and the request's own origin, so a browser reaching Silo over the overlay can open
+  `server.public_url` and the request's own origin, so a browser reaching Spark over the overlay can open
   WebSockets.
 
 Downstream, `Path.Provider` selects the proxy origin a client is handed: a
@@ -236,4 +236,4 @@ Funnel or any public exposure, multiple API replicas, NetBird. Login via
 overlay identity is the network identity sign-in in
 [external-sign-in.md](external-sign-in.md#network-identity): the middleware
 only records the peer, and the provider's plugin decides who it is. The non-goals in [docs/non-goals.md](../non-goals.md)
-apply unchanged: a provider proxies Silo's own listeners and nothing else.
+apply unchanged: a provider proxies Spark's own listeners and nothing else.

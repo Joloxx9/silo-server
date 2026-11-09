@@ -48,7 +48,7 @@ type AdminCatalogItem struct {
 	SeasonNumber     *int                      `json:"season_number,omitempty" doc:"An episode's season; absent otherwise"`
 	EpisodeNumber    *int                      `json:"episode_number,omitempty" doc:"An episode's number in its season; absent otherwise"`
 	LibraryIDs       []ID                      `json:"library_ids" doc:"Every enabled library the item is present in, whatever library_id filters"`
-	AddedAt          Instant                   `json:"added_at" doc:"When Silo first saw the item: the earliest first-seen time across its libraries, or its first-seen time in library_id when that filter is set. Not a change cursor; metadata and file changes do not move it"`
+	AddedAt          Instant                   `json:"added_at" doc:"When Spark first saw the item: the earliest first-seen time across its libraries, or its first-seen time in library_id when that filter is set. Not a change cursor; metadata and file changes do not move it"`
 	Versions         []AdminCatalogItemVersion `json:"versions" doc:"Each present file in an enabled library, ordered by file_id. Empty for a series, never null"`
 	Genres           []string                  `json:"genres,omitempty" doc:"Stored genres of a movie or series, not localized; absent when there are none and for an episode"`
 	ContentRating    string                    `json:"content_rating,omitempty" doc:"Stored content rating of a movie or series; absent when unknown and for an episode" example:"PG-13"`

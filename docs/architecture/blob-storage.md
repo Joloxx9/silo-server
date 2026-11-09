@@ -1,10 +1,10 @@
 # Blob storage
 
-`internal/blobstore.Store` is the backend-neutral store for the blobs Silo owns.
+`internal/blobstore.Store` is the backend-neutral store for the blobs Spark owns.
 The store owns its filesystem root or S3 bucket; callers use their own logical
 keys.
 
-Every blob Silo owns goes through it: artwork, branding assets, intro/credit
+Every blob Spark owns goes through it: artwork, branding assets, intro/credit
 markers, chapter thumbnails, trickplay sprite sheets, downloaded subtitles,
 diagnostic bundles, job artifacts, and profile avatars.
 
@@ -330,7 +330,7 @@ job. The admission session is detached from the connection pool so pool cleanup
 cannot release it while old workers are still running.
 
 An unexpected loss of that PostgreSQL session, such as a database restart or
-failover, releases its advisory lock before the process may notice. Silo probes
+failover, releases its advisory lock before the process may notice. Spark probes
 the session every second. A node that holds only the shared lock rejoins on a
 new session with a non-blocking shared acquire, so an ordinary database restart
 does not stop it. While the database cannot be reached, its blob writes are
@@ -356,7 +356,7 @@ seconds. Every error and cancellation path makes a final bounded write with a
 detached context, so verified work survives even when the job context has been
 canceled. An incomplete fenced listing never runs orphan cleanup. The transition
 does not retain a key-sized set in application memory or issue a database round
-trip per object. During the fenced pass of the same execution, Silo can compare
+trip per object. During the fenced pass of the same execution, Spark can compare
 reliable listed size, ETag, and modification-time values against those rows,
 avoiding a second object read when all three are unchanged. Bulk passes never
 take this shortcut. Local filesystem listings are deliberately excluded
@@ -522,7 +522,7 @@ published, and artwork without a manifest is limited to its type's medium rung.
 Every other key resolves as held, without a lookup. Catalog reads never probe
 storage or delivery.
 
-Silo is the only writer to the assets store, and its collectors delete a
+Spark is the only writer to the assets store, and its collectors delete a
 revision only after it is retired, so a published key stays in storage.
 Nothing rechecks published artwork on a timer: on a request-billed bucket,
 re-confirming every immutable object each week became the largest source of
@@ -530,7 +530,7 @@ read requests. On local storage, a published key that is nevertheless missing
 is repaired when the server reads it: the signed artwork route and offline
 downloads read the store, answer 404, and enqueue repair. On S3, clients read
 objects without passing through the server. Objects removed there outside
-Silo, such as after bucket loss or a restore onto a bucket the collectors have
+Spark, such as after bucket loss or a restore onto a bucket the collectors have
 since cleaned, are recovered by running `reconcile_artwork_cache` by hand. Its
 verify sweep checks each row's stored key and every other size the revision
 published. Provider artwork missing either is reset to its source for the

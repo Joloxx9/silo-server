@@ -19,7 +19,7 @@ func TestBoundUserAgent(t *testing.T) {
 		limit           int
 	}{
 		{"empty", "", "", 4},
-		{"ordinary", "Silo/1.0", "Silo/1.0", 12},
+		{"ordinary", "Spark/1.0", "Spark/1.0", 12},
 		{"ascii", "abcdef", "abcd", 4},
 		{"exact multibyte", "a界b", "a界", 4},
 		{"split multibyte", "ab界c", "ab", 4},
@@ -79,7 +79,7 @@ func (*mutationMetadataRows) Scan(dst ...any) error {
 }
 
 func TestMutationBoundsUserAgentBeforePersistenceAndCommit(t *testing.T) {
-	for _, raw := range []string{"Silo/1.0", "a\x00\xff\xfeb", strings.Repeat("agent/", 86)} {
+	for _, raw := range []string{"Spark/1.0", "a\x00\xff\xfeb", strings.Repeat("agent/", 86)} {
 		req := httptest.NewRequest(http.MethodPatch, "/api/v2/admin/users/7", nil)
 		req.Header.Set("User-Agent", raw)
 		var published []Entry

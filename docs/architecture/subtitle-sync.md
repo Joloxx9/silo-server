@@ -41,7 +41,7 @@ bytes never change.
 
 ## Sidecar subtitles
 
-Silo is a media server, not a media manager: it never writes a sidecar file.
+Spark is a media server, not a media manager: it never writes a sidecar file.
 A sidecar's correction is a row keyed by the media file and the SHA-256 of the
 sidecar's bytes on disk, before any UTF-8 decoding, so the lookup on delivery
 and the sync job's change check hash the same bytes.

@@ -1,6 +1,6 @@
 # Real-time library monitoring
 
-On Linux, Silo watches the folders of enabled libraries and scans only what
+On Linux, Spark watches the folders of enabled libraries and scans only what
 changed, usually within seconds of a file being added, finished, renamed, or
 removed. It uses inotify. Network shares are not monitored. Each library
 reports whether monitoring works and, when it doesn't, why.
@@ -14,11 +14,11 @@ operations are in `internal/apiv2/library_monitoring.go` and are described in
 - Monitoring is a library feature, not an autoscan source. The autoscan master
   switch does not gate it, and its scans carry their own trigger,
   `realtime_monitor` (labelled "File change" in the web scan views).
-- Silo always scans the narrowest target: the file, its folder, or the vanished
+- Spark always scans the narrowest target: the file, its folder, or the vanished
   subtree. It widens to a whole-library scan only after a kernel event overflow
   or a burst of more than 1,000 targets for one library. There is no
   "full scan on change" mode.
-- Changes made while Silo was down are not replayed. The initial walk of a
+- Changes made while Spark was down are not replayed. The initial walk of a
   folder queues no scans; the scheduled `scan_libraries` task (daily at 02:00 by
   default), a manual scan, or an autoscan source picks those changes up.
 - Linux only. On other platforms every visible library folder reports
@@ -268,15 +268,15 @@ directories the scanner would enter (`walkTree`). They skip:
   library still reports `monitoring`, because its own folder is monitored,
   even when every entry is such a link; only the detail says what is left
   out.
-- A directory Silo may not read cannot be watched (`inotify_add_watch` fails
+- A directory Spark may not read cannot be watched (`inotify_add_watch` fails
   with `EACCES` or `EPERM`); the scanner cannot read it either. Below a
   library folder it is skipped with everything under it, and the folder's
-  status detail names it ("Folders Silo can't read aren't monitored: …") so
+  status detail names it ("Folders Spark can't read aren't monitored: …") so
   the status never claims it. Nothing reports a permission change on a
   directory that is not watched, so every reconcile checks whether such a
   directory can be opened now and walks the folder again when one can. A
   directory that appears unreadable at runtime asks for a walk at once. A
-  library folder Silo cannot watch, or any other kernel error, fails the walk,
+  library folder Spark cannot watch, or any other kernel error, fails the walk,
   and the folder shows `error` with the reason. Only a directory that vanished
   or stopped being a directory after it was listed (`ENOENT`, `ENOTDIR`) is
   skipped silently.
@@ -389,7 +389,7 @@ monitored with nothing recorded.
   monitor keeps `limit_reached` instead of the walk's result.
 - Walks run in library `sort_order`, so the libraries listed first win when the
   limit is tight.
-- Tests inject `ENOSPC` through a seam. Nothing in Silo or its tests changes
+- Tests inject `ENOSPC` through a seam. Nothing in Spark or its tests changes
   host sysctls.
 
 ## Filesystem support
@@ -428,7 +428,7 @@ IDEs) draw from the same budget when they run as that UID.
 fs.inotify.max_user_watches = 1048576
 ```
 
-Apply it with `sudo sysctl --system`. Silo notices the new value on its next
+Apply it with `sudo sysctl --system`. Spark notices the new value on its next
 reconcile and retries libraries in `limit_reached`. On TrueNAS SCALE, add the
 same variable under System Settings → Advanced → Sysctl; on Unraid, the Tips
 and Tweaks plugin sets it.

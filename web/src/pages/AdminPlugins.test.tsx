@@ -238,7 +238,7 @@ describe("AdminPlugins", () => {
 
     expect(markup).toContain("Made by Silo");
     expect(markup).toContain("Other sources");
-    expect(markup).not.toContain("Approved community");
+    expect(markup).not.toContain("Spark community");
     // Uninstalled plugins come first within a group.
     expect(markup.indexOf("Plugin 02")).toBeLessThan(markup.indexOf("Plugin 01"));
     expect(markup).toContain("Installed");

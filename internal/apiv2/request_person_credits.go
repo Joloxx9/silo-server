@@ -18,7 +18,7 @@ type MediaRequestPersonCreditsService interface {
 
 // RequestPersonCreditsInput names a person by TMDB ID.
 type RequestPersonCreditsInput struct {
-	TMDBID int `path:"tmdb_id" minimum:"1" doc:"The person's TMDB identifier (external, not a Silo ID); a catalog person carries it as tmdb_id" example:"73968"`
+	TMDBID int `path:"tmdb_id" minimum:"1" doc:"The person's TMDB identifier (external, not a Spark ID); a catalog person carries it as tmdb_id" example:"73968"`
 }
 
 // RequestPersonCredit is one title in a person's filmography.

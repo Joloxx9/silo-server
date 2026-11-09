@@ -85,7 +85,7 @@ func TestInstanceNamesSurviveTheWire(t *testing.T) {
 	// Spaces, parentheses, dots and UTF-8 must stay one label and compare
 	// equal after a round trip, or the responder would ignore questions about
 	// its own name.
-	for _, name := range []string{"Living Room (Den)", "Silo v1.0", "Wohnzimmer – Ö", `quote"back\slash`} {
+	for _, name := range []string{"Living Room (Den)", "Spark v1.0", "Wohnzimmer – Ö", `quote"back\slash`} {
 		svc := testService
 		svc.instance = name
 		q := roundTrip(t, query(svc.instanceName(), dns.TypeSRV))

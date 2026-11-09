@@ -1,6 +1,6 @@
 # Notifications
 
-Silo's user-facing notification system treats media availability as durable,
+Spark's user-facing notification system treats media availability as durable,
 server-side release events, fans them out to interested profiles as inbox
 rows, and accelerates delivery through realtime websocket, web push, and
 outbound webhooks. The durable `notification_deliveries` row is always the
@@ -289,7 +289,7 @@ Discord's infrastructure and to everyone in the channel. The rules:
 ### Discord payload
 
 Discord webhooks receive a native embed (no `content` line), with
-`username: "Silo"` and a per-reason accent color (favorite, watchlist,
+`username: "Spark"` and a per-reason accent color (favorite, watchlist,
 continue-watching, next-up precedence order). The builder enforces Discord's
 embed limits — 256-char title, 4096-char description, 1024-char field
 values, 2048-char footer, 6000 chars total — truncating description first
@@ -305,7 +305,7 @@ line, which also counts items past the 10-embed cap.
 
 ### Generic payload and HMAC signing
 
-Generic webhooks receive canonical Silo JSON: event name, delivery and
+Generic webhooks receive canonical Spark JSON: event name, delivery and
 webhook IDs, timestamp, `version`, `test` flag, profile ID, delivery type,
 reason flags, and the series/episode (or request) content blocks.
 
@@ -316,7 +316,7 @@ Each request is signed with the webhook's per-destination 32-byte secret:
   `X-Silo-Signature: t=<epoch>,v1=<hex-hmac-sha256>` (Stripe's convention,
   so existing verification libraries work).
 - The HMAC-SHA256 input is `{X-Silo-Timestamp}.{request body bytes}` — the
-  literal bytes Silo sends. Receivers verify against the literal bytes they
+  literal bytes Spark sends. Receivers verify against the literal bytes they
   received with a constant-time compare and a replay window (~5 minutes); no
   JSON canonicalization is required on either side.
 - The secret is returned once at create/rotate time and is never readable

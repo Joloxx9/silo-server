@@ -69,7 +69,7 @@ func fixtureCases() []fixtureCase {
 		{name: "get_system_info_ok", operationID: "getSystemInfo",
 			scenario: "Discovery before login: a public operation answered with the contract identity.",
 			method:   http.MethodGet, path: "/api/v2/system/info",
-			headers: map[string]string{"X-Silo-Client": "Silo Fixture Client", "X-Silo-Client-Version": "0.0.0"},
+			headers: map[string]string{"X-Silo-Client": "Spark Fixture Client", "X-Silo-Client-Version": "0.0.0"},
 			status:  http.StatusOK, assertHeaders: []string{"Content-Type", "Cache-Control"}, schema: "#/components/schemas/SystemInfo"},
 		{name: "unknown_query_parameter", operationID: "getSystemInfo",
 			scenario: "A query parameter the operation does not declare is a validation failure naming the parameter.",

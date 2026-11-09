@@ -263,7 +263,7 @@ func (s *CatalogService) fetchRepositoryIndex(ctx context.Context, repositoryURL
 	}
 	var index RepositoryIndex
 	if err := json.Unmarshal(data, &index); err != nil {
-		return nil, packageError(fmt.Errorf("decode repository index %q: %w", repositoryURL, err), "Silo couldn't read %s: it isn't a valid plugin catalog.", subject)
+		return nil, packageError(fmt.Errorf("decode repository index %q: %w", repositoryURL, err), "Spark couldn't read %s: it isn't a valid plugin catalog.", subject)
 	}
 	return &index, nil
 }
@@ -398,7 +398,7 @@ func (s *CatalogService) installTargetFromPackage(ctx context.Context, repositor
 		} else {
 			if strings.TrimSpace(pkg.ChecksumsURL) == "" {
 				return nil, packageError(fmt.Errorf("plugin binary checksum is required for platform %s", platformKey),
-					"The catalog lists no SHA-256 checksum for this plugin, so Silo can't verify it.")
+					"The catalog lists no SHA-256 checksum for this plugin, so Spark can't verify it.")
 			}
 			resolvedChecksumsURL, err := resolveRepositoryURL(repository.URL, pkg.ChecksumsURL)
 			if err != nil {
@@ -446,7 +446,7 @@ func (s *CatalogService) fetchChecksumForBinary(ctx context.Context, checksumsUR
 	}
 	checksum, err := checksumForBinary(string(data), binaryURL)
 	if err != nil {
-		return "", packageError(err, "This plugin's checksum file has no valid SHA-256 checksum for its download, so Silo can't verify it.")
+		return "", packageError(err, "This plugin's checksum file has no valid SHA-256 checksum for its download, so Spark can't verify it.")
 	}
 	return checksum, nil
 }

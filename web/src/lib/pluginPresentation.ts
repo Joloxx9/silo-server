@@ -42,9 +42,9 @@ export function pendingUpdateVersion(installation: PluginInstallation): string |
 export function sourceLabel(tier: string): string {
   switch (tier) {
     case "silo":
-      return "Silo maintained";
+      return "Spark maintained";
     case "approved_community":
-      return "Approved community";
+      return "Spark community";
     case "unverified":
       return "Unverified";
     default:
@@ -76,7 +76,7 @@ export function configPanelId(key: string): string {
 
 export const CATALOG_GROUPS: { kind: PluginSourceKind; title: string }[] = [
   { kind: "silo", title: "Made by Silo" },
-  { kind: "approved_community", title: "Approved community" },
+  { kind: "approved_community", title: "Spark community" },
   { kind: "external", title: "Other sources" },
 ];
 

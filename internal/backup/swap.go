@@ -361,7 +361,7 @@ func checkLiveIdle(ctx context.Context, ctl ControlDB, live string) error {
 		return fmt.Errorf("checking for other connections: %w", err)
 	}
 	if others > 0 {
-		return fmt.Errorf("%w: %d other clients are connected to %s, so changes they made since the restore began, credentials included, would be lost. Stop Silo on every server, turn off automatic restarts, and run the restore again", ErrLiveInUse, others, live)
+		return fmt.Errorf("%w: %d other clients are connected to %s, so changes they made since the restore began, credentials included, would be lost. Stop Spark on every server, turn off automatic restarts, and run the restore again", ErrLiveInUse, others, live)
 	}
 	return nil
 }
@@ -373,7 +373,7 @@ func swapPreflight(ctx context.Context, ctl ControlDB, stores blobStores, live, 
 	if others, err := ctl.OtherConnections(ctx, live); err != nil {
 		return 0, fmt.Errorf("checking for other connections: %w", err)
 	} else if others > 0 {
-		return 0, fmt.Errorf("%d other clients are connected to %s; stop Silo on every server and turn off automatic restarts, or use separate mode (--into)", others, live)
+		return 0, fmt.Errorf("%d other clients are connected to %s; stop Spark on every server and turn off automatic restarts, or use separate mode (--into)", others, live)
 	}
 	if err := ctl.CheckPrivileges(ctx, live); err != nil {
 		return 0, fmt.Errorf("%w; stop here and use separate mode (--into) instead", err)

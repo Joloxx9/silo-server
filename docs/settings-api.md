@@ -1,6 +1,6 @@
 # Canonical Settings API
 
-> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Silo
+> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Spark
 > 1.0. The frozen alpha `/api/v1` settings routes are kept in
 > [Bridge: the frozen `/api/v1` settings routes](#bridge-the-frozen-apiv1-settings-routes) at the
 > end of this document and are served through the pre-1.0 bridge window. See
@@ -13,7 +13,7 @@ keys, scopes, enum members, or defaults.
 
 ## The stable surface
 
-Silo 1.0's stable settings surface is the `settings` section of the native `/api/v2` contract
+Spark 1.0's stable settings surface is the `settings` section of the native `/api/v2` contract
 (`contracts/api/v2/openapi.json`, tag `settings`). It serves the same settings contract, the same
 stored rows and the same `internal/settingsresolve` semantics as the frozen v1 routes; what
 changes is the request and response envelope. Everything in this section is taken from the operation
@@ -639,18 +639,18 @@ including ignored, skipped or unmatched events. Malformed payloads return 400,
 unknown secrets 404, and internal failures a safe 500 problem. Known-connection
 rejections retain delivery logs. This synchronous operation is non-retryable.
 Missing required fields or trailing data after the JSON document count as malformed;
-a well-formed notification of a type Silo does not use is ignored.
+a well-formed notification of a type Spark does not use is ignored.
 
 Watch-state rules, shared by the v2 and bridge receivers:
 
-- An event changes only the Silo profile explicitly mapped to its external user.
+- An event changes only the Spark profile explicitly mapped to its external user.
   An unmapped user's event is skipped and is not replayed after mapping.
 - Plex: `media.scrobble` marks the item watched; `media.pause` and `media.stop`
   record the event's `viewOffset`. The server's item metadata supplies identity
   and runtime only, because its view state belongs to the connection token's
-  owner. Plex events carry no timestamp, so Silo uses the receipt time, and a
+  owner. Plex events carry no timestamp, so Spark uses the receipt time, and a
   resent `media.pause` or `media.stop` counts as a new event that rewrites its
-  position. After a scrobble, including one that newer Silo progress kept from
+  position. After a scrobble, including one that newer Spark progress kept from
   applying, further events for the same user and item (a repeated scrobble, a
   stop in the credits) are ignored until a `media.play` starts a new playback. A
   `media.play` needs no metadata lookup or catalog match. Plex sends no webhook
@@ -663,7 +663,7 @@ Watch-state rules, shared by the v2 and bridge receivers:
   dropped, and an event with the same timestamp applies only if it completes the
   item or advances the position by at least five seconds. A replayed delivery
   with its original timestamp (Jellyfin, Emby) therefore has no further effect,
-  and a replayed completion cannot undo a later unplayed mark. Silo progress for
+  and a replayed completion cannot undo a later unplayed mark. Spark progress for
   the profile at least as recent as the event, compared in whole seconds, also
   wins, including over an unplayed mark, unless it is the write of the last
   event applied for that external user and item, recognized by its time and
@@ -725,7 +725,7 @@ onboarding counterpart.
 
 ## Bridge: the frozen `/api/v1` settings routes
 
-The alpha surface below is frozen. Silo serves it through the pre-1.0 bridge window so
+The alpha surface below is frozen. Spark serves it through the pre-1.0 bridge window so
 existing clients keep working. After the bridge window, and once a maintainer decides to retire
 it ([#886](https://github.com/Silo-Server/silo-server/issues/886)), the main API listener
 answers the `/api/v1` business routes with `410 Gone` and the `client_upgrade_required` problem
@@ -753,7 +753,7 @@ on. Any missing flag fails closed.
 ### Request identity headers
 
 Authenticated settings routes use the active account and profile from the
-normal Silo session. The contextual headers below identify which client is
+normal Spark session. The contextual headers below identify which client is
 resolving or writing an override.
 
 | Header                 | When required                                                                                               | Meaning                                                                                                                                     |
@@ -780,12 +780,12 @@ the other. Send the exact lower-case family:
 Separately from the family, every first-party client should send its own app
 identity on playback requests. These are server-wide contextual headers, not
 settings-specific: the playback session stores them, the admin Activity page
-renders them ("Silo Android TV 1.0.0 (build 5)"), and playback decision logs
+renders them ("Spark Android TV 1.0.0 (build 5)"), and playback decision logs
 carry them so a report can be tied to an exact build.
 
 | Header                  | Clamp | Meaning                                                                                                          |
 | ----------------------- | ----- | ---------------------------------------------------------------------------------------------------------------- |
-| `X-Silo-Client`         | 128   | Product name, e.g. `Silo Android TV`, `Silo iOS`.                                                                |
+| `X-Silo-Client`         | 128   | Product name, e.g. `Spark Android TV`, `Spark iOS`.                                                                |
 | `X-Silo-Client-Version` | 64    | Marketing version, e.g. `1.0.0`. Sent verbatim and displayed verbatim — do not pre-shorten it.                   |
 | `X-Silo-Client-Build`   | 64    | Opaque per-platform build identifier (Android `versionCode`, Apple `CFBundleVersion`). Never parsed or compared. |
 | `X-Silo-Client-Channel` | 32    | Opaque distribution channel: `release`, `beta`, `sideload`, `dev`. Stored verbatim; `release` is not displayed.  |
@@ -1053,7 +1053,7 @@ The server admin settings include `artwork.storage_backend` (`auto`, `local`, or
 restart.
 
 The first write to the assets store records its storage identity; writes to a
-shared local root count too. At startup, Silo records any configured private
+shared local root count too. At startup, Spark records any configured private
 bucket, even if it is empty. A direct settings write that changes a recorded
 location is rejected with `409` (problem type `conflict` in `/api/v2`;
 `artwork_storage_locked` in the frozen `/api/v1`): a change of `artwork.storage_backend`, of
@@ -1145,12 +1145,12 @@ image library to rating sources, as a JSON object keyed by source name:
 `{"imdb":{"image":"<ref>"},"rt_critic":{"image":"<ref>","low_image":"<ref>"}}`.
 `low_image` shows instead of `image` while the score is under 60. Refs must be
 overlay image refs; a source with neither image is dropped. Title page ratings
-carry the chosen image as `icon_url`. Silo ships no third-party logos: an
+carry the chosen image as `icon_url`. Spark ships no third-party logos: an
 uploaded image is the administrator's to license. Server-wide, applies within
 seconds, no restart.
 
 `scanner.realtime_monitoring` (default `true`) is the server-wide real-time
-monitoring switch: Silo scans library folders automatically when their files
+monitoring switch: Spark scans library folders automatically when their files
 change. A library is monitored only while this setting, the library's own
 `realtime_monitoring` switch (see [libraries-api.md](libraries-api.md)), and the
 library itself are all on. The setting applies without a restart.

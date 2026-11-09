@@ -357,7 +357,7 @@ func TestAdminUpdateSettingsCommitsOneValidatedBatch(t *testing.T) {
 }
 
 func TestAdminUpdateSettingsRejectsWholeBatchBeforeWrite(t *testing.T) {
-	settings := &fakeServerSettingsStore{values: map[string]string{"branding.server_name": "Silo"}}
+	settings := &fakeServerSettingsStore{values: map[string]string{"branding.server_name": "Spark"}}
 	handler := &AdminHandler{SettingsRepo: settings}
 	req := httptest.NewRequest(
 		http.MethodPut,
@@ -374,7 +374,7 @@ func TestAdminUpdateSettingsRejectsWholeBatchBeforeWrite(t *testing.T) {
 	if settings.setManyCalls != 0 {
 		t.Fatalf("SetMany calls = %d, want 0", settings.setManyCalls)
 	}
-	if settings.values["branding.server_name"] != "Silo" {
+	if settings.values["branding.server_name"] != "Spark" {
 		t.Fatalf("valid sibling value was partially persisted: %#v", settings.values)
 	}
 }
@@ -629,19 +629,19 @@ func TestAdminUpdateSettingsReturnsEffectiveDefaultAfterClear(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Values["branding.server_name"] != "Silo" {
+	if response.Values["branding.server_name"] != "Spark" {
 		t.Fatalf("response values = %#v, want effective default", response.Values)
 	}
 	if settings.values["branding.server_name"] != "" {
 		t.Fatalf("stored value = %q, want cleared override", settings.values["branding.server_name"])
 	}
-	if callbackValue != "Silo" {
-		t.Fatalf("callback value = %q, want effective default Silo", callbackValue)
+	if callbackValue != "Spark" {
+		t.Fatalf("callback value = %q, want effective default Spark", callbackValue)
 	}
 }
 
 func TestAdminUpdateSettingPersistsClearWhenOverrideEqualsDefault(t *testing.T) {
-	settings := &fakeServerSettingsStore{values: map[string]string{"branding.server_name": "Silo"}}
+	settings := &fakeServerSettingsStore{values: map[string]string{"branding.server_name": "Spark"}}
 	handler := &AdminHandler{SettingsRepo: settings}
 	req := httptest.NewRequest(
 		http.MethodPut,
@@ -666,7 +666,7 @@ func TestAdminUpdateSettingPersistsClearWhenOverrideEqualsDefault(t *testing.T) 
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.Value != "Silo" || response.RestartRequired {
+	if response.Value != "Spark" || response.RestartRequired {
 		t.Fatalf("response = %#v, want unchanged effective default without restart", response)
 	}
 }

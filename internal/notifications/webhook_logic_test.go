@@ -176,7 +176,7 @@ func TestBuildDiscordWebhookPayload(t *testing.T) {
 	if err := json.Unmarshal(payload, &body); err != nil {
 		t.Fatalf("payload is not valid JSON: %v", err)
 	}
-	if body.Username != "Silo" || len(body.Embeds) != 1 {
+	if body.Username != "Spark" || len(body.Embeds) != 1 {
 		t.Fatalf("unexpected body shape: %+v", body)
 	}
 	embed := body.Embeds[0]
@@ -186,7 +186,7 @@ func TestBuildDiscordWebhookPayload(t *testing.T) {
 	if embed.Color != discordColorFavorite {
 		t.Fatalf("favorite reason must pick the favorite color, got %d", embed.Color)
 	}
-	if embed.Author == nil || embed.Author.Name != "New episode on Silo" {
+	if embed.Author == nil || embed.Author.Name != "New episode on Spark" {
 		t.Fatalf("unexpected author %+v", embed.Author)
 	}
 	if embed.URL != "https://www.themoviedb.org/tv/95396" {
@@ -208,7 +208,7 @@ func TestBuildDiscordWebhookPayload(t *testing.T) {
 		embed.Fields[2].Value != "Drama, Sci-Fi & Fantasy" {
 		t.Fatalf("unexpected fields: %+v", embed.Fields)
 	}
-	if embed.Footer == nil || embed.Footer.Text != "Silo • TV-MA" {
+	if embed.Footer == nil || embed.Footer.Text != "Spark • TV-MA" {
 		t.Fatalf("unexpected footer %+v", embed.Footer)
 	}
 	// The privacy contract: only public provider origins may appear — never

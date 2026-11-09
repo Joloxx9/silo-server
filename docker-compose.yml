@@ -1,4 +1,4 @@
-# Silo in one container. Silo's Docker image runs Silo with a bundled
+# Spark in one container. Spark's Docker image runs Spark with a bundled
 # PostgreSQL and Redis, and starts the bundled Meilisearch when
 # ENABLE_MEILISEARCH is set. Settings come from .env; see .env.example.
 # docs/architecture/omnibus-image.md describes the image.
@@ -13,31 +13,31 @@
 # Compose file; docker-compose.advanced.yml runs PostgreSQL and Redis in
 # containers of their own, the layout this file used before.
 # This file does not look for an earlier install: started on one's
-# SILO_DATA_ROOT, Silo comes up on a new, empty database with first-run setup
+# SILO_DATA_ROOT, Spark comes up on a new, empty database with first-run setup
 # open on the published ports. Moving an earlier install into this layout is a
 # separate step; see "Moving from the multi-container stack" in
 # docs/architecture/omnibus-image.md.
 
 services:
   silo:
-    image: ${SILO_OMNIBUS_IMAGE:-ghcr.io/silo-server/silo-server:latest}
+    image: ${SILO_OMNIBUS_IMAGE:-ghcr.io/joloxx9/spark-server:latest}
     restart: unless-stopped
-    # On stop Silo fails readiness, keeps serving for SILO_SHUTDOWN_DELAY
+    # On stop Spark fails readiness, keeps serving for SILO_SHUTDOWN_DELAY
     # (default 5s), then finishes in-flight requests, and PostgreSQL shuts
     # down after it. Docker kills a container 10s after asking it to stop,
     # which would cut that short. A transcode node first drains its sessions
     # for up to SILO_NODE_DRAIN_TIMEOUT (default 10m), so a node's host sets
     # SILO_STOP_GRACE_PERIOD=11m.
     stop_grace_period: ${SILO_STOP_GRACE_PERIOD:-2m}
-    # NET_ADMIN lets Silo use kernel BBR congestion control on its client
-    # connections even where the host does not allow bbr. It also lets Silo
+    # NET_ADMIN lets Spark use kernel BBR congestion control on its client
+    # connections even where the host does not allow bbr. It also lets Spark
     # force a larger TCP send buffer when the kernel's limit would cap remote
     # clients on long, fast links (near 160 Mbit/s at 1 Gbit/s, 100 ms and 1%
     # loss). A proxy node uses it the same way. A transcode node drops it at
     # startup and uses none of it.
     #
-    # Before its own code runs, Silo starts a small helper that holds
-    # NET_ADMIN until the listeners are configured and then exits. Silo,
+    # Before its own code runs, Spark starts a small helper that holds
+    # NET_ADMIN until the listeners are configured and then exits. Spark,
     # ffmpeg, ffprobe and plugins never keep it, and the start log says if
     # dropping it fails. The container's root processes (the s6 supervisor,
     # placeholders for disabled services, docker exec shells) keep it while
@@ -45,7 +45,7 @@ services:
     # interfaces, routes and firewall rules and reach more kernel code
     # (nf_tables), or the host's own with network_mode: host.
     #
-    # To undo, remove this line; Silo then logs the TCP limits it cannot change
+    # To undo, remove this line; Spark then logs the TCP limits it cannot change
     # and how to raise them. In .env, SILO_NET_TCP_CONGESTION=off turns BBR off
     # and SILO_NET_TCP_SEND_BUFFER=off keeps send-buffer autotuning.
     cap_add: [NET_ADMIN]
@@ -55,7 +55,7 @@ services:
       PORT: "8080"
       JF_PORT: "8096"
       ABS_PORT: "13378"
-      # The account that runs Silo, owns /config/silo, and reads the media.
+      # The account that runs Spark, owns /config/silo, and reads the media.
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
       TZ: ${TZ:-Etc/UTC}
@@ -82,13 +82,13 @@ services:
       # - "${NODE_ACCESS_HOST:?Set NODE_ACCESS_HOST in .env}:${POSTGRES_PORT:-5432}:5432"
       # - "${NODE_ACCESS_HOST:?Set NODE_ACCESS_HOST in .env}:${REDIS_PORT:-6379}:6379"
     volumes:
-      # Silo's state, the PostgreSQL cluster, and the Redis and Meilisearch data.
+      # Spark's state, the PostgreSQL cluster, and the Redis and Meilisearch data.
       - ${SILO_DATA_ROOT:-/opt/silo}/config:/config
       - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env to the host media path}:${MEDIA_CONTAINER_ROOT:-/mnt/media}:ro
       # Transcode segments, kept out of /config so a backup of it stays small.
       - ${SILO_DATA_ROOT:-/opt/silo}/transcode:/tmp/silo-transcode
       # Prepared downloads. While "Prepared file directory" (download.artifact_dir)
-      # is blank, Silo keeps them beside the transcode directory rather than in
+      # is blank, Spark keeps them beside the transcode directory rather than in
       # it, so they need their own mount to survive image updates. This path
       # assumes the default playback.transcode_dir; with another one, mount the
       # silo-download-artifacts directory beside that instead. No storage budget
@@ -101,7 +101,7 @@ services:
       # sits on a cgroup this container cannot see. lxcfs rewrites them to the
       # LXC's limits, so mounting them makes CPU, load, and memory report this
       # container's share instead of the whole machine's. On bare metal or a VM
-      # they are the same files Silo reads anyway, so they do no harm. Silo uses
+      # they are the same files Spark reads anyway, so they do no harm. Spark uses
       # each one separately; removing one only reverts that reading. See
       # docs/architecture/observability.md#node-resource-sampling.
       - /proc/meminfo:/host/proc/meminfo:ro

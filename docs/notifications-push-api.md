@@ -7,7 +7,7 @@ access token, so the server issues it a separate long-lived credential at
 push registration.
 
 > **API lifecycle:** the operations below are the stable `/api/v2` native contract,
-> which locks with Silo 1.0. The frozen alpha `/api/v1` surface serves the same
+> which locks with Spark 1.0. The frozen alpha `/api/v1` surface serves the same
 > Apple display-token flow at the matching `/api/v1` paths through the pre-1.0
 > bridge window. After the bridge window, and once a maintainer decides to retire
 > it ([#886](https://github.com/Silo-Server/silo-server/issues/886)), the main API

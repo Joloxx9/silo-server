@@ -175,7 +175,7 @@ func TestMountedABSRouterAttributesPublicTrack(t *testing.T) {
 	t.Cleanup(client.CloseIdleConnections)
 
 	got := getWithHeaders(t, client, http.MethodGet, server.URL+"/public/session/sid-telemetry/track/1",
-		map[string]string{"X-Silo-Client": "Silo Audiobooks", "X-Silo-Client-Version": "3.1.0"})
+		map[string]string{"X-Silo-Client": "Spark Audiobooks", "X-Silo-Client-Version": "3.1.0"})
 	if got.status != http.StatusOK || !bytes.Equal(got.body, body) {
 		t.Fatalf("GET = %d, %d bytes (want %d)", got.status, len(got.body), len(body))
 	}
@@ -213,7 +213,7 @@ func TestMountedABSRouterAttributesPublicTrack(t *testing.T) {
 	if session.Routes[0].BytesAccepted != int64(len(body)) {
 		t.Fatalf("bytes = %d, want %d", session.Routes[0].BytesAccepted, len(body))
 	}
-	if len(session.ClientVariants) != 1 || session.ClientVariants[0].Name != "Silo Audiobooks" || session.ClientVariants[0].Version != "3.1.0" {
+	if len(session.ClientVariants) != 1 || session.ClientVariants[0].Name != "Spark Audiobooks" || session.ClientVariants[0].Version != "3.1.0" {
 		t.Fatalf("client variants = %+v", session.ClientVariants)
 	}
 }

@@ -397,8 +397,8 @@ func shouldTryAnotherBase(err error) bool {
 
 func embyAuthorizationHeader(userID, token string) string {
 	parts := []string{
-		`Client="Silo"`,
-		`Device="Silo"`,
+		`Client="Spark"`,
+		`Device="Spark"`,
 		`DeviceId="silo-history-import"`,
 		`Version="1.0.0"`,
 	}

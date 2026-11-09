@@ -144,12 +144,12 @@ func (l *BrandLoader) customLogo(ctx context.Context, ref string) brandLogo {
 
 	data, _, storedRef, err := l.source.GetAsset(ctx, branding.KindWordmark)
 	if err != nil {
-		slog.WarnContext(ctx, "email: custom wordmark unavailable; using the Silo wordmark", "ref", ref, "error", err)
+		slog.WarnContext(ctx, "email: custom wordmark unavailable; using the Spark wordmark", "ref", ref, "error", err)
 		return brandLogo{}
 	}
 	png, width, height, err := imageutil.EncodePNGWithin(data, 2*logoMaxWidth, 2*logoMaxHeight)
 	if err != nil {
-		slog.WarnContext(ctx, "email: custom wordmark could not be converted; using the Silo wordmark", "ref", storedRef, "error", err)
+		slog.WarnContext(ctx, "email: custom wordmark could not be converted; using the Spark wordmark", "ref", storedRef, "error", err)
 		return brandLogo{}
 	}
 	logo := brandLogo{png: png}
@@ -164,7 +164,7 @@ func (l *BrandLoader) customLogo(ctx context.Context, ref string) brandLogo {
 func mustDefaultLogo() brandLogo {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(defaultWordmarkPNG))
 	if err != nil {
-		panic("mail: embedded Silo wordmark is not a valid PNG: " + err.Error())
+		panic("mail: embedded Spark wordmark is not a valid PNG: " + err.Error())
 	}
 	logo := brandLogo{png: defaultWordmarkPNG}
 	logo.width, logo.height = logoDisplaySize(cfg.Width, cfg.Height)

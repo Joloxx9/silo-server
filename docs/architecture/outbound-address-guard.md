@@ -1,6 +1,6 @@
 # Outbound address guard
 
-Some features make Silo send HTTP requests to an address a user typed or a
+Some features make Spark send HTTP requests to an address a user typed or a
 third party supplied: history import, webhook sync, notification webhooks,
 collection posters set from a URL, artwork URLs from metadata providers,
 subtitle file links from OpenSubtitles, catalog seed imports from a URL, and
@@ -100,7 +100,7 @@ allowed addresses in both modes, with a two-second lookup deadline. See
 
 ## Artwork downloads
 
-Artwork Silo downloads on its own (metadata refresh, image-cache jobs, person
+Artwork Spark downloads on its own (metadata refresh, image-cache jobs, person
 images) comes from Public addresses only (`imagecache`). Provider artwork URLs
 are untrusted, so these downloads use the netguard transport too, checked on
 every dial and redirect; the cache keeps no address list of its own. An image
@@ -126,7 +126,7 @@ download host and refuses redirects to another host.
 
 ## Serving catalog artwork
 
-Catalog artwork is not always in Silo's own storage. A provider URL stays on
+Catalog artwork is not always in Spark's own storage. A provider URL stays on
 the item until its image-cache job succeeds, and stays for good when caching
 fails, so an address the cache refused can still be served. Three places fetch
 catalog artwork themselves instead of handing the URL to the client: the

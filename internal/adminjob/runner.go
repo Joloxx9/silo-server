@@ -392,12 +392,12 @@ func (r *Runner) executeStorageTransition(job *models.AdminJob) {
 	// restart must not depend on the best-effort job receipt write below. In
 	// particular, a canceled context or a transient database outage must not
 	// leave the old process running indefinitely with storage writes blocked.
-	message := "Storage transition completed; restarting Silo"
+	message := "Storage transition completed; restarting Spark"
 	manual := r.requestStorageTransitionRestartOnce(job.ID)
 	if uncertain, ok := result.(storageTransitionCommitResult); ok && uncertain.StorageTransitionCommitUnknown() {
-		message = "Storage commit outcome is unknown; restarting Silo to recover safely"
+		message = "Storage commit outcome is unknown; restarting Spark to recover safely"
 		if manual {
-			message = "Storage commit outcome is unknown; automatic restart unavailable — restart Silo manually"
+			message = "Storage commit outcome is unknown; automatic restart unavailable — restart Spark manually"
 		}
 		if structured, ok := result.(storageTransitionRestartResult); ok {
 			result = structured.WithStorageTransitionRestartReceipt(manual, job.ClaimGeneration)
@@ -406,7 +406,7 @@ func (r *Runner) executeStorageTransition(job *models.AdminJob) {
 		return
 	}
 	if manual {
-		message = "Storage transition committed; automatic restart unavailable — restart Silo manually"
+		message = "Storage transition committed; automatic restart unavailable — restart Spark manually"
 	}
 	if structured, ok := result.(storageTransitionRestartResult); ok {
 		result = structured.WithStorageTransitionRestartReceipt(manual, job.ClaimGeneration)
@@ -487,9 +487,9 @@ func (r *Runner) settleCommittedStorageTransition(job *models.AdminJob, current,
 	if committed {
 		state = "Storage transition committed"
 	}
-	message := state + "; restarting Silo to finish recovery"
+	message := state + "; restarting Spark to finish recovery"
 	if manual {
-		message = state + "; automatic restart unavailable — restart Silo manually"
+		message = state + "; automatic restart unavailable — restart Spark manually"
 	}
 	receipt := StorageTransitionReceipt{
 		Phase: storageTransitionPhaseRestartPending, VerifiedObjects: max(current, 0),

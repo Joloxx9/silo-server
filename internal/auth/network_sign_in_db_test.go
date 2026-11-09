@@ -60,7 +60,7 @@ func TestNetworkSignInDB(t *testing.T) {
 	}}
 	svc := networkSignInService(t, env, plugin, true)
 	signIn := func(peer string) (*TokenPair, error) {
-		return svc.NetworkSignIn(overlayContext(ctx, env.installationID, peer), NetworkSignInInput{InstallationID: env.installationID, DeviceName: "Silo/1.0 (tvOS)", IP: peer})
+		return svc.NetworkSignIn(overlayContext(ctx, env.installationID, peer), NetworkSignInInput{InstallationID: env.installationID, DeviceName: "Spark/1.0 (tvOS)", IP: peer})
 	}
 
 	pair, err := signIn("100.64.0.7")

@@ -22,7 +22,7 @@ type emailContent struct {
 func composeResetEmail(brand mail.Brand, requested bool, username, serverName, resetURL string, expiresAt, now time.Time) emailContent {
 	product := strings.TrimSpace(serverName)
 	if product == "" {
-		product = "Silo"
+		product = "Spark"
 	}
 	intro := fmt.Sprintf("An admin sent you a link to choose a new password for your %s account.", product)
 	if requested {

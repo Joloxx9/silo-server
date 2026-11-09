@@ -78,7 +78,7 @@ func (f *fakeBackups) Destinations() []string {
 }
 func (f *fakeBackups) TestS3(_ context.Context, cfg backup.S3Config) (backup.S3TestResult, error) {
 	f.calls = append(f.calls, "test s3 "+cfg.Bucket)
-	return backup.S3TestResult{OK: true, Message: "Connected. Silo wrote and deleted a test file."}, nil
+	return backup.S3TestResult{OK: true, Message: "Connected. Spark wrote and deleted a test file."}, nil
 }
 func (f *fakeBackups) AcknowledgeKey(_ context.Context, check string) error {
 	f.calls = append(f.calls, "acknowledge "+check)

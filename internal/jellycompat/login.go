@@ -453,7 +453,7 @@ func mapAuthError(err error) error {
 	}
 	if errors.Is(err, auth.ErrPasswordChangeRequired) {
 		// Kept as the sentinel, like the PIN errors, so the client sees why.
-		return fmt.Errorf("%w: sign in to Silo to replace your temporary password", err)
+		return fmt.Errorf("%w: sign in to Spark to replace your temporary password", err)
 	}
 	if _, ok := errors.AsType[*auth.SignInThrottledError](err); ok {
 		// Kept as is: the handler answers 429 with its Retry-After.

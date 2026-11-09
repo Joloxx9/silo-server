@@ -97,7 +97,7 @@ are read live, so renaming or merging a person changes every item they are
 credited on without a `catalog.item.changed` event; a mirror that keeps credits
 picks that up on its next full pass.
 
-`added_at` is when Silo first saw the item. Without `library_id` it is the
+`added_at` is when Spark first saw the item. Without `library_id` it is the
 earliest first-seen time across the item's enabled libraries. With `library_id`
 it is the item's first-seen time in that library, and `added_after` compares that
 value. A membership lasts while the item has a present file there; when its
@@ -676,7 +676,7 @@ repeated or invalid continuation rather than publishing a partial list.
 
 For a movie or series the list also offers its local sidecar artwork (the
 `poster.jpg`, `fanart.jpg` and similar files a refresh would use), found by
-Silo's own sidecar discovery whether or not the library's metadata chain uses
+Spark's own sidecar discovery whether or not the library's metadata chain uses
 the NFO provider. A `file://` URL from any other provider is not offered. These
 choices have `provider_id` `local`, a `file://` `original_url`, and a small
 WebP preview as a `data:` URI in `url`. A file that cannot be read under the

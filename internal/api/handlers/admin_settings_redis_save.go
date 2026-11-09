@@ -18,7 +18,7 @@ import (
 var errRedisSettingsMoved = &APIError{
 	Status:  http.StatusBadRequest,
 	Code:    adminInvalidSettingsCode,
-	Message: "The Redis settings changed while Silo was checking them. Reload the settings and save again.",
+	Message: "The Redis settings changed while Spark was checking them. Reload the settings and save again.",
 }
 
 // prospectiveSettings returns the stored settings once changes are written
@@ -101,7 +101,7 @@ func (h *AdminHandler) checkRedisSave(ctx context.Context, changes map[string]st
 		return config.RedisConfig{}, nil
 	}
 	if err := probeRedis(ctx, next); err != nil {
-		slog.WarnContext(ctx, "refused a Redis settings save that Silo could not connect with", "error", logredact.SanitizeText(err.Error()))
+		slog.WarnContext(ctx, "refused a Redis settings save that Spark could not connect with", "error", logredact.SanitizeText(err.Error()))
 		return config.RedisConfig{}, &APIError{Status: http.StatusBadRequest, Code: adminInvalidSettingsCode, Message: redisSaveRefusal(err)}
 	}
 	return next, nil
@@ -121,18 +121,18 @@ func (h *AdminHandler) confirmRedisSave(stored, prospective map[string]string, c
 // which can name hosts and addresses.
 func redisSaveRefusal(err error) string {
 	if errors.Is(err, errRedisURLUnreadable) {
-		return "Silo could not read redis.url as a Redis URL, so it could not check these settings. " +
+		return "Spark could not read redis.url as a Redis URL, so it could not check these settings. " +
 			"Save redis.url again in the form redis://host:port, then save the database number."
 	}
 	_, refused := errors.AsType[redis.Error](err)
 	if refused && errors.Is(err, errRedisChannelsRefused) {
-		return "Redis refused a subscription to Silo's event channels, so the server would not start with these settings. " +
+		return "Redis refused a subscription to Spark's event channels, so the server would not start with these settings. " +
 			"If the Redis user has an ACL, grant it the channel pattern &silo:*."
 	}
 	if refused {
 		return "Redis refused the connection, so the server would not start with these settings. " +
 			"Check the database number (0 to 15 on a Redis with the default 16 databases) and the user name and password in redis.url."
 	}
-	return "Silo could not connect to Redis with these settings, so the server would not start with them. " +
+	return "Spark could not connect to Redis with these settings, so the server would not start with them. " +
 		"Check that Redis is running and that redis.url has the right host and port."
 }

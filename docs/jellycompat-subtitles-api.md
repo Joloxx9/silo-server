@@ -32,5 +32,5 @@ Repeated unstarted playback negotiations replace only negotiations with the same
 source and track-selection variant. Distinct audio or subtitle selections keep
 their own playback grants until they start or expire.
 
-These are Jellyfin compatibility behaviors. Native Silo client API contracts are
+These are Jellyfin compatibility behaviors. Native Spark client API contracts are
 unchanged.

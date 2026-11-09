@@ -114,7 +114,7 @@ func (h *Handler) handleStandaloneLogin(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "this account is not permitted to sign in to this server", http.StatusUnauthorized)
 		} else if errors.Is(err, auth.ErrPasswordChangeRequired) {
 			// This client cannot run the change a temporary password requires.
-			http.Error(w, "sign in to Silo to replace your temporary password", http.StatusUnauthorized)
+			http.Error(w, "sign in to Spark to replace your temporary password", http.StatusUnauthorized)
 		} else if errors.Is(err, passwordhash.ErrBusy) {
 			w.Header().Set("Retry-After", strconv.Itoa(passwordhash.RetryAfterSeconds))
 			http.Error(w, "the server is busy; try again in a moment", http.StatusServiceUnavailable)

@@ -395,8 +395,8 @@ func fixtureSession() handlers.PlaybackSessionView {
 		PosterURL: "https://media.example/poster-42.jpg", PlayMethod: "transcode", ReportingNode: "node-3", NodeDisplayName: "Basement",
 		FileDuration: &duration, StartedAt: fixedTime(), UpdatedAt: fixedTime().Add(time.Minute),
 		PositionSeconds: 61.5, IsPaused: false, HasPlaybackControl: true,
-		ClientIP: "", ClientName: "Silo for Apple TV", ClientVersion: "1.4.0", ClientBuild: "1400", ClientChannel: "release",
-		ClientLabel: "Silo for Apple TV 1.4", ClientLabelFull: "Silo for Apple TV 1.4.0 (1400)", ClientUserAgent: "Silo/1.4.0",
+		ClientIP: "", ClientName: "Spark for Apple TV", ClientVersion: "1.4.0", ClientBuild: "1400", ClientChannel: "release",
+		ClientLabel: "Spark for Apple TV 1.4", ClientLabelFull: "Spark for Apple TV 1.4.0 (1400)", ClientUserAgent: "Spark/1.4.0",
 		AudioTrackIndex: 0, TranscodeAudio: true, StreamBitrateKbps: &kbps,
 		TargetResolution: "1080p", TargetVideoCodec: "h264", TargetAudioCodec: "aac", TargetAudioChannels: &channels, TargetBitrateKbps: &kbps,
 		TranscodeHWAccel: "videotoolbox", ToneMapMode: "hardware", SourceContainer: "mkv", SourceBitrateKbps: &kbps,
@@ -1285,7 +1285,7 @@ func (f *fakeSessionService) DiscoverProviders(context.Context) (auth.ProviderDi
 		discovery = auth.ProviderDiscovery{Providers: []auth.LoginProviderInfo{sso}}
 	} else {
 		discovery = auth.ProviderDiscovery{Providers: []auth.LoginProviderInfo{
-			{ID: "local", DisplayName: "Silo account", Mode: auth.ProviderModeCredentials, Default: true}, sso,
+			{ID: "local", DisplayName: "Spark account", Mode: auth.ProviderModeCredentials, Default: true}, sso,
 		}, PasswordLogin: true}
 	}
 	if f.networkPeer {
@@ -1346,7 +1346,7 @@ func (f *fakeSessionService) liveSessions(userID int) []*models.AuthSession {
 	expires := fixedTime().Add(30 * 24 * time.Hour)
 	return []*models.AuthSession{
 		{ID: "s3", UserID: userID, DeviceName: "Living Room Apple TV", DeviceID: "8d2f6a4e-3c1b-4e5f-9a7d-0b1c2d3e4f50", DevicePlatform: "tvOS", IPAddress: "127.0.0.1", CreatedAt: fixedTime().Add(time.Hour), ExpiresAt: expires},
-		{ID: "s2", UserID: userID, DeviceName: "Silo/1.0 (iOS)", IPAddress: "127.0.0.2", CreatedAt: fixedTime().Add(time.Hour), ExpiresAt: expires},
+		{ID: "s2", UserID: userID, DeviceName: "Spark/1.0 (iOS)", IPAddress: "127.0.0.2", CreatedAt: fixedTime().Add(time.Hour), ExpiresAt: expires},
 		{ID: "s1", UserID: userID, DeviceName: "", IPAddress: "", CreatedAt: fixedTime(), ExpiresAt: expires},
 	}
 }

@@ -1,7 +1,7 @@
 # Omnibus image
 
-The omnibus image is Silo's Docker image, published as
-`ghcr.io/silo-server/silo-server`: the base Silo image plus PostgreSQL, and
+The omnibus image is Spark's Docker image, published as
+`ghcr.io/joloxx9/spark-server`: the Spark image plus PostgreSQL, and
 optional Redis and Meilisearch, in one container supervised by
 [s6-overlay](https://github.com/just-containers/s6-overlay). It serves
 installs that want one container instead of the Compose stack: a main server
@@ -28,16 +28,16 @@ such a build means pinning its `build-N-aio`: its `build-N` is the base image,
 which has no PostgreSQL or s6.
 
 The omnibus image is not a drop-in replacement for the base image, which an
-install that pulled `latest` before this layout ran. It runs Silo as `PUID` (911 unless set) instead of root, so media that only root could
-read becomes unreadable; re-owns the bind-mounted Silo, transcode, and download
+install that pulled `latest` before this layout ran. It runs Spark as `PUID` (911 unless set) instead of root, so media that only root could
+read becomes unreadable; re-owns the bind-mounted Spark, transcode, and download
 directories to that account on first start; and starts `/init` rather than
 `silo`. `/init` needs root, so a deployment that sets a container `user:` or a
 Kubernetes `runAsUser` must also set the entrypoint to `silo` (see
 [Starting without root](#starting-without-root)).
 
-Because the omnibus image starts from the base one, both run the same Silo
+Because the omnibus image starts from the base one, both run the same Spark
 binary against the same libvips, FFmpeg build, GPU runtimes, and Node.js. Keep
-it that way: a runtime dependency Silo needs belongs in the root `Dockerfile`,
+it that way: a runtime dependency Spark needs belongs in the root `Dockerfile`,
 and `omnibus/Dockerfile` adds only the bundled services and s6. The base changes
 on every build, so the omnibus build uses no layer cache and always installs
 current PostgreSQL and Redis packages.
@@ -70,15 +70,15 @@ order:
    owner, such as uid 1000, unless that uid is `PUID`.
 2. `init-adduser` maps the `silo` account onto `PUID` and `PGID` and adds it to
    the groups of any passed-in GPU devices. A device owned by group 0 is
-   skipped, so Silo, which never runs as root here, cannot open it. Unprivileged
+   skipped, so Spark, which never runs as root here, cannot open it. Unprivileged
    LXC containers present passed-through devices that way unless the host gives
    them a group (on Proxmox, `gid=` on the `devN` entry).
 3. `init-config` lays out `/config`, decides which bundled services run, and
-   exports the connection settings Silo reads for them: `DATABASE_URL`,
+   exports the connection settings Spark reads for them: `DATABASE_URL`,
    `REDIS_URL`, and the search variables below. An explicit `DATABASE_URL` or
    `REDIS_URL` turns the matching bundled service off. With the bundled
    PostgreSQL it defaults `POSTGRES_TUNE` to `auto` with a 50% memory budget;
-   a deployment's own database keeps Silo's default, tuning off. A proxy or
+   a deployment's own database keeps Spark's default, tuning off. A proxy or
    transcode `MODE` turns them all off and requires both URLs.
 4. `init-postgres` creates the cluster on first start and writes the image's
    settings and `pg_hba.conf` on every start; `svc-postgres` runs it;
@@ -86,15 +86,15 @@ order:
    collation-dependent indexes after a C library change. `svc-redis` and
    `svc-meilisearch` start alongside. A service that is off reports ready and
    sleeps, so the dependency graph stays fixed.
-5. `svc-silo` runs Silo once the database exists and the enabled services
+5. `svc-silo` runs Spark once the database exists and the enabled services
    are ready. It passes a granted NET_ADMIN to `silo` as an ambient capability
-   through `setpriv`, so Silo's startup helper can configure client sockets.
+   through `setpriv`, so Spark's startup helper can configure client sockets.
    If `setpriv` fails, including when the ambient raise is refused, `svc-silo`
-   starts Silo through `s6-setuidgid` without the grant, so a refusal never
-   keeps Silo from starting. Silo then holds only the bounding bit and enables
+   starts Spark through `s6-setuidgid` without the grant, so a refusal never
+   keeps Spark from starting. Spark then holds only the bounding bit and enables
    `no_new_privs` to contain its child processes.
 
-s6 stops services in reverse order, so Silo drains before PostgreSQL's fast
+s6 stops services in reverse order, so Spark drains before PostgreSQL's fast
 shutdown. `svc-silo` and `svc-postgres` have no stop timeout of their own; the
 container's stop timeout bounds them.
 
@@ -115,7 +115,7 @@ revocation. A host crash can still lose about a second of writes.
 
 The init scripts only do container work: map the `silo` account onto `PUID`,
 lay out `/config`, hand directories to the service accounts, and run the
-bundled services. What Silo needs to behave correctly, including refusing a
+bundled services. What Spark needs to behave correctly, including refusing a
 configuration it cannot run with, belongs in the `silo` binary. Keep it there,
 so that a container started with `silo` as its entrypoint, or an image built
 around the binary, behaves the same as this one.
@@ -123,24 +123,24 @@ around the binary, behaves the same as this one.
 A container started with `silo` as its entrypoint and a non-root uid runs
 none of the init, so code in the binary must not rely on what the init does:
 
-- Nothing creates `/config/silo`, maps `PUID`, or re-owns a directory. Silo's
+- Nothing creates `/config/silo`, maps `PUID`, or re-owns a directory. Spark's
   storage refuses a root reached through the dangling `/var/lib/silo` link
   rather than writing somewhere else.
 - No bundled services, `FILE__` loading, GPU group discovery, or supervisor.
 - The working directory is `/`, and Docker sets `HOME` to `/` for a uid with no
   passwd entry. That is why the Jellyfin Web installer keeps npm's cache in its
   own workspace.
-- NET_ADMIN added to the container does not reach a non-root process, so Silo
+- NET_ADMIN added to the container does not reach a non-root process, so Spark
   starts without its helper (see [TCP congestion control](tcp-congestion.md)).
 
 How to deploy this way is in the user manual:
-[Run Silo without root](https://siloserver.org/docs/docker#run-silo-without-root).
+[Run Spark without root](https://siloserver.org/docs/docker#run-silo-without-root).
 
 ## Accounts and data
 
 | Service | Account | uid:gid | Data |
 | --- | --- | --- | --- |
-| Silo | `silo` | `PUID`:`PGID` (911 by default) | `/config/silo`, linked from `/var/lib/silo` |
+| Spark | `silo` | `PUID`:`PGID` (911 by default) | `/config/silo`, linked from `/var/lib/silo` |
 | PostgreSQL | `postgres` | 999:999 | `/config/postgres` |
 | Redis | `redis` | 998:998 | `/config/redis` |
 | Meilisearch | `meilisearch` | 997:997 | `/config/meilisearch` |
@@ -162,18 +162,18 @@ the marker forces a walk. The `silo` account's home is `/nonexistent`, because
 `usermod -u` re-owns everything in the home and a `PUID` change would otherwise
 walk `/config/silo` twice; the scripts set `HOME` for each service.
 
-Silo reaches its state through `/var/lib/silo`, a link to `/config/silo`, so
+Spark reaches its state through `/var/lib/silo`, a link to `/config/silo`, so
 paths stored in the database keep working. Local artwork storage is recorded by
 its resolved root, so a catalog that stored artwork under another image's
-`/var/lib/silo/artwork` resolves to `/config/silo/artwork` here; Silo
+`/var/lib/silo/artwork` resolves to `/config/silo/artwork` here; Spark
 recognizes that as the same directory and keeps the recorded identity (see
 [Storage identity](blob-storage.md#storage-identity)). `init-adduser` refuses a `PUID` that
-another account holds: the kernel would report that account's name for Silo's
+another account holds: the kernel would report that account's name for Spark's
 processes, and PostgreSQL's peer authentication maps the process's user name to
 the database role.
 
 PostgreSQL listens only on `/run/postgresql`. The `silo` role is the cluster's
-superuser and authenticates by peer, so no database password exists. Silo needs
+superuser and authenticates by peer, so no database password exists. Spark needs
 the superuser role for `POSTGRES_TUNE`, which uses `ALTER SYSTEM`, and its
 migrations create the `vector`, `pg_trgm`, and `citext` extensions.
 `00-omnibus.conf` preloads `pg_stat_statements`, as the shipped Compose files
@@ -189,22 +189,22 @@ collation for a predicate or expression), except vector indexes, then runs
 `ALTER DATABASE ... REFRESH COLLATION VERSION`. That covers
 a data directory from the Compose stack's image, which is Debian 12 (glibc
 2.36) where this one has 2.41, and a later move of this image to a newer Debian
-release. The rebuild runs before Silo starts, so a large catalog's first start
+release. The rebuild runs before Spark starts, so a large catalog's first start
 takes longer. A database that does not accept connections cannot be rebuilt,
 so it keeps its recorded version and logs a warning on each start. `init-postgres` rewrites `conf.d/00-omnibus.conf` and
 `pg_hba.conf` on every start and makes sure `postgresql.conf` includes
 `conf.d`; `POSTGRES_TUNE` writes `postgresql.auto.conf`, which loads after it.
-Silo tunes with `ALTER SYSTEM` once it is up, and PostgreSQL applies some of
+Spark tunes with `ALTER SYSTEM` once it is up, and PostgreSQL applies some of
 those settings, such as `shared_buffers`, only at start. So while
 `POSTGRES_TUNE` is on, `init-postgres` also writes
 `conf.d/02-omnibus-tune.conf` from `silo postgres-tune-conf`, which prints the
-restart-only settings Silo sizes from memory and CPUs, read from the same
+restart-only settings Spark sizes from memory and CPUs, read from the same
 environment and `/config/silo/.env`. A new cluster then starts with them, and
-Silo's later `ALTER SYSTEM` writes the same values, so no restart is pending.
+Spark's later `ALTER SYSTEM` writes the same values, so no restart is pending.
 `max_connections` and `io_method` stay out: the first is sized from
 `database.max_connections`, which lives in the database, and an `io_method`
 PostgreSQL rejects would drop the whole file (below). Both apply at the next
-restart. With tuning off, or when Silo cannot size the settings, the file is
+restart. With tuning off, or when Spark cannot size the settings, the file is
 removed. A value outside a setting's range in a configuration file stops
 PostgreSQL from starting, where `ALTER SYSTEM` refuses it, so `init-postgres`
 also removes the file, with a warning, when `postgres -C` rejects the
@@ -226,7 +226,7 @@ Redis unless `REDIS_URL` points elsewhere.
 
 With `ENABLE_MEILISEARCH=true`, `init-config` exports `SILO_SEARCH_PROVIDER`,
 `SILO_MEILISEARCH_URL`, and `SILO_MEILISEARCH_API_KEY` for the bundled instance,
-leaving any of the three the deployment already sets. Silo validates them,
+leaving any of the three the deployment already sets. Spark validates them,
 stores them on every start, with the API key encrypted, and the admin UI shows
 them as set by the environment
 ([admin settings API](../admin-settings-api.md)).
@@ -234,7 +234,7 @@ them as set by the environment
 When the image chose the provider, it leaves a marker,
 `/config/.silo-search-provider`. While Meilisearch is off and the marker
 exists, `init-config` exports `SILO_SEARCH_PROVIDER=postgres` on each start.
-`svc-search-marker` deletes the marker once Silo answers `/api/v1/health`,
+`svc-search-marker` deletes the marker once Spark answers `/api/v1/health`,
 which it does only after storing that provider, so a start that fails earlier
 keeps the marker and the next start tries again. Search returns to PostgreSQL,
 and from the start after the marker is gone the administrator can choose a
@@ -247,10 +247,10 @@ working.
 The same image runs a proxy or transcode node. With `MODE=proxy` or
 `MODE=transcode`, `init-config` requires `DATABASE_URL` and `REDIS_URL`,
 starts none of the bundled services, and ignores `ENABLE_REDIS`, `ENABLE_MEILISEARCH`,
-and `ENABLE_NODE_ACCESS` with a warning. Silo already keeps migrations and
+and `ENABLE_NODE_ACCESS` with a warning. Spark already keeps migrations and
 `POSTGRES_TUNE` to the primary modes (`integrated`, `api`), so a node never
 changes the shared database's schema or settings. `/config` holds the node's
-own state. Silo itself refuses to start either mode without `NODE_URL`, the
+own state. Spark itself refuses to start either mode without `NODE_URL`, the
 node's identity. An administrator registers the node's URL on the main server,
 which checks the node's health at that registered URL; it can differ from
 `NODE_URL` (see [Proxy origins by access path](../admin-api.md#proxy-origins-by-access-path)).
@@ -268,8 +268,8 @@ A main server shares its bundled services with nodes when `.env` sets
   server uses. It binds every interface and requires `REDIS_PASSWORD`, which
   `init-config` writes to a file only the `redis` account and root read; the
   readiness check signs in from it. The password is limited to characters that
-  need no escaping in a URL, because Silo's own `REDIS_URL` carries it.
-- Silo on the main server still uses the socket and loopback.
+  need no escaping in a URL, because Spark's own `REDIS_URL` carries it.
+- Spark on the main server still uses the socket and loopback.
 
 Turning node access off removes the listener and the network rule, clears the
 role's password, and puts Redis back on loopback. Nodes sign in as `silo`, the
@@ -284,7 +284,7 @@ until their `DATABASE_URL` names `silo`. Their `REDIS_URL` gains the password.
 
 Before the omnibus image, `docker-compose.yml` ran PostgreSQL
 (`pgvector/pgvector:pg18`), Redis, and Meilisearch as services of their own,
-with data in `SILO_DATA_ROOT/postgres`, `redis`, and `meilisearch`, and Silo's
+with data in `SILO_DATA_ROOT/postgres`, `redis`, and `meilisearch`, and Spark's
 state in `plugins`, `artwork`, and `compat`. That file is now
 `docker-compose.advanced.yml` (briefly `docker-compose.split.yml`), and an
 install of that layout keeps it by selecting it in `COMPOSE_FILE`. A
@@ -314,10 +314,10 @@ docker compose up -d
 `docker compose run` gives the script the `silo` service's `.env` and `PUID`,
 and the script works within the one mount so it can hard-link:
 
-- Silo's three directories are hard-linked into `config/silo`, or copied when
+- Spark's three directories are hard-linked into `config/silo`, or copied when
   hard links fail across file systems. This happens with an external
-  `DATABASE_URL` too. Silo replaces files rather than rewriting them, so the
-  earlier stack keeps its own copy of any file Silo changes afterwards;
+  `DATABASE_URL` too. Spark replaces files rather than rewriting them, so the
+  earlier stack keeps its own copy of any file Spark changes afterwards;
   ownership is shared between the two, which the root-run earlier image
   ignores.
 - The cluster in `postgres/18/docker` is copied to `config/postgres/data`. A
@@ -329,14 +329,14 @@ and the script works within the one mount so it can hard-link:
   local connection, on its first start, and `init-postgres-db` rebuilds the
   collation-dependent indexes, since the copy was built under glibc 2.36.
 - Redis and Meilisearch data stay behind. Redis holds nothing a single node
-  cannot rebuild, and Silo builds a new index when `ENABLE_MEILISEARCH` is
+  cannot rebuild, and Spark builds a new index when `ENABLE_MEILISEARCH` is
   turned on. The Compose file still starts the bundled Redis unless `.env`
-  sets `ENABLE_REDIS=false`, as the earlier stack always ran one: Silo offers
+  sets `ENABLE_REDIS=false`, as the earlier stack always ran one: Spark offers
   the Watch Party room socket only with Redis. The image's own default stays
   off, since a node ignores the setting and warns when it is on. A search
   provider the admin UI pointed at the old `meilisearch` service goes back to
   `postgres` in the copy, unless `ENABLE_MEILISEARCH` is on, in which case
-  `init-config` hands Silo the bundled instance.
+  `init-config` hands Spark the bundled instance.
 
 It reports nothing to move when the install was already moved, or when an
 omnibus install has a database of its own and none of the earlier stack is
@@ -348,16 +348,16 @@ here. It refuses, before anything is moved into place, when:
   without `SILO_OMNIBUS_IMAGE`: this file would otherwise follow
   `latest` past the pin.
 - The omnibus install has a database of its own, no migration finished, and
-  the earlier stack's cluster or Silo directories are here: Silo created that
+  the earlier stack's cluster or Spark directories are here: Spark created that
   database first, most likely when `docker-compose.yml` started before the move.
   Copying over it would drop what it holds, and going on would leave the
   earlier install behind unannounced. The message says to move
   `config/postgres/data` aside and start again if it holds nothing needed, or
   to delete the earlier stack's directories to keep it.
 - An earlier install is here and `.env` holds a `DATABASE_URL` or `REDIS_URL`
-  naming the old services or `localhost` (the old file overrode them for Silo,
+  naming the old services or `localhost` (the old file overrode them for Spark,
   and this one passes `.env` through), or a `SILO_MEILISEARCH_URL` naming the
-  old `meilisearch` service (Silo applies it on every start, and the image keeps
+  old `meilisearch` service (Spark applies it on every start, and the image keeps
   it even with its own Meilisearch on).
 - An earlier install is here, `.env` sets `SILO_SEARCH_PROVIDER=meilisearch`
   without `SILO_MEILISEARCH_URL`, and `ENABLE_MEILISEARCH` is off: the URL
@@ -367,15 +367,15 @@ here. It refuses, before anything is moved into place, when:
   not a directory.
 - The earlier install's directories exist without a cluster and `DATABASE_URL`
   is unset, or `.env` sets a `DATABASE_URL` beside the earlier stack's cluster:
-  the earlier file set `DATABASE_URL` for Silo itself, so that cluster is the
-  database Silo used, and moving on would point Silo at another one.
+  the earlier file set `DATABASE_URL` for Spark itself, so that cluster is the
+  database Spark used, and moving on would point Spark at another one.
 - The old cluster's `PG_VERSION` is a link or holds no version number, it has
   a `postmaster.pid` (a server may still have it open), was written by another
   PostgreSQL major version, or keeps its WAL or a tablespace outside the data
   directory.
 - There is no room for the copy plus 2 GiB, or, once copied, for rebuilding
   its largest collation-dependent index twice over (the index and its WAL) plus
-  1 GiB, or for copying a Silo directory that cannot be hard-linked while
+  1 GiB, or for copying a Spark directory that cannot be hard-linked while
   keeping that room for the database's first start.
 - The copy's search uses a Meilisearch chosen in the admin UI, `.env` sets no
   `SILO_SEARCH_PROVIDER`, and nothing turns Redis on (`ENABLE_REDIS`,
@@ -388,7 +388,7 @@ How it stays safe to repeat and to roll back:
 
 - It never changes the old directories' contents, so the earlier Compose file
   still starts on them. Deleting them is the administrator's job.
-- The database copy and Silo's directories are one generation, built under
+- The database copy and Spark's directories are one generation, built under
   staging names that no later run promotes. Moving them into place happens
   under `/config/.compose-migration-pending`; a run that finds it without the
   done marker below sets aside whatever was already moved
@@ -398,8 +398,8 @@ How it stays safe to repeat and to roll back:
   an unfinished `initdb` left is set aside the same way. A failure removes
   everything staged, and the closing log lists every copy set aside. While the
   pending record exists, `init-postgres` refuses to start, whatever the
-  environment and even with an external database: Silo writing to a
-  half-moved cluster or Silo directory that the next run sets aside would
+  environment and even with an external database: Spark writing to a
+  half-moved cluster or Spark directory that the next run sets aside would
   leave those writes behind.
 - `cp` does not flush, and PostgreSQL never syncs a cleanly stopped cluster it
   starts on, so the script syncs the file system after staging and writing the
@@ -412,7 +412,7 @@ How it stays safe to repeat and to roll back:
   temporary name and renamed into place once everything else is, so it is
   whole or absent. It records the source cluster's system identifier and latest
   checkpoint location (`pg_controldata`, read in the C locale; a cluster it
-  cannot read stops the script), or `none` when Silo's database is
+  cannot read stops the script), or `none` when Spark's database is
   elsewhere. Any later start of the old cluster, even a clean start and stop,
   changes the checkpoint, so the script refuses to go on once the earlier
   Compose file has been used since the copy: starting on the copy would drop
@@ -420,7 +420,7 @@ How it stays safe to repeat and to roll back:
 - Going back to `docker-compose.advanced.yml` after a move leaves the copy
   stale. Before using `docker-compose.yml` again, move `config` aside and run
   the move again; a run on the stale copy refuses (the done marker above).
-- Silo directories that `init-config` made, empty, before the move are
+- Spark directories that `init-config` made, empty, before the move are
   removed instead of set aside. A database created beside the old install
   has to be moved aside by hand (above).
 

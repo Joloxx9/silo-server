@@ -15,7 +15,7 @@ To update, select an exact `swagger-ui-dist` version, verify its archive against
 the npm `dist.integrity` value, and replace the two assets, dependency notices, license and notice
 from that archive. Update this record and verify the page, filtering,
 authorization and interactive requests. Keep source maps and unrelated upstream
-files out of the bundle. `index.html` and `init.js` are Silo's viewer setup.
+files out of the bundle. `index.html` and `init.js` are Spark's viewer setup.
 
 The server embeds these files so viewing the documentation needs no CDN access.
 The initializer disables the external validator, URL-based configuration and

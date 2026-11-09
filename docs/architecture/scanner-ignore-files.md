@@ -45,7 +45,7 @@ Patterns follow gitignore syntax:
 - Blank lines and lines starting with `#` are comments. Each line is trimmed,
   as in Jellyfin. Invalid patterns are dropped.
 
-Silo matches anchored patterns against the path relative to the `.ignore`
+Spark matches anchored patterns against the path relative to the `.ignore`
 file's directory, as git does. Jellyfin matches them against the absolute
 path, so the two can disagree only for patterns containing a `/`.
 

@@ -1,6 +1,6 @@
 # Backups API
 
-> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Silo
+> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Spark
 > 1.0. Backups have no `/api/v1` routes. See
 > [the native API contract](architecture/api-contract.md).
 
@@ -213,7 +213,7 @@ when storage is unavailable.
 access_key, secret_key, path_style}` tests a bucket the way backups use it:
 `HeadBucket`, then it writes and deletes a test object under
 `<key_prefix>/backups/`. It saves nothing and answers `200` with `{ok,
-step, message}`: `ok: true` and "Connected. Silo wrote and deleted a test
+step, message}`: `ok: true` and "Connected. Spark wrote and deleted a test
 file.", `ok: true` with a message saying old backups stay until the bucket's
 lifecycle rules remove them when the bucket refuses the delete, or `ok:
 false` with the `step` that failed (`endpoint`: the address cannot be
@@ -243,7 +243,7 @@ from another key reaches the `backup_unauthenticated` answer below.
 `GET /admin/backups/{id}/restore-set` reads the backup's `restore-set.tar`
 and compares each item with this server. It writes nothing and takes no
 lock. `409` when the backup has no restore set (a before-upgrade backup),
-when it is from a newer Silo ("This backup is from a newer Silo. Upgrade this
+when it is from a newer Spark ("This backup is from a newer Spark. Upgrade this
 server first."), or when the restore set cannot be read. `409
 backup_unauthenticated` when this server cannot authenticate the backup's
 manifest (an unencrypted backup taken with another `SECRET_KEY`; an
@@ -497,7 +497,7 @@ reading it), `complete`, or `rejected`.
   sent, whether or not its parts are stored encrypted), and answers `complete` with `source`, or `rejected` with
   `rejection.reason`:
   - `not_a_restore_set`: the reader refused it; `message` says why.
-  - `newer_silo`: "This backup is from a newer Silo. Upgrade this server
+  - `newer_silo`: "This backup is from a newer Spark. Upgrade this server
     first."
   - `encrypted`: an age file this server's key cannot open: "This file is
     encrypted with another server's SECRET_KEY. On a computer with that

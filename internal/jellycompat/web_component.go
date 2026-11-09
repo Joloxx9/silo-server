@@ -1029,7 +1029,7 @@ func ensureWebInstallerPrerequisites() error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("%w: install %s on the Silo host or container", ErrWebInstallerUnavailable, strings.Join(missing, ", "))
+		return fmt.Errorf("%w: install %s on the Spark host or container", ErrWebInstallerUnavailable, strings.Join(missing, ", "))
 	}
 	return nil
 }

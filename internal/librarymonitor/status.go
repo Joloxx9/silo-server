@@ -177,7 +177,7 @@ func (rs *rootState) statusDetail() string {
 			parts = append(parts, "Folders on network filesystems aren't monitored: "+summarizePaths(rs.unsupportedMounts)+".")
 		}
 		if len(rs.unreadable) > 0 {
-			parts = append(parts, "Folders Silo can't read aren't monitored: "+summarizePaths(rs.unreadable)+".")
+			parts = append(parts, "Folders Spark can't read aren't monitored: "+summarizePaths(rs.unreadable)+".")
 		}
 		return strings.Join(parts, " ")
 	case StateUnsupportedFilesystem:
@@ -187,7 +187,7 @@ func (rs *rootState) statusDetail() string {
 	case StateLimitReached:
 		return limitDetail(rs.limit, rs.dirs)
 	case StateRootUnavailable:
-		return "The folder is missing or was unmounted. Silo keeps retrying."
+		return "The folder is missing or was unmounted. Spark keeps retrying."
 	case StateError:
 		return rs.errText
 	default:

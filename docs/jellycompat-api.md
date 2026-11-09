@@ -1,6 +1,6 @@
 # Jellyfin compatibility API
 
-Jellycompat exposes Silo's movie and TV catalog, viewer state, and playback through
+Jellycompat exposes Spark's movie and TV catalog, viewer state, and playback through
 Jellyfin-shaped routes. It is a supported subset of the Jellyfin protocol; a
 registered route does not imply every Jellyfin parameter or media type is
 supported. The reference contract is Jellyfin 12.1: Jellyfin 12.0 carried the
@@ -8,22 +8,22 @@ API changes, and 12.1 is a bug-fix release with the same OpenAPI surface.
 `/System/Info` and `/System/Info/Public` report the configured emulated
 version, `12.1.0` on new installs.
 
-`/System/Info` also returns `CastReceiverApplications: []`. Silo does not
+`/System/Info` also returns `CastReceiverApplications: []`. Spark does not
 advertise Chromecast receiver applications; the empty array lets Jellyfin Web
 initialize playback preferences without attempting to iterate a missing field.
 
 `GET` and `POST /System/Ping` return the product name as a JSON string
 (`"Jellyfin Server"`), as Jellyfin does; `HEAD` answers 200 for reachability
 probes. `/Branding/Css` and `/Branding/Css.css` return 200 with an empty
-`text/css` body. Jellyfin Web 10.10 and earlier fetch it at startup. Silo has no
-Jellyfin Web custom CSS: its own custom CSS styles Silo's web client, so it is
+`text/css` body. Jellyfin Web 10.10 and earlier fetch it at startup. Spark has no
+Jellyfin Web custom CSS: its own custom CSS styles Spark's web client, so it is
 not served here.
 
 Authenticated `GET /System/Configuration/encoding` returns
 `{"EnableFallbackFont":false,"EnableSubtitleExtraction":true}`. Jellyfin Web
 loads it before drawing ASS/SSA subtitles and draws nothing when the request
-fails; Silo serves no fallback fonts. The Kodi add-on reads
-`EnableSubtitleExtraction` before offering embedded text subtitles, which Silo
+fails; Spark serves no fallback fonts. The Kodi add-on reads
+`EnableSubtitleExtraction` before offering embedded text subtitles, which Spark
 serves as External. The key matches case-insensitively; any other key returns
 404.
 
@@ -102,7 +102,7 @@ other values return 400. Inaccessible items and another profile's user ID are
 rejected before mutation.
 
 Configuration maps audio language, subtitle language, autoplay, subtitle mode,
-and `HidePlayedInLatest` into Silo's canonical profile settings. Field names are case-insensitive;
+and `HidePlayedInLatest` into Spark's canonical profile settings. Field names are case-insensitive;
 duplicate casing variants of the same field return 400. Other declared
 presentation preferences round-trip for clients. Storage failures produce
 errors instead of success responses.
@@ -120,15 +120,15 @@ it lists come first in that order, and the rest keep the order above. IDs match
 regardless of case and dashes, and unknown IDs are ignored. `OrderedViews` is
 stored only in the Jellyfin configuration and is not written to
 `ui.library_order`, so once a Jellyfin client saves it, a later reorder in a
-Silo app moves only the views it doesn't list.
+Spark app moves only the views it doesn't list.
 
 `SubtitleMode` sets both `playback.subtitle_mode` and
 `playback.show_forced_subtitles`, so it reads back unchanged and native clients
 behave the same way:
 
-| Jellyfin mode | Silo settings |
+| Jellyfin mode | Spark settings |
 |---|---|
-| `Smart` | `auto` (Silo's auto is Jellyfin's Smart) |
+| `Smart` | `auto` (Spark's auto is Jellyfin's Smart) |
 | `Default` | `auto`; the saved Jellyfin configuration keeps `Default` |
 | `Always` | `always` |
 | `OnlyForced` | `off`, forced subtitles shown |
@@ -152,7 +152,7 @@ each item's original-language audio, as native clients do.
 
 Movie and episode detail responses select `DefaultSubtitleStreamIndex` from the
 viewer's effective subtitle mode and language, including downloaded subtitles.
-In `Always` mode, a track the viewer picked for the series in a Silo client
+In `Always` mode, a track the viewer picked for the series in a Spark client
 (its source, language, codec, label, forced and hearing-impaired traits) wins
 when the file has one that matches; otherwise the language rules apply.
 The detail-page selection therefore carries into playback instead of sending
@@ -167,17 +167,17 @@ empty `SubtitleStreamIndex` when playback starts from a series page. An explicit
 `0` is stream 0.
 
 `PlaybackInfo` defaults follow the viewer's settings. `DefaultAudioStreamIndex`
-is the audio track Silo selects for the viewer (audio language preference,
+is the audio track Spark selects for the viewer (audio language preference,
 original language, and the series' remembered track), falling back to the
 file's default track. `DefaultSubtitleStreamIndex` follows Jellyfin 12.1's
 `MediaStreamSelector` for the effective subtitle mode and language, judged
 against the starting audio track, with one change: Jellyfin sorts external files
-first, while Silo ranks them by Jellyfin's remaining rules and uses the source
+first, while Spark ranks them by Jellyfin's remaining rules and uses the source
 only to break ties, preferring embedded tracks over external and downloaded
 files. A file's default-flagged track therefore beats an external file in
 `Default` mode, and an external file is still chosen when nothing embedded is
 flagged. An unset subtitle language matches any language.
-In `Always` mode, Silo's per-series remembered subtitle track is applied first,
+In `Always` mode, Spark's per-series remembered subtitle track is applied first,
 as on item details. An explicit `SubtitleStreamIndex` in the request still wins.
 
 ## Browse and response fields
@@ -192,8 +192,8 @@ As in Jellyfin 12, a `/Items` request at the user root (no `ParentId`)
 returns the user's libraries only when it carries no filter. Any parameter that
 sets Jellyfin's `HasFilters` (item types, genres, tags, studios, media types,
 IDs, `Is*`/`Has*` flags, name bounds, languages, and so on) makes it a
-recursive search, including filters Silo does not apply. `LocationTypes` and
-`ExcludeLocationTypes` are the exception: Silo has no virtual items, and older
+recursive search, including filters Spark does not apply. `LocationTypes` and
+`ExcludeLocationTypes` are the exception: Spark has no virtual items, and older
 clients send `ExcludeLocationTypes=Virtual` with their library-list request.
 
 `AudioLanguages` and `SubtitleLanguages` (comma-separated or repeated) keep
@@ -278,9 +278,9 @@ an episode left long ago still resumes. As in Jellyfin, a movie or episode
 resumable item under it.
 
 Global `/Shows/NextUp` and the Resume lists leave out series the profile dropped,
-as Silo's Home does; `/Shows/NextUp?SeriesId=` still answers for a dropped series.
+as Spark's Home does; `/Shows/NextUp?SeriesId=` still answers for a dropped series.
 See [dropped-shows.md](architecture/dropped-shows.md). It orders series as
-Silo's Home does: by when the profile finished the previous episode, the order
+Spark's Home does: by when the profile finished the previous episode, the order
 Jellyfin uses. A profile that turns on `ui.next_up_new_releases_first` instead
 gets a caught-up series back at the front when its next episode is released to
 the server. `nextUpDateCutoff` still filters on last played.
@@ -314,7 +314,7 @@ the primary first, and is empty when the item has no primary backdrop.
 | `GET /Items/{id}/Images/Art` | The clear art; 404 without one. |
 | `GET /Items/{id}/Images/Disc` | The disc art; 404 without one. |
 | `GET /Items/{id}/Images/Backdrop/{index}` | Index 0 (or no index) is the primary backdrop; index `i` is the item's `i`-th backdrop after it, 404 past the last. Other image types ignore the index. |
-| `GET /Items/{id}/Images` | Jellyfin's image list: one entry per type in `ImageTags` and one `Backdrop` entry per backdrop tag, with its `ImageIndex`. `Width` and `Height` are omitted because Silo does not record artwork dimensions. |
+| `GET /Items/{id}/Images` | Jellyfin's image list: one entry per type in `ImageTags` and one `Backdrop` entry per backdrop tag, with its `ImageIndex`. `Width` and `Height` are omitted because Spark does not record artwork dimensions. |
 | `HEAD /Items/{id}/Images/{type}[/{index}]` | `200` with no body when the GET would serve the image, without redirecting or proxying it; Roku checks for a logo this way. |
 
 An episode's `ParentThumbImageTag` still names its series' backdrop; the series'
@@ -323,21 +323,21 @@ An episode's `ParentThumbImageTag` still names its series' backdrop; the series'
 | Routes | Behavior |
 |---|---|
 | `GET /Items/{id}/Ancestors` | Visible episode/season/series/library ancestry. When an item belongs to multiple libraries, chooses its first visible library parent. |
-| `GET /Library/MediaFolders` | The session's visible libraries as a `QueryResult` of `CollectionFolder` items, with the `Id` and `CollectionType` that `/UserViews` reports (`movies`, `tvshows`, …). The synthetic Collections view is not a media folder and is left out. Silo has no hidden media folders, so `isHidden=true` returns an empty list. Jellyfin SDK `getMediaFolders()` discovers libraries here. |
+| `GET /Library/MediaFolders` | The session's visible libraries as a `QueryResult` of `CollectionFolder` items, with the `Id` and `CollectionType` that `/UserViews` reports (`movies`, `tvshows`, …). The synthetic Collections view is not a media folder and is left out. Spark has no hidden media folders, so `isHidden=true` returns an empty list. Jellyfin SDK `getMediaFolders()` discovers libraries here. |
 | `GET /Items/Filters`, `/Items/Filters2` | Visible catalog genre facets; the legacy shape includes years and official ratings. For Movie, Series, Season, or Episode queries, `Filters2` also lists `AudioLanguages` and `SubtitleLanguages` as `{Name: "English (en)", Value: "en"}` pairs sorted by name. |
-| `GET /Items/Counts` | Jellyfin's `ItemCounts` for what the session can see: `MovieCount`, `SeriesCount`, `EpisodeCount`, and `BoxSetCount`, with `ItemCount` their sum (Jellyfin also counts seasons there). `isFavorite=true` counts the profile's favorites; box sets cannot be favorites, so they count zero. Silo serves no music, trailers, books or Live TV, so those counts are zero. A `userId` other than the session's answers 404. |
+| `GET /Items/Counts` | Jellyfin's `ItemCounts` for what the session can see: `MovieCount`, `SeriesCount`, `EpisodeCount`, and `BoxSetCount`, with `ItemCount` their sum (Jellyfin also counts seasons there). `isFavorite=true` counts the profile's favorites; box sets cannot be favorites, so they count zero. Spark serves no music, trailers, books or Live TV, so those counts are zero. A `userId` other than the session's answers 404. |
 | `GET /Items/{id}/Collections` | Jellyfin 12 "Included In": visible BoxSets that store the item, sorted by name and paged by `StartIndex`/`Limit`. An item the viewer cannot see returns 404 regardless of membership; visible episodes and any season return an empty result. Smart collections have no stored membership and are not listed. |
 | `GET /Studios` | Visible catalog studios with paging. |
 | `GET /Shows/Upcoming` | Scoped episodes dated from yesterday in UTC onward, with paging. |
 | `GET /Items/{id}/ThemeMedia` | `ThemeSongsResult` and `ThemeVideosResult` envelopes after validating the owner. |
 | `GET /Items/{id}/ThemeSongs`, `/ThemeVideos` | Local theme songs for a visible owner; theme videos remain empty. |
-| `GET /Videos/{id}/AdditionalParts` | An empty `QueryResult`. Silo lists each file as a version, not as an additional part. |
+| `GET /Videos/{id}/AdditionalParts` | An empty `QueryResult`. Spark lists each file as a version, not as an additional part. |
 | `GET /Movies/Recommendations` | The profile's cached recommendation rows, filtered for the session and kept to movies, in Jellyfin's category shape. Only rows a Jellyfin heading describes truthfully are sent: up to two Because You Watched rows anchored on a movie as `SimilarToRecentlyPlayed` with the watched title as `BaselineItemName`, then taste-cluster rows as `SimilarToLikedItem` with the cluster's genre label (jellyfin-web shows "Because you watched {0}" and "Because you like {0}"). A library `ParentId` (jellyfin-web sends the movie library it shows suggestions for) keeps the titles and watched titles to that library; a library the session cannot browse, or any other parent, gets `[]`. A row whose watched title is a series or one the session cannot see, the main For You row, an unlabeled cluster, Similar Users and the server-wide rows are left out; a profile without such rows gets `[]`. A title appears in the first category that holds it, each category has its own `CategoryId`, and `categoryLimit` (default 5) and `itemLimit` (default 8) apply. |
 | `GET /Items/{id}/Similar`, `/Movies/{id}/Similar`, `/Shows/{id}/Similar` | With recommendations enabled, the item's nearest titles by embedding and co-watch, in that order, keeping those the session may see; otherwise, or when none is left, the top-rated titles of the same type in the item's first genre. An item the session cannot see answers an empty list. |
 | `GET /Persons`, `/Persons/{name}` | People with a credit on a movie, series, or episode visible to the current profile, under the native person-detail rule: an episode credit counts when the profile can see the parent series. `/Persons` accepts Jellyfin 12's `StartIndex`, `NameStartsWith`, `NameLessThan`, and `NameStartsWithOrGreater` (lowercased name comparisons) and a library, movie, series, or episode `ParentId`; a series parent includes its episodes' guest stars, a library parent includes the guest stars of its series, and other parents match nobody. Pages without `SearchTerm` hold up to 100 people; searches stay capped at 20. Person photo tags are signed and appear only in responses that passed this visibility check. `GET /Items/{personId}/Images/Primary` accepts a matching signed `tag` without authentication, as Jellyfin Web sends image requests without credentials; otherwise the session must see a credit for the person. Either check runs before cached artwork is used. |
 
 `/Library/VirtualFolders` reports `LibraryOptions.EnableRealtimeMonitor` from
-Silo's configuration: `true` only while both the server-wide
+Spark's configuration: `true` only while both the server-wide
 `scanner.realtime_monitoring` setting and the library's own
 `realtime_monitoring` switch are on. The server setting is read live, so a
 change shows on the next request. This applies to both the viewer response and
@@ -407,7 +407,7 @@ encode only while HEVC encoding is allowed. Streamyfin sends such a profile on
 phones that decode AV1. The `found no route` log line records the profile's
 HLS transcoding containers and whether HEVC encoding is allowed.
 
-Silo gives each version its own `MediaSources[i].Id`, while real Jellyfin reuses
+Spark gives each version its own `MediaSources[i].Id`, while real Jellyfin reuses
 the item id. Some clients therefore send a media-source id where an item id
 belongs. `PlaybackInfo`, `GET /Items/{id}`, `MediaSegments`, `Download`, static
 `/Videos/{id}/stream`, and the user-data and played-state routes accept a
@@ -454,7 +454,7 @@ without previews is absent. `GET /Videos/{itemId}/Trickplay/{width}/{index}.jpg`
 proxies a sheet (Roku does not follow image redirects) with an `ETag` and
 `private, no-cache`, requiring revalidation after a source switch or
 regeneration, and `…/tiles.m3u8` writes Jellyfin's HLS image playlist.
-Where Jellyfin puts the caller's token on each sheet URL, Silo puts the
+Where Jellyfin puts the caller's token on each sheet URL, Spark puts the
 `PlaySessionId` of a live play of the caller that covers that item and
 source: the one the playlist request names, else the most recent. With no
 such play, or when plays cannot be read, the lines carry no credential.
@@ -534,7 +534,7 @@ source IDs alone are not credentials. An invalid explicit token does not fall
 back to a playback grant, and a grant does not cover a request whose
 `MediaSourceId` spellings name different sources. Revoked owner credentials
 invalidate the grant.
-Media URLs that Silo builds (`DirectStreamUrl`, `TranscodingUrl`, subtitle
+Media URLs that Spark builds (`DirectStreamUrl`, `TranscodingUrl`, subtitle
 `DeliveryUrl`, attachment URLs, trickplay playlist sheets) carry only
 `PlaySessionId`, never the login token, so a URL recorded by a proxy or player
 log grants that media only until the play session ends. A client that fetches
@@ -550,7 +550,7 @@ Main tier because the probe does not record the tier. Copied VP9 profiles 0 and
 picture size alone, as FFmpeg writes it into the init segment's `vpcC` box;
 Jellyfin also counts the frame rate. These short forms imply BT.709,
 limited-range, non-monochrome video, so HDR, full-range, and monochrome AV1 or
-VP9 get no entry. When Silo cannot name every format a variant carries (an
+VP9 get no entry. When Spark cannot name every format a variant carries (an
 unknown level, another AV1 or VP9 profile or color, or copied audio with no
 entry), that variant has no `CODECS` or `SUPPLEMENTAL-CODECS`, where Jellyfin
 writes a partial list or a short form. For Dolby Vision without a compatible
@@ -629,11 +629,11 @@ same way. Turning off hardware video decoding in Chrome avoids it.
 ## Sessions and socket
 
 Sign-in refuses an account holding a temporary password with `401` and a message to
-sign in to Silo first: Jellyfin clients cannot run the password change it requires
+sign in to Spark first: Jellyfin clients cannot run the password change it requires
 (see [temporary passwords](auth-api.md#temporary-passwords)). The account's other
 state is unaffected, and signing in works again once the password is changed.
 
-Each sign-in, by password or Quick Connect, opens its own Silo login session, and the
+Each sign-in, by password or Quick Connect, opens its own Spark login session, and the
 compat session lives only as long as it (see
 [login sessions](auth-api.md#login-sessions)). Every authenticated request, stream
 grant, and socket re-check reads the stored compatibility session and looks its login
@@ -661,9 +661,9 @@ returns `401`.
 
 ### Quick Connect
 
-Jellyfin apps sign in with Quick Connect on top of Silo's device sign-in
+Jellyfin apps sign in with Quick Connect on top of Spark's device sign-in
 ([device-login.md](architecture/device-login.md#jellyfin-quick-connect)). It
-needs no Silo password, so it also serves accounts that sign in only through an
+needs no Spark password, so it also serves accounts that sign in only through an
 external provider, and it picks the profile without the `username#profile`
 syntax.
 
@@ -675,7 +675,7 @@ syntax.
 | `POST /QuickConnect/Authorize?code=` | From an app already signed in here: approves the code for the session's own account and profile and answers `true`. An API key is refused; `userId`, if given, must be the session's own user (`403`). An unknown or finished code is `404`, a code another approver already approved is `409`, and a spent code budget is `429` with `Retry-After`. |
 | `POST /Users/AuthenticateWithQuickConnect` | Exchanges the secret of an approved request for a session answered like `AuthenticateByName`. Asking again with the same secret while the request lives returns the same session, as Jellyfin does, so an app that lost the answer can still sign in; once the app signs out, it is `404`. Its user name is what password sign-in accepts for the same profile: `username#profile`, or the bare account name for the profile named after the account. A secret that is not approved is `404`. |
 
-A person approves the code on `/activate` or in a Silo app, choosing one of the
+A person approves the code on `/activate` or in a Spark app, choosing one of the
 account's profiles (a PIN profile needs its PIN), or from a signed-in Jellyfin
 app with `Authorize`. The request expires, is held open by approver lookups,
 and survives a node restart exactly as a device sign-in request does. Jellyfin
@@ -691,7 +691,7 @@ is omitted.
 
 Direct players such as webOS may send an empty `PlaySessionId` on
 `/Sessions/Playing`, `/Sessions/Playing/Progress`, and `/Sessions/Playing/Stopped`.
-Silo saves their reported position when the authenticated item/source identifiers
+Spark saves their reported position when the authenticated item/source identifiers
 match exactly one started, active playback. Pending negotiations and terminal
 sessions do not qualify; ambiguous matches are ignored. A final stop sample is
 saved even when the viewer did not pause first. Samples remain last-write-wins,
@@ -709,7 +709,7 @@ fresh on every request; full session payloads use the normal per-session cache.
 
 A play ends at the first Stopped report carrying its per-play identifier or
 `DELETE /Videos/ActiveEncodings`; for ID-less players and clients that never
-stop, idle cleanup ends it. Silo then records the play the way it records native
+stop, idle cleanup ends it. Spark then records the play the way it records native
 playback: a watch-history row with source `playback` once the position passes the
 minimum resume threshold, completed past the watched threshold, and an admin
 playback-history row. Each play is recorded once across retried stops, API

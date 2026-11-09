@@ -545,7 +545,7 @@ func TestLoginStateExpiryConsentAndReauthorization(t *testing.T) {
 	}
 	u, _ := url.Parse(login.AuthorizationURL)
 	q := u.Query()
-	if q.Get("client_id") != dynamicClientID || q.Get("agent_name_hint") != "Silo" || q.Get("code_challenge") != hash(stored(t, store).Pending.Verifier) || q.Get("redirect_uri") != browserCallbackURI {
+	if q.Get("client_id") != dynamicClientID || q.Get("agent_name_hint") != "Spark" || q.Get("code_challenge") != hash(stored(t, store).Pending.Verifier) || q.Get("redirect_uri") != browserCallbackURI {
 		t.Fatal("invalid registration")
 	}
 	if err := s.CompleteLogin(t.Context(), login.CallbackURI+"?state=wrong&error=access_denied"); !errors.Is(err, ErrInvalidLogin) {

@@ -51,7 +51,7 @@ func TestMiddlewareBoundsAuditUserAgentBeforeWrite(t *testing.T) {
 }
 
 func TestAuditUserAgentMatchesSafeText(t *testing.T) {
-	for _, raw := range []string{"", "Silo/1.0", "a界😀b", "a\xff\xfeb", "a\x00b", "\xff\x00\xfe"} {
+	for _, raw := range []string{"", "Spark/1.0", "a界😀b", "a\xff\xfeb", "a\x00b", "\xff\x00\xfe"} {
 		if got, want := auditmutation.BoundUserAgent(raw), logstream.SafeText(raw); got != want {
 			t.Fatalf("normalizing %q: got %q, want %q", raw, got, want)
 		}
@@ -98,7 +98,7 @@ func auditMetadataRow(raw string) []any {
 }
 
 func TestAuditPersistenceAndProjectionsBoundUserAgent(t *testing.T) {
-	for _, raw := range []string{"Silo/1.0", "a\x00\xff\xfeb", strings.Repeat("界", 172)} {
+	for _, raw := range []string{"Spark/1.0", "a\x00\xff\xfeb", strings.Repeat("界", 172)} {
 		want := auditmutation.BoundUserAgent(raw)
 		hub := logstream.NewHub("test-node", nil)
 		tail, unsubscribe := hub.Subscribe(nil)

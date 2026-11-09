@@ -43,7 +43,7 @@ func TestPluginInstallationSource(t *testing.T) {
 		{name: "enabled external", repository: &plugins.Repository{SourceKind: plugins.RepositorySourceExternal, DisplayName: "Mine", Enabled: true}, wantKind: plugins.RepositorySourceExternal, wantName: "Mine"},
 		{name: "disabled external", repository: &plugins.Repository{SourceKind: plugins.RepositorySourceExternal, DisplayName: "Mine"}, wantKind: plugins.RepositorySourceExternal, wantName: "Mine", wantPaused: true},
 		{name: "hidden approved community", repository: &plugins.Repository{SourceKind: plugins.RepositorySourceApprovedCommunity, DisplayName: "Approved community"}, wantKind: plugins.RepositorySourceApprovedCommunity, wantName: "Approved community", wantPaused: true},
-		{name: "enabled silo", repository: &plugins.Repository{SourceKind: plugins.RepositorySourceSilo, DisplayName: "Silo maintained", Enabled: true}, wantKind: plugins.RepositorySourceSilo, wantName: "Silo maintained"},
+		{name: "enabled silo", repository: &plugins.Repository{SourceKind: plugins.RepositorySourceSilo, DisplayName: "Spark maintained", Enabled: true}, wantKind: plugins.RepositorySourceSilo, wantName: "Spark maintained"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -49,10 +49,10 @@ ships imports drops already on the provider; a connection with every sync settin
 stays paused. A provider takes part when it advertises the `sync_dropped` capability.
 Only v2 exposes the setting and capability; the frozen v1 responses omit them.
 
-`watch_provider_dropped_items` records, per connection, the series Silo and the provider
+`watch_provider_dropped_items` records, per connection, the series Spark and the provider
 last agreed are dropped. Each series is a three-way merge of the local drop, the remote
 drop, and that agreed value; the side that moved wins. When the provider dropped a show
-before the profile's latest watch of it in Silo, the show is undropped on the provider
+before the profile's latest watch of it in Spark, the show is undropped on the provider
 instead of imported, because watching undrops. A drop that watching ended locally is restored when the provider's drop is newer than
 that watch, since the user dropped the show again there. `remote_seen`, account scoping, the empty
 read guard, and the rule that a series missing from a complete read counts as undropped
@@ -64,13 +64,13 @@ Changes apply in read order per provider key, including when the read first intr
 the drop. A tombstone removes only its key; a surviving drop under another key keeps the
 series dropped. When several keys remain, the later drop time wins.
 A tombstone whose key names neither changes nothing: that is usually the provider
-echoing an undrop whose agreement Silo already forgot. Local imports are compare-and-set on the row the run read, so a
+echoing an undrop whose agreement Spark already forgot. Local imports are compare-and-set on the row the run read, so a
 concurrent dismissal or undo wins.
 
-Provider reads can lag or omit Silo's writes. A provider may serve reads from a cache,
-or leave drops that apps make out of its dropped list, so a drop Silo sends may never be
+Provider reads can lag or omit Spark's writes. A provider may serve reads from a cache,
+or leave drops that apps make out of its dropped list, so a drop Spark sends may never be
 confirmed by a read. Such a drop stays agreed and is not sent again; resending it would
-drop the show again each time the user undropped it on the provider, which Silo cannot
+drop the show again each time the user undropped it on the provider, which Spark cannot
 see. An undrop of a drop a read had confirmed keeps its agreed row
 until a read shows the show is gone, so a stale read resends the undrop instead of
 importing the old drop back; an undrop of a drop no read confirmed forgets the row at
@@ -87,13 +87,13 @@ undrop a show that is watched.
 ## Providers
 
 - Simkl: the first-party plugin `silo.watchprovider.simkl` sets `sync_dropped` and
-  follows the watch-sync plugin rules below. Silo has no built-in Simkl client.
+  follows the watch-sync plugin rules below. Spark has no built-in Simkl client.
 - Watch-sync plugins: a plugin that sets `sync_dropped` (and lists `SERIES` in
   `supported_media_types`) answers `ListRemoteState` for the `DROPPED` state kind, with
   its cursor saved under `plugin.remote.dropped`. `complete_snapshot` means the rows are
   the account's full dropped set; otherwise the read is incremental and reports undrops
   as `removed` tombstones. `listed_at` is the drop time; without it an imported drop is
-  stamped with the sync time. A complete snapshot with a row Silo cannot read (no
+  stamped with the sync time. A complete snapshot with a row Spark cannot read (no
   identity, or media that is not a series) counts as incomplete, because that row may be
   a show that is still dropped. Drops and undrops are `MARK_DROPPED` and
   `UNMARK_DROPPED` events for `SERIES` media. Both are convergent, so the event ID

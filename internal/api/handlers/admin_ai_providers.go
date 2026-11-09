@@ -363,9 +363,9 @@ func aiProviderCheckFailureMessage(err error) string {
 		return fmt.Sprintf("The provider answered with HTTP %d.", status.StatusCode)
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return "The provider did not answer in time. Check the address and that Silo can reach it."
+		return "The provider did not answer in time. Check the address and that Spark can reach it."
 	}
-	return "Silo could not reach the provider. Check the address and that Silo can reach it."
+	return "Spark could not reach the provider. Check the address and that Spark can reach it."
 }
 
 func aiProviderView(provider config.AIProvider, effective map[string]string) AdminAIProviderView {

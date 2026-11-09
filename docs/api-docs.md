@@ -1,6 +1,6 @@
 # Interactive API documentation
 
-Open `/api/v2/docs` on your Silo server to browse the native API with Swagger UI.
+Open `/api/v2/docs` on your Spark server to browse the native API with Swagger UI.
 The page loads the server's embedded OpenAPI document.
 No separate service, frontend build or internet connection is needed to load
 the viewer. The document is also available directly at `/api/v2/openapi.json`.

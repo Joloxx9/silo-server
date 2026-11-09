@@ -1,11 +1,11 @@
 # Scan API
 
-> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Silo
+> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Spark
 > 1.0. The frozen alpha `/api/v1` scan routes are summarized in [Bridge note](#bridge-note) and
 > are retired after the pre-1.0 bridge window. See
 > [the native API contract](architecture/api-contract.md).
 
-Silo's scan API lets external tools trigger media library scans on demand. Use it to integrate
+Spark's scan API lets external tools trigger media library scans on demand. Use it to integrate
 with download managers like Sonarr and Radarr, or with relay tools like Autoscan that notify your
 server when new media arrives.
 
@@ -15,9 +15,9 @@ accepted scan does and does not promise — is in
 
 ## Prerequisites
 
-- Silo must be running in **integrated** or **api** mode. In `proxy` and `transcode` modes the
+- Spark must be running in **integrated** or **api** mode. In `proxy` and `transcode` modes the
   scan operations are not registered.
-- You need an **admin API key**. Create one in the Silo web UI under **Settings > API Keys**.
+- You need an **admin API key**. Create one in the Spark web UI under **Settings > API Keys**.
   Keys start with the `sa_` prefix.
 
 ## Authentication
@@ -41,7 +41,7 @@ curl -s http://your-server:8090/api/v2/libraries \
 ```
 
 `listLibraries` returns `{items, page}`. Library IDs are opaque strings; send them back exactly as
-received. You can also find them in the Silo web UI under **Settings > Libraries**.
+received. You can also find them in the Spark web UI under **Settings > Libraries**.
 
 ## Operations
 
@@ -218,17 +218,17 @@ curl -X POST http://your-server:8090/api/v2/scan \
 ## Integration with Autoscan
 
 [Autoscan](https://github.com/Cloudbox/autoscan) monitors Sonarr, Radarr, and other sources for
-new downloads, then relays scan requests to media servers. Silo supports Autoscan's stock
+new downloads, then relays scan requests to media servers. Spark supports Autoscan's stock
 Jellyfin target through the Jellyfin compatibility server.
 
 Use:
 
-- URL: Silo's Jellyfin compatibility URL, usually `http://your-server:8096`
-- Token: a Silo admin API key beginning with `sa_`
+- URL: Spark's Jellyfin compatibility URL, usually `http://your-server:8096`
+- Token: a Spark admin API key beginning with `sa_`
 - Target type: Autoscan `jellyfin`
 
 Autoscan discovers library roots from `GET /Library/VirtualFolders` and sends changed paths to
-`POST /Library/Media/Updated`. The paths must be server-side paths as Silo sees them.
+`POST /Library/Media/Updated`. The paths must be server-side paths as Spark sees them.
 
 ### Alternative: Autoscan custom script target
 
@@ -245,7 +245,7 @@ BODY=$(jq -n --arg path "$1" '{"path": $path}')
 curl -s -S --fail -X POST "${SILO_URL}/api/v2/scan" \
   -H "Authorization: Bearer ${API_KEY}" \
   -H "Content-Type: application/json" \
-  -d "$BODY" || echo "Silo scan request failed for: $1" >&2
+  -d "$BODY" || echo "Spark scan request failed for: $1" >&2
 ```
 
 ## Integration with Sonarr / Radarr
@@ -254,14 +254,14 @@ Sonarr and Radarr can trigger external scripts or webhooks when a download compl
 
 ### Built-in autoscan receiver
 
-Silo also ships a first-class receiver. An administrator creates a webhook on an autoscan source
+Spark also ships a first-class receiver. An administrator creates a webhook on an autoscan source
 with `POST /api/v2/admin/autoscan/sources/{id}/webhook` (`createAdminAutoscanSourceWebhook`) and
 configures the resulting token URL in the external service. Events arrive at
 `POST /api/v2/autoscan/webhooks/{token}` (`receiveAutoscanWebhook`), which authenticates on the
 token alone and answers `202 {"status":"accepted"}`. `GET /api/v2/autoscan/capabilities` reports
 whether the ingress is available. Rotate a token with
 `POST /api/v2/admin/autoscan/sources/{id}/webhook/rotate` and remove it with
-`DELETE /api/v2/admin/autoscan/sources/{id}/webhook`; Silo does not redirect a retired token URL.
+`DELETE /api/v2/admin/autoscan/sources/{id}/webhook`; Spark does not redirect a retired token URL.
 
 ### Sonarr custom script
 
@@ -305,7 +305,7 @@ case "$sonarr_eventtype" in
     ;;
 esac
 
-# If Sonarr and Silo see files at different mount points, remap here:
+# If Sonarr and Spark see files at different mount points, remap here:
 # SCAN_PATH="${SCAN_PATH/#\/tv//mnt/media/tv}"
 
 BODY=$(jq -n --arg path "$SCAN_PATH" '{"path": $path}')
@@ -313,7 +313,7 @@ BODY=$(jq -n --arg path "$SCAN_PATH" '{"path": $path}')
 curl -s -S --fail -X POST "${SILO_URL}/api/v2/scan" \
   -H "Authorization: Bearer ${API_KEY}" \
   -H "Content-Type: application/json" \
-  -d "$BODY" || echo "Silo scan failed for: $SCAN_PATH" >&2
+  -d "$BODY" || echo "Spark scan failed for: $SCAN_PATH" >&2
 ```
 
 Place this script somewhere accessible (for example `/opt/scripts/silo-sonarr.sh`), make it
@@ -360,7 +360,7 @@ case "$radarr_eventtype" in
     ;;
 esac
 
-# If Radarr and Silo see files at different mount points, remap here:
+# If Radarr and Spark see files at different mount points, remap here:
 # SCAN_PATH="${SCAN_PATH/#\/movies//mnt/media/movies}"
 
 BODY=$(jq -n --arg path "$SCAN_PATH" '{"path": $path}')
@@ -368,7 +368,7 @@ BODY=$(jq -n --arg path "$SCAN_PATH" '{"path": $path}')
 curl -s -S --fail -X POST "${SILO_URL}/api/v2/scan" \
   -H "Authorization: Bearer ${API_KEY}" \
   -H "Content-Type: application/json" \
-  -d "$BODY" || echo "Silo scan failed for: $SCAN_PATH" >&2
+  -d "$BODY" || echo "Spark scan failed for: $SCAN_PATH" >&2
 ```
 
 Neither script handles `SeriesDelete` or `MovieDelete`. Sonarr and Radarr run the script before
@@ -417,11 +417,11 @@ that folder. Scans running on different servers in a cluster are not serialized.
 - **Sending a file path is fine.** For video libraries the server scans the file's directory
   when that directory exists, which catches the replaced version, renames, and new sidecar files
   alongside the file you named. Sending the season or movie folder directly is equivalent.
-- **Full library scans are expensive.** Reserve these for periodic maintenance (Silo runs one
+- **Full library scans are expensive.** Reserve these for periodic maintenance (Spark runs one
   daily at 02:00 server-local time by default). Do not trigger full scans from download
   automation.
-- **Paths must be server-side paths.** The path you send must match the filesystem as the Silo
-  server sees it. If Sonarr and Silo see files at different mount points (common with Docker),
+- **Paths must be server-side paths.** The path you send must match the filesystem as the Spark
+  server sees it. If Sonarr and Spark see files at different mount points (common with Docker),
   uncomment and adjust the path remapping line in the scripts above.
 - **Scripts require `jq`.** The integration scripts use `jq` to build JSON safely, which handles
   paths containing quotes or backslashes. Install it with your package manager (`apt install jq`,

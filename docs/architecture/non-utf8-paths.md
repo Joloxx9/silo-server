@@ -4,11 +4,11 @@ A Linux file name is a byte string, and libraries filled by older tools can
 hold names in a legacy 8-bit encoding, such as a Latin-1 `å` stored as the
 single byte `0xe5`. PostgreSQL text columns reject such strings (SQLSTATE
 22021), and `encoding/json` replaces each invalid byte with U+FFFD, which
-loses the name. Silo carries these names through `internal/fspath`.
+loses the name. Spark carries these names through `internal/fspath`.
 
 ## Encoded paths
 
-Every path Silo stores or passes around is in fspath encoding:
+Every path Spark stores or passes around is in fspath encoding:
 
 - Valid UTF-8 is unchanged. Paths that were already UTF-8, which includes
   rows written before this encoding existed, are the same encoded or not. The
@@ -26,13 +26,13 @@ Every path Silo stores or passes around is in fspath encoding:
 
 ## Where encoding and decoding happen
 
-- Names enter Silo encoded once, where they come off the file system:
+- Names enter Spark encoded once, where they come off the file system:
   directory listings (`fspath.ReadDir`), symlink resolution
   (`fspath.EvalSymlinks`, `fspath.Readlink`), and library-monitor inotify
   events. Patterns read from `.siloignore` and `.ignore` files are encoded
   the same way, so a pattern holding a name's raw bytes matches it. Never
   encode a path that came from the database, an API request, or another
-  Silo process: it is already encoded, and encoding it again escapes it
+  Spark process: it is already encoded, and encoding it again escapes it
   twice.
 - Every system call or child process that receives a media path decodes it.
   Use `fspath.Open`, `Stat`, `Lstat`, `ReadFile`, `ReadDir`, and

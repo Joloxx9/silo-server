@@ -84,7 +84,7 @@ type AdminRequestRouteConditions struct {
 	NetworkIDs        []int    `json:"network_ids,omitempty" doc:"TMDB network IDs (series)"`
 	CompanyIDs        []int    `json:"company_ids,omitempty" doc:"TMDB production company IDs (movies)"`
 	RequesterUserIDs  []int    `json:"requester_user_ids,omitempty" doc:"Accounts whose requests the route applies to"`
-	SeriesStatuses    []string `json:"series_statuses,omitempty" enum:"returning,in_production,upcoming,ended,cancelled" doc:"Series only: the series' status when the request was made, or, for a request made before Silo captured status, the first time it is routed while a rule checks status (TMDB's Pilot is in_production, Planned is upcoming). A series with no TMDB status matches none of them"` //nolint:misspell // the catalog's show_status spelling
+	SeriesStatuses    []string `json:"series_statuses,omitempty" enum:"returning,in_production,upcoming,ended,cancelled" doc:"Series only: the series' status when the request was made, or, for a request made before Spark captured status, the first time it is routed while a rule checks status (TMDB's Pilot is in_production, Planned is upcoming). A series with no TMDB status matches none of them"` //nolint:misspell // the catalog's show_status spelling
 
 	ExcludeGenreIDs          []int    `json:"exclude_genre_ids,omitempty" doc:"Match titles with none of these TMDB genre IDs"`
 	ExcludeKeywordIDs        []int    `json:"exclude_keyword_ids,omitempty" doc:"Match titles with none of these TMDB keyword IDs"`
@@ -167,7 +167,7 @@ type AdminRequestRouteReorderInput struct {
 type AdminRequestRoutePreviewInput struct {
 	Body struct {
 		MediaType       string `json:"media_type" enum:"movie,series"`
-		TMDBID          int    `json:"tmdb_id" minimum:"1" doc:"TMDB identifier (external, not a Silo ID)" example:"129"`
+		TMDBID          int    `json:"tmdb_id" minimum:"1" doc:"TMDB identifier (external, not a Spark ID)" example:"129"`
 		RequesterUserID *ID    `json:"requester_user_id,omitempty" doc:"Route as this account's request; without it, rules for certain accounts do not match"`
 	}
 }
@@ -199,7 +199,7 @@ type AdminRequestRoutePreviewRule struct {
 
 // AdminRequestRouteTitle is a title the admin can try the rules on.
 type AdminRequestRouteTitle struct {
-	TMDBID     int    `json:"tmdb_id" doc:"TMDB identifier (external, not a Silo ID)" example:"129"`
+	TMDBID     int    `json:"tmdb_id" doc:"TMDB identifier (external, not a Spark ID)" example:"129"`
 	MediaType  string `json:"media_type" enum:"movie,series"`
 	Title      string `json:"title" example:"Spirited Away"`
 	Year       int    `json:"year,omitempty" example:"2001"`

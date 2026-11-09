@@ -9,7 +9,7 @@ Repos affected: `silo-server` (contract, planner, store, web), `silo-android`, `
 
 ## Summary
 
-When playback keeps rebuffering, every Silo client should notice, lower the
+When playback keeps rebuffering, every Spark client should notice, lower the
 quality, and remember the result for that device and network. Today only the
 web player does this.
 
@@ -190,7 +190,7 @@ measured and where it came from, and never do Auto's arithmetic.
     timeouts do not decide an outage, so every client tells a dropout from a
     slow link the same way. For a client that plays through a local server or
     engine (Apple's Aether), the media requests are its upstream reads from
-    the Silo origin. The player's requests to the local server are not media
+    the Spark origin. The player's requests to the local server are not media
     requests, and their errors (such as AVPlayer's -12889 on the loopback hop)
     are not media failures unless the upstream read failed. An outage ends
     when the plan's media data arrives again (a segment or range request
@@ -479,8 +479,8 @@ A lowering refused before it is sent is not kept.
 
 `playback.buffering_quality_mode` joins the settings manifest in phase 1:
 
-- Label: "Lower quality when buffering". Description: "What Silo does on Auto
-  when playback keeps buffering. Silo always asks before lowering a quality you
+- Label: "Lower quality when buffering". Description: "What Spark does on Auto
+  when playback keeps buffering. Spark always asks before lowering a quality you
   picked."
 - Values: `never` ("Never"), `ask` ("Ask first"), `always` ("Automatically").
 - Scopes: `profile` and `profile_device`, the same as `playback.intro_skip_mode`.

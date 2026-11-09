@@ -102,7 +102,7 @@ func PublicWarning(diagnostic string) string {
 		return fmt.Sprintf("Not matched (%d): %s", count, PublicUnmatchedReason(reason))
 	}
 	if n, _ := fmt.Sscanf(diagnostic, warnEmbySeasonFavorites, &count); n == 1 {
-		return fmt.Sprintf("Season favorites skipped (%d): Silo can't favorite a season.", count)
+		return fmt.Sprintf("Season favorites skipped (%d): Spark can't favorite a season.", count)
 	}
 	if n, _ := fmt.Sscanf(diagnostic, warnHiddenHistorySuppressed, &count); n == 1 {
 		return fmt.Sprintf(

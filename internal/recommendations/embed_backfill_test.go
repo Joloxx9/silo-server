@@ -235,7 +235,7 @@ func TestBackfillUnstorableVectorWritesNoLock(t *testing.T) {
 			if err == nil || store.lockWrites != 0 || store.lock != nil || len(store.stored) != 0 {
 				t.Fatalf("unstorable %d-d vectors: error=%v lock writes=%d stored=%d", dims, err, store.lockWrites, len(store.stored))
 			}
-			if dims > 0 && !strings.Contains(err.Error(), fmt.Sprintf("returns %d dimensions; Silo stores at most %d", dims, CanonicalEmbeddingDimensions)) {
+			if dims > 0 && !strings.Contains(err.Error(), fmt.Sprintf("returns %d dimensions; Spark stores at most %d", dims, CanonicalEmbeddingDimensions)) {
 				t.Fatalf("error = %v, want the model's dimensions named", err)
 			}
 		})

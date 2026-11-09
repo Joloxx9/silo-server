@@ -2,7 +2,7 @@
   "items": [
     {
       "id": "local",
-      "display_name": "Silo account",
+      "display_name": "Spark account",
       "mode": "credentials",
       "default": true
     },

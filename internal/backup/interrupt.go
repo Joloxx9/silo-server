@@ -122,7 +122,7 @@ func interruptWork(ctx context.Context, loader DatabaseLoader, dbURL, liveURL st
 	}
 	if len(changed) > 0 {
 		_, _ = fmt.Fprintf(out, "Ended the work that was queued or running when the backup was taken, and marked what is rebuilt from the restored data (%s): "+
-			"none of it runs by itself after the restore, and the search index and recommendations are rebuilt when Silo starts.\n",
+			"none of it runs by itself after the restore, and the search index and recommendations are rebuilt when Spark starts.\n",
 			strings.Join(changed, ", "))
 	}
 	return nil

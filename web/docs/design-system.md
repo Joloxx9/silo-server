@@ -1,16 +1,16 @@
-# Silo Design System
+# Spark Design System
 
-Human-facing reference for the Silo web app's design language.
+Human-facing reference for the Spark web app's design language.
 
 Code-backed tokens and utility constants live in [../src/lib/design-system.ts](../src/lib/design-system.ts). CSS tokens and reusable utility classes live in [../src/app.css](../src/app.css).
 
 ## Philosophy
 
-Silo uses a cinema-first design language for media streaming interfaces. Media consumption and discovery are the primary concerns — every design decision should be evaluated against them.
+Spark uses a cinema-first design language for media streaming interfaces. Media consumption and discovery are the primary concerns — every design decision should be evaluated against them.
 
 The UI should feel like a dark theater, not a dashboard. Media artwork, backdrops, and thumbnails carry most of the visual weight. Interface chrome stays restrained so content stays primary. When a user lands on the app, the first thing they should feel is the content — a sweeping backdrop, a cinematic title, artwork that fills the viewport.
 
-Themes should let content imagery be the primary source of color. Theme accent colors should complement, not compete with, poster and backdrop artwork. Silo's one theme, Cinema Dark (the `midnight-cinema` block in `app.css`), uses a monochromatic palette specifically so the media provides all the color.
+Themes should let content imagery be the primary source of color. Theme accent colors should complement, not compete with, poster and backdrop artwork. Spark's Cinema Dark theme (the `midnight-cinema` block in `app.css`) uses a monochromatic palette specifically so the media provides all the color.
 
 ## How To Use It
 

@@ -405,7 +405,7 @@ func resolvePluginCacheDir() (string, error) {
 	}
 	dir := filepath.Join(os.TempDir(), "silo-plugins")
 	if err := plugins.EnsurePrivateCacheRoot(dir); err != nil {
-		return "", fmt.Errorf("%w; set SILO_PLUGIN_CACHE_DIR to a directory only the Silo user can write", err)
+		return "", fmt.Errorf("%w; set SILO_PLUGIN_CACHE_DIR to a directory only the Spark user can write", err)
 	}
 	return dir, nil
 }
@@ -4904,7 +4904,7 @@ func replaceWatchSyncPluginProviders(
 			continue
 		}
 		if watchsync.RetiredPlugin(installation.PluginID) {
-			slog.WarnContext(ctx, "skip retired watch sync plugin; Silo no longer supports its provider",
+			slog.WarnContext(ctx, "skip retired watch sync plugin; Spark no longer supports its provider",
 				"component", "app",
 				"installation_id", installation.ID,
 				"plugin_id", installation.PluginID,
@@ -4948,7 +4948,7 @@ func replaceWatchSyncPluginProviders(
 			}
 			providerKey := watchsync.PluginProviderKey(installation.ID, installation.PluginID, capability.ID, siloManaged)
 			if legacyKey := watchsync.PluginProviderKey(installation.ID, installation.PluginID, capability.ID, true); legacyKey != providerKey {
-				slog.WarnContext(ctx, "first-party watch provider plugin was not installed from the Silo repository; connections made with it before stay unsynced",
+				slog.WarnContext(ctx, "first-party watch provider plugin was not installed from the Spark repository; connections made with it before stay unsynced",
 					"component", "app",
 					"installation_id", installation.ID,
 					"plugin_id", installation.PluginID,

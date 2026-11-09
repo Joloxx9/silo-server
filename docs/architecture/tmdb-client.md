@@ -1,6 +1,6 @@
 # TMDB client and request budget
 
-Silo calls TMDB itself for request discovery, the request reconcile and
+Spark calls TMDB itself for request discovery, the request reconcile and
 Discover list refresh tasks, watchlist title repair, and library and personal
 collections (charts, franchises, discover queries, lists, and their scheduled
 syncs). Metadata plugins call TMDB on their own and are outside this

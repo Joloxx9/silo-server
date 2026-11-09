@@ -8,7 +8,7 @@ import (
 )
 
 // siloSenderName labels Discord posts and embed footers.
-const siloSenderName = "Silo"
+const siloSenderName = "Spark"
 
 // Server-channel embed accent colors (decimal RGB).
 const (
@@ -186,11 +186,11 @@ func BuildServerChannelDiscordContent(groups []ContentGroup, test bool) ([]byte,
 	now := time.Now().UTC().Format(time.RFC3339)
 	entries := make([]discordDigestEntry, 0, len(groups))
 	for _, group := range groups {
-		author := "New episodes available on Silo"
+		author := "New episodes available on Spark"
 		if flat, ok := flatKindByString(group.Kind); ok {
-			author = "New " + flat.ItemType + " available on Silo"
+			author = "New " + flat.ItemType + " available on Spark"
 		} else if len(group.Episodes) == 1 {
-			author = "New episode available on Silo"
+			author = "New episode available on Spark"
 		}
 		ids := group.Meta.providerIDs()
 		fields := make([]discordEmbedField, 0, 3)
@@ -225,7 +225,7 @@ func BuildServerChannelDiscordContent(groups []ContentGroup, test bool) ([]byte,
 	overflow += dropped
 	body := discordWebhookBody{Embeds: embeds, Username: siloSenderName}
 	if overflow > 0 {
-		body.Content = fmt.Sprintf("…and %d more new items on Silo", overflow)
+		body.Content = fmt.Sprintf("…and %d more new items on Spark", overflow)
 	}
 	return json.Marshal(body)
 }
@@ -311,13 +311,13 @@ func BuildServerChannelGenericContent(groups []ContentGroup, channelID string, t
 func requestEventDescription(event string) string {
 	switch event {
 	case ServerChannelEventRequestSubmitted:
-		return "New media request on Silo"
+		return "New media request on Spark"
 	case ServerChannelEventRequestApproved:
 		return "Media request approved"
 	case ServerChannelEventRequestDeclined:
 		return "Media request declined"
 	case ServerChannelEventRequestFulfilled:
-		return "Requested media is now available on Silo"
+		return "Requested media is now available on Spark"
 	default:
 		return genericNotificationTitle
 	}

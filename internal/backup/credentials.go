@@ -145,7 +145,7 @@ const profileExists = `EXISTS (SELECT 1 FROM user_profiles p WHERE p.id = r.prof
 
 // Reasons shared by several secretTables entries.
 const (
-	outboundOnly  = "outbound: what Silo presents to another service, not a credential for Silo"
+	outboundOnly  = "outbound: what Spark presents to another service, not a credential for Spark"
 	workerLease   = "a worker's lease or claim on a job, not a credential"
 	urlSlug       = "a URL name, not a secret"
 	watchTogether = "Watch Together rooms in progress and their join codes"
@@ -424,7 +424,7 @@ func carryCredentials(ctx context.Context, loader DatabaseLoader, dbURL, liveURL
 		return fmt.Errorf("replacing the restored %s: %w", carriedKinds, err)
 	}
 	if liveURL == "" {
-		_, _ = fmt.Fprintf(out, "Left out the backup's %s; create new ones after Silo starts.\n", carriedKinds)
+		_, _ = fmt.Fprintf(out, "Left out the backup's %s; create new ones after Spark starts.\n", carriedKinds)
 		return nil
 	}
 	if len(carriedRows.Absent) > 0 {

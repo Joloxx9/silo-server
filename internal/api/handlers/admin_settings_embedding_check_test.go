@@ -41,7 +41,7 @@ func TestCheckRecommendationsEmbeddingConnection(t *testing.T) {
 		want    string
 	}{
 		{name: "fits", vectors: vectorOf(1024), success: true, want: "returns 1024 dimensions"},
-		{name: "too many dimensions", vectors: vectorOf(4096), want: "The model returns 4096 dimensions; Silo stores at most 3072."},
+		{name: "too many dimensions", vectors: vectorOf(4096), want: "The model returns 4096 dimensions; Spark stores at most 3072."},
 		{name: "exactly the stored size", vectors: vectorOf(3072), success: true, want: "returns 3072 dimensions"},
 		{name: "no vectors", vectors: [][]float32{}, want: "returned no vector"},
 		{name: "nil vector", vectors: [][]float32{nil}, want: "returned no vector"},

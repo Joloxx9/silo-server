@@ -441,7 +441,7 @@ func TestAdminPlaybackHistoryFactsDB(t *testing.T) {
 	// its reason; an admin terminate and a delayed expiry recorded with
 	// earlier ends do not replace the stop.
 	finalize(600, 10*time.Minute, AdminPlaybackHistoryEntry{EndReason: PlaybackEndExpired})
-	finalize(500, 9*time.Minute, AdminPlaybackHistoryEntry{DeviceID: "tv-1", DevicePlatform: "tvOS", ClientName: "Silo tvOS", ClientVersion: "2.1.0", VideoDecision: "direct", AudioDecision: "transcode"})
+	finalize(500, 9*time.Minute, AdminPlaybackHistoryEntry{DeviceID: "tv-1", DevicePlatform: "tvOS", ClientName: "Spark tvOS", ClientVersion: "2.1.0", VideoDecision: "direct", AudioDecision: "transcode"})
 	finalize(700, 12*time.Minute, AdminPlaybackHistoryEntry{DeviceID: "tv-2", DevicePlatform: "iOS", ClientName: "Other", ClientVersion: "9", VideoDecision: "transcode", AudioDecision: "direct", EndReason: PlaybackEndStopped})
 	finalize(700, 11*time.Minute, AdminPlaybackHistoryEntry{EndReason: PlaybackEndTerminated})
 	// The same holds when the stop got no further, so ended_at never moved
@@ -493,7 +493,7 @@ func TestAdminPlaybackHistoryFactsDB(t *testing.T) {
 	for _, check := range []struct{ field, got, want string }{
 		{"device_id", text(got.DeviceID), "tv-1"},
 		{"device_platform", text(got.DevicePlatform), "tvOS"},
-		{"client_name", text(got.ClientName), "Silo tvOS"},
+		{"client_name", text(got.ClientName), "Spark tvOS"},
 		{"client_version", text(got.ClientVersion), "2.1.0"},
 		{"video_decision", text(got.VideoDecision), "direct"},
 		{"audio_decision", text(got.AudioDecision), "transcode"},

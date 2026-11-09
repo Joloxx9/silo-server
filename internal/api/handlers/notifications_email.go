@@ -177,13 +177,13 @@ func (h *EmailLinkHandler) HandleVerify(w http.ResponseWriter, r *http.Request) 
 			"The address could not be verified. Try the link again in a moment.")
 	case outcome == notifications.EmailVerifyConflict:
 		writeEmailLinkPage(w, http.StatusConflict, "Address already in use",
-			"This address now belongs to another profile or account. Choose a different address in Silo's notification settings.")
+			"This address now belongs to another profile or account. Choose a different address in Spark's notification settings.")
 	case outcome == notifications.EmailVerifyInvalid:
 		writeEmailLinkPage(w, http.StatusBadRequest, "Link expired or already used",
-			"Request a new verification email from Silo's notification settings.")
+			"Request a new verification email from Spark's notification settings.")
 	default:
 		writeEmailLinkPage(w, http.StatusOK, "Address verified",
-			"Silo notifications for this profile will now be delivered here. You can close this page.")
+			"Spark notifications for this profile will now be delivered here. You can close this page.")
 	}
 }
 
@@ -197,10 +197,10 @@ func (h *EmailLinkHandler) HandleUnsubscribe(w http.ResponseWriter, r *http.Requ
 			"Could not unsubscribe. Try the link again in a moment.")
 	case !ok:
 		writeEmailLinkPage(w, http.StatusBadRequest, "Link invalid",
-			"This unsubscribe link is no longer valid. Manage notifications in Silo's settings.")
+			"This unsubscribe link is no longer valid. Manage notifications in Spark's settings.")
 	default:
 		writeEmailLinkPage(w, http.StatusOK, "Unsubscribed",
-			"This profile will no longer receive notification emails. Re-enable them any time in Silo's settings.")
+			"This profile will no longer receive notification emails. Re-enable them any time in Spark's settings.")
 	}
 }
 

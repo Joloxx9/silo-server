@@ -151,17 +151,17 @@ func decideForce(in sendBufferInput) SendBufferResult {
 func sendBufferAction(reason string) string {
 	switch reason {
 	case reasonNoNetAdmin:
-		return "Grant NET_ADMIN so Silo forces a larger send buffer on its listeners (cap_add: [NET_ADMIN], as in the shipped docker-compose.yml; Kubernetes Pod Security Baseline refuses it). Or raise the maximum (third value) of net.ipv4.tcp_wmem to 67108864 in Silo's network namespace: a container sysctl on a bridge network, the host with network_mode: host or no container, or a Kubernetes pod sysctl (a safe sysctl from Kubernetes 1.32 on Linux 4.15 or later; older clusters must allow it)."
+		return "Grant NET_ADMIN so Spark forces a larger send buffer on its listeners (cap_add: [NET_ADMIN], as in the shipped docker-compose.yml; Kubernetes Pod Security Baseline refuses it). Or raise the maximum (third value) of net.ipv4.tcp_wmem to 67108864 in Spark's network namespace: a container sysctl on a bridge network, the host with network_mode: host or no container, or a Kubernetes pod sysctl (a safe sysctl from Kubernetes 1.32 on Linux 4.15 or later; older clusters must allow it)."
 	case reasonHelperUnavailable:
-		return "Raise the maximum (third value) of net.ipv4.tcp_wmem to 67108864 in Silo's network namespace: a container sysctl on a bridge network, the host with network_mode: host or no container, or a Kubernetes pod sysctl (a safe sysctl from Kubernetes 1.32 on Linux 4.15 or later; older clusters must allow it). The net admin line says why Silo cannot force a larger send buffer."
+		return "Raise the maximum (third value) of net.ipv4.tcp_wmem to 67108864 in Spark's network namespace: a container sysctl on a bridge network, the host with network_mode: host or no container, or a Kubernetes pod sysctl (a safe sysctl from Kubernetes 1.32 on Linux 4.15 or later; older clusters must allow it). The net admin line says why Spark cannot force a larger send buffer."
 	case reasonNotAllowed:
-		return "This container's NET_ADMIN cannot force buffers (for example rootless Docker or Podman). Raise the maximum (third value) of net.ipv4.tcp_wmem to 67108864 in Silo's network namespace instead."
+		return "This container's NET_ADMIN cannot force buffers (for example rootless Docker or Podman). Raise the maximum (third value) of net.ipv4.tcp_wmem to 67108864 in Spark's network namespace instead."
 	case reasonKernelError:
-		return "Report the errno in a Silo issue."
+		return "Report the errno in a Spark issue."
 	case reasonGrantedBelowRequest:
-		return "Report the granted value in a Silo issue."
+		return "Report the granted value in a Spark issue."
 	case reasonLimitsUnknown:
-		return "Check that /proc/sys/net/ipv4/tcp_wmem is readable where Silo runs."
+		return "Check that /proc/sys/net/ipv4/tcp_wmem is readable where Spark runs."
 	default:
 		return actionNone
 	}

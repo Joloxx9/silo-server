@@ -319,7 +319,7 @@ describe("AdminPluginDetail", () => {
     installationsQuery = query([
       makeInstallation({
         source_kind: "approved_community",
-        repository_name: "Approved community",
+        repository_name: "Spark community",
         updates_paused: true,
         update_policy: "notify",
       }),

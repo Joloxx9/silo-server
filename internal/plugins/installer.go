@@ -179,7 +179,7 @@ func (i *Installer) downloadBinary(
 	actualChecksum := hex.EncodeToString(checksum[:])
 	if actualChecksum != req.Checksum {
 		return nil, nil, nil, "", packageError(fmt.Errorf("binary checksum mismatch: expected %s, got %s", req.Checksum, actualChecksum),
-			"The downloaded plugin doesn't match the SHA-256 checksum its catalog lists, so Silo didn't install it.")
+			"The downloaded plugin doesn't match the SHA-256 checksum its catalog lists, so Spark didn't install it.")
 	}
 
 	manifest := req.Manifest
@@ -652,7 +652,7 @@ func loadManifestFromBinary(ctx context.Context, binaryData []byte) (*pluginv1.P
 			return nil, nil, runErr
 		}
 		return nil, nil, packageError(runErr,
-			"Silo couldn't run the plugin to read its manifest. It may be built for another platform, or the file may be damaged.")
+			"Spark couldn't run the plugin to read its manifest. It may be built for another platform, or the file may be damaged.")
 	}
 
 	// Fields this server's SDK doesn't know yet are dropped, as when an
@@ -731,7 +731,7 @@ func checkReplacementIdentity(manifest *pluginv1.PluginManifest, existing *Insta
 	}
 	return packageError(
 		fmt.Errorf("replacement plugin id %q does not match installation %q", manifest.GetPluginId(), existing.PluginID),
-		"The package is %s, not the installed %s, so Silo didn't replace it.",
+		"The package is %s, not the installed %s, so Spark didn't replace it.",
 		manifest.GetPluginId(), existing.PluginID,
 	)
 }
@@ -744,7 +744,7 @@ func checkCatalogIdentity(manifest *pluginv1.PluginManifest, pluginID, version s
 	}
 	return packageError(
 		fmt.Errorf("binary manifest is %s@%s, catalog lists %s@%s", manifest.GetPluginId(), manifest.GetVersion(), pluginID, version),
-		"The downloaded plugin identifies itself as %s %s, not the %s %s its catalog lists, so Silo didn't install it.",
+		"The downloaded plugin identifies itself as %s %s, not the %s %s its catalog lists, so Spark didn't install it.",
 		manifest.GetPluginId(), manifest.GetVersion(), pluginID, version,
 	)
 }

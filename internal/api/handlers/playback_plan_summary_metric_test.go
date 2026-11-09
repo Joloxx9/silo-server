@@ -78,7 +78,7 @@ func TestReportRouteEventV2LabelsPlanSummaryDelivery(t *testing.T) {
 			store := deliveryLookupStore{PlanStoreV3: f.handler.PlanStoreV3, delivery: tc.delivery, err: tc.err, writes: make(chan struct{}, 2)}
 			f.handler.PlanStoreV3 = store
 			caller := f.caller
-			caller.ClientName = "Silo Web"
+			caller.ClientName = "Spark Web"
 			before := stallRatioSamples(t, tc.label)
 			report := func(event string, diagnostics map[string]string) {
 				t.Helper()

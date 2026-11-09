@@ -1,6 +1,6 @@
 {
-  "name": "Silo",
-  "short_name": "Silo",
+  "name": "Spark",
+  "short_name": "Spark",
   "icons": [
     {
       "src": "/web-app-icon-192.png",
@@ -19,7 +19,7 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#1718c9",
-  "background_color": "#1718c9",
+  "theme_color": "#241046",
+  "background_color": "#241046",
   "display": "standalone"
 }

@@ -290,7 +290,7 @@ func TestPolicyReadsDeclaredSources(t *testing.T) {
 		ids = append(ids, s.Source)
 	}
 	if want := []string{"imdb", "tmdb", "kinopoisk"}; !reflect.DeepEqual(ids, want) {
-		t.Fatalf("sources = %q, want %q: Silo lists only IMDb, TMDB and what plugins declare", ids, want)
+		t.Fatalf("sources = %q, want %q: Spark lists only IMDb, TMDB and what plugins declare", ids, want)
 	}
 	last := sources[len(sources)-1]
 	if last.Provider != "MDBList" || last.AlwaysShown {

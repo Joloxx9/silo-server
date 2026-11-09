@@ -1220,7 +1220,7 @@ func checkAnotherKey(t *testing.T, src *Source, loader PGLoader, pool *pgxpool.P
 	if err := restored.QueryRow(ctx, `SELECT count(*) FROM server_settings WHERE value LIKE 'enc:%'`).Scan(&left); err != nil {
 		t.Fatal(err)
 	}
-	if left != len(rotatedSettings) || !strings.Contains(out.String(), secretKey) || strings.Contains(out.String(), "enter them again after Silo starts: auth.jwt_secret") {
+	if left != len(rotatedSettings) || !strings.Contains(out.String(), secretKey) || strings.Contains(out.String(), "enter them again after Spark starts: auth.jwt_secret") {
 		t.Fatalf("%d encrypted settings left, want only the new signing keys; output %q must name %s and not the signing key", left, out.String(), secretKey)
 	}
 	// The signing key is a new one, encrypted with this server's key.

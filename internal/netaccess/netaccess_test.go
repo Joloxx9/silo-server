@@ -239,7 +239,7 @@ func TestStatusCacheConnectedOrigins(t *testing.T) {
 	}
 	previous, changed := cache.Report(Status{
 		InstallationID: 1, Provider: "tailscale", State: StateConnected,
-		Origin:    "https://Silo.tail1234.ts.net/",
+		Origin:    "https://Spark.tail1234.ts.net/",
 		Listeners: []Listener{{Name: "api", Origin: "https://silo.tail1234.ts.net"}, {Name: "jellyfin", Origin: "https://silo.tail1234.ts.net:8096"}},
 	})
 	if !changed || previous.State != StateConnecting {

@@ -141,7 +141,7 @@ type DeviceLogin struct {
 	ClientPurpose  string   `json:"client_purpose" doc:"Purpose the request was opened with: device_login, remote_playback, or jellyfin_quick_connect for a Jellyfin app signing in with Quick Connect, which is approved for a profile through approve-handoff" example:"device_login"`
 	Temporary      bool     `json:"temporary" doc:"Whether the resulting session will be temporary" example:"false"`
 	ServerID       string   `json:"server_id,omitempty" doc:"This deployment's server identity, for app links that must reach the same server; absent when unavailable" example:"3f2a9d5e-6b1c-4c7e-9a0d-2f4b8c1e7a35"`
-	ServerName     string   `json:"server_name" doc:"Server display name the approver signs the device in to" example:"Silo"`
+	ServerName     string   `json:"server_name" doc:"Server display name the approver signs the device in to" example:"Spark"`
 	Binding        string   `json:"binding,omitempty" doc:"The session binding the device started the request with; absent for an unbound request. An approver that compared one request's code can approve later requests carrying the same binding without comparing again" example:"Zmh6rfhivXdsj8GLjp-OIAiXFIVu4jOzkCpZHQ1fKSU"`
 }
 

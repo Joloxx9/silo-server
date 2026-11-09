@@ -270,7 +270,7 @@ func (s *Service) authorizationURL(c *credentials, p *pendingLogin) string {
 		"redirect_uri": {p.RedirectURI}, "scope": {authorizationScope},
 		oauthResource: {resource}, oauthState: {p.State}, "nonce": {p.Nonce}, "code_challenge_method": {"S256"}, "code_challenge": {hash(p.Verifier)}}
 	if p.ClientID == "" {
-		q.Set("agent_name_hint", "Silo")
+		q.Set("agent_name_hint", "Spark")
 	} else {
 		for _, a := range c.Accounts {
 			if a.ClientID == p.ClientID {

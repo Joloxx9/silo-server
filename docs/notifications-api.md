@@ -69,7 +69,7 @@ at-least-once semantics when acceptance succeeds but the final database commit
 is lost. The source read is bounded to the most recent 2,000 events per window;
 template limits and burst compaction apply after access filtering.
 
-These subscriptions are a native Silo email channel. They do not change the
+These subscriptions are a native Spark email channel. They do not change the
 Jellyfin protocol surface or require a plugin installation after import.
 
 ## Existing inbox operations
@@ -486,7 +486,7 @@ GET is `unsubscribeNotificationEmail`; the RFC 8058 one-click POST is
 `unsubscribeNotificationEmailOneClick`.
 
 These public token-authorized routes render the existing standalone HTML pages.
-They require no Silo login or profile header and accept mail-client HTML
+They require no Spark login or profile header and accept mail-client HTML
 negotiation and one-click form bodies. Verification consumes the single-use
 proof and promotes the pending address; success is 200, expired/consumed/missing
 proof is 400, an address ownership conflict is 409, and storage errors are 500.

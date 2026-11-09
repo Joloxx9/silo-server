@@ -415,7 +415,7 @@ func (u *userPlanner) planNew(ctx context.Context, plan *accountPlan) error {
 		}
 		if local == nil {
 			plan.item.Status, plan.item.Reason = ItemNotOnThisServer, ReasonGroupNotOnThisServer
-			plan.item.Message = fmt.Sprintf("Its access group %q is not on this server. Silo does not restore groups; create one with that name first.", a.Group.Name)
+			plan.item.Message = fmt.Sprintf("Its access group %q is not on this server. Spark does not restore groups; create one with that name first.", a.Group.Name)
 			return nil
 		}
 		group, plan.groupID = local, &local.ID

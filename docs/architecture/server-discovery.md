@@ -1,6 +1,6 @@
 # Server discovery
 
-A client with no saved address should be able to list the Silo servers it can
+A client with no saved address should be able to list the Spark servers it can
 reach instead of asking the user to type one. Two networks matter: the local
 network, and an overlay network that a network access provider joins
 ([network-access.md](network-access.md)). Neither discovery path is trusted:
@@ -34,8 +34,8 @@ Rules a client relies on:
 - **Connect by resolved address.** Build the URL from the address the
   platform resolver returns (IPv4 preferred, IPv6 in brackets). `.local` names
   do not resolve on every Android release.
-- **Instance names are not unique.** Two servers named `Silo` on one link
-  probe and one becomes `Silo (2)`: the later one, or the tiebreak loser when
+- **Instance names are not unique.** Two servers named `Spark` on one link
+  probe and one becomes `Spark (2)`: the later one, or the tiebreak loser when
   both start together. A rename in the admin settings
   is picked up within the check interval below. Clients label entries with the
   live name from `GET /api/v2/theme/branding` and tell servers apart by `id`.
@@ -44,7 +44,7 @@ Rules a client relies on:
   interfaces is resolved once per interface. Group by `id`.
 - **Unknown TXT keys are ignored.** New keys are added without bumping `v`.
 
-The responder is Silo's own (`internal/landiscovery/responder.go`), not a
+The responder is Spark's own (`internal/landiscovery/responder.go`), not a
 general mDNS library, and it is deliberately narrow:
 
 - It shares UDP 5353 with the operating system's mDNS daemon (avahi,
@@ -96,7 +96,7 @@ A bare name cannot be used with HTTPS directly, because the node's certificate
 covers only the full name (`silo.<tailnet>.ts.net`). So a provider answers plain
 HTTP on its API host's overlay port 80 with a `307` redirect to its HTTPS API
 origin, keeping the path and query. The redirect handler never proxies: no
-request reaches Silo without TLS, and methods other than `GET` and `HEAD`
+request reaches Spark without TLS, and methods other than `GET` and `HEAD`
 are refused. Proxy nodes do not answer; nobody types their names.
 
 Client flow:
@@ -130,7 +130,7 @@ is a convenience, not part of connection setup.
 
 - Jellyfin's UDP 7359 "who is JellyfinServer" broadcast. jellycompat's `Id`
   defaults to one fixed value on every install, so answering the broadcast
-  would make every Silo server look like one; it needs a per-deployment
+  would make every Spark server look like one; it needs a per-deployment
   compat ID first.
 - Listing servers a user can reach over the internet. A client learns the
   public and provider addresses of a known server from

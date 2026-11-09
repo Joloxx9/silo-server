@@ -494,10 +494,10 @@ func (s *Service) Start(ctx context.Context, userID int, req StartRequest) (*mod
 	if s.pool != nil {
 		var activeNodes int
 		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM node_heartbeats WHERE updated_at > now() - interval '2 minutes'`).Scan(&activeNodes); err != nil {
-			return nil, Preflight{}, fmt.Errorf("check active Silo nodes: %w", err)
+			return nil, Preflight{}, fmt.Errorf("check active Spark nodes: %w", err)
 		}
 		if activeNodes > 1 {
-			return nil, Preflight{}, NewValidationError(errors.New("storage transitions require a maintenance window with only one active Silo node"))
+			return nil, Preflight{}, NewValidationError(errors.New("storage transitions require a maintenance window with only one active Spark node"))
 		}
 		var activeJobs int
 		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM admin_jobs WHERE status IN ('queued','running') AND job_type <> $1`, adminjob.JobTypeStorageTransition).Scan(&activeJobs); err != nil {
@@ -2424,7 +2424,7 @@ func (l storageLocation) operationalName() string {
 }
 
 func describe(current, target storageLocation, policy string) Preflight {
-	warnings := []string{"The old storage location will not be deleted automatically.", "A Silo restart is required after the transition commits."}
+	warnings := []string{"The old storage location will not be deleted automatically.", "A Spark restart is required after the transition commits."}
 	assetsMove := current.assets != target.assets
 	operationalMoves := current.operational != "" && target.operational != "" && current.operational != target.operational
 	provider := "Copied to the new artwork store."

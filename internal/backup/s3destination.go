@@ -257,7 +257,7 @@ func TestS3(ctx context.Context, c S3Config) S3TestResult {
 	if err := client.HeadBucket(ctx, c.Bucket); err != nil {
 		return s3TestFailure(err, S3StepBucket)
 	}
-	probe := []byte("Silo connection test. Safe to delete.\n")
+	probe := []byte("Spark connection test. Safe to delete.\n")
 	if err := client.PutObject(ctx, c.Bucket, probeKey, probe); err != nil {
 		return s3TestFailure(err, S3StepPermission)
 	}
@@ -268,7 +268,7 @@ func TestS3(ctx context.Context, c S3Config) S3TestResult {
 		return s3TestFailure(err, S3StepPermission)
 	}
 	if !bytes.Equal(got, probe) {
-		return S3TestResult{Step: S3StepPermission, Message: "Silo wrote a test file but read back different contents."}
+		return S3TestResult{Step: S3StepPermission, Message: "Spark wrote a test file but read back different contents."}
 	}
 	if err := client.DeleteObject(ctx, c.Bucket, probeKey); err != nil {
 		result := s3TestFailure(err, S3StepPermission)
@@ -276,11 +276,11 @@ func TestS3(ctx context.Context, c S3Config) S3TestResult {
 			// A bucket that keeps objects until its own lifecycle rules
 			// expire them refuses deletes; backups still work there, and
 			// rotation records the deletes it was refused (rotate).
-			return S3TestResult{OK: true, Message: "Connected. Silo wrote a test file but this bucket refuses deletes, so old backups stay until the bucket's lifecycle rules remove them."}
+			return S3TestResult{OK: true, Message: "Connected. Spark wrote a test file but this bucket refuses deletes, so old backups stay until the bucket's lifecycle rules remove them."}
 		}
 		return result
 	}
-	return S3TestResult{OK: true, Message: "Connected. Silo wrote and deleted a test file."}
+	return S3TestResult{OK: true, Message: "Connected. Spark wrote and deleted a test file."}
 }
 
 // s3TestFailure names what an error says failed. step is the step that was

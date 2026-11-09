@@ -17,7 +17,7 @@ import (
 
 const (
 	plexClientIdentifier = "silo-history-import"
-	plexProduct          = "Silo"
+	plexProduct          = "Spark"
 	plexVersion          = "1.0.0"
 	plexTVBaseURL        = "https://plex.tv"
 	// plexDiscoverBaseURL hosts account-level metadata (the user's

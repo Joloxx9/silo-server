@@ -40,7 +40,7 @@ const (
 )
 
 type AdminOverlayImageForm struct {
-	File huma.FormFile `form:"file" contentType:"image/png,image/jpeg,image/webp" required:"true" doc:"The image: PNG, JPEG or WebP, at most 4 MiB. Silo stores it as WebP no larger than 600x300, keeping transparency."`
+	File huma.FormFile `form:"file" contentType:"image/png,image/jpeg,image/webp" required:"true" doc:"The image: PNG, JPEG or WebP, at most 4 MiB. Spark stores it as WebP no larger than 600x300, keeping transparency."`
 	// The name's bounds are the service's: Huma would report a form field it
 	// refused at form.name, outside the contract's location grammar.
 	Name string `form:"name" required:"false" doc:"Label administrators see when they assign the image to a badge: 1 to 64 characters after trimming. Required."`
@@ -130,7 +130,7 @@ func registerOverlayImages(reg *Registry) {
 			case errors.Is(err, overlays.ErrInvalidImageName):
 				return nil, overlayImageValidation("body.name", "a name of 1 to 64 characters is required")
 			case errors.Is(err, overlays.ErrUnsupportedImage):
-				return nil, overlayImageValidation(locationBodyFile, "the file is not a PNG, JPEG or WebP image Silo can read")
+				return nil, overlayImageValidation(locationBodyFile, "the file is not a PNG, JPEG or WebP image Spark can read")
 			case errors.Is(err, overlays.ErrImageTooLarge):
 				return nil, tooLarge
 			case errors.Is(err, overlays.ErrImageLibraryFull):

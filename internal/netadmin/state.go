@@ -70,13 +70,13 @@ var logStateOnce sync.Once
 func stateAction(state State) string {
 	switch {
 	case state.Helper == HelperInspectFailed:
-		return "Remove NET_ADMIN, or report the errno in a Silo issue: Silo could not read its capabilities, so it cannot confirm that it and the programs it starts run without NET_ADMIN."
+		return "Remove NET_ADMIN, or report the errno in a Spark issue: Spark could not read its capabilities, so it cannot confirm that it and the programs it starts run without NET_ADMIN."
 	case state.ChildrenInherit:
-		return "Remove NET_ADMIN, or report the errno in a Silo issue: Silo could not stop programs it starts from regaining NET_ADMIN."
+		return "Remove NET_ADMIN, or report the errno in a Spark issue: Spark could not stop programs it starts from regaining NET_ADMIN."
 	case (state.Helper == HelperRunning || state.Helper == HelperStartFailed) && state.Threads != 1:
-		return "Report this line in a Silo issue: Silo could not confirm that it dropped NET_ADMIN before any other thread started."
+		return "Report this line in a Spark issue: Spark could not confirm that it dropped NET_ADMIN before any other thread started."
 	case state.Helper == HelperStartFailed:
-		return "Report the errno in a Silo issue. Silo dropped NET_ADMIN anyway; kernel BBR and the send buffer use the unprivileged path."
+		return "Report the errno in a Spark issue. Spark dropped NET_ADMIN anyway; kernel BBR and the send buffer use the unprivileged path."
 	default:
 		return "none"
 	}

@@ -138,7 +138,7 @@ func TestQueuedCancellationAfterStorageCommitWaitsForRestart(t *testing.T) {
 	if err := json.Unmarshal(current.ResultPayload, &result); err != nil {
 		t.Fatal(err)
 	}
-	if current.Status != StatusRunning || result.Phase != "restart_pending" || result.ClaimGeneration != current.ClaimGeneration || !result.RestartRequired || !result.ManualRestartRequired || !strings.Contains(current.Message, "restart Silo manually") {
+	if current.Status != StatusRunning || result.Phase != "restart_pending" || result.ClaimGeneration != current.ClaimGeneration || !result.RestartRequired || !result.ManualRestartRequired || !strings.Contains(current.Message, "restart Spark manually") {
 		t.Fatalf("committed cancellation receipt status=%q result=%s message=%q", current.Status, current.ResultPayload, current.Message)
 	}
 }

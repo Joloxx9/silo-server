@@ -22,7 +22,7 @@ time.
 
 That means the *same* movie matched on two servers (or re-imported into a fresh
 instance) gets a **different** id each time. Consequence: two servers holding the
-identical title share *none* of that state. Run more than one Silo, or try to
+identical title share *none* of that state. Run more than one Spark, or try to
 sync a profile's history between servers, and the same film shows up as a
 stranger on the other side — no resume point, no watched flags, no ratings. There
 was no stable identity to build any cross-server feature on.

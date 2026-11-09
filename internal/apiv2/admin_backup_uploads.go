@@ -42,7 +42,7 @@ type AdminBackupUploadSource struct {
 }
 
 type AdminBackupUploadRejection struct {
-	Reason  string `json:"reason" enum:"not_a_restore_set,newer_silo,encrypted,checksum_mismatch" doc:"not_a_restore_set: the file is not a restore set Silo reads (message says what failed); newer_silo: written by a newer Silo, upgrade this server first; encrypted: encrypted with another server's SECRET_KEY, decrypt it with silo backup decrypt first; checksum_mismatch: the bytes do not match the sha256 sent when the upload started"`
+	Reason  string `json:"reason" enum:"not_a_restore_set,newer_silo,encrypted,checksum_mismatch" doc:"not_a_restore_set: the file is not a restore set Spark reads (message says what failed); newer_silo: written by a newer Spark, upgrade this server first; encrypted: encrypted with another server's SECRET_KEY, decrypt it with silo backup decrypt first; checksum_mismatch: the bytes do not match the sha256 sent when the upload started"`
 	Message string `json:"message"`
 }
 
@@ -227,7 +227,7 @@ func registerAdminBackupUploads(reg *Registry, op func(method, path, id, summary
 	}}
 
 	complete := op(http.MethodPost, "/uploads/{upload_id}/complete", "completeAdminBackupUpload",
-		"Check a fully received upload: its bytes are read in order through the restore-set checks, and their SHA-256 is frozen. The answer is complete, or rejected with the reason (not a restore set, from a newer Silo, encrypted with another server's key). A finished upload answers as it is. 409 while another backup or restore holds the lock; complete it again then.")
+		"Check a fully received upload: its bytes are read in order through the restore-set checks, and their SHA-256 is frozen. The answer is complete, or rejected with the reason (not a restore set, from a newer Spark, encrypted with another server's key). A finished upload answers as it is. 409 while another backup or restore holds the lock; complete it again then.")
 	complete.RetrySafety = RetrySafetyNaturalIdempotent
 	complete.Errors = []int{http.StatusNotFound, http.StatusConflict}
 	Register(reg, complete, func(ctx context.Context, in *AdminBackupUploadCompleteInput) (*AdminBackupUploadOutput, error) {

@@ -1,6 +1,6 @@
 # Catalog API
 
-> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Silo
+> **API lifecycle:** this documents the stable `/api/v2` native contract, which locks with Spark
 > 1.0. The frozen alpha `/api/v1` surface answers the same features through the pre-1.0 bridge
 > window and is then retired. See [the native API contract](architecture/api-contract.md).
 
@@ -946,7 +946,7 @@ row of the box set's movies on the movie page, marking the movie being viewed.
 
 A box set's `title` is its TMDB collection name with a trailing "Collection"
 shown as "Box Set" ("Harry Potter Collection" is "Harry Potter Box Set"), so it
-does not read as one of Silo's own collections; other names are unchanged.
+does not read as one of Spark's own collections; other names are unchanged.
 Search finds it by either form ("harry potter box set" or "harry potter
 collection"), but "box", "set" or "collection" alone matches only names that
 contain the word themselves.
@@ -1196,7 +1196,7 @@ nothing to show. Each entry has:
 Clients render each entry as its mark followed by `display`, in list order.
 The list holds at most five entries, the first in display order. Clients show
 them on one line and drop whole entries from the end when they do not fit.
-Marks are plain text, never logo artwork shipped with Silo or a client, with
+Marks are plain text, never logo artwork shipped with Spark or a client, with
 one exception: TMDB's approved logo may stand in for the `TMDB` mark, as TMDB's
 terms allow. When the administrator assigned an image to the source (the
 `catalog.rating_source_icons` server setting), the entry carries `icon_url`, an
@@ -1284,7 +1284,7 @@ and the sources the sending plugin declared, and drops any other name, a score
 outside 0-100, and a vote count that is not a whole, non-negative number while
 keeping its score.
 
-Silo itself names only IMDb and TMDB. Every other rating comes from a metadata
+Spark itself names only IMDb and TMDB. Every other rating comes from a metadata
 provider that declares it. The built-in NFO provider declares the named ratings
 it reads from local `.nfo` files: `rt_critic` and `rt_audience` (percentages),
 `metacritic` (scale 100), `trakt` (a percentage), `tvdb` (scale 10), and
@@ -1318,7 +1318,7 @@ An entry that breaks a rule is dropped on its own, a repeated `id` keeps the
 first, and a capability keeps at most eight. When two enabled plugins declare
 the same `id`, the first by installation order names and scales it. A declared
 source is stored like the others and is shown only after an administrator adds
-its `id` to `catalog.extra_rating_sources`; title pages list it after Silo's
+its `id` to `catalog.extra_rating_sources`; title pages list it after Spark's
 own sources. `GET /api/v2/admin/rating-sources` lists every source an
 administrator can show, with the plugin that declared it;
 `GET /api/v2/admin/rating-sources/capabilities` reports
@@ -1423,7 +1423,7 @@ route or V1 item-detail shape changes.
 
 ## Description translation
 
-Silo can translate descriptions with an AI model into a profile's metadata
+Spark can translate descriptions with an AI model into a profile's metadata
 language (`metadata_ai` settings). Localized text reaches clients through the
 ordinary localized fields; these members describe it:
 

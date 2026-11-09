@@ -1,6 +1,6 @@
 # Restart-resilient playback (TR-lease)
 
-How Silo keeps playback alive across a server restart, reconnect, or partial
+How Spark keeps playback alive across a server restart, reconnect, or partial
 stream — and how the design arrived at **TR-lease** (token-carried
 reconstruction + a server-side session-deny marker for revocation).
 

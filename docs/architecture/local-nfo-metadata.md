@@ -177,7 +177,7 @@ it rejects silently counts as "no NFO".
 
 ### Fields read
 
-`nfo.go` maps every field Silo has a slot for:
+`nfo.go` maps every field Spark has a slot for:
 
 - Titles and text: `<title>`, `<originaltitle>`, `<sorttitle>`, `<tagline>`,
   `<plot>` (then `<outline>`), `<mpaa>` (then `<certification>`, whose
@@ -375,7 +375,7 @@ precedence order, each tried with `.jpg`, `.jpeg`, `.png`, `.webp`, `.tbn`,
   families, in Jellyfin's order: `fanart-N` (or Kodi's `fanartN`),
   `background-N`, `art-N`, `backdropN`, each from 1 to 20 and stopping after
   three missing numbers in a row (Jellyfin stops after three misses in total,
-  so Silo finds a superset). Then every image in an `extrafanart` folder,
+  so Spark finds a superset). Then every image in an `extrafanart` folder,
   sorted by name. Jellyfin's `backdrops` folder holds theme videos and is not
   read.
 - Generic names attach only in folders that hold a single content group; a
@@ -633,7 +633,7 @@ library mounted, like a server that copies local artwork; on a server without
 the mount discovery finds nothing and local choices are not offered.
 
 An admin can also upload a poster, backdrop or logo for a movie or series, or
-a season's poster (`POST .../images/upload`). Silo does not write into library
+a season's poster (`POST .../images/upload`). Spark does not write into library
 folders, which are usually mounted read-only, so the upload is stored only in
 artwork storage: under the same `local/...` keys as cached sidecar art, with
 the image's digest as the key discriminator. It is published with the images
@@ -686,7 +686,7 @@ refresh (`internal/metadata/local_sidecar.go`, `local_reapply.go`).
   follow a content ID rename and go with their library.
 - **Equality, not timestamps.** A change is any difference in the applied
   set, a size, or a modification time: an edit, a new higher-precedence file,
-  or a removed one. Silo never compares a file's time with when it last saved
+  or a removed one. Spark never compares a file's time with when it last saved
   the item.
 - **Scans** (library, subtree and file). The video walk keeps the names of the
   sidecar files in every directory it reads (`scanner.SidecarListing`) at no
@@ -798,7 +798,7 @@ refresh (`internal/metadata/local_sidecar.go`, `local_reapply.go`).
   `ImageClearArt` or `ImageDisc` (plugin image kinds `banner`, `thumb`,
   `clearart`, `disc`), and `applyBestImages` fills the slot when no sidecar
   does.
-- A value removed from an NFO keeps its stored value: Silo records no
+- A value removed from an NFO keeps its stored value: Spark records no
   per-field provenance, so re-applying cannot tell an NFO-supplied value from
   a remote one. Removing a sidecar image likewise keeps the cached copy until
   a manual refresh.
@@ -835,7 +835,7 @@ refresh (`internal/metadata/local_sidecar.go`, `local_reapply.go`).
 - `<set>` (movie collections) is not mapped: `MetadataResult` has no
   collection field, so `nfoCommon` (`internal/metadata/nfo/nfo.go`) does not
   decode it.
-- `<userrating>` is parsed into `UserRating` but never emitted; Silo has no
+- `<userrating>` is parsed into `UserRating` but never emitted; Spark has no
   per-user rating slot in `MetadataResult`. `TestParseNFOData_TableCases`
   covers a document with only `<userrating>` producing no ratings.
 - Multi-episode NFOs (several `<episodedetails>` roots in one file) are not

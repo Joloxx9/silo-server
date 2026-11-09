@@ -45,7 +45,7 @@ func TestGetServerConnections(t *testing.T) {
 	deps.ServerIdentity = fakeServerIdentity{id: fixtureServerID}
 	deps.NetworkAccess = newFakeNetworkAccess()
 	cache := netaccess.NewStatusCache()
-	cache.Report(netaccess.Status{InstallationID: 7, Provider: "stub", State: netaccess.StateConnected, Origin: "HTTPS://Silo.Overlay.Example.Test/"})
+	cache.Report(netaccess.Status{InstallationID: 7, Provider: "stub", State: netaccess.StateConnected, Origin: "HTTPS://Spark.Overlay.Example.Test/"})
 	publicURL := "https://silo.example.test/"
 	localURL := "HTTP://192.168.1.20:8080/"
 	const pin = "n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg="

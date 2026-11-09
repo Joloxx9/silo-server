@@ -561,7 +561,7 @@ func TestSyncDroppedKeepsADropWhoseSeriesLostItsProviderIDs(t *testing.T) {
 
 	for _, item := range h.provider.undropped {
 		if item.MediaItemID == droppedTestSeriesA {
-			t.Fatal("a drop still active in Silo must not be undropped on the provider")
+			t.Fatal("a drop still active in Spark must not be undropped on the provider")
 		}
 	}
 	if !h.store.active(droppedTestSeriesA) || h.state(droppedTestSeriesA) == nil {

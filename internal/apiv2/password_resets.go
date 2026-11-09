@@ -92,7 +92,7 @@ type PasswordResetTokenInput struct {
 // PasswordResetLookup is the reset screen's view of a usable link.
 type PasswordResetLookup struct {
 	Username   string  `json:"username" doc:"The account whose password the link replaces" example:"alice"`
-	ServerName string  `json:"server_name" example:"Silo"`
+	ServerName string  `json:"server_name" example:"Spark"`
 	ExpiresAt  Instant `json:"expires_at"`
 }
 

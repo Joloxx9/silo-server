@@ -1,6 +1,6 @@
 # Cross-platform settings contract
 
-Silo has one machine-readable contract for every production, user-facing
+Spark has one machine-readable contract for every production, user-facing
 setting, owned by this repository in `contracts/settings/v1/`. Before the
 contract existed, the server, the web client, and the native apps each kept
 their own partial registries of keys, defaults, ranges, and enum members, and
@@ -77,7 +77,7 @@ Every definition declares one persistence class:
   semantics; defined in the contract but never sent to the API.
 - Private `local.<client>.<domain>.<name>` keys are the one escape hatch: a
   client-only diagnostics or implementation knob needs no contract PR, but it
-  must never be shown as a production setting, sent to any Silo API, or
+  must never be shown as a production setting, sent to any Spark API, or
   expected to roam. Promoting one to a production feature means adding it to
   the contract first.
 

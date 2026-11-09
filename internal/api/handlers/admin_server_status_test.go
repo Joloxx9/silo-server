@@ -22,7 +22,7 @@ func TestAdminServerStatusDoesNotPromoteLiveJellyfinIdentitySettings(t *testing.
 		"jellyfin_compat.enabled":                 "true",
 		"jellyfin_compat.listen":                  ":8096",
 		"jellyfin_compat.public_url":              "http://127.0.0.1:8096",
-		"jellyfin_compat.server_name":             "Silo",
+		"jellyfin_compat.server_name":             "Spark",
 		"jellyfin_compat.emulated_server_version": "10.11.0",
 	})
 	if err != nil {
@@ -34,7 +34,7 @@ func TestAdminServerStatusDoesNotPromoteLiveJellyfinIdentitySettings(t *testing.
 		RestartStatus: NewServerRestartStatusTracker(),
 		SettingsRepo: &fakeServerSettingsStore{values: map[string]string{
 			"jellyfin_compat.public_url":              "https://compat.example.test",
-			"jellyfin_compat.server_name":             "Silo Compat",
+			"jellyfin_compat.server_name":             "Spark Compat",
 			"jellyfin_compat.emulated_server_version": "10.11.6",
 		}},
 	}

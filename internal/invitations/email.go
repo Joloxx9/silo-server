@@ -25,7 +25,7 @@ func composeInvitationEmail(brand mail.Brand, inviterName, serverName, email, cl
 	}
 	product := strings.TrimSpace(serverName)
 	if product == "" {
-		product = "Silo"
+		product = "Spark"
 	}
 	expiry := mail.ExpiryPhrase(expiresAt, now)
 

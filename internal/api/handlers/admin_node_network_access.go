@@ -102,7 +102,7 @@ func (h *NodeHandler) nodeNetworkAccessCall(ctx context.Context, node plugins.Ne
 	case http.StatusNotFound:
 		return plugins.ErrNetworkAccessProviderNotFound
 	case http.StatusUnauthorized:
-		return fmt.Errorf("proxy node refused the signed request; check that it shares this server's secret, runs this Silo version, and keeps the correct time")
+		return fmt.Errorf("proxy node refused the signed request; check that it shares this server's secret, runs this Spark version, and keeps the correct time")
 	case http.StatusServiceUnavailable:
 		return fmt.Errorf("proxy node does not host network access providers: %s", trimNodeReason(body))
 	default:

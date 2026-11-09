@@ -160,7 +160,7 @@ func carryPluginReleases(ctx context.Context, loader DatabaseLoader, dbURL, live
 		return fmt.Errorf("keeping the live server's plugin releases: %w", err)
 	}
 	if len(off) > 0 {
-		_, _ = fmt.Fprintf(out, "Turned off %d plugins whose release this server does not have; reinstall or enable them after Silo starts: %s.\n", len(off), strings.Join(off, ", "))
+		_, _ = fmt.Fprintf(out, "Turned off %d plugins whose release this server does not have; reinstall or enable them after Spark starts: %s.\n", len(off), strings.Join(off, ", "))
 	}
 	return nil
 }

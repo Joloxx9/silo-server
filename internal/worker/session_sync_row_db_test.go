@@ -39,7 +39,7 @@ func TestSessionSyncRowJSONMatchesTheSyncedRowDB(t *testing.T) {
 	session := SessionSync{
 		SessionID: uuid.NewString(), UserID: account, ProfileID: "p-1", MediaFileID: 7, RequestedMediaFileID: 8,
 		PlayMethod: "transcode", StartedAt: now.Add(-time.Hour), UpdatedAt: now, ClientIP: "203.0.113.9",
-		StreamLocation: "remote", ClientName: "Silo", ClientVersion: "2.0", ClientBuild: "42", ClientChannel: "beta",
+		StreamLocation: "remote", ClientName: "Spark", ClientVersion: "2.0", ClientBuild: "42", ClientChannel: "beta",
 		ClientUserAgent: "ua", AudioTrackIndex: 1, TranscodeAudio: true, StreamBitrateKbps: 8000,
 		TranscodeNodeURL: "http://node", TargetResolution: "1080p", TargetVideoCodec: "h264", TargetAudioCodec: "aac",
 		TargetAudioChannels: 2, TargetBitrateKbps: 6000, TranscodeHWAccel: "qsv", ToneMapMode: "zscale",

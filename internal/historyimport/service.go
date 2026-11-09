@@ -690,7 +690,7 @@ const (
 	RunErrorSourceRejected = "Couldn't connect to that server. Check the URL, username, and password and try again."
 	RunErrorStoppedEarly   = "Import stopped early. Some history may already be imported."
 	RunErrorNotCompleted   = "Import couldn't be completed. Please try again."
-	RunErrorSourceTooLarge = "The server sent more data than Silo accepts for one import, so the import stopped."
+	RunErrorSourceTooLarge = "The server sent more data than Spark accepts for one import, so the import stopped."
 )
 
 func userFacingRunError(summary ExecutionSummary, err error) string {

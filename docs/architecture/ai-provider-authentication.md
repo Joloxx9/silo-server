@@ -46,12 +46,12 @@ unread, so an older build still runs against the same database.
 ## Identity and credentials
 
 The administrator starts a ten-minute sign-in attempt from AI Services settings.
-Silo returns an authorization link, a loopback callback URI, and an attempt
+Spark returns an authorization link, a loopback callback URI, and an attempt
 identifier. After OpenAI authorization, the administrator copies the final
-callback URL from the browser address bar and submits it to Silo through an
+callback URL from the browser address bar and submits it to Spark through an
 acting-administrator operation. The loopback tab can show a connection error
 because this manual flow runs no local listener. This works independently of
-where the Silo server runs, including remote servers and containers.
+where the Spark server runs, including remote servers and containers.
 
 The browser binds connection mutations and their results to the initiating
 account, server, and profile authority. An authority change clears the dialog
@@ -62,28 +62,28 @@ committed credential change. The browser holds the pasted URL and authorization
 link in memory, clears the dialog's state when it closes or sign-in ends, and
 discards unobserved login mutations without a cache retention period. It does
 not persist them to browser storage. Connection polling uses the attempt identifier to ignore another
-attempt's outcome. Silo parses the address without requesting it. It requires
+attempt's outcome. Spark parses the address without requesting it. It requires
 the exact prepared scheme, host, port, and path, and rejects userinfo, fragments,
 duplicate query parameters, and oversized fields. A malformed or mismatched
 paste does not consume the pending attempt.
 
-Silo generates PKCE S256, state, and OIDC nonce for each attempt. Initial
-registration uses `dynamic_agent_client`, `agent_name_hint=Silo`, and a stable
+Spark generates PKCE S256, state, and OIDC nonce for each attempt. Initial
+registration uses `dynamic_agent_client`, `agent_name_hint=Spark`, and a stable
 installation host ID. Later attempts reuse the saved issued client ID. A
-returning callback cannot change the registration's verified subject. Silo
+returning callback cannot change the registration's verified subject. Spark
 rejects a verified callback for another subject and attempts bounded revocation
 of its newly issued grant outside the settings transaction, preserving the saved
 account. A retained validated ID token supplies `id_token_hint` on reconnect,
 paired with that registration's saved email. Disconnect clears the token hint. Authorization
 URLs carrying it must not be logged.
 
-Silo durably consumes a valid pending attempt before exchanging the
+Spark durably consumes a valid pending attempt before exchanging the
 authorization code. A replay, node failure, or lost reply cannot exchange it
 again. A newer sign-in, account selection, or disconnect supersedes an older
-completion even while it waits for the provider. Silo validates the ID token's
+completion even while it waits for the provider. Spark validates the ID token's
 RS256 signature, OpenAI issuer, audience, expiration, nonce, and subject, and
 requires the granted `chatgpt.tokens.use.direct` scope before activating a grant.
-When the initial token response omits scopes, Silo uses the requested scopes
+When the initial token response omits scopes, Spark uses the requested scopes
 under RFC 6749 section 5.1. The resulting plan grant still requires a refresh token.
 
 A verified sign-in without plan permission retains a disabled registration and
@@ -174,7 +174,7 @@ the saved credentials; authorization-code exchanges remain single attempts.
 Sign-in expiry is checked before
 consuming the attempt; an accepted exchange may finish after that deadline.
 A provider-side rotation followed by a lost database commit may require login
-again; Silo never promises an atomic transaction across OpenAI and PostgreSQL.
+again; Spark never promises an atomic transaction across OpenAI and PostgreSQL.
 
 Disconnect first commits a disabled account, clears its access token and active
 selection, and retains its refresh token with an operation identifier. Fresh and
@@ -235,7 +235,7 @@ replacement token or a different active account. API-key requests and speech
 transcription do not use this restriction.
 A `subscription_sharing_usage_limit_exceeded` HTTP or stream failure persists
 `usage_limited` for the exact registration and access token. Fresh and pinned
-inference sources and translation admission reject the pause. Silo assumes no
+inference sources and translation admission reject the pause. Spark assumes no
 reset time. The administrator can deliberately recheck usage through Test text
 model; only a completed successful check clears the matching token's pause.
 Failed checks preserve it. Catalog reads, model-setting writes, selection,
@@ -263,7 +263,7 @@ may implement a subset of the configured vocabulary; their connection check
 establishes whether a particular model accepts it.
 
 The administrator account applies to server text AI jobs. It does not implement
-Silo user login or individual household billing. No native media, subtitle,
+Spark user login or individual household billing. No native media, subtitle,
 metadata, or Jellyfin response contract changes.
 
 ## Provider references

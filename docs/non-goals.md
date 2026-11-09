@@ -1,6 +1,6 @@
 # Non-goals
 
-Silo is an early WIP and most of its scope is open. This document is the short list of things
+Spark is an early WIP and most of its scope is open. This document is the short list of things
 that are **not** open — features that will not be accepted, in core, in a plugin, or in a client,
 regardless of implementation quality.
 
@@ -21,14 +21,14 @@ writing code in these areas, so nobody's time is wasted.
 
 ### Why
 
-**App store distribution risk.** Silo's first-party clients ship on the Apple and Google stores.
+**App store distribution risk.** Spark's first-party clients ship on the Apple and Google stores.
 Review of media apps in these categories is strict, and an app whose server plays arbitrary
 remote stream URLs or IPTV playlists is read as a conduit for unlicensed content no matter what
 the intended use is. The exposure is not scoped to the feature — a rejection or a takedown lands
 on the entire client suite, for every user, including those who only ever play files they own.
 No single feature is worth that trade.
 
-**Product scope.** Silo indexes and plays media that exists on disk in a library the operator
+**Product scope.** Spark indexes and plays media that exists on disk in a library the operator
 controls. Live TV is a different product with its own always-on reliability burden: tuner
 allocation, guide-provider contracts and merge semantics, schedule conflict resolution, and
 recording lifecycle. Building it competes directly with making the core playback path fast and
@@ -47,14 +47,14 @@ problem above. Not in core, not in a plugin, not in a client.
 
 ### What to do instead
 
-Silo does not assume it is the only media server on the box. Run Jellyfin, Plex, or a dedicated
-tuner/IPTV backend alongside it for live TV, and use Silo for the on-disk library. That
+Spark does not assume it is the only media server on the box. Run Jellyfin, Plex, or a dedicated
+tuner/IPTV backend alongside it for live TV, and use Spark for the on-disk library. That
 separation also keeps the risk where it belongs, on software whose distribution model can absorb
 it.
 
 ## Deleting or managing media files
 
-**Out of scope permanently.** Silo is a media server, not a media manager. It reads the files in
+**Out of scope permanently.** Spark is a media server, not a media manager. It reads the files in
 a library; it does not delete, move, rename, or reorganize them. This covers, at minimum:
 
 - Deleting a media file or item from disk, through any API, admin option, or client action.
@@ -63,13 +63,13 @@ a library; it does not delete, move, rename, or reorganize them. This covers, at
 
 ### Why
 
-**The library belongs to the operator.** Silo only needs read access to media; the shipped Compose file mounts libraries read-only. A server that can
+**The library belongs to the operator.** Spark only needs read access to media; the shipped Compose file mounts libraries read-only. A server that can
 delete files needs write access to every library, and then one bug, compromised account, or
-mistaken tap can destroy media that may not be backed up. Keeping Silo read-only removes that
+mistaken tap can destroy media that may not be backed up. Keeping Spark read-only removes that
 whole class of failure.
 
 **Other tools already do this well.** Library managers such as Sonarr and Radarr, and the
-operator's own file manager or shell, own file layout and cleanup. When they change files, Silo's
+operator's own file manager or shell, own file layout and cleanup. When they change files, Spark's
 scanner picks up the result.
 
 ### Not available as a plugin either
@@ -80,5 +80,5 @@ not deletable for the same reason.
 
 ### What to do instead
 
-Manage files with the tools built for it: a library manager, a file manager, or the shell. Silo
+Manage files with the tools built for it: a library manager, a file manager, or the shell. Spark
 reflects the change on its next scan.

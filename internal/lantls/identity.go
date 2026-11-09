@@ -73,7 +73,7 @@ func New(masterKey []byte) (*Identity, error) {
 	now := time.Now()
 	template := &x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: "Silo local network"},
+		Subject:               pkix.Name{CommonName: "Spark local network"},
 		NotBefore:             now.Add(-24 * time.Hour),
 		NotAfter:              now.Add(certificateLifetime),
 		KeyUsage:              x509.KeyUsageDigitalSignature,

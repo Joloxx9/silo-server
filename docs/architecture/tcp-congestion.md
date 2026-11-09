@@ -1,7 +1,7 @@
 # TCP Congestion Control
 
 `internal/tcpcongestion` requests kernel BBR and configures TCP send buffers on
-Silo's client listeners. `internal/netadmin` confines the required NET_ADMIN
+Spark's client listeners. `internal/netadmin` confines the required NET_ADMIN
 capability to a helper process. Kernel or helper refusals produce logs and leave
 the listener serving; an address bind error still fails the bind.
 
@@ -19,8 +19,8 @@ their startup wiring in `cmd/silo/main.go`, and the shipped Compose file.
 | Transcode mode, metrics and debug listeners | None | No congestion or send-buffer tuning; TCP by default |
 
 On Linux, `Listen` sets `TCP_CONGESTION` to `bbr`, then reads it back.
-A running helper performs the set; Silo performs the read. Without the helper,
-Silo attempts the set itself. A refusal still triggers a readback so the log can
+A running helper performs the set; Spark performs the read. Without the helper,
+Spark attempts the set itself. A refusal still triggers a readback so the log can
 show the kernel's choice. The comparison stops at the first NUL byte.
 
 When that readback confirms BBR, the first successful `Accept` reads the accepted
@@ -38,7 +38,7 @@ it refuses an MPTCP listener. MPTCP also fails to pass `TCP_NOTSENT_LOWAT` to
 accepted TCP connections. Plain TCP keeps both the helper and the memory guard
 working on these listeners.
 
-The Silo executable sets `//go:debug multipathtcp=0`, so transcode, metrics and
+The Spark executable sets `//go:debug multipathtcp=0`, so transcode, metrics and
 debug listeners also default to plain TCP in both module and workspace builds.
 This reduces exposure to the published MPTCP exploit for CVE-2026-98432; the
 underlying Linux kernel flaw still needs a patched kernel. An operator's
@@ -46,13 +46,13 @@ underlying Linux kernel flaw still needs a patched kernel. An operator's
 `SetMultipathTCP(false)` above. Separately built plugin binaries have their own
 defaults.
 
-A TLS-terminating reverse proxy owns the client connection. Silo's socket policy
-then affects only the hop between that proxy and Silo. A network access provider
-terminates connections in its plugin and proxies to Silo, so this policy does not
-change the provider's client hop either. Silo cannot detect those hops.
+A TLS-terminating reverse proxy owns the client connection. Spark's socket policy
+then affects only the hop between that proxy and Spark. A network access provider
+terminates connections in its plugin and proxies to Spark, so this policy does not
+change the provider's client hop either. Spark cannot detect those hops.
 With rootless Docker or Podman port drivers (RootlessKit, slirp4netns) and Docker
 Desktop's VM proxy, the client's TCP connection ends in the proxy, so the tuning
-reaches only the hop from that proxy to Silo.
+reaches only the hop from that proxy to Spark.
 
 ## Tuning Contract
 
@@ -95,7 +95,7 @@ They do not configure Linux socket options.
 ## TCP Buffer Contract
 
 Startup reads the third whitespace-separated integer in
-`/proc/sys/net/ipv4/tcp_wmem` and `/proc/sys/net/ipv4/tcp_rmem` for Silo's network
+`/proc/sys/net/ipv4/tcp_wmem` and `/proc/sys/net/ipv4/tcp_rmem` for Spark's network
 namespace. The caller reads and logs these limits once in serving modes other
 than transcode. Transcode mode reads neither limit and emits no limits line.
 
@@ -117,19 +117,19 @@ CPU per GB.
 
 Forcing requires Linux, readable send limits below the threshold, and a running
 helper, with `SILO_NET_TCP_SEND_BUFFER` enabled. After setting the low-water
-mark, Silo asks the helper to set `SO_SNDBUFFORCE` to the configured size
-(33554432 bytes, or 32 MiB, by default). Silo reads back
+mark, Spark asks the helper to set `SO_SNDBUFFORCE` to the configured size
+(33554432 bytes, or 32 MiB, by default). Spark reads back
 `SO_SNDBUF` itself. Linux doubles the request; success requires a readback of at
 least twice the configured size (67108864 bytes, or 64 MiB, by default).
 Accepted sockets inherit both options from the listener. No per-connection force
 is needed.
 
-A forced send buffer fixes its size and disables send-buffer autotuning. Silo
+A forced send buffer fixes its size and disables send-buffer autotuning. Spark
 therefore leaves autotuning intact when the send maximum meets the threshold.
-When the maximum is at least twice the configured size, Silo also leaves
+When the maximum is at least twice the configured size, Spark also leaves
 autotuning intact, skips the force, and reports `not_needed`.
 
-If setting the low-water mark fails, Silo reports `kernel_error` in the existing
+If setting the low-water mark fails, Spark reports `kernel_error` in the existing
 send-buffer listener line, even when forcing is off or not needed, and keeps
 serving without forcing the buffer. Once set, the low-water mark stays in place
 even if the force or readback fails. A bare
@@ -137,7 +137,7 @@ even if the force or readback fails. A bare
 with `granted=0`.
 
 Without the grant, a capped limit produces a `no_net_admin` send-buffer line.
-Its action describes raising the maximum to 67108864 bytes in Silo's network
+Its action describes raising the maximum to 67108864 bytes in Spark's network
 namespace or granting NET_ADMIN. `net.ipv4.tcp_wmem: "4096 16384 67108864"`
 meets the threshold without disabling autotuning. The shipped Compose files do
 not set it: a container sysctl that the runtime refuses, including with host
@@ -154,7 +154,7 @@ their capability and releases the helper after the standalone bind.
 
 In a Linux cgo build, a C constructor runs before the Go runtime. It counts
 entries in `/proc/self/task` and reads the effective capabilities. When NET_ADMIN
-is held, the constructor starts a helper, then drops NET_ADMIN from Silo's
+is held, the constructor starts a helper, then drops NET_ADMIN from Spark's
 bounding, ambient, inheritable, permitted and effective sets. The drop still
 runs if starting the helper fails.
 
@@ -163,7 +163,7 @@ a grant, it sets `PR_SET_NO_NEW_PRIVS` after dropping the other sets, then reads
 containment back. This flag prevents children from
 gaining privileges at `execve`: setuid and setgid bits and file capabilities
 grant nothing, and Linux security module transitions are limited. In the omnibus
-image, Silo, ffmpeg, ffprobe and plugins run as `silo`, without relying on those
+image, Spark, ffmpeg, ffprobe and plugins run as `silo`, without relying on those
 grants. Their work does not require gaining NET_ADMIN.
 
 The startup log reports `no_new_privs` and `threads`. A running helper with
@@ -181,9 +181,9 @@ rewriting unknown capability sets. Builds without the Linux cgo constructor repo
 When NET_ADMIN is absent from the effective set at constructor entry, the helper
 is `none`. Any remaining inheritable, permitted, ambient or bounding grant still
 triggers cleanup and containment readback. A launcher that sets the inheritable
-bit but has its ambient raise refused leaves such a grant: Silo clears the
+bit but has its ambient raise refused leaves such a grant: Spark clears the
 inheritable bit and enables `no_new_privs` even though no helper starts.
-(`svc-silo` never starts Silo that way: `setpriv` exits on a refused raise and
+(`svc-silo` never starts Spark that way: `setpriv` exits on a refused raise and
 the script falls back to `s6-setuidgid`.) `children_inherit` reports the
 readback in this path too.
 With no grant in any set, startup leaves `no_new_privs` unchanged. Linux's
@@ -202,7 +202,7 @@ allowed range. No algorithm payload is accepted. Other commands, sizes, socket
 types, descriptor counts, malformed lengths and truncated messages are refused
 with `EINVAL`. The helper closes every received
 descriptor before replying. Both ends of its socket pair are close-on-exec, so
-programs Silo executes do not inherit that channel. Before creating it, the
+programs Spark executes do not inherit that channel. Before creating it, the
 constructor opens `/dev/null` on any closed fd 0, 1 or 2, as the Go runtime
 would later, so the channel never takes a standard descriptor; if that fails,
 the helper does not start.
@@ -216,15 +216,15 @@ and later requests return `netadmin.ErrUnavailable`.
 
 Whoever holds NET_ADMIN can reach the network namespace's interfaces, routes,
 firewall rules and nf_tables kernel code. With `network_mode: host`, that
-includes the host's network. Silo confines its own use to the helper, but a
+includes the host's network. Spark confines its own use to the helper, but a
 container grant also stays with the container's root processes for the
 container's life: in the omnibus image, the s6 supervisor, disabled-service
 placeholders and `docker exec` shells. The restricted protocol
-limits requests from Silo; NET_ADMIN itself remains broader than these two
-socket operations. Removing NET_ADMIN from Silo's capability set before startup
+limits requests from Spark; NET_ADMIN itself remains broader than these two
+socket operations. Removing NET_ADMIN from Spark's capability set before startup
 removes the helper, regardless of how the capability is granted; removing the
 container grant also removes it from the container's root processes.
-Silo and its children lose NET_ADMIN on a successful drop; the state log reports
+Spark and its children lose NET_ADMIN on a successful drop; the state log reports
 when that cannot be confirmed.
 
 ### Deployment Constraints
@@ -235,7 +235,7 @@ when that cannot be confirmed.
 | Omnibus image | `svc-silo` uses `setpriv` to pass a permitted NET_ADMIN grant as an ambient capability when it changes to `silo`. It probes `setpriv` first; without the grant, or when `setpriv` fails, it uses `s6-setuidgid`. The constructor sets `no_new_privs` because `silo` lacks CAP_SETPCAP and cannot drop the bounding bit. |
 | Root without a container | Root can hold NET_ADMIN without an explicit grant. The helper then uses the host's network namespace; removing a Compose grant has no effect. |
 | Privileged containers | `privileged: true` supplies NET_ADMIN without `cap_add`. Removing `cap_add` alone leaves that capability available. |
-| Rootless Docker or Podman | NET_ADMIN in the container's user namespace can bypass the BBR allowed list for a loaded module. It cannot load host kernel modules or force send buffers; forcing needs NET_ADMIN in the initial user namespace. With RootlessKit or slirp4netns port drivers, the client's TCP connection ends in the proxy, so the tuning reaches only the hop from that proxy to Silo. |
+| Rootless Docker or Podman | NET_ADMIN in the container's user namespace can bypass the BBR allowed list for a loaded module. It cannot load host kernel modules or force send buffers; forcing needs NET_ADMIN in the initial user namespace. With RootlessKit or slirp4netns port drivers, the client's TCP connection ends in the proxy, so the tuning reaches only the hop from that proxy to Spark. |
 | Kubernetes | `securityContext.capabilities.add: ["NET_ADMIN"]` can grant the capability. Pod Security Baseline and Restricted refuse it. A pod without CAP_SETPCAP relies on the constructor's `no_new_privs` fallback when the bounding bit remains. |
 | Kubernetes TCP limits | `net.ipv4.tcp_wmem` is a safe pod sysctl from Kubernetes 1.32 on Linux 4.15 or later; older clusters must allow it. The same namespace and threshold rules apply. |
 | systemd | `AmbientCapabilities=CAP_NET_ADMIN` can supply the capability, subject to the unit's other restrictions. A host that loads and allows BBR provides the congestion alternative without the grant. |
@@ -256,7 +256,7 @@ algorithm, or empty if unread. States `on` and `off` log at Info;
 `fallback` logs at Warn. `errno` appears only for `kernel_error`, as a symbolic
 name or `unknown`. `error` accompanies an unknown errno with the error text.
 
-`cap_net_admin` is true for helper calls. Without the helper, Silo reads its
+`cap_net_admin` is true for helper calls. Without the helper, Spark reads its
 effective capabilities once, when it first attempts a congestion set, and
 reports that value whether the set succeeds or fails.
 

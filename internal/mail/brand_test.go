@@ -98,7 +98,7 @@ func TestBrandLoaderFallsBackWhenLogoUnavailable(t *testing.T) {
 	source := &countingSource{Service: brandedService(t, settings), fail: errors.New("bucket down")}
 	brand := NewBrandLoader(source).Load(context.Background())
 	if brand.Name != "Harbor" || !bytes.Equal(brand.logo.png, defaultWordmarkPNG) {
-		t.Fatalf("want the Silo wordmark with the server name, got name=%q", brand.Name)
+		t.Fatalf("want the Spark wordmark with the server name, got name=%q", brand.Name)
 	}
 
 	// A transient failure is not cached: the next email retries.
@@ -126,7 +126,7 @@ func TestNormalizeHexColor(t *testing.T) {
 }
 
 func TestBuildMessageEmbedsInlineImages(t *testing.T) {
-	cfg := &smtpConfig{fromAddress: "silo@example.com", fromName: "Silo"}
+	cfg := &smtpConfig{fromAddress: "silo@example.com", fromName: "Spark"}
 	brand := DefaultBrand()
 	message, err := buildMessage(cfg, Message{
 		To:       []string{"user@example.com"},

@@ -236,7 +236,7 @@ func DescribeEmbeddingLockConflict(lock EmbeddingLock, baseURL, model string, so
 		}
 	}
 	if lock.SourceDimensions <= 0 || lock.SourceDimensions > CanonicalEmbeddingDimensions {
-		return fmt.Sprintf("The embedding lock records %d-dimension vectors; Silo stores 1 to %d. Reset embeddings and use a model that returns at most %d dimensions.",
+		return fmt.Sprintf("The embedding lock records %d-dimension vectors; Spark stores 1 to %d. Reset embeddings and use a model that returns at most %d dimensions.",
 			lock.SourceDimensions, CanonicalEmbeddingDimensions, CanonicalEmbeddingDimensions)
 	}
 	return ""
