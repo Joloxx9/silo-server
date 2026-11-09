@@ -47,10 +47,13 @@ const (
 type Change struct {
 	SourcePath string      `json:"source_path"`
 	Scope      ChangeScope `json:"scope"`
-	// Removed marks a path the source reports it is deleting, such as a
-	// series or movie folder Sonarr/Radarr deleted with its files. Webhook
-	// ingestion waits for the path to disappear before scanning it. Only the
-	// host's own webhook parser sets it.
+	// Removed marks a file the provider itself deleted (a Sonarr/Radarr
+	// upgrade or manual delete), or on a subtree change a series or movie
+	// folder it deleted, as opposed to one it only noticed was gone. When
+	// the path is confirmed absent on disk, its rows skip the scanner's
+	// file-removal grace period, and webhook ingestion waits for a removed
+	// folder to disappear before scanning it. Only the host's own webhook
+	// parser sets it.
 	Removed bool `json:"removed,omitempty"`
 }
 

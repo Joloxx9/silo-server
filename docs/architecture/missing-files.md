@@ -68,17 +68,40 @@ Arr webhooks report an upgrade as a delete followed by an import, in either
 order and possibly in separate deliveries. Neither order changes the outcome;
 the title is only hidden between the two.
 
-Sonarr's `SeriesDelete` and Radarr's `MovieDelete` with `deletedFiles: true`
-become a scoped scan of the series or movie folder. Arr sends them before it
-deletes the folder, so the delivery waits in the webhook queue, rechecked
-every 10 to 25 seconds for two minutes and about once a minute after that,
-until the folder is gone (`ENOENT`) while its parent
-is still a directory, and only then scans. A scan any earlier would find the
-files and nothing would scan again. Each check is a bounded stat, so a stalled
+A file arr deleted itself skips the grace once a scan has found it gone. The
+webhook parser marks a change `Removed` for an import's `deletedFiles` (unless
+the import reused that path) and for a file-delete event whose reason is
+`Upgrade`, `Manual` or `ManualOverride`. `MissingFromDisk` means arr found the
+file already gone, as a lost mount would look, so it keeps the grace. Autoscan
+confirms a removed path only when nothing is at the path and its directory
+still exists; `FileRepository.ConfirmFilesRemoved` sets
+`removal_confirmed_at` and leaves `missing_since` to the scanner. The scan that
+finds the file gone marks it missing and reconciles memberships as usual, and
+the trash sweep then deletes the row whatever its age, except under a
+protected root or while it holds first-seen data. A held row waits for the
+replacement to claim the date, so in practice the shortcut applies to
+upgrades; deleting a title's only file still takes the full grace. A scan
+that finds a confirmed file on disk clears the confirmation.
+
+Deleting a whole series or movie in arr with its files sends `SeriesDelete` or
+`MovieDelete` with `deletedFiles: true`, which the parser turns into one
+`Removed` subtree change for the folder. Autoscan confirms every cataloged file
+beneath it with `FileRepository.ConfirmFilesRemovedUnder` once the folder's
+parent directory exists. Arr sends these events while it is still removing the folder, so the delivery
+waits in the webhook queue, rechecked every 10 to 25 seconds for two minutes
+and about once a minute after that, until the folder is gone (`ENOENT`) while
+its parent is still a directory. Each check is a bounded stat, so a stalled
 mount keeps the delivery waiting. A folder not confirmed gone an hour after
-the delivery arrived is scanned as it stands. Deleting the last folder under a
-library root leaves that root suspect-empty, so its titles stay protected
-like any other emptied root.
+the delivery arrived is confirmed and scanned as it stands; the confirmations
+are dated a few minutes ahead, and scans that still find the files in that
+window keep them.
+A scan whose
+walk then fails on that folder would normally protect it as a possible lost
+mount; when every cataloged file beneath it is confirmed, the scan reconciles
+it instead, so the title leaves the library at once. Its rows hold the added
+date like any title's only file, so they still wait out the grace in the
+trash. A folder that vanished without arr's confirmation keeps the
+protection, and a delete that left the files on disk is a no-op.
 
 ## Renamed and moved files
 

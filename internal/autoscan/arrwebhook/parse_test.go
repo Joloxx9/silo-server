@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/Silo-Server/silo-server/internal/autoscan"
@@ -139,7 +140,64 @@ func TestParseUpgradeIncludesReplacedFiles(t *testing.T) {
 					t.Fatalf("upgrade change = %+v, want file scope", change)
 				}
 			}
+			if parsed.Changes[0].Removed || !parsed.Changes[1].Removed {
+				t.Fatalf("upgrade changes = %+v, want only the replaced file marked removed", parsed.Changes)
+			}
 		})
+	}
+}
+
+// An upgrade that keeps the file name replaces the file in place: the path
+// holds the new file, so it must not be reported as removed.
+func TestParseUpgradeInPlaceIsNotRemoved(t *testing.T) {
+	body := []byte(`{
+		"eventType": "Download",
+		"series": {"path": "/data/tv/Show"},
+		"episodeFile": {"path": "/data/tv/Show/same.mkv"},
+		"deletedFiles": [{"path": "/data/tv/Show/same.mkv"}],
+		"isUpgrade": true
+	}`)
+	parsed, err := Parse(ProviderAuto, body)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(parsed.Changes) != 1 || parsed.Changes[0].Removed {
+		t.Fatalf("changes = %+v, want one change not marked removed", parsed.Changes)
+	}
+}
+
+// Only reasons where arr deleted the file itself mark it removed.
+// MissingFromDisk means arr found it already gone, which a lost mount also
+// produces.
+func TestParseFileDeleteReasons(t *testing.T) {
+	for reason, want := range map[string]bool{
+		"upgrade":         true,
+		"Upgrade":         true,
+		"manual":          true,
+		"manualOverride":  true,
+		"missingFromDisk": false,
+		"MissingFromDisk": false,
+		"":                false,
+		"somethingNew":    false,
+	} {
+		for _, event := range []string{
+			`{"eventType":"EpisodeFileDelete","series":{"path":"/tv/x"},"episodeFile":{"path":"/tv/x/a.mkv"},"deleteReason":"` + reason + `"}`,
+			`{"eventType":"MovieFileDelete","movie":{"folderPath":"/movies/x"},"movieFile":{"path":"/movies/x/a.mkv"},"deleteReason":"` + reason + `"}`,
+		} {
+			parsed, err := Parse(ProviderAuto, []byte(event))
+			if err != nil {
+				t.Fatalf("Parse(%s): %v", event, err)
+			}
+			if len(parsed.Changes) != 1 || parsed.Changes[0].Removed != want {
+				t.Fatalf("reason %q: changes = %+v, want removed=%v", reason, parsed.Changes, want)
+			}
+		}
+	}
+	// A reason that is not a string loses only the removed mark; the path is
+	// still scanned.
+	parsed, err := Parse(ProviderAuto, []byte(`{"eventType":"EpisodeFileDelete","series":{"path":"/tv/x"},"episodeFile":{"path":"/tv/x/a.mkv"},"deleteReason":2}`))
+	if err != nil || len(parsed.Changes) != 1 || parsed.Changes[0].Removed {
+		t.Fatalf("numeric reason: parsed = %+v, err = %v; want one change not marked removed", parsed, err)
 	}
 }
 
@@ -191,6 +249,7 @@ func TestParseSeriesAndMovieDelete(t *testing.T) {
 	}{
 		{"series, files deleted", "SeriesDelete", ProviderSonarr, fixture(t, "sonarr_series_delete.json"), removed("/data/tv/Example Show")},
 		{"movie, files kept", "MovieDelete", ProviderRadarr, fixture(t, "radarr_movie_delete.json"), nil},
+		{"movie, files deleted, fixture", "MovieDelete", ProviderRadarr, fixture(t, "radarr_movie_delete_files.json"), removed("/data/movies/Example Movie (2024)")},
 		{"series, files kept", "SeriesDelete", ProviderSonarr,
 			[]byte(`{"eventType":"SeriesDelete","series":{"path":"/data/tv/Show"},"deletedFiles":false}`), nil},
 		{"movie, files deleted", "MovieDelete", ProviderRadarr,
@@ -215,6 +274,22 @@ func TestParseSeriesAndMovieDelete(t *testing.T) {
 				t.Fatalf("changes = %+v, want %+v", parsed.Changes, tc.want)
 			}
 		})
+	}
+}
+
+// Sonarr's ImportComplete carries every episode file of the finished
+// download, like a Download event.
+func TestParseSonarrImportComplete(t *testing.T) {
+	parsed, err := Parse(ProviderAuto, fixture(t, "sonarr_import_complete.json"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want := []autoscan.Change{
+		{SourcePath: "/data/tv/Example Show/Season 01/Example Show - S01E01.mkv", Scope: autoscan.ChangeScopeFile},
+		{SourcePath: "/data/tv/Example Show/Season 01/Example Show - S01E02.mkv", Scope: autoscan.ChangeScopeFile},
+	}
+	if parsed.Provider != ProviderSonarr || !slices.Equal(parsed.Changes, want) {
+		t.Fatalf("parsed = %+v, want sonarr with %+v", parsed, want)
 	}
 }
 

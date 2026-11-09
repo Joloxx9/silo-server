@@ -4,9 +4,9 @@ import type { AutoscanPathRewrite, AutoscanWebhookProvider, Library } from "@/ap
  * The arr notification triggers Silo actually consumes.
  *
  * Kept in sync with internal/autoscan/arrwebhook/parse.go: importEventTypes
- * ("Download"/"Import"/"Upgrade"/"DownloadComplete"), the "Rename" event,
- * deleteEventTypes ("EpisodeFileDelete"/"MovieFileDelete"), and
- * folderDeleteEventTypes ("SeriesDelete"/"MovieDelete"). Anything the host
+ * ("Download"/"Import"/"Upgrade"/"DownloadComplete"/"ImportComplete"), the
+ * "Rename" event, deleteEventTypes ("EpisodeFileDelete"/"MovieFileDelete"),
+ * and folderDeleteEventTypes ("SeriesDelete"/"MovieDelete"). Anything the host
  * ignores is deliberately absent — telling an operator to tick a box that does
  * nothing is how "I followed the steps and it didn't work" starts.
  *
@@ -43,6 +43,11 @@ const SHARED_TRIGGERS: WebhookTrigger[] = [
 
 const SONARR_TRIGGERS: WebhookTrigger[] = [
   ...SHARED_TRIGGERS,
+  {
+    label: "On Import Complete",
+    reason: "Fires once a whole download is imported, such as a season pack.",
+    required: false,
+  },
   {
     label: "On Episode File Delete",
     reason: "Lets Silo drop episodes you removed, instead of leaving dead entries.",

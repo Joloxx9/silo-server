@@ -38,6 +38,10 @@ describe("triggersFor", () => {
     expect(triggersFor("radarr").map((t) => t.label)).toContain("On Movie File Delete");
   });
 
+  it("names the folder delete trigger specific to each service", () => {
+    expect(triggersFor("sonarr").map((t) => t.label)).toContain("On Series Delete");
+    expect(triggersFor("radarr").map((t) => t.label)).toContain("On Movie Delete");
+  });
   it("shows a combined delete trigger when the provider is unknown", () => {
     const labels = triggersFor("auto").map((t) => t.label);
     expect(
