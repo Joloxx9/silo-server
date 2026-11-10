@@ -21350,6 +21350,20 @@ export interface components {
       section_type: string;
       title: string;
       /**
+       * @description Values of the title_key message's placeholders by name, such as library for a generated library row; present only with title_key, and absent when the message has none
+       * @example {
+       *       "library": "Movies"
+       *     }
+       */
+      title_args?: {
+        [key: string]: string;
+      };
+      /**
+       * @description Key of the shared translation catalog message whose English is title, present only while title is the server's own text: a built-in or generated section or recommendation row name. A client that has the key shows its translation, filling title_args, and otherwise shows title. Absent when an administrator or the profile typed the title, except that upgrading keyed existing titles identical to a built-in name, and a profile title equal to the administrator's keeps the key. A client acts on title_key whenever it is present
+       * @example home.section.recentlyAddedIn
+       */
+      title_key?: string;
+      /**
        * Format: date-time
        * @description RFC 3339 instant in UTC with millisecond precision
        */
@@ -27846,6 +27860,11 @@ export interface components {
        */
       section_item_limit_max?: number;
       /**
+       * @description Sections, profile section settings, admin section definitions and recommendation rows carry title_key, with title_args when its message has placeholders, for titles the server writes, so a client can translate them (a few, such as a seasonal row's in-season title, have none; a client shows title whenever the key is absent or unknown), and profile section settings carry default_title_key and default_title_args the same way for default_title. Informational: clients act on title_key whenever it is present. Absent when the home sections service is not configured, and on a server that predates the fields
+       * @example true
+       */
+      section_title_keys?: boolean;
+      /**
        * @description Support and configuration state, not health
        * @enum {string}
        */
@@ -32274,7 +32293,10 @@ export interface components {
        * @example en
        */
       language: string;
-      /** @example false */
+      /**
+       * @description Whether the profile is limited to allowed_library_ids within its account's libraries. The primary profile is never limited: it sees every library its account can access and hides libraries through its settings instead
+       * @example false
+       */
       library_restrictions_enabled: boolean;
       /**
        * Format: int64
@@ -32364,7 +32386,7 @@ export interface components {
     };
     ProfileCreate: {
       /**
-       * @description Unique library identifiers the profile may see when restrictions are enabled
+       * @description Unique library identifiers the profile may see when restrictions are enabled. Must be empty on an account's first profile, which becomes its primary profile, even with restrictions off
        * @example [
        *       "1",
        *       "2"
@@ -32391,7 +32413,10 @@ export interface components {
        * @example en
        */
       language?: string;
-      /** @example false */
+      /**
+       * @description Limits the profile to allowed_library_ids. Must be false or omitted on an account's first profile, which becomes its primary profile
+       * @example false
+       */
       library_restrictions_enabled?: boolean;
       /**
        * Format: int64
@@ -32542,6 +32567,20 @@ export interface components {
        * @example Continue Watching
        */
       default_title: string;
+      /**
+       * @description Values of the default_title_key message's placeholders by name; present only with default_title_key, and absent when the message has none
+       * @example {
+       *       "library": "Movies"
+       *     }
+       */
+      default_title_args?: {
+        [key: string]: string;
+      };
+      /**
+       * @description Key of the shared translation catalog message whose English is default_title, under the same rules as title_key: present only while default_title is the server's own text, and absent when an administrator typed it
+       * @example home.section.continueWatching
+       */
+      default_title_key?: string;
       /** @example false */
       featured: boolean;
       /**
@@ -32576,6 +32615,20 @@ export interface components {
        * @example Continue Watching
        */
       title: string;
+      /**
+       * @description Values of the title_key message's placeholders by name, such as library for a generated library row; present only with title_key, and absent when the message has none
+       * @example {
+       *       "library": "Movies"
+       *     }
+       */
+      title_args?: {
+        [key: string]: string;
+      };
+      /**
+       * @description Key of the shared translation catalog message whose English is title, present only while title is the server's own text: a built-in or generated section or recommendation row name. A client that has the key shows its translation, filling title_args, and otherwise shows title. Absent when an administrator or the profile typed the title, except that upgrading keyed existing titles identical to a built-in name, and a profile title equal to the administrator's keeps the key. A client acts on title_key whenever it is present
+       * @example home.section.recentlyAddedIn
+       */
+      title_key?: string;
     };
     ProfileSectionSettingCollection: {
       /** @description The page's items; empty, never null */
@@ -32612,7 +32665,10 @@ export interface components {
        * @example en
        */
       language?: string | null;
-      /** @example false */
+      /**
+       * @description Limits the profile to allowed_library_ids. The primary profile can't be limited: true, or a non-empty allowed_library_ids, fails validation on it
+       * @example false
+       */
       library_restrictions_enabled?: boolean;
       /**
        * Format: int64
@@ -33117,6 +33173,20 @@ export interface components {
        * @example Because you enjoy Crime
        */
       title: string;
+      /**
+       * @description Values of the title_key message's placeholders by name, such as library for a generated library row; present only with title_key, and absent when the message has none
+       * @example {
+       *       "library": "Movies"
+       *     }
+       */
+      title_args?: {
+        [key: string]: string;
+      };
+      /**
+       * @description Key of the shared translation catalog message whose English is title, present only while title is the server's own text: a built-in or generated section or recommendation row name. A client that has the key shows its translation, filling title_args, and otherwise shows title. Absent when an administrator or the profile typed the title, except that upgrading keyed existing titles identical to a built-in name, and a profile title equal to the administrator's keeps the key. A client acts on title_key whenever it is present
+       * @example home.section.recentlyAddedIn
+       */
+      title_key?: string;
       /**
        * @description Row type: cluster, similar_users_liked, popular, recently_added, top_rated, genre_sampler
        * @example cluster
@@ -33757,6 +33827,20 @@ export interface components {
       /** @example Recently Added */
       title: string;
       /**
+       * @description Values of the title_key message's placeholders by name, such as library for a generated library row; present only with title_key, and absent when the message has none
+       * @example {
+       *       "library": "Movies"
+       *     }
+       */
+      title_args?: {
+        [key: string]: string;
+      };
+      /**
+       * @description Key of the shared translation catalog message whose English is title, present only while title is the server's own text: a built-in or generated section or recommendation row name. A client that has the key shows its translation, filling title_args, and otherwise shows title. Absent when an administrator or the profile typed the title, except that upgrading keyed existing titles identical to a built-in name, and a profile title equal to the administrator's keeps the key. A client acts on title_key whenever it is present
+       * @example home.section.recentlyAddedIn
+       */
+      title_key?: string;
+      /**
        * Format: int64
        * @description Items the section has in total, at least the number returned
        * @example 120
@@ -33795,6 +33879,20 @@ export interface components {
       section_type: string;
       /** @example Recently Added */
       title: string;
+      /**
+       * @description Values of the title_key message's placeholders by name, such as library for a generated library row; present only with title_key, and absent when the message has none
+       * @example {
+       *       "library": "Movies"
+       *     }
+       */
+      title_args?: {
+        [key: string]: string;
+      };
+      /**
+       * @description Key of the shared translation catalog message whose English is title, present only while title is the server's own text: a built-in or generated section or recommendation row name. A client that has the key shows its translation, filling title_args, and otherwise shows title. Absent when an administrator or the profile typed the title, except that upgrading keyed existing titles identical to a built-in name, and a profile title equal to the administrator's keeps the key. A client acts on title_key whenever it is present
+       * @example home.section.recentlyAddedIn
+       */
+      title_key?: string;
     };
     SectionOverride: {
       /** @description Legacy config override; absent when the profile saved none (the section's own config applies), {} when it saved an empty one */

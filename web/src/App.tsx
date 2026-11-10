@@ -29,6 +29,8 @@ import { useNavigationDirection } from "@/hooks/useNavigationDirection";
 import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { DateTimeFormatProvider, useDateTimeFormat } from "@/hooks/useDateTimeFormat";
+import { LocaleProvider } from "@/hooks/useAppLocale";
+import { requestAdminMessages, useT } from "@/i18n";
 import { BrandingProvider } from "@/contexts/BrandingProvider";
 import { UICustomizationProvider } from "@/contexts/UICustomizationProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -182,13 +184,20 @@ const HOT_ROUTE_CHUNKS: readonly RouteChunkImport[] = [
 
 /** Announces route changes to screen readers via an aria-live region. */
 function RouteAnnouncer() {
+  const t = useT();
   const location = useLocation();
   const [announcement, setAnnouncement] = useState("");
+  // Read at announce time, so a language change doesn't announce the page again.
+  const fallbackText = t("web.common.shell.pageLoaded");
+  const fallback = useRef(fallbackText);
+  useEffect(() => {
+    fallback.current = fallbackText;
+  }, [fallbackText]);
 
   useEffect(() => {
     // Small delay so document.title has time to update via useDocumentTitle hooks
     const id = setTimeout(() => {
-      setAnnouncement(document.title || "Page loaded");
+      setAnnouncement(document.title || fallback.current);
     }, 100);
     return () => clearTimeout(id);
   }, [location.pathname]);
@@ -217,15 +226,17 @@ function NavigationDirectionManager() {
 }
 
 function RouteLoading() {
+  const t = useT();
   return (
     <div className="p-8" role="status" aria-live="polite">
-      <span className="sr-only">Loading page</span>
-      Loading...
+      <span className="sr-only">{t("web.common.shell.loadingPage")}</span>
+      {t("web.ui.loading")}
     </div>
   );
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {
+  const t = useT();
   const { user, pendingPasswordChange, loading, setupLoading } = useAuth();
   const location = useLocation();
   // Setup status only decides where a signed-out visitor goes; a restored
@@ -233,8 +244,8 @@ function RequireAuth({ children }: { children: ReactNode }) {
   if (loading || (setupLoading && !user)) {
     return (
       <div className="p-8" role="status" aria-live="polite">
-        <span className="sr-only">Loading application</span>
-        Loading...
+        <span className="sr-only">{t("web.common.shell.loadingApplication")}</span>
+        {t("web.ui.loading")}
       </div>
     );
   }
@@ -247,12 +258,13 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 function SetupGate({ children }: { children: ReactNode }) {
+  const t = useT();
   const { user, setupLoading, setupRequired } = useAuth();
   if (setupLoading && !user) {
     return (
       <div className="p-8" role="status" aria-live="polite">
-        <span className="sr-only">Loading application</span>
-        Loading...
+        <span className="sr-only">{t("web.common.shell.loadingApplication")}</span>
+        {t("web.ui.loading")}
       </div>
     );
   }
@@ -289,12 +301,13 @@ function RequirePrimaryOrAdmin({ children }: { children: ReactNode }) {
 }
 
 function RequireRequestsEnabled({ children }: { children: ReactNode }) {
+  const t = useT();
   const status = useRequestFeatureStatus();
   if (status.isLoading) {
     return (
       <div className="p-8" role="status" aria-live="polite">
-        <span className="sr-only">Loading request availability</span>
-        Loading...
+        <span className="sr-only">{t("web.common.shell.loadingRequestAvailability")}</span>
+        {t("web.ui.loading")}
       </div>
     );
   }
@@ -381,6 +394,7 @@ export function QueryCacheManager() {
 }
 
 function AppChrome() {
+  const t = useT();
   const { user, isImpersonating, endImpersonation } = useAuth();
   const navigate = useNavigate();
 
@@ -394,7 +408,9 @@ function AppChrome() {
     try {
       if (await endImpersonation()) navigate(returnPath, { replace: true });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to end impersonation");
+      toast.error(
+        error instanceof Error ? error.message : t("web.common.shell.endImpersonationFailed"),
+      );
     }
   }
 
@@ -797,6 +813,9 @@ function RealtimeEventChannels() {
 }
 
 function AdminRealtimeEventChannels() {
+  // Admins see admin text outside the admin area too (server activity, item
+  // tools), so fetch its catalog chunk now rather than on first use.
+  useEffect(requestAdminMessages, []);
   useEventChannel("jobs");
   useEventChannel("sessions");
   useEventChannel("tasks");
@@ -903,31 +922,33 @@ function AppShell() {
         <ErrorBoundary>
           <BrandingProvider>
             <ThemeProvider>
-              <DateTimeFormatProvider>
-                <WatchPlaybackProvider>
-                  <AudiobookPlaybackProvider>
-                    <RealtimeEventsProvider>
-                      <PlaybackCapabilityPrewarmer />
-                      <RouteChunkPrewarmer />
-                      <BandwidthProbePrewarmer />
-                      <ArtworkCapabilityReader />
-                      <WebPushSubscriptionSync />
-                      <RealtimeEventChannels />
-                      <ScrollRestorationManager />
-                      <NavigationDirectionManager />
-                      <RouteAnnouncer />
-                      <QueryCacheManager />
-                      <AppChrome />
-                      <Suspense fallback={<RouteLoading />}>
-                        <Outlet />
-                      </Suspense>
-                      <WatchPlaybackHost />
-                      <WatchPlaybackBar />
-                      <Toaster />
-                    </RealtimeEventsProvider>
-                  </AudiobookPlaybackProvider>
-                </WatchPlaybackProvider>
-              </DateTimeFormatProvider>
+              <LocaleProvider>
+                <DateTimeFormatProvider>
+                  <WatchPlaybackProvider>
+                    <AudiobookPlaybackProvider>
+                      <RealtimeEventsProvider>
+                        <PlaybackCapabilityPrewarmer />
+                        <RouteChunkPrewarmer />
+                        <BandwidthProbePrewarmer />
+                        <ArtworkCapabilityReader />
+                        <WebPushSubscriptionSync />
+                        <RealtimeEventChannels />
+                        <ScrollRestorationManager />
+                        <NavigationDirectionManager />
+                        <RouteAnnouncer />
+                        <QueryCacheManager />
+                        <AppChrome />
+                        <Suspense fallback={<RouteLoading />}>
+                          <Outlet />
+                        </Suspense>
+                        <WatchPlaybackHost />
+                        <WatchPlaybackBar />
+                        <Toaster />
+                      </RealtimeEventsProvider>
+                    </AudiobookPlaybackProvider>
+                  </WatchPlaybackProvider>
+                </DateTimeFormatProvider>
+              </LocaleProvider>
             </ThemeProvider>
           </BrandingProvider>
         </ErrorBoundary>
