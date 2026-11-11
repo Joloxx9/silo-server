@@ -273,6 +273,7 @@ type Dependencies struct {
 	AdminCollections      AdminCollectionService
 	AdminCollectionGroups AdminCollectionGroupService
 	WebhookSync           WebhookSyncService
+	WebhookSyncManagement WebhookSyncManagementService
 	SubtitleProviders     SubtitleProviderStatusService
 	SubtitleAI            SubtitleAIStatusService
 	SubtitleReads         SubtitleReadService
