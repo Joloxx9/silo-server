@@ -1,5 +1,5 @@
-# Personal image build for this fork's `silo-custom` branch (upstream Silo plus the
-# fork's own fixes; `main` mirrors upstream Silo and is never built here). Upstream's publisher
+# Personal image build for this fork's `main` branch (upstream Silo plus the
+# fork's own fixes; upstream is merged into it by hand). Upstream's publisher
 # (.github/workflows/docker.yml -> trusted-linux-build.yml) is gated on
 # github.repository == 'Silo-Server/silo-server', so it never runs here.
 # This builds the single architecture Unraid needs and pushes it to the
@@ -18,7 +18,7 @@ name: Fork image
 
 on:
   push:
-    branches: [silo-custom]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
