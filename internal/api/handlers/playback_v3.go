@@ -4857,6 +4857,11 @@ func (h *PlaybackHandler) v3SessionStreamState(ctx context.Context, session *pla
 			CopyVideoMPEGTS:  playback.PlanCopiesVideoAsMPEGTSV3(*result.Plan),
 		})
 	}
+	if strings.EqualFold(state.TargetVideoCodec, "copy") {
+		// A copy applies no target resolution. Report none, as a session rebuilt
+		// from its recipe card does, so the field does not change on a restart.
+		state.TargetResolution = ""
+	}
 	if result.Plan != nil && result.Plan.Delivery == playback.DeliveryRemuxProgressiveV3 {
 		state.OutputContainer, state.OutputProtocol = playback.OutputContainerFMP4, playback.OutputProtocolHTTP
 	}
@@ -4956,6 +4961,9 @@ func (h *PlaybackHandler) attachSubtitleArtifactV3(ctx context.Context, sessionI
 			}
 		}
 		inventory = playback.ScopeSubtitleInventoryV3(sessionID, file, rebuilt, clientFeatures)
+	}
+	if h == nil || h.FileNamesVisible == nil || !h.FileNamesVisible(ctx) {
+		playback.HideSidecarFileNamesV3(inventory, file)
 	}
 	plan.Subtitle.Inventory = inventory
 	// Only render and convert publish a client-fetchable artifact; off and

@@ -1260,6 +1260,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		// avatars use the signed artwork endpoint. Never use public S3 here.
 		profileHandler.AvatarStore = handlers.NewProfileAvatarStore(deps.Blobs)
 		profileHandler.AvatarResolver = deps.ArtworkResolver
+		profileHandler.ArtworkStore = deps.Blobs.Assets
 		profileHandler.SessionsReader = playbackSessionsLoader
 		personalDataHandler = handlers.NewPersonalDataHandler(deps.UserStoreProvider, itemRepo)
 		if detailSvc != nil {
@@ -1439,6 +1440,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 		playbackHandler.StreamTelemetry = deps.StreamTelemetry
 		playbackHandler.ItemAccess = itemRepo
+		if itemsHandler != nil {
+			playbackHandler.FileNamesVisible = itemsHandler.CanViewFilePaths
+		}
 		playbackHandler.EpisodeLookup = episodeRepo
 		playbackHandler.ExtraLookup = extraRepo
 		playbackHandler.OriginalLangLookup = itemRepo
@@ -1801,6 +1805,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 		adminHandler.Config = deps.Config
 		adminHandler.ArtworkBackend = deps.ArtworkBackend
+		adminHandler.ArtworkStore = deps.Blobs.Assets
 		if deps.OnUserSessionsRevoked != nil {
 			adminHandler.OnUserSessionsRevoked = deps.OnUserSessionsRevoked
 		}
@@ -2012,6 +2017,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 
 		mediaResolver := &pgSubtitleMediaResolver{pool: deps.DB}
 		subtitleSearchHandler = handlers.NewSubtitleSearchHandler(subtitleManager, subtitleRepo, mediaResolver)
+		if itemsHandler != nil {
+			subtitleSearchHandler.FileNamesVisible = itemsHandler.CanViewFilePaths
+		}
 		if subtitleAINotifier != nil {
 			subtitleSearchHandler.SetSubtitleReadyAnnouncer(subtitleAINotifier)
 		}
@@ -2487,6 +2495,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 			deps.OnDownloadService(downloadSvc)
 		}
 		downloadHandler = handlers.NewDownloadHandler(downloadSvc)
+		if itemsHandler != nil {
+			downloadHandler.FileNamesVisible = itemsHandler.CanViewFilePaths
+		}
 		if jwtService != nil {
 			downloadHandler.SetDirectDownloadLinks(jwtService)
 		}
@@ -3425,6 +3436,9 @@ func (d Dependencies) overlayOrigins() handlers.OverlayOriginSource {
 // two drift, and a drifted copy is exactly how a broken writer chain passes its
 // own tests (see the §4.4 conformance requirement in the stream-telemetry design).
 func useBaseMiddleware(r chi.Router, deps Dependencies) {
+	// No response is used as a type it does not declare (see httpstream.NoSniff).
+	r.Use(httpstream.NoSniff)
+
 	// Server-generated request ID; never adopts a client-supplied one.
 	r.Use(apimw.RequestID)
 
