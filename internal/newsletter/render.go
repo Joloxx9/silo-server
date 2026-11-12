@@ -175,7 +175,11 @@ func renderTemplates(settings Settings, data map[string]any) (*Rendered, error) 
 	if err != nil {
 		return nil, err
 	}
-	html, err := renderOne("HTML", settings.Templates.HTML, false, data)
+	htmlTemplate := designedHTMLTemplate
+	if settings.Layout.CustomHTML {
+		htmlTemplate = settings.Templates.HTML
+	}
+	html, err := renderOne("HTML", htmlTemplate, false, data)
 	if err != nil {
 		return nil, err
 	}
@@ -374,6 +378,9 @@ func buildData(env RenderEnv, entries []Entry, images *imageSet, withImages bool
 	data["header_title"] = renderInline(s.Theme.HeaderTitle, data)
 	data["intro"] = renderInline(s.Theme.Intro, data)
 	data["footer_text"] = renderInline(s.Theme.FooterText, data)
+	data["button_label"] = renderInline(s.Theme.ButtonText, data)
+	data["lang"] = string(l)
+	layoutVars(data, l, s.Layout, movies, shows)
 	return data
 }
 

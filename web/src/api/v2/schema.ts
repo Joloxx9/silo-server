@@ -29834,6 +29834,7 @@ export interface components {
       custom_vars: components["schemas"]["NewsletterCustomVar"][];
       delivery: components["schemas"]["NewsletterDelivery"];
       language: string;
+      layout: components["schemas"]["NewsletterLayout"];
       recap: components["schemas"]["NewsletterRecap"];
       schedule: components["schemas"]["NewsletterSchedule"];
       templates: components["schemas"]["NewsletterTemplates"];
@@ -29900,6 +29901,27 @@ export interface components {
       smtp_copied: boolean;
       /** Format: int64 */
       subscriptions: number;
+    };
+    NewsletterLayout: {
+      custom_html: boolean;
+      eyebrow: string;
+      greeting: string;
+      sections: components["schemas"]["NewsletterLayoutSection"][];
+      show_button: boolean;
+      show_detail: boolean;
+      show_episodes: boolean;
+      show_overview: boolean;
+      show_ratings: boolean;
+      show_summary: boolean;
+      show_year: boolean;
+    };
+    NewsletterLayoutSection: {
+      /** Format: int64 */
+      columns: number;
+      enabled: boolean;
+      id: string;
+      style: string;
+      width: string;
     };
     NewsletterPreviewOutputBody: {
       html: string;

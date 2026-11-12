@@ -30,12 +30,18 @@ Acting administrators have these operations under
 
 | Method and suffix | Result |
 | --- | --- |
-| `GET /` | Native delivery enablement, templates, theme, schedule and delivery settings |
+| `GET /` | Native delivery enablement, templates, theme, layout, schedule and delivery settings |
 | `PUT /` | Validated replacement; naturally idempotent |
 | `POST /preview` | Subject, HTML and text rendered from synthetic titles; sends no email |
 | `GET /import` | Email Alerts installations and retained import summaries |
 | `POST /import` | Body `{ "installation_id": 123 }`; imports a disabled `community.email-alerts` installation |
 | `GET /import/{installation_id}` | Archived subscriber choices and send history, excluding credentials and capability tokens |
+
+`content.layout` designs the HTML email: section order, per-section style
+(`list`, `grid`, `cards`), grid columns (2-5), full or half width, and which
+title details show. `custom_html: true` renders `content.templates.html`
+instead. Settings saved before the layout existed keep an edited HTML template
+as `custom_html`; a stock template moves to the layout.
 
 Import requires native delivery to be off. It copies configuration only when
 native configuration does not already exist, and copies SMTP only when the

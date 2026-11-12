@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { v2, type V2Result } from "@/api/v2/request";
 import {
@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { NewsletterAppearance } from "./NewsletterAppearance";
 
 type Config = V2Result<"GET /api/v2/admin/notifications/newsletter">;
 
@@ -27,6 +28,7 @@ function NewsletterAdminForm() {
   });
   const [draft, setDraft] = useState<Config>();
   const [preview, setPreview] = useState<string>();
+  const [previewWidth, setPreviewWidth] = useState(680);
   const [archiveID, setArchiveID] = useState<number>();
   const config = draft ?? query.data;
   const sources = useQuery({
@@ -97,6 +99,14 @@ function NewsletterAdminForm() {
     onSuccess: (result) => setPreview(result.html),
     onError: (e) => toast.error(e.message),
   });
+  const contentKey = config ? JSON.stringify(config.content) : "";
+  const showingPreview = preview !== undefined;
+  useEffect(() => {
+    if (!showingPreview || !contentKey) return;
+    const timer = setTimeout(() => render.mutate(), 700);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- render is a new object every render; only content changes should refresh the preview
+  }, [contentKey, showingPreview]);
   if (query.isError)
     return (
       <SettingsGroup title="Newsletter">
@@ -113,10 +123,7 @@ function NewsletterAdminForm() {
       title="Newsletter and new-release emails"
       description="Built into Silo. Uses the shared outgoing-mail settings. Each profile chooses whether to subscribe and verifies its own address."
     >
-      <fieldset
-        disabled={save.isPending || migrate.isPending || render.isPending}
-        className="space-y-4"
-      >
+      <fieldset disabled={save.isPending || migrate.isPending} className="space-y-4">
         <label className="flex items-center justify-between">
           Enable newsletters and new-release alerts
           <Switch
@@ -208,79 +215,11 @@ function NewsletterAdminForm() {
             />
           </label>
         </div>
-        <label className="block">
-          Heading
-          <Input
-            value={config.content.theme.header_title}
-            onChange={(e) =>
-              change({ theme: { ...config.content.theme, header_title: e.target.value } })
-            }
-          />
-        </label>
-        <label className="block">
-          Introduction
-          <Input
-            value={config.content.theme.intro}
-            onChange={(e) => change({ theme: { ...config.content.theme, intro: e.target.value } })}
-          />
-        </label>
-        <details>
-          <summary className="cursor-pointer">Design and newsletter content</summary>
-          <div className="my-4 grid gap-4 sm:grid-cols-2">
-            {(
-              [
-                ["accent_color", "Accent color"],
-                ["background_color", "Background color"],
-                ["card_color", "Card color"],
-                ["text_color", "Text color"],
-                ["muted_color", "Secondary text color"],
-                ["logo_url", "Logo URL"],
-                ["footer_text", "Footer"],
-                ["button_text", "Watch button label"],
-              ] as const
-            ).map(([field, label]) => (
-              <label key={field}>
-                {label}
-                <Input
-                  value={config.content.theme[field]}
-                  onChange={(e) =>
-                    change({ theme: { ...config.content.theme, [field]: e.target.value } })
-                  }
-                />
-              </label>
-            ))}
+        <details open className="rounded border p-4">
+          <summary className="cursor-pointer font-medium">Appearance</summary>
+          <div className="mt-4">
+            <NewsletterAppearance content={config.content} change={change} />
           </div>
-          {(
-            [
-              ["personal", "Include personal viewing summaries"],
-              ["popular", "Include popular titles"],
-              ["weekly_when_empty", "Send a viewing summary when no new titles arrived"],
-            ] as const
-          ).map(([field, label]) => (
-            <label key={field} className="my-3 flex items-center justify-between gap-4">
-              {label}
-              <Switch
-                checked={config.content.recap[field]}
-                onCheckedChange={(value) =>
-                  change({ recap: { ...config.content.recap, [field]: value } })
-                }
-              />
-            </label>
-          ))}
-          <label className="my-3 block">
-            Popular titles to include
-            <Input
-              type="number"
-              min={1}
-              max={20}
-              value={config.content.recap.popular_count}
-              onChange={(e) =>
-                change({
-                  recap: { ...config.content.recap, popular_count: Number(e.target.value) },
-                })
-              }
-            />
-          </label>
         </details>
         <details>
           <summary className="cursor-pointer">Delivery limits and quiet hours</summary>
@@ -387,11 +326,21 @@ function NewsletterAdminForm() {
             Existing Email Alerts template variables are supported. Preview uses example titles and
             does not send email.
           </p>
+          <label className="my-3 flex items-center justify-between gap-4">
+            Use my own HTML template instead of the Appearance layout
+            <Switch
+              checked={config.content.layout.custom_html}
+              onCheckedChange={(custom_html) =>
+                change({ layout: { ...config.content.layout, custom_html } })
+              }
+            />
+          </label>
           {(["subject", "html", "text"] as const).map((field) => (
             <label key={field} className="my-3 block capitalize">
               {field}
               <textarea
-                className="bg-background mt-1 min-h-28 w-full rounded border p-2 font-mono text-sm"
+                className="bg-background mt-1 min-h-28 w-full rounded border p-2 font-mono text-sm disabled:opacity-50"
+                disabled={field === "html" && !config.content.layout.custom_html}
                 value={config.content.templates[field]}
                 onChange={(e) =>
                   change({ templates: { ...config.content.templates, [field]: e.target.value } })
@@ -409,12 +358,34 @@ function NewsletterAdminForm() {
           </Button>
         </div>
         {preview && (
-          <iframe
-            title="Newsletter preview"
-            sandbox=""
-            srcDoc={preview}
-            className="h-[36rem] w-full rounded border"
-          />
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm">
+              Preview width
+              {(
+                [
+                  [680, "Desktop"],
+                  [380, "Phone"],
+                ] as const
+              ).map(([width, label]) => (
+                <Button
+                  key={width}
+                  size="sm"
+                  variant={previewWidth === width ? "default" : "outline"}
+                  onClick={() => setPreviewWidth(width)}
+                >
+                  {label}
+                </Button>
+              ))}
+              {render.isPending && <span className="text-muted-foreground">Updating…</span>}
+            </div>
+            <iframe
+              title="Newsletter preview"
+              sandbox=""
+              srcDoc={preview}
+              style={{ maxWidth: previewWidth }}
+              className="h-[48rem] w-full rounded border"
+            />
+          </div>
         )}
       </fieldset>
       <details>

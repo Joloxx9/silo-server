@@ -41135,6 +41135,9 @@
           "language": {
             "type": "string"
           },
+          "layout": {
+            "$ref": "#/components/schemas/NewsletterLayout"
+          },
           "recap": {
             "$ref": "#/components/schemas/NewsletterRecap"
           },
@@ -41155,7 +41158,8 @@
           "schedule",
           "delivery",
           "language",
-          "recap"
+          "recap",
+          "layout"
         ],
         "type": "object"
       },
@@ -41350,6 +41354,90 @@
           "needs_review",
           "settings_copied",
           "smtp_copied"
+        ],
+        "type": "object"
+      },
+      "NewsletterLayout": {
+        "additionalProperties": false,
+        "properties": {
+          "custom_html": {
+            "type": "boolean"
+          },
+          "eyebrow": {
+            "type": "string"
+          },
+          "greeting": {
+            "type": "string"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/NewsletterLayoutSection"
+            },
+            "type": "array"
+          },
+          "show_button": {
+            "type": "boolean"
+          },
+          "show_detail": {
+            "type": "boolean"
+          },
+          "show_episodes": {
+            "type": "boolean"
+          },
+          "show_overview": {
+            "type": "boolean"
+          },
+          "show_ratings": {
+            "type": "boolean"
+          },
+          "show_summary": {
+            "type": "boolean"
+          },
+          "show_year": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "custom_html",
+          "sections",
+          "eyebrow",
+          "greeting",
+          "show_summary",
+          "show_year",
+          "show_detail",
+          "show_ratings",
+          "show_overview",
+          "show_episodes",
+          "show_button"
+        ],
+        "type": "object"
+      },
+      "NewsletterLayoutSection": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "style": {
+            "type": "string"
+          },
+          "width": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "enabled",
+          "style",
+          "columns",
+          "width"
         ],
         "type": "object"
       },

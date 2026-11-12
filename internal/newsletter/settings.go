@@ -17,6 +17,8 @@ type Settings struct {
 	// (summaries, labels, dates): en or pl.
 	Language string `json:"language"`
 	Recap    Recap  `json:"recap"`
+	// Layout designs the HTML email unless Layout.CustomHTML is set.
+	Layout Layout `json:"layout"`
 }
 
 // Recap is the newsletter part of digests: each recipient's own viewing and
@@ -156,7 +158,7 @@ func defaultSettingsFor(l string) Settings {
 			HeaderTitle:     "New on {{server_name}}",
 			Intro:           "Here's what just landed on the server.",
 			FooterText:      "You're receiving this because you signed up for new media alerts.",
-			ButtonText:      "Watch now",
+			ButtonText:      "Open {{server_name}}",
 		},
 		Schedule: Schedule{DailyHour: 18, WeeklyDay: 5, WeeklyHour: 18, WeeklyDays: 7},
 		Delivery: Delivery{
@@ -182,8 +184,9 @@ func defaultSettingsFor(l string) Settings {
 		s.Theme.HeaderTitle = "Nowości na {{server_name}}"
 		s.Theme.Intro = "Oto, co właśnie pojawiło się na serwerze."
 		s.Theme.FooterText = "Dostajesz ten e-mail, bo masz włączone powiadomienia o nowościach."
-		s.Theme.ButtonText = "Oglądaj"
+		s.Theme.ButtonText = "Otwórz {{server_name}}"
 	}
+	s.Layout = defaultLayout(s.Language)
 	return s
 }
 
@@ -193,6 +196,18 @@ func (s *Settings) normalize() {
 	}
 	s.Language = cleanLanguage(s.Language)
 	def := defaultSettingsFor(s.Language)
+	if s.Layout.Version == 0 {
+		// Settings saved before the designed layout keep a template the
+		// admin edited; the stock one gives way to the layout.
+		html := strings.TrimSpace(s.Templates.HTML)
+		custom := html != "" && html != strings.TrimSpace(defaultHTMLTemplate) && html != strings.TrimSpace(plHTMLTemplate)
+		s.Layout = def.Layout
+		s.Layout.CustomHTML = custom
+		if s.Theme.ButtonText == "Watch now" || s.Theme.ButtonText == "Oglądaj" {
+			s.Theme.ButtonText = def.Theme.ButtonText
+		}
+	}
+	s.Layout.normalize()
 	s.Recap.PopularCount = clamp(s.Recap.PopularCount, 1, 20)
 	s.Recap.PopularMinViewers = clamp(s.Recap.PopularMinViewers, 2, 50)
 	if strings.TrimSpace(s.Templates.Subject) == "" {
@@ -280,6 +295,12 @@ func (s *Settings) Normalize()                 { s.normalize() }
 
 // Validate checks a saved template before it can enter the delivery worker.
 func (s Settings) Validate() error {
+	if err := s.Theme.validate(); err != nil {
+		return err
+	}
+	if err := s.Layout.validate(); err != nil {
+		return err
+	}
 	_, err := renderTemplates(s, map[string]any{})
 	return err
 }
