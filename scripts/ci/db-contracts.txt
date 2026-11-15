@@ -7,9 +7,12 @@
 ./internal/catalog TestEpisodeOpensUnderEveryLibraryOfItsSeriesDB
 ./internal/catalog TestCatalogQueryRequestedLibraryOutsideAccessDB
 ./internal/catalog TestCatalogSearchSortsByProfilePlaysDB
+./internal/catalog TestCatalogQuerySortsDateViewedUnwatchedLastDB
 ./internal/catalog TestLibraryCollectionDrawsFromItsRulesLibrariesDB
 ./internal/catalog TestLibraryCollectionReplaceItemsWritesOnlyTheDifferenceDB
 ./internal/catalog TestLibraryCollectionReplaceItemsRacesMemberDeleteDB
+./internal/catalog TestLibraryCollectionNamesDB
+./internal/catalog TestLibraryCollectionNameRacesDB
 ./internal/catalog TestCatalogManualCollectionCursorDB
 ./internal/catalog TestMixedCatalogMangaCounts
 ./internal/catalog TestContentRatingCeilingAcrossSystemsDB
@@ -22,6 +25,9 @@
 ./internal/sections TestCompatibilityRecentlyAddedReturnsFlatDistinctSeries
 ./internal/sections TestSectionsSkipItemsInNoLibraryPostgres
 ./internal/sections TestPersonalSmartCollectionRowKeepsTheCollectionLimitPostgres
+./internal/sections TestNextUpDismissalKeepsTheRowFullPostgres
+./internal/sections TestNextUpOutOfScopeSeriesKeepTheRowFullPostgres
+./internal/sections TestContinueReadingFillsTheRowAfterCollapsingMangaChaptersPostgres
 ./internal/sections TestEpisodeCardsCarryParentArtworkPostgres
 ./internal/catalog TestCatalogQueryWithoutLibraryLeavesOutItemsInNoLibraryDB
 ./internal/catalog TestCountsAndListingsLeaveOutItemsHeldByRemovalGraceDB
@@ -30,6 +36,11 @@
 ./internal/api/handlers TestPersonalListPagesKeepVisibleEpisodesDB
 ./internal/catalog TestPersonalListPageFollowsAccessDB
 ./internal/audiobooks TestABSListsLeaveOutBooksInNoLibraryDB
+./internal/audiobooks TestABSLibraryItemsFiltersAndSortDB
+./internal/audiobooks TestABSSeriesIdentityAndContinueListeningDB
+./internal/audiobooks TestABSCollapsedPagesAndNarrowLookupsDB
+./internal/audiobooks TestABSAuthorCountsRefreshOnOneConnectionPoolDB
+./internal/audiobooks TestABSAuthorsLeaveOutABookJustAddedToADisabledLibraryDB
 ./internal/api/handlers TestAdminStatsLeaveOutFilesAndItemsHeldByRemovalGraceDB
 ./internal/sections TestRuleRowsReadTheViewersWatchStatePostgres
 ./internal/sections TestSmartCollectionRowWithDisplayFilterReadsTheViewersWatchStatePostgres
@@ -45,12 +56,15 @@
 ./internal/scanner TestHDR10PlusBackfillLeavesARowRewrittenDuringTheReadDB
 ./internal/scanner TestHDR10PlusBackfillStopsWhenStorageStallsDB
 ./internal/scanner TestRescanKeepsHDR10PlusWhenTheFrameReadFailsDB
+./internal/scanner TestHDR10PlusBackfillWaitsADayAfterANoFrameReadDB
 ./internal/scanner TestRescanKeepsSidecarsItCouldNotListDB
 ./internal/scanner TestScanStateCarriesProbeRejectionDB
 ./internal/scanner TestRescanKeepsProbeFactsOfARejectedUnchangedFileDB
 ./internal/scanner TestFinalizeVariantsKeepsMatchSuppressionDB
 ./internal/scanner TestFinalizeVariantsRetotalsPartsLeftByARenameDB
 ./internal/scanner TestFinalizeVariantsReadsWholeGroupFoundOutsideTheScopeDB
+./internal/scanner TestFinalizeVariantsPagesTheScopeDB
+./internal/scanner TestFinalizeVariantsRereadsOwnerLinkedBetweenPagesDB
 ./internal/scanner TestScanKeepsFileRowAcrossRenameDB
 ./internal/scanner TestScanLeavesOutFilesWithoutVideoDB
 ./internal/scanner TestScanFileRetiresFileWithoutVideoDB
@@ -60,8 +74,9 @@
 ./internal/scanner TestScanIndexesFileWithNonUTF8Name
 ./migrations TestScanRunForeignKeysHaveLeadingIndexesDB
 
-# Locked season and episode fields survive refreshes, seed imports and a change of show.
+# Season and episode edits survive refreshes and seed imports; locked fields also follow a change of show.
 ./internal/catalog TestSeasonEpisodeLockedFieldsSurviveUpsertsDB
+./internal/catalog TestSeasonEpisodeEditsKeepTitleDetailsDB
 ./internal/catalogseed TestSeedCarriesSeasonEpisodeLocksDB
 ./internal/metadata TestIdentify_SeasonEpisodeLocksFollowTheShow
 ./internal/metadata TestIdentify_SeasonEpisodeLocksClearOnEveryCorrectionPath
@@ -77,6 +92,17 @@
 ./internal/catalog TestMovieBoxSetDB
 ./internal/catalog TestBoxSetCollectionArtworkDB
 
+# Audiobook Series, Authors, and Narrators browse: group counts and durations,
+# cover order, the viewer's own progress, count-sorted cursor pages, the search
+# prefix, and library access.
+./internal/catalog TestAudiobookGroupsDB
+
+# A delegated curator's provider-ID edit can't name a title in another library,
+# which a later refresh would merge the item onto, and the curator's refresh job
+# re-anchors only inside their libraries.
+./internal/catalog TestCuratedProviderIDEditsStayInCurationScopeDB
+./internal/metadata TestCuratorRefreshReanchorStaysInScopePostgres
+
 # A corrected match empties an item's localized text, keeping locks and manual translations.
 ./internal/catalog TestClearMatchTextDB
 
@@ -89,6 +115,10 @@
 # A failed play-target read returns its error and the pool reuses its connection.
 ./internal/catalog TestPlayableTargetQueryFailureKeepsConnection
 
+# A book page's related rows carry the viewing profile's own finished or
+# partway state, never another profile's; browse cards name authors in credit order.
+./internal/catalog TestBookPageRelatedStateAndCardAuthorsPostgres
+
 # Series air-date sort keys advance when a known episode airs. The latest
 # available episode air date counts only episodes with a file in a library:
 # files the bulk episode link attaches count, also when an air-date correction
@@ -96,11 +126,18 @@
 ./internal/catalog TestSeriesAirDatesFollowEpisodesAndCalendarDB
 ./internal/scanner TestBulkLinkEpisodesAdvancesSeriesAvailableAirDateDB
 
+# Poster availability counts only files the viewer can play, and stays blank
+# when a regular season has no episode rows.
+./internal/catalog TestSeriesSeasonAvailabilityDatabase
+./internal/catalog TestEpisodeMetadataIncompleteSeasonsWithoutEpisodes
+
 # Same-day episodes sorted by air date keep series title and season/episode order on every query path.
 ./internal/catalog TestQueryEpisodeAirDateTiesPostgres
 
 # Episode collection counts name exactly the episodes their cursor pages list, under every rule and access limit.
 ./internal/catalog TestEpisodeCatalogCountsMatchCursorPagesPostgres
+./internal/catalog TestEpisodeCatalogRefreshWaitsForAnEpisodeEditPostgres
+./internal/catalog TestEpisodeCatalogRefreshSerializesFileChangesPostgres
 
 # PostgreSQL search keeps typo matches that contain every query word and ranks
 # titles starting with the query first, on the cursor and offset paths. Search
@@ -109,6 +146,10 @@
 ./internal/catalog TestSearchRelevancePostgres
 ./internal/catalog TestSearchTextFoldMatchesGoPostgres
 ./internal/catalog TestFoldSearchDiacriticsMigrationPostgres
+
+# Sorting by latest episode added works when episodes can appear: mixed search
+# and the episode scope, in search and browse, with episodes and movies last.
+./internal/catalog TestSortLatestEpisodeAddedWithEpisodesDB
 
 # Section and Smart collection rule fields and operators compile to working SQL.
 ./internal/catalog TestRuleFieldsFilterCatalogDB
@@ -128,6 +169,14 @@
 # marks its files missing and removes the title from the library.
 ./internal/scanner TestScanSubtreeReconcilesDeletedTitleFolderDB
 
+# A full scan with a configured root emptied (a dropped mount) keeps that
+# root's cataloged files and reports it suspect, and still scans the other root.
+./internal/scanner TestScanFolderEmptyRootKeepsCatalogedFilesDB
+
+# The roots that count as holding cataloged files: present or missing files at
+# or under the root, never a sibling that only shares a string prefix.
+./internal/scanner TestListRootsWithCatalogedFilesDB
+
 # A subtree scan of a deleted book folder reconciles its files, except under a
 # configured root that is now an empty directory (a lost mount).
 ./internal/scanner TestScanSubtreeAudiobookVanishedBookUnderEmptyRootDB
@@ -139,6 +188,48 @@
 # A monitored rename of a book folder keeps the book: the old path is
 # reconciled first, and the removal grace holds the book for the new path.
 ./internal/scanner TestScanSubtreeAudiobookRenameKeepsBookDB
+# Two copies of one recording on disk are two items; only a moved folder reuses one.
+./internal/scanner TestScanAudiobookSecondCopyIsItsOwnItemDB
+# An admin's metadata refresh reads an unchanged audiobook's tags again and
+# keeps its item, file, and progress; an ordinary scan still skips it.
+./internal/scanner TestAudiobookTagRereadKeepsItemDB
+
+# A book whose link moves to another book while a scan reads it keeps its
+# item; the other book's metadata is not written under its root.
+./internal/scanner TestAudiobookRootMovedWhileReadKeepsItsItemDB
+
+# Subtree scans of a book folder and of the folder above it keep the book's
+# item, and the folder's own audio becomes a book beside it.
+./internal/scanner TestScanSubtreeAudiobookKeepsSubfolderBookBesideFolderBookDB
+
+# Two audiobook scans of one book at once: a scan that walked the book before
+# another scan indexed a part neither marks that part missing nor rewrites the
+# book without it; a newer scan still replaces an older alias scan's parts;
+# a part indexed again while a scan is marking it missing stays present; and
+# a disc book's parts are named by their path in the book, not their file name.
+./internal/scanner TestScanFileAudiobookKeepsPartsIndexedByConcurrentScanDB
+./internal/scanner TestScanFileAudiobookNewerAliasInventoryWinsDB
+./internal/scanner TestScanFileAudiobookKeepsPartRestoredWhileMarkingDB
+./internal/scanner TestScanFileAudiobookDiscPartsAgainstConcurrentRowDB
+
+# An ebook or manga library scan does not mark missing a book that a scan of
+# that file indexed after the library scan's walk or while it marked the book.
+./internal/scanner TestScanBookFolderKeepsBookIndexedByConcurrentScanDB
+
+# A rescan of a retagged, unmatched ebook keeps the fields and author credits an
+# admin locked, including locked fields left empty.
+./internal/scanner TestEbookRescanKeepsLockedFieldsDB
+
+# A scan of a sibling folder that runs while another scan is publishing a new
+# ebook keeps the book: its membership sweep spares an item that still has a
+# present file.
+./internal/scanner TestScanFileEbookKeepsBookPublishedDuringSiblingScanDB
+
+# A manga scan's orphaned-series delete spares a series another scan just
+# created for its first chapter, and a rescan of an unchanged chapter restores
+# a series that is gone from the library.
+./internal/scanner TestScanFileMangaKeepsNewSeriesDuringConcurrentScanDB
+./internal/scanner TestScanFileMangaRelinksUnchangedChapterWithoutSeriesDB
 
 # A full scan that holds a few files at a time catalogs a library like one that
 # holds them all: groups and roots spanning batches, a deleted top-level
@@ -167,6 +258,7 @@
 ./internal/scanner TestScanSubtreeIndexesPodcastShowFolders
 ./internal/scanner TestScanSubtreeReconcilesOnlyTheScannedPodcastShow
 ./internal/scanner TestPodcastShowScanLeavesANestedLibraryRootAlone
+./internal/scanner TestOuterRootIgnoreFileExcludesAShowInANestedLibraryRoot
 ./internal/scanner TestPodcastShowSurvivesConcurrentMembershipSweep
 ./internal/scanner TestConcurrentScansOfANewPodcastShowCreateOneShow
 ./internal/scanner TestPodcastShowScanWritesTheShowInItsTransaction
@@ -176,6 +268,10 @@
 # A complete metadata refresh of a podcast show or episode keeps the show and
 # episode content IDs.
 ./internal/adminjob TestCompleteItemRefreshKeepsPodcastIDsDB
+
+# A complete metadata refresh of a series, season or episode relinks its files
+# and resolves the rebuilt item (#934).
+./internal/metadata TestCompleteRefreshRebuildsSeriesDB
 
 # Profile history and account/invitation persistence.
 ./internal/api/handlers TestAccessGroupUpdateLibraryPolicyDB
@@ -192,6 +288,8 @@
 ./internal/auth TestUserRepositoryUpdateUsernameRenamesPrimaryProfileDB
 ./internal/auth TestUserWithoutEmailOrUsernameDB
 ./internal/auth TestLoginIdentitySpaceDB
+./internal/auth TestPasswordSignInForDB
+./internal/auth TestPasswordSignInForRoutesDB
 ./internal/auth TestLoginSessionActivityAndAdminRevocationDB
 ./internal/auth TestChangePasswordSignOutOtherSessionsDB
 ./internal/auth TestSignupPolicySerializationDB
@@ -200,6 +298,8 @@
 ./internal/jellycompat TestApplyListFileFieldsDB
 ./internal/jellycompat TestLoginAccountNameWithHashDB
 ./internal/jellycompat TestRevokedCompatSessionStaysDeletedPostgres
+./internal/jellycompat TestDeletedProfileCompatSessionsEndPostgres
+./internal/jellycompat TestSignInRacingProfileDeleteKeepsNoSessionPostgres
 ./internal/jellycompat TestDurableCompatPlaybackStoreUpdateRejectionAcrossReplicas
 ./internal/jellycompat TestDurableCompatPlaybackStoreDropsRejectedPendingUpdate
 ./internal/jellycompat TestDurableCompatPlaybackStoreRetiresUpstreamSessionAcrossReplicas
@@ -402,8 +502,11 @@
 ./internal/markers TestContributionStoreAmendSendsManualClears
 ./internal/taskmanager/tasks TestContributeMarkersTaskDoesNotReselectDeclinedFiles
 ./internal/trickplay TestClaimPublishAndServeDB
+./internal/trickplay TestClaimTakesRegeneratedThenNewestDB
 ./internal/trickplay TestExternalDeliveryConfirmationDB
 ./internal/trickplay TestReconcileSchedulesContinuationAfterReleasingClusterLockDB
+./internal/trickplay TestReconcileRequeuesSheetsWhoseToneMapSourceChangedDB
+./internal/trickplay TestReconcileAdoptsToneMapSourceOfOlderSheetsDB
 ./internal/subtitles TestAIPublicationPostgresLostReplyRetainsBytes
 ./internal/keptsub TestKeptTrackRowsAndGarbageDB
 ./internal/keptsub TestKeptTracksGoWithTheirFileDB
@@ -449,11 +552,18 @@
 # Request cleanup, prepared downloads and user-store transactions.
 ./internal/requests TestReplaceFailedIsScopedToRequesterDatabase
 ./internal/requests TestDeleteFailedRequestDatabase
+./internal/requests TestClaimedTargetWritesNeedTheClaimDatabase
+./internal/requests TestDeleteTargetWaitsForAConcurrentReclaimDatabase
+./internal/requests TestMarkAvailableLeavesARetryResendingATierDatabase
 ./internal/requests TestListDownloadingRequestsOrderDatabase
+./internal/requests TestRecordSubmissionReplacesFailedTargetDatabase
+./internal/requests TestWithdrawIgnoresFailedTargetsDatabase
+./internal/requests TestUpdateTargetStatusLeavesFinishedTargetDatabase
 ./internal/downloads TestConcurrentArtifactCreatesCannotBypassQuotaDB
 ./internal/downloads TestParkedDownloadIsNotServedOrPreparedFromItsOldFileDB
 ./internal/downloads TestRegistrationRefusesAFileOfAnotherTitleDB
 ./internal/downloads TestRegistrationAndRetitleSerializeOnTheFileRowDB
+./internal/downloads TestDeadAccountTransferReleasesItsConcurrentSlotDB
 ./internal/downloads TestManagedRequestRegistersNothingWhenAFileLeftItsTitleDB
 ./internal/downloads TestMonitorSyncSkipsAnEpisodeWhoseFileLeftItsTitleDB
 ./internal/downloads TestSubscriptionSyncPagePostgres
@@ -469,11 +579,19 @@
 ./internal/downloads TestPreparedMonitorSyncQueuesNothingForAStaleMonitorDB
 ./internal/downloads TestPreparedSeasonReplacementCountsTowardConcurrentLimitDB
 ./internal/downloads TestPreparedReplacementQuotaAccountingDB
+./internal/downloads TestReadyArtifactSingleCreateTakesNoConcurrentSlotDB
+./internal/downloads TestPreparedSingleReplacementCountsTowardConcurrentLimitDB
+./internal/downloads TestPreparedReplacementCountsTheEntryStatusUnderTheLockDB
+./internal/downloads TestPreparedReplacementRefusesAStaleGuardUnderTheLockDB
 ./internal/downloads TestManagedBatchOverConcurrentCapDB
+./internal/downloads TestDeviceReportedTransfersHoldNoConcurrentSlotDB
 ./internal/downloads TestAttachPreparationsPostgres
 ./internal/downloads TestFailedPreparationRefreshIsSharedPostgres
 ./internal/downloads TestPreparationControlsPauseResumeAndCancel
 ./internal/downloads TestDownloadLinkedToCanceledPreparationFails
+./internal/downloads TestDeletingTheLastDownloadStopsItsPreparationDB
+./internal/downloads TestLateCompletionStopsItsPreparationDB
+./internal/downloads TestStaleAbandonedPreparationsAreRetiredNotClaimedDB
 ./internal/userstore/pgstore TestPostgresClearResumePosition
 ./internal/userstore/pgstore TestPostgresCollectionContinuation
 ./internal/userstore/pgstore TestPostgresFailedSyncKeepsANewerResult
@@ -483,6 +601,7 @@
 ./internal/userstore/pgstore TestPostgresConcurrentProfileDeletesWithCrossVisibility
 ./internal/userstore/pgstore TestPostgresConcurrentProfileAndCollectionDeletes
 ./internal/userstore/pgstore TestPostgresConcurrentProfileDeleteAndCollectionReorder
+./internal/userstore/pgstore TestUpdateProfileRequestsBlockedBumpsAccessPolicyRevision
 ./internal/api/handlers TestEbookReaderPurgeProfileDB
 ./internal/userstore/pgstore TestPostgresMarkWatchedBatch
 ./internal/userstore/pgstore TestPostgresProgressHints
@@ -491,6 +610,7 @@
 ./internal/userstore/pgstore TestPostgresJellycompatPlayedByDate
 ./internal/userstore/pgstore TestPostgresPersonalListPage
 ./internal/userstore/pgstore TestPostgresReplaceCollectionItemsWritesOnlyTheDifference
+./internal/userstore/pgstore TestPostgresRemoveHistoryItemsDeletesTheirPlaysDB
 ./internal/userstore/pgstore TestPostgresReplaceCollectionItemsWaitsOutADelete
 ./internal/userstore/pgstore TestPostgresItemUserFlagsMatchesPerTableReads
 
@@ -539,6 +659,13 @@
 ./internal/api/handlers TestLifecycleSweepPassesLiveJellyfinPlaysDB
 ./internal/api/handlers TestLifecycleSweepBacksOffFailedEndsDB
 
+# An Audiobookshelf play a client only reports through its local session is
+# one play across servers under a cluster-wide account cap; Activity lists it
+# with no server holding it, the sweep ends it once reports stop, and a report
+# after its end is a new play.
+./internal/audiobooks TestReportPlayKeepsOnePlayPerClientSessionDB
+./internal/api/handlers TestLifecycleSweepEndsReportedPlaysDB
+
 # Transactional administrator audit details and rollback isolation.
 ./internal/activitylog TestMutationCommitRollbackAndHistoryDB
 
@@ -580,6 +707,7 @@
 ./internal/partman TestDropExpiredPartitionsGivesUpOnABusyParentDB
 
 ./internal/downloads TestLocalDownloadCanceledWritePersistsFailureDB
+./internal/downloads TestEphemeralDownloadCompletesOnlyOnWholeFileDB
 ./internal/downloads TestEphemeralDownloadRechecksProfileAccessDB
 
 # Rating sources keep their merge rules, and a trigger keeps the TMDB vote pair
@@ -590,6 +718,16 @@
 # An admin metadata edit that clears a field stores NULL, takes a cleared
 # rating's per-source row with it, and recomputes series air dates.
 ./internal/catalog TestMetadataUpdateClearsNullableFieldsDB
+
+# An admin's provider-ID edit replaces or removes the item's durable provider
+# ID with the column, and skips one another item already holds.
+./internal/catalog TestMetadataUpdateKeepsDurableProviderIDsDB
+
+# A provider-ID drift repair and an automatic rebind wait for an admin's ID
+# edit on the same item instead of deadlocking with it.
+./internal/metadata TestProviderIDDriftRepairWaitsForItemEditPostgres
+./internal/metadata TestProviderIDDriftRepairSkipsChangedOwnerPostgres
+./internal/metadata TestRebindWaitsForItemEditPostgres
 
 # Watch-provider events carry catalog titles to plugins.
 ./internal/watchsync TestGetMediaTitlesDB
@@ -624,6 +762,10 @@
 # stays on the provider while another item of the same kind still holds it.
 ./internal/watchsync TestListItemsSharingProviderKeyDB
 
+# A watchlist title's sync row keeps every ID the title has held across
+# writes that know fewer of them.
+./internal/watchsync TestListItemTitleIDsAddUpDB
+
 # A sync flow saves only its own bookkeeping: tokens refreshed meanwhile stay,
 # its cursors merge with the stored ones, only a deferral that has ended is
 # cleared, and a connection disconnected meanwhile is not restored.
@@ -647,6 +789,10 @@
 # A refused automatic plugin update stays on its installation until it is
 # cleared or the installed version changes.
 ./internal/plugins TestInstallationStoreUpdateFailureDB
+
+# Updating an installed plugin from its catalog stops the running plugin only
+# after the new package passed its download and checksum checks.
+./internal/plugins TestServiceInstallCatalogStopsPluginOnlyForAnAcceptedPackageDB
 
 # Autoscan poll markers restart from now, and poll at once, only when the upstream changes.
 ./internal/autoscan TestUpdateSourceMarkerReset
@@ -721,7 +867,8 @@
 
 # Recommendation ranking and rows: default rows, Popular floor, genre rows, picker
 # order, taste levels, per-interest anchors, quality prior, rubric leakage,
-# media types of personal rows.
+# media types of personal rows, Because You Watched anchors per library.
+./internal/recommendations TestBecauseYouWatchedAnchorsEachLibraryOnItsOwnWatchesPostgres
 ./internal/recommendations TestCacheUserRowsDoNotAnchorOnDislikedTitlesPostgres
 ./internal/recommendations TestCatalogRankLeadsWithNotableTrustedRatingsPostgres
 ./internal/recommendations TestDefaultRowsLeaveOutASeriesRatedThroughAnEpisodePostgres
@@ -771,6 +918,10 @@
 ./internal/catalog TestLetterIndexMatchesCursorPagesPostgres
 ./internal/catalog TestLetterIndexEpisodesMatchCursorPagesPostgres
 
+# An episode's Sort Title decides its browse order and A–Z letter, falling back
+# to its title.
+./internal/catalog TestEpisodeSortTitleFilesEpisodeBrowsePostgres
+
 # Deleting a library removes its ID from access groups, account overrides and
 # invitations, without widening an emptied list; a write keeps only existing
 # libraries, even racing the delete; the migration repairs earlier deletes.
@@ -784,13 +935,16 @@
 
 # AI metadata translations never replace provider or manual localized text.
 ./internal/catalog TestAITranslationNeverOverwritesProviderOrManualText
+./internal/catalog TestPlainAITranslationFillsOnlyEmptyFields
+./internal/catalog TestAITranslationOfChangedSourceIsDropped
 
 # A provider refresh with no translation clears only a copy of the base item's text.
 ./internal/catalog TestProviderUpsertClearsCopiedBaseTextOnly
 
 # An unmatched item an admin ignored stays off the unmatched and scan-retry
 # lists, the matcher queues and library refreshes across a rescan, the matcher
-# and item refreshes skip it, and a match clears the mark.
+# and item refreshes skip it, and a match clears the mark. A full library
+# refresh still lists an ignored audiobook, for a tags-only re-read.
 ./internal/api/handlers TestIgnoredUnmatchedItemStaysIgnoredAcrossRescanDB
 ./internal/metadata TestProcessLeavesIgnoredItemUnmatchedDB
 ./internal/metadata TestMatchQueuesSkipIgnoredItemsDB
@@ -857,6 +1011,10 @@
 # (issue #3441).
 ./internal/scanqueue TestCreateOnClaimedScopeJoinsTheActiveRunDB
 
+# An admin's exact-path file request that joins an automatic run is owed as a
+# follow-up, so it keeps the ignore-file bypass (issue #4157).
+./internal/scanqueue TestExplicitFileRequestJoinsActiveRunAsFollowUpDB
+
 # A scan cut short by shutdown goes back to the queue with its owed follow-up;
 # an admin cancel still ends it cancelled, and a late requeue never takes back
 # another worker's claim.
@@ -907,6 +1065,9 @@
 # drain spacing, and retention.
 ./internal/catalog TestCatalogItemChangeOutboxDB
 
+# An audiobook rescan fills an empty sort title only while the Name lock is off.
+./internal/scanner TestAudiobookRescanSortTitleFollowsNameLockDB
+
 # Existing audiobooks take the runtime their active files add up to instead of
 # a metadata provider's runtime for some other edition.
 ./migrations TestAudiobookRuntimeFromFilesBackfillPostgres
@@ -919,14 +1080,60 @@
 ./internal/scanner TestAudiobookRuntimeConcurrentMetadataAndMissingPostgres
 ./internal/worker TestSessionSyncRowJSONMatchesTheSyncedRowDB
 
+# An audiobook enrichment match keeps the fields an admin locked.
+./internal/audiobooks TestPersistKeepsAdminLockedFieldsDB
+
+# Audiobook enrichment failures back off, honor retry-after, and stop at a
+# terminal failed outcome; failures do not reset the no-match count.
+./internal/audiobooks TestAudiobookEnrichmentRetryStateDB
+# One node sweeps at a time, and a rate-limited provider is left alone for the
+# rest of the sweep.
+./internal/audiobooks TestAudiobookEnrichmentSweepRateLimitDB
+# One sweep keeps claiming batches until no book is due.
+./internal/audiobooks TestAudiobookEnrichmentSweepDrainsBacklogDB
+
+# Audiobook enrichment loads the tagged narrators and series position its
+# candidate checks compare against, and never claims a book whose match an
+# admin ignored.
+./internal/audiobooks TestClaimBatchLoadsNarratorsAndSeriesPositionDB
+
+# An audiobook rescan keeps the authors and narrators an admin locked with the
+# crew lock.
+./internal/scanner TestAudiobookRescanKeepsCrewLockedCreditsDB
+./internal/scanner TestAudiobookRegroupKeepsContentIDsDB
+./internal/scanner TestAudiobookUnreadableDiscKeepsIndexedBookDB
+
+# A provider match owns an audiobook's year, genres and credits: a rescan only
+# fills what is empty, and the match keeps the tag narrator and the book's own
+# cover, and a renamed folder of a matched book keeps its item. Audiobooks
+# without a provider match show in the unmatched list.
+./internal/scanner TestAudiobookRescanKeepsProviderMatchDB
+./internal/scanner TestAudiobookRenamedFolderFindsMatchedItemDB
+./internal/audiobooks TestPersistKeepsTagNarratorAndLocalCoverDB
+./internal/api/handlers TestUnmatchedItemsListsAudiobooksWithoutProviderMatchDB
+
+# The admin Refresh Metadata actions never run the general metadata service on
+# an audiobook. A full library refresh re-reads every book in one library scan
+# run, keeps matched books' matches, makes unmatched books due for the next
+# enrichment sweep, and stands down while a library scan is active; an item
+# refresh refetches or re-matches through the audiobook enricher. Content IDs,
+# files, library membership and progress stay.
+./internal/audiobooks TestAudiobookAdminRefreshKeepsMatchDB
+
 # Dashboard egress splits by stream node and API server without adding the
 # per-node rows to the total, and a wide bucket's split comes from its peak minute.
 ./internal/dashmetrics TestSampleSharedRecordsEgressPerNodeDB
 ./internal/api/handlers TestQueryAdminTimeseriesSplitsEgressBySourceDB
+./internal/api/handlers TestQueryAdminTimeseriesSplitsStreamsByPeakMinuteDB
 
 # Clearing admin collection artwork commits the cleared reference even when a
 # stored variant fails to delete.
 ./internal/api/handlers TestDeleteAdminCollectionArtworkClearsReferenceWhenVariantDeleteFailsDB
+
+# An admin collection update checks its name only when it renames or adds
+# libraries, and refuses to leave the collection in no library.
+./internal/api/handlers TestAdminCollectionUpdateNameRuleDB
+./internal/api/handlers TestAdminCollectionUpdateNameRuleReadsTheLockedRowDB
 
 # API usage summaries behind the admin API clients card.
 ./internal/apiusage TestAPIUsageSummaryDB
@@ -1095,3 +1302,15 @@
 ./internal/notifications TestNewsletterPluginImportArchiveDB
 ./internal/notifications TestNewsletterBackoffDoesNotStarveOtherProfilesDB
 ./internal/notifications TestNewsletterSendRetainsWindowUntilAcceptedDB
+./internal/catalog TestExternalIDLookupSkipsItemsWithAnotherTMDBIDDB
+./internal/catalog TestResolveProviderAliasesSkipsItemsWithAnotherTMDBIDDB
+./internal/watchlist TestLibraryMatchesUsesTheTitlesRetainedIDsDB
+
+# After TMDB repointed a movie and promotion moved its entry onto the library
+# item with the new ID, sync still finds that item through the IDs its row
+# kept, which the title's deleted aliases no longer give.
+./internal/watchlist TestWatchSyncFindsThePromotedItemByKeptIDsDB
+
+# Smart collection collage records: a refresh deletes the collection's records
+# nobody refreshed for a week, with or without a collage, and keeps the rest.
+./internal/catalog TestSmartCollageRecordsRetireWhenUnrefreshedDB

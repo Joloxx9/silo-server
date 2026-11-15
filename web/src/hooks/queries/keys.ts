@@ -67,6 +67,9 @@ export const catalogKeys = {
   allLetters: ["catalog", "letters"] as const,
   letters: (params: Pick<CatalogParams, "library_id" | "type" | "query_fingerprint">) =>
     ["catalog", "letters", params] as const,
+  allCounts: ["catalog", "count"] as const,
+  count: (params: Pick<CatalogParams, "library_id" | "type" | "query_fingerprint">) =>
+    ["catalog", "count", params] as const,
   itemDetail: (id: string, libraryId?: number) =>
     ["catalog", "items", id, "detail", libraryId ?? "default"] as const,
   itemVersions: (id: string) => ["catalog", "items", id, "versions"] as const,
@@ -174,6 +177,14 @@ export const libraryCollectionKeys = {
     ["libraryCollections", "items", libraryId, collectionId] as const,
   userContributed: (libraryId: number) =>
     ["libraryCollections", "userContributed", libraryId] as const,
+};
+
+// The titles that name pinned collections, kept outside libraryCollectionKeys.all:
+// personal-collection writes and media changes invalidate that root, and
+// neither renames a library collection.
+export const libraryCollectionTitleKeys = {
+  all: ["libraryCollectionTitles"] as const,
+  library: (libraryId: number) => ["libraryCollectionTitles", libraryId] as const,
 };
 
 export const profileKeys = {

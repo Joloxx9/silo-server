@@ -173,11 +173,18 @@ export interface CompatConnectInfo {
   };
   account: {
     /**
-     * False when the account's local password can't sign in: SSO/plugin-provisioned
-     * accounts, and accounts that aren't break-glass while the server turns
-     * password sign-in off.
+     * False when the account's own Silo password can't sign in: SSO/plugin-provisioned
+     * accounts, accounts that aren't break-glass while the server turns
+     * password sign-in off, and accounts a network provider refuses.
      */
     password_login_available: boolean;
+    /**
+     * True when a password sign-in without a provider (a Jellyfin app's) goes
+     * to the server's directory (LDAP) for this account. Absent on older servers.
+     */
+    directory_login_available?: boolean;
+    /** The account's username at that directory, when one is linked. */
+    directory_username?: string;
   };
 }
 
@@ -245,6 +252,11 @@ export interface Profile {
    * max_advisory_age are shown. No effect without a limit.
    */
   require_advisory_age?: boolean;
+  /**
+   * Whether the profile may use requests and request discovery. Absent on a
+   * server that predates the switch, which allows every profile.
+   */
+  requests_allowed?: boolean;
   quality_preference: string;
   language: string;
   preferred_metadata_language?: string;
@@ -623,7 +635,14 @@ export interface AudiobookRelatedItem {
   title: string;
   year?: number;
   poster_url?: string;
+  poster_thumbhash?: string;
   series_index?: number;
+  /** Audiobooks only: total listening time in seconds. */
+  duration_seconds?: number;
+  /** The profile finished this book; absent when not. */
+  played?: boolean;
+  /** 0-1, only while the book is started and not played. */
+  progress_ratio?: number;
 }
 
 export interface AudiobookSeriesGroup {
@@ -760,6 +779,7 @@ export interface Season {
   poster_url: string;
   poster_thumbhash: string;
   user_data?: SeasonUserData;
+  availability?: { have: number; total: number } | null;
   /** Localized fields whose text was machine-translated by AI. */
   machine_translated_fields?: string[];
 }
@@ -876,8 +896,17 @@ export interface BrowseItem {
   release_date?: string | null;
   last_air_date?: string | null;
   overlay_summary?: OverlaySummary | null;
+  availability?: { have: number; total: number } | null;
   sort_metrics?: BrowseItemSortMetrics | null;
   user_state?: MediaItemUserState;
+  /** Audiobook and ebook browse cards: up to three author names in credit order. */
+  authors?: string[];
+  /**
+   * The profile's resume position and the length it is measured against, in
+   * seconds, on a title it has started and not finished.
+   */
+  position_seconds?: number;
+  duration_seconds?: number;
   // Manga-only count chips. The host populates these only for type='manga'
   // browse items; they are absent (undefined) for every other media type.
   // chapter count = loose chapters without a volume token; volume count =
@@ -2804,6 +2833,10 @@ export interface AdminSession {
   client_label?: string;
   client_label_full?: string;
   client_user_agent?: string;
+  /** Device the client declared when playback started; absent when none was. */
+  device_id?: string;
+  /** Platform the client declared; never derived from the user agent. */
+  device_platform?: string;
   audio_track_index: number;
   transcode_audio: boolean;
   stream_bitrate_kbps: number | null;
@@ -2836,6 +2869,9 @@ export interface AdminSession {
   /** Server-computed activity bucket: direct | remux | direct_stream | transcode.
    * Absent when the per-stream decisions are unknown. */
   effective_play_method?: string;
+  /** Why the route converts or repackages the file, video causes first.
+   * Absent for direct play, older servers, and Jellyfin-protocol sessions. */
+  adaptation_reasons?: string[];
   /** Server-side identification of Jellyfin-ecosystem clients (the JF pill). */
   is_jellyfin_client?: boolean;
   /** Resolved playback workload and route. Node IDs/names are omitted when
@@ -4570,6 +4606,7 @@ export interface SectionItem {
   backdrop_thumbhash: string;
   logo_url: string;
   overlay_summary?: OverlaySummary | null;
+  availability?: { have: number; total: number } | null;
   badges?: string[];
   user_state?: MediaItemUserState;
   upcoming_event?: SectionItemUpcomingEvent | null;
@@ -4600,6 +4637,11 @@ export interface ResolvedSection extends SectionTitleKey {
   is_custom: boolean;
   customized: boolean;
   items: SectionItem[];
+  /**
+   * The row was read with an item_limit and holds more cards than `items`
+   * (see homeRowLimit). Absent when false.
+   */
+  has_more?: boolean;
 }
 
 export interface SectionsResponse {
@@ -5154,6 +5196,18 @@ export interface AdminTimeseriesPoint {
   // `egress_kbps`; the remainder is egress no source accounts for. v2 only
   // (the `egress_by_source` dashboard capability).
   egress_by_source?: Record<string, number>;
+  // `streams` split by play method, read from the bucket's peak-streams minute
+  // so the parts add up to no more than `streams` and can be stacked. The
+  // point's own `direct`/`remux`/`transcode` are each their own peak and may
+  // come from different minutes. Sessions with any other play method are the
+  // remainder. v2 only (the `streams_by_method` dashboard capability).
+  streams_by_method?: AdminTimeseriesStreamsByMethod;
+}
+
+export interface AdminTimeseriesStreamsByMethod {
+  direct: number;
+  remux: number;
+  transcode: number;
 }
 
 // One key of `AdminTimeseriesPoint.egress_by_source`: every API process

@@ -1,6 +1,6 @@
 import "@/styles/player-hud.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { MotionConfig, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Play, Shuffle, X } from "lucide-react";
 import { isStillWatchingGated } from "../stillWatching";
 import type { EpisodeRef, PlaybackStartTrigger } from "../types";
@@ -11,6 +11,7 @@ import { isEpisodeStill, isEpisodeUnwatched, SPOILER_IMAGE_CLASS } from "@/lib/e
 import { useEpisodeSpoilerPrefs } from "@/hooks/useEpisodeSpoilerPrefs";
 import { codeNumber, useT } from "@/i18n";
 import { cn } from "@/lib/utils";
+import WatchProgressBar from "@/components/WatchProgressBar";
 import { useCarouselEmbla } from "@/hooks/useCarouselEmbla";
 import { parseCalendarDate, preferredDateLocale } from "@/lib/datetime";
 import { formatRuntimeMinutes } from "@/lib/mediaFormat";
@@ -44,7 +45,17 @@ interface PlayingNextScreenProps {
 
 const COUNTDOWN_SECONDS = 10;
 
-export function PlayingNextScreen({
+// `reducedMotion="user"` drops the slide-up offsets under
+// `prefers-reduced-motion` and keeps the fades.
+export function PlayingNextScreen(props: PlayingNextScreenProps) {
+  return (
+    <MotionConfig reducedMotion="user">
+      <PlayingNextContent {...props} />
+    </MotionConfig>
+  );
+}
+
+function PlayingNextContent({
   seriesId,
   seriesTitle,
   nextEpisode,
@@ -549,12 +560,7 @@ function OnDeckCarousel({
                     </div>
                     {/* Progress bar */}
                     {progressPercent > 0 && (
-                      <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/10">
-                        <div
-                          className="h-full bg-[var(--hud-lamp)]"
-                          style={{ width: `${Math.min(progressPercent, 100)}%` }}
-                        />
-                      </div>
+                      <WatchProgressBar percent={progressPercent} fillColor="var(--hud-lamp)" />
                     )}
                   </div>
                   <div className="mt-1.5 space-y-0.5">

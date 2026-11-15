@@ -624,6 +624,7 @@ func (s *Server) restartSegmentLocked(
 	sessionID string,
 	session *playback.TranscodeSession,
 	segNum int,
+	seenGeneration time.Time,
 ) (playback.SegmentRecoveryTarget, bool, error) {
 	unlock := s.lockSessionLifecycle(sessionID)
 	defer unlock()
@@ -633,7 +634,7 @@ func (s *Server) restartSegmentLocked(
 	if !ok || live != session {
 		return playback.SegmentRecoveryTarget{}, false, playback.ErrSessionSuperseded
 	}
-	return session.RestartSegment(ctx, segNum)
+	return session.RestartSegmentSince(ctx, segNum, seenGeneration)
 }
 
 // NewServer creates a new transcode server.
@@ -2217,6 +2218,7 @@ func (s *Server) spawnReconstruct(r *http.Request, sessionID string, requestedSe
 	outputDir := s.sessionOutputDir(sessionID)
 	opts := card.TranscodeOpts(outputDir, cfg.Playback.FFmpegPath, s.ffmpegSink)
 	opts.SessionID = sessionID
+	opts.Reconstructed = true
 	// Recipe cards preserve the original launch tuning, but reconstruction must
 	// retain the normal manifest cushion rather than the fresh-start fast path.
 	opts.FastStart = false
@@ -2325,9 +2327,11 @@ func (s *Server) spawnReconstruct(r *http.Request, sessionID string, requestedSe
 	// these dimensions), and registering the dead session would serve this
 	// media as permanently missing. Outside the automatic pipeline, mirror
 	// handleStart's software retry for the accel StartupRetryHWAccel would
-	// change.
+	// change. The rebuild reuses the lost session's output directory, so wait
+	// for a manifest this process wrote: the previous one would report a
+	// process that died at startup as ready and skip the retry (#4099).
 	if retryAccel != opts.HWAccel {
-		if _, waitErr := session.WaitForManifest(playback.ManifestStartupTimeout); waitErr != nil {
+		if _, waitErr := session.WaitForGenerationManifest(playback.ManifestStartupTimeout); waitErr != nil {
 			if session.IsRunning() {
 				slog.WarnContext(r.Context(), "reconstructed transcode slow to produce a manifest", "component", "transcodenode",
 					"error", waitErr, "session", sessionID, "playback_session_id", sessionID)
@@ -2344,7 +2348,7 @@ func (s *Server) spawnReconstruct(r *http.Request, sessionID string, requestedSe
 						"session", sessionID, "playback_session_id", sessionID)
 					return nil, err
 				}
-				if _, retryErr := session.WaitForManifest(playback.ManifestStartupTimeout); retryErr != nil {
+				if _, retryErr := session.WaitForGenerationManifest(playback.ManifestStartupTimeout); retryErr != nil {
 					_ = session.Close()
 					slog.ErrorContext(r.Context(), "reconstructed software retry failed readiness check", "component", "transcodenode", "error", retryErr,
 						"session", sessionID, "playback_session_id", sessionID)
@@ -2644,6 +2648,7 @@ func (s *Server) handleRemux(w http.ResponseWriter, r *http.Request) {
 	if err := playback.ServeRemuxWithOptions(w, request, claims.MediaPath, "mp4", seekSeconds, claims.TranscodeAudio, claims.AudioTrackIndex, claims.DVProfile, playback.RemuxServeOptions{
 		DVMode: playback.RemuxDVMode(claims.RemuxDVMode), FFmpegPath: cfg.Playback.FFmpegPath,
 		DropResumeLeadingPictures: claims.RemuxResumeLeadingPictureDrop,
+		StreamOriginSeconds:       playback.RemuxStreamOrigin(r.URL.Query()),
 		ContentType:               playback.RemuxContentType(claims.AudioOnly), AudioOnly: claims.AudioOnly,
 		SourceAudioChannels: claims.SourceAudioChannels, TargetAudioChannels: claims.TargetAudioChannels,
 		TargetAudioBitrateKbps: claims.TargetAudioBitrateKbps, CopyAudioCodec: claims.CopyAudioCodec,
@@ -3079,6 +3084,7 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 					sessionID,
 					session,
 					segNum,
+					decision.Progress.GenerationStartedAt,
 				)
 				// A restart skipped because the request ended is not a failure.
 				if restartErr != nil && !errors.Is(restartErr, playback.ErrManifestNotReady) && !errors.Is(restartErr, r.Context().Err()) {

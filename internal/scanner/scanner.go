@@ -372,11 +372,21 @@ func (s *Scanner) ScanSubtree(ctx context.Context, folder *models.MediaFolder, s
 	// A subtree scan under a skipped library root would walk nothing and
 	// retire the subtree piece by piece, bypassing the empty-root guard. Only
 	// a full library scan decides what happens to a skipped root's catalog.
-	if root := scopeLibraryRoot(cleanSubtree, folder.Paths); root != "" {
+	// Every root that holds the subtree counts, and a root nested in another
+	// is also skipped when the outer root's rules exclude it.
+	for _, root := range cleanScanRoots(folder.Paths) {
+		if !pathWithinAnyRoot(cleanSubtree, []string{root}) {
+			continue
+		}
 		skipped, err := libraryRootSkipped(root)
 		if err != nil {
 			// Without the root's rules the scope cannot tell what it excludes.
 			return nil, fmt.Errorf("library root %s: %w", root, err)
+		}
+		if !skipped {
+			// An unreadable ancestor is left to the walk, which records it
+			// as a walk failure and protects the subtree.
+			_, skipped, _ = scanRootIgnoreRules(root, folder.Paths)
 		}
 		if skipped {
 			slog.InfoContext(ctx, "scanner: library root is skipped by its ignore files; leaving subtree to a full library scan", "component", "scanner",
@@ -390,11 +400,17 @@ func (s *Scanner) ScanSubtree(ctx context.Context, folder *models.MediaFolder, s
 	watchCtx, stopWatch := s.watchFolderContext(ctx, folder.ID)
 	defer stopWatch()
 	if librarykind.IsAudiobook(folder.Type) {
-		scanRoot, err := cleanScopedAudiobookScanRoot(subtreePath)
+		// collectAudiobookRootScans widens the scope (audiobookScopeRoot); a
+		// file is scanned through its folder.
+		scope := filepath.Clean(subtreePath)
+		if info, statErr := fspath.Stat(scope); statErr == nil && !info.IsDir() {
+			scope = filepath.Dir(scope)
+		}
+		scanRoot, err := cleanScopedAudiobookScanRoot(scope)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.scanAudiobookPaths(watchCtx, folder, []string{scanRoot}, false, true); err != nil {
+		if err := s.scanAudiobookPaths(watchCtx, folder, []string{scanRoot}, false, true, ""); err != nil {
 			return nil, err
 		}
 		if err := s.syncFolderScopedAudioLibraryState(watchCtx, folder.ID); err != nil {
@@ -995,55 +1011,40 @@ func (s *Scanner) scanPaths(
 		})
 	}
 
-	stopProgress := make(chan struct{})
-	progressDone := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(scanProgressLogInterval)
-		defer ticker.Stop()
-		defer close(progressDone)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-stopProgress:
-				return
-			case <-ticker.C:
-				processed := int(processedCount.Load())
-				total := len(filePaths)
-				slog.InfoContext(ctx, "scanner: processing progress", "component", "scanner",
-					"folder_id", folder.ID,
-					"scope", firstScope(reconcileRoots),
-					"processed", processed,
-					"total", total,
-					"new", newCount.Load(),
-					"updated", updatedCount.Load(),
-					"unchanged", unchangedCount.Load(),
-					"no_video", noVideoCount.Load(),
-					"errors", errorCount.Load(),
-				)
-				reportProgress(ctx, ProgressUpdate{
-					Phase:           "processing",
-					Message:         "Processing discovered files",
-					CurrentScope:    firstScope(reconcileRoots),
-					TotalFiles:      total,
-					FilesDiscovered: total,
-					FilesProcessed:  processed,
-					New:             int(newCount.Load()),
-					Updated:         int(updatedCount.Load()),
-					Unchanged:       int(unchangedCount.Load()),
-					Errors:          int(errorCount.Load()),
-				})
-			}
+	stopProgress := reportProgressEvery(ctx, scanProgressLogInterval, func() ProgressUpdate {
+		processed := int(processedCount.Load())
+		total := len(filePaths)
+		slog.InfoContext(ctx, "scanner: processing progress", "component", "scanner",
+			"folder_id", folder.ID,
+			"scope", firstScope(reconcileRoots),
+			"processed", processed,
+			"total", total,
+			"new", newCount.Load(),
+			"updated", updatedCount.Load(),
+			"unchanged", unchangedCount.Load(),
+			"no_video", noVideoCount.Load(),
+			"errors", errorCount.Load(),
+		)
+		return ProgressUpdate{
+			Phase:           "processing",
+			Message:         "Processing discovered files",
+			CurrentScope:    firstScope(reconcileRoots),
+			TotalFiles:      total,
+			FilesDiscovered: total,
+			FilesProcessed:  processed,
+			New:             int(newCount.Load()),
+			Updated:         int(updatedCount.Load()),
+			Unchanged:       int(unchangedCount.Load()),
+			Errors:          int(errorCount.Load()),
 		}
-	}()
+	})
 
 	for _, p := range primaryPaths {
 		pathCh <- p
 	}
 	close(pathCh)
 	wg.Wait()
-	close(stopProgress)
-	<-progressDone
+	stopProgress()
 
 	result.New = int(newCount.Load())
 	result.Updated = int(updatedCount.Load())
@@ -1232,7 +1233,7 @@ func (s *Scanner) scanFolderByRoots(
 	// compaction but can die independently of its reachable parent.
 	configuredProbes := rootcheck.ProbeManyWithTimeout(ctx, configuredRoots, rootcheck.DefaultProbeTimeout)
 	unreachableRoots := make([]string, 0)
-	suspectRoots := make([]string, 0)
+	emptyRoots := make([]string, 0)
 	for i, root := range configuredRoots {
 		probe := configuredProbes[i]
 		if !probe.Reachable {
@@ -1240,16 +1241,20 @@ func (s *Scanner) scanFolderByRoots(
 			unreachableRoots = append(unreachableRoots, root)
 			continue
 		}
-		if !probe.Empty {
-			continue
+		if probe.Empty {
+			emptyRoots = append(emptyRoots, root)
 		}
-		existing, err := s.fileRepo.GetByFolderAndPathPrefix(ctx, folder.ID, root)
-		if err != nil {
-			return nil, fmt.Errorf("listing files under empty root %q: %w", root, err)
-		}
-		if len(existing) > 0 {
-			suspectRoots = append(suspectRoots, root)
-		}
+	}
+	// Ask only whether the catalog holds anything under each empty root.
+	// Loading the rows to count them decoded every file row of a dropped
+	// mount in full, with its track, chapter and marker JSON, on every scan
+	// for as long as the drive stayed missing.
+	suspectRoots, err := s.fileRepo.ListRootsWithCatalogedFiles(ctx, folder.ID, emptyRoots)
+	if err != nil {
+		return nil, fmt.Errorf("listing files under empty roots: %w", err)
+	}
+	if suspectRoots == nil {
+		suspectRoots = make([]string, 0)
 	}
 	result.UnreachableRoots = unreachableRoots
 	unreachableSet := make(map[string]bool, len(unreachableRoots))
@@ -2728,6 +2733,36 @@ func requirePathInLibrary(path string, folder *models.MediaFolder) error {
 	return fmt.Errorf("%w: library %d, path %s", ErrPathOutsideLibrary, folder.ID, path)
 }
 
+type explicitFileRequestKey struct{}
+
+// WithExplicitFileRequest marks ctx as an admin's scan request for an exact
+// file path. ScanFile then scans the file even if the library's ignore files
+// exclude it.
+func WithExplicitFileRequest(ctx context.Context) context.Context {
+	return context.WithValue(ctx, explicitFileRequestKey{}, true)
+}
+
+// audiobookFileScanIgnores reports how an audiobook file scan applies the
+// library's ignore files to the books it rebuilds. A scan Silo starts on its
+// own applies them. When an admin named this file explicitly, the admin's
+// file is scanned rather than refused, as when the request is resolved: if
+// the ignore files exclude it, it is admitted past them and nothing else they
+// exclude is (admit); if one of them cannot be read, the rules are unknown and
+// the rebuild reads no ignore files (honor is false).
+func audiobookFileScanIgnores(ctx context.Context, file string, libraryRoots []string) (honor bool, admit string) {
+	if explicit, _ := ctx.Value(explicitFileRequestKey{}).(bool); !explicit {
+		return true, ""
+	}
+	ignored, err := FileIgnored(file, libraryRoots)
+	switch {
+	case err != nil:
+		return false, ""
+	case ignored:
+		return true, file
+	}
+	return true, ""
+}
+
 // ScanFile scans a single file and upserts it into the database. filePath
 // must lie under one of folder's roots.
 func (s *Scanner) ScanFile(ctx context.Context, filePath string, folder *models.MediaFolder) error {
@@ -2746,16 +2781,20 @@ func (s *Scanner) ScanFile(ctx context.Context, filePath string, folder *models.
 		if !SupportsAudioFile(cleanFile) {
 			return fmt.Errorf("unrecognized audio extension: %s", strings.ToLower(filepath.Ext(cleanFile)))
 		}
-		scanRoot, err := cleanScopedAudiobookScanRoot(filepath.Dir(cleanFile))
+		// Widen before checking the folder exists, so a file in a deleted
+		// disc folder still rebuilds its book.
+		widened, _ := audiobookScopeRoot(filepath.Dir(cleanFile), folder.Paths)
+		scanRoot, err := cleanScopedAudiobookScanRoot(widened)
 		if err != nil {
 			return err
 		}
+		honorIgnores, admit := audiobookFileScanIgnores(ctx, cleanFile, folder.Paths)
 		if handled, err := s.reconcileVanishedFileIfNeeded(ctx, folder, cleanFile); handled {
 			if err != nil {
 				return err
 			}
 			if info, statErr := fspath.Stat(scanRoot); statErr == nil && info.IsDir() {
-				if err := s.scanAudiobookPaths(ctx, folder, []string{scanRoot}, false, false); err != nil {
+				if err := s.scanAudiobookPaths(ctx, folder, []string{scanRoot}, false, honorIgnores, admit); err != nil {
 					return err
 				}
 			} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
@@ -2763,7 +2802,7 @@ func (s *Scanner) ScanFile(ctx context.Context, filePath string, folder *models.
 			}
 			return s.syncFolderScopedAudioLibraryState(ctx, folder.ID)
 		}
-		if err := s.scanAudiobookPaths(ctx, folder, []string{scanRoot}, false, false); err != nil {
+		if err := s.scanAudiobookPaths(ctx, folder, []string{scanRoot}, false, honorIgnores, admit); err != nil {
 			return err
 		}
 		return s.syncFolderScopedAudioLibraryState(ctx, folder.ID)
@@ -4360,6 +4399,7 @@ func applyProbeData(mf *models.MediaFile, probe *ProbeData, probeSource string) 
 			VideoRange:          vt.VideoRange,
 			VideoRangeType:      vt.VideoRangeType,
 			ColorRange:          vt.ColorRange,
+			FrameColorRange:     vt.FrameColorRange,
 			ColorPrimaries:      vt.ColorPrimaries,
 			ColorSpace:          vt.ColorSpace,
 			ColorTransfer:       vt.ColorTransfer,

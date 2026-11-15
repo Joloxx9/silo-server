@@ -70,6 +70,11 @@ type ProfileHandler struct {
 	EbookReaderPurger interface {
 		PurgeProfile(ctx context.Context, userID int, profileID string) error
 	}
+	// JellyfinSessionPurger signs out the Jellyfin-compatible sessions of a
+	// deleted profile, which live in Postgres whichever store holds it.
+	JellyfinSessionPurger interface {
+		PurgeProfile(ctx context.Context, userID int, profileID string) error
+	}
 	// RecommendationsPurger removes a deleted profile's ratings, taste
 	// profile and cached recommendations, which live in Postgres whichever
 	// store holds the profile.
@@ -117,7 +122,10 @@ type ProfileCreateRequest struct {
 	MaxAdvisoryAge int `json:"-"`
 	// RequireAdvisoryAge hides titles with no advisory age. v2-only, like
 	// MaxAdvisoryAge.
-	RequireAdvisoryAge         bool   `json:"-"`
+	RequireAdvisoryAge bool `json:"-"`
+	// RequestsBlocked keeps the profile out of requests and request
+	// discovery. v2-only (json:"-"); v2 carries it as requests_allowed.
+	RequestsBlocked            bool   `json:"-"`
 	QualityPreference          string `json:"quality_preference,omitempty"`
 	Language                   string `json:"language,omitempty"`
 	PreferredMetadataLanguage  string `json:"preferred_metadata_language,omitempty"`
@@ -144,7 +152,9 @@ type ProfileUpdateRequest struct {
 	// it (json:"-").
 	MaxAdvisoryAge *int `json:"-"`
 	// RequireAdvisoryAge: nil leaves it untouched. v2-only (json:"-").
-	RequireAdvisoryAge         *bool   `json:"-"`
+	RequireAdvisoryAge *bool `json:"-"`
+	// RequestsBlocked: nil leaves it untouched. v2-only (json:"-").
+	RequestsBlocked            *bool   `json:"-"`
 	QualityPreference          *string `json:"quality_preference,omitempty"`
 	Language                   *string `json:"language,omitempty"`
 	PreferredMetadataLanguage  *string `json:"preferred_metadata_language,omitempty"`
@@ -174,7 +184,9 @@ type ProfileView struct {
 	// so only v2 emits it (json:"-").
 	MaxAdvisoryAge int `json:"-"`
 	// RequireAdvisoryAge hides titles with no advisory age. v2-only (json:"-").
-	RequireAdvisoryAge         bool   `json:"-"`
+	RequireAdvisoryAge bool `json:"-"`
+	// RequestsBlocked keeps the profile out of requests. v2-only (json:"-").
+	RequestsBlocked            bool   `json:"-"`
 	QualityPreference          string `json:"quality_preference,omitempty"`
 	Language                   string `json:"language,omitempty"`
 	PreferredMetadataLanguage  string `json:"preferred_metadata_language,omitempty"`
@@ -272,13 +284,13 @@ func invalidAdvisoryAgeLimit() *APIError {
 // only touches fields the user is allowed to change on their own profiles.
 // Admin-only fields (access policy: library restrictions, content rating,
 // advisory-age limit and its strictness, playback-quality cap, child-profile
-// flag) must be
-// rejected for non-admins.
+// flag, requests block) must be rejected for non-admins.
 func isAllowedSelfServiceProfileUpdate(req ProfileUpdateRequest) bool {
 	return req.IsChild == nil &&
 		req.MaxContentRating == nil &&
 		req.MaxAdvisoryAge == nil &&
 		req.RequireAdvisoryAge == nil &&
+		req.RequestsBlocked == nil &&
 		req.LibraryRestrictionsEnabled == nil &&
 		req.AllowedLibraryIDs == nil &&
 		req.MaxPlaybackQuality == nil
@@ -472,6 +484,7 @@ func (h *ProfileHandler) CreateProfile(ctx context.Context, cmd ProfileCreateCom
 	// admin bootstrap creations must leave those fields at their defaults.
 	if isBootstrap && !apimw.IsAdmin(ctx) &&
 		(req.IsChild || req.MaxContentRating != "" || req.MaxAdvisoryAge != 0 || req.RequireAdvisoryAge ||
+			req.RequestsBlocked ||
 			req.LibraryRestrictionsEnabled || len(req.AllowedLibraryIDs) > 0 ||
 			req.MaxPlaybackQuality != "") {
 		return none, apiError(http.StatusForbidden, "forbidden", "Profile access settings require the primary profile or admin access")
@@ -529,6 +542,7 @@ func (h *ProfileHandler) CreateProfile(ctx context.Context, cmd ProfileCreateCom
 		MaxContentRating:           req.MaxContentRating,
 		MaxAdvisoryAge:             req.MaxAdvisoryAge,
 		RequireAdvisoryAge:         req.RequireAdvisoryAge,
+		RequestsBlocked:            req.RequestsBlocked,
 		QualityPreference:          req.QualityPreference,
 		Language:                   req.Language,
 		PreferredMetadataLanguage:  req.PreferredMetadataLanguage,
@@ -562,19 +576,6 @@ func (h *ProfileHandler) CreateProfile(ctx context.Context, cmd ProfileCreateCom
 		return none, apiError(http.StatusInternalServerError, "internal_error", "Failed to retrieve created profile")
 	}
 	created := *createdPtr
-
-	if req.ShowForcedSubtitles != nil && !*req.ShowForcedSubtitles {
-		if err := store.UpdateProfile(ctx, created.ID, userstore.UpdateProfileInput{
-			ShowForcedSubtitles: req.ShowForcedSubtitles,
-		}); err != nil {
-			return none, apiError(http.StatusInternalServerError, "internal_error", "Failed to set forced subtitle preference")
-		}
-		p, err := store.GetProfile(ctx, created.ID)
-		if err != nil || p == nil {
-			return none, apiError(http.StatusInternalServerError, "internal_error", "Failed to retrieve profile after forced subtitle update")
-		}
-		created = *p
-	}
 
 	return h.toProfileResponse(ctx, store, created), nil
 }
@@ -702,6 +703,7 @@ func (h *ProfileHandler) UpdateProfile(ctx context.Context, cmd ProfileUpdateCom
 		MaxContentRating:           req.MaxContentRating,
 		MaxAdvisoryAge:             req.MaxAdvisoryAge,
 		RequireAdvisoryAge:         req.RequireAdvisoryAge,
+		RequestsBlocked:            req.RequestsBlocked,
 		QualityPreference:          req.QualityPreference,
 		Language:                   req.Language,
 		PreferredMetadataLanguage:  req.PreferredMetadataLanguage,
@@ -854,6 +856,13 @@ func (h *ProfileHandler) DeleteProfile(ctx context.Context, cmd ProfileDeleteCom
 		return apiError(http.StatusNotFound, "not_found", "Profile not found")
 	}
 	auditmutation.CommitMutation(ctx, audit)
+	if h.JellyfinSessionPurger != nil {
+		purgeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if purgeErr := h.JellyfinSessionPurger.PurgeProfile(purgeCtx, userID, profileID); purgeErr != nil {
+			slog.WarnContext(ctx, "profile Jellyfin session purge failed after delete", "component", "api", "user_id", userID, "profile_id", profileID, "error", purgeErr)
+		}
+	}
 	if h.WatchlistRequestWithdrawer != nil {
 		withdrawCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
@@ -1088,6 +1097,7 @@ func (h *ProfileHandler) profileResponseWith(
 		MaxContentRating:           p.MaxContentRating,
 		MaxAdvisoryAge:             p.MaxAdvisoryAge,
 		RequireAdvisoryAge:         p.RequireAdvisoryAge,
+		RequestsBlocked:            p.RequestsBlocked,
 		QualityPreference:          p.QualityPreference,
 		Language:                   prefs.AudioLanguage,
 		PreferredMetadataLanguage:  prefs.MetadataLanguage,

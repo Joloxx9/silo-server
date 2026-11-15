@@ -261,6 +261,45 @@ container), `direct_stream` (copied video with converted audio), or `transcode`
 Per-stream Copy means no re-encoding; it does not promise byte-identical packets
 after a permitted bitstream transformation.
 
+`adaptation_reasons: true` on the capability response advertises an optional
+`adaptation_reasons` list on v2 session rows: why the route converts or
+repackages the file instead of playing it as it is. The playback planner derives
+the list from the facts it chose the route by and stores it with the live
+session. The plan's own `decision_reason` can't stand in for it: that field names
+only the last step that shaped the recipe, so a video the device can't decode
+reports its quality step. The list follows the order of
+`adaptation_reason_values`, video causes first:
+
+| Value | Meaning |
+| --- | --- |
+| `video_codec_unsupported` | The device can't decode the video codec, profile, level or bit depth. |
+| `video_capability_unconfirmed` | The client's capability evidence can't confirm it decodes the video. |
+| `dynamic_range_unsupported` | The output can't show the source's HDR or Dolby Vision as it is (tone mapping or a Dolby Vision conversion). |
+| `resolution_limit` | The source is taller than the device's maximum resolution. |
+| `bandwidth_limit` | The client's bandwidth estimate can't carry the source. |
+| `buffering` | Earlier buffering lowered the estimate: the player reported rebuffering during this play, or the server applied a limit learned from recent rebuffering on this device and connection. |
+| `bandwidth_cap` | The viewer's Maximum bitrate setting (`playback.max_bitrate_kbps`, profile or device), sent as the request's cap, is below the source. |
+| `server_bitrate_limit` | The user's access group Max local or remote stream bitrate binds, being lower than any request cap. |
+| `quality_selected` | The viewer chose a quality below the source. |
+| `subtitle_burn_in` | The selected subtitle is rendered into the video. |
+| `direct_play_failed` | The client already tried the original file, or every copy route, and it failed; nothing else forced the change. |
+| `audio_codec_unsupported` | The device, or the delivery it needs, can't carry the audio codec. |
+| `audio_channels_unsupported` | The audio has more channels than the output allows. |
+| `device_workaround` | A known device quirk needs the audio converted. |
+| `audio_track_selection` | The selected audio track is not the one the original file plays. |
+| `container_unsupported` | The device can't open the container, or offers no original-file delivery. |
+| `subtitle_unsupported` | The selected subtitle can't be delivered with the original file. |
+
+A video transcode lists audio reasons only when the audio alone couldn't have
+been copied, because every encode also converts the audio. The field is absent
+for Direct Play, for a session planned before the server recorded reasons, and
+for Jellyfin-protocol sessions, whose route decision doesn't come from this
+planner. Reasons survive a seek reanchor (they ride on the executable recipe)
+and a rebuild after a restart (from the recovery card, or from the live row for
+a session rebuilt from a stream token). Values are additive; clients ignore
+values they don't know, and the server drops stored values it doesn't know. The
+frozen v1 row never carries the field.
+
 `output_format: true` on the same capability response advertises optional
 `output_container` and `output_protocol` fields on v2 session rows. The serving
 transport reports the container (`fmp4`, `mpegts`, or the source container for
@@ -1105,6 +1144,7 @@ though layout save and reset are served; see
 | `downloads_stats` | `GET /admin/stats/downloads` serves the offline-download aggregate, and timeseries points carry the additive `download_egress_kbps` split. |
 | `egress_totals` | `GET /admin/stats/timeseries` carries the window's additive `egress_bytes` and `download_egress_bytes` totals. |
 | `egress_by_source` | `GET /admin/stats/timeseries` carries `egress_sources` and each point's `egress_by_source` split. |
+| `streams_by_method` | `GET /admin/stats/timeseries` points carry the `streams_by_method` split. |
 | `api_clients` | `GET /admin/stats/api-clients` and `GET /admin/stats/api-clients/{session_id}/endpoints` serve per-session API request counts. |
 
 ```json
@@ -1119,6 +1159,7 @@ though layout save and reset are served; see
   "downloads_stats": true,
   "egress_totals": true,
   "egress_by_source": true,
+  "streams_by_method": true,
   "api_clients": true
 }
 ```
@@ -1316,6 +1357,14 @@ also covers sources that never served at a bucket's peak minute. Each carries
 sampled minute like the window's own `egress_bytes`. Rank sources by that, not
 by summing the per-point split, which only sees peak minutes.
 
+`direct`, `remux` and `transcode` each take their own per-bucket peak, like
+`streams`, so past the one-minute resolution they may come from different
+minutes and can add up to more than `streams`. `streams_by_method` is the
+stackable form: the same three counts read from the minute whose `streams`
+peaked in the bucket (the earliest such minute on a tie), so they add up to no
+more than that point's `streams`. The remainder is sessions with any other
+play method.
+
 A bucket with no sample in it is absent from `points` rather than zero — a gap
 (a restart, a stopped server) and an idle bucket are different facts. Stream
 telemetry being disabled means no `proc:` rows, not an error.
@@ -1343,7 +1392,8 @@ fresh install renders "collecting data" instead of an empty chart.
       "transcode": 2,
       "egress_kbps": 48211,
       "download_egress_kbps": 6100,
-      "egress_by_source": { "api": 9211, "node:4": 39000 }
+      "egress_by_source": { "api": 9211, "node:4": 39000 },
+      "streams_by_method": { "direct": 1, "remux": 0, "transcode": 2 }
     }
   ]
 }
@@ -2211,7 +2261,8 @@ file paths.
 take `{"ids": [...]}` (1–500 job ids) and return one `{id, outcome}` per
 distinct id in request order. `outcome` is `applied`, `unchanged` (already in
 the requested state), `not_found` (no such job is being prepared: it finished,
-was canceled, or never existed), or `not_applicable` (pausing or resuming a
+was canceled, was stopped because no download needs it any more, or never
+existed), or `not_applicable` (pausing or resuming a
 failed job). Pause keeps a job's queue position but no worker claims it until
 it is resumed; a running encode stops and restarts from the beginning on resume,
 and the stopped attempt does not count against the job. Its waiting downloads
@@ -2225,8 +2276,8 @@ preparing is never touched. The three operations are idempotent.
 the realtime channel (`download_preparations`), the failure window in seconds,
 and `controls` when pause, resume, and cancel are available. The admin-only channel publishes `download_preparation.changed`
 (`{id}`) when a job is queued, claimed, assigned a worker, finishes, fails, is
-requeued, paused, resumed, or canceled, and when a user adds or removes a
-download waiting on it, and `download_preparation.progress` (`{id, progress}`) at most every
+requeued, paused, resumed, canceled, or stopped because no download needs it,
+and when a user adds or removes a download waiting on it, and `download_preparation.progress` (`{id, progress}`) at most every
 five seconds per running job. The subscription snapshot is `null`; re-read the
 list after subscribing. See
 [preparation progress](downloads-api.md#preparation-progress-admin) for how the
@@ -2521,12 +2572,13 @@ invalidates the exact compatibility status scope only for the active authority.
 
 ### Dashboard capability discovery in v2
 
-`GET /api/v2/admin/dashboard/capabilities` returns the eleven dashboard support
+`GET /api/v2/admin/dashboard/capabilities` returns the twelve dashboard support
 flags to an acting administrator. These describe the v2 surface in the API build;
 they do not promise that a database or other runtime dependency is healthy.
 
 `timeseries`, `playback_activity`, `top_activity`, `health`, `watch_providers`,
-`downloads_stats`, `egress_totals`, `egress_by_source` and `api_clients` are true for
+`downloads_stats`, `egress_totals`, `egress_by_source`, `streams_by_method` and
+`api_clients` are true for
 the existing v2 dashboard operations. `server_layouts` remains false until the full
 layout lifecycle is accepted, although layout read, save and reset are served.
 `log_level_list` is true for the accepted multi-level application-log reader.
@@ -2930,11 +2982,11 @@ change logging have an empty list. Each change has `source_path` (as reported),
 `outcome`: `queued` (created a scan run), `joined` (coalesced into a run for the
 same scope that was already queued or running), `suppressed` (debounced),
 `unresolved` (did not map to a scannable library location), `ignored` (empty path,
-or a file change that resolved to a whole library) or `error` (resolve or enqueue
-failure). `reason` is a machine code for unresolved, ignored and error outcomes:
-resolver reasons such as `no_library_match`, `library_root_offline` or
-`unsupported_extension`, plus `resolves_to_library`, `resolve_failed` and
-`enqueue_failed`; clients treat unknown codes and unknown outcomes as opaque and
+a file change that resolved to a whole library, or a file the library's ignore files
+exclude) or `error` (resolve or enqueue failure). `reason` is a machine code for
+unresolved, ignored and error outcomes: resolver reasons such as `no_library_match`,
+`library_root_offline`, `unsupported_extension` or `path_ignored`, plus
+`resolves_to_library`, `resolve_failed` and `enqueue_failed`; clients treat unknown codes and unknown outcomes as opaque and
 may show `detail`. Resolved changes include `library_id`, `target_mode` and
 `target_path`; queued and joined changes include the covering `scan_run_id`, which
 is how a joined change names a run another event created. A change that joins a
@@ -3426,7 +3478,8 @@ names a different `plugin_id` or `version` than the catalog entry, or a catalog 
 longer lists the requested version. A catalog, checksum or download host that cannot be
 reached, answers 429 or 5xx, or cuts the response short is 503 `dependency_unavailable`
 with `Retry-After: 30`. Nothing is written in either case; an update leaves the installed
-version in place.
+version in place, and a running plugin keeps running, because the installed plugin is
+stopped only after the new package passed these checks.
 
 `POST /api/v2/admin/plugins/installations/{id}/restart` stops the installation's process
 and, for a resident plugin, starts it again with a fresh failure budget; a non-resident plugin
@@ -3502,7 +3555,18 @@ so the plugin's default applies; fields the manifest does not declare (plugin-ow
 are kept. Manifest-declared secret fields left blank keep their stored value, and a secret is
 removed only when named in `clear_secrets`. The
 connection test (`.../config/test` and the auth connection test) merges a staged entry the
-same way without storing it. The server validates the merged entry against the
+same way without storing it, with one difference: a blank secret reuses the stored secret
+only while the entry is otherwise unchanged. Unchanged means no secret is typed and every
+other field, after clears, matches the stored entry; a field the stored entry lacks
+matches its declared default. A secret object or list (such as a map of servers with keys
+inside) counts as typed whenever it is sent, because its contents are secret. A staged entry that changes a server URL, issuer, CA or any
+other setting, or types a secret, is tested with only the secrets the administrator typed
+and without undeclared stored top-level fields, so a destination changed in an entry never
+receives the saved secrets that entry declares. An undeclared key stored inside a declared
+object is kept, and an entry whose schema declares no secret is merged as a save would
+merge it, undeclared stored fields included. The rule is per entry: the other stored entries go to the
+plugin unchanged, so a plugin that keeps a credential in one entry and its destination in
+another is not covered. The server validates the merged entry against the
 plugin's schema and returns 422 with the plugin's own message on failure, then persists
 under a compare-and-swap on the stored revision and stops the running plugin so it rebinds.
 Success is 204. Repeating the same request converges on one stored entry, so the row is
@@ -3555,7 +3619,7 @@ identifies the acting administrator. Actor filters use
 | `user.impersonation_ended` | `endImpersonation` | `impersonation_session_id` (before) |
 | `user.ownership_transferred` | `transferAdminUserOwnership`; target is the new Owner | `owner_user_id` |
 | `user.password_reset_link_created` | `createAdminUserPasswordReset` | `delivery`, `expires_at` |
-| `user.password_reset_completed` | `completePasswordReset` | `password` (field name only) |
+| `user.password_reset_completed` | `completePasswordResetLink`, `completePasswordReset` (deprecated) | `password` (field name only) |
 | `user.password_changed` | `changePassword` | `password` (field name only) |
 | `user.login_session_revoked` | `deleteSession`, `deleteAdminUserLoginSession` | `login_session_id` (before) |
 | `user.login_sessions_revoked` | `deleteAdminUserLoginSessions` | `revoked_login_sessions` count; recorded when the call ended any login session or Audiobookshelf, Jellyfin-compatible or device sign-in |
@@ -3574,9 +3638,11 @@ profile. Login session IDs identify sessions and are not credentials.
 
 Audit rows never contain a password, password or PIN hash, PIN, access or
 refresh token, API key or its prefix, reset link, its token or digest, or an
-arbitrary request body or header. The path of `completePasswordReset` is stored
-with its link token replaced by `[redacted]`, and that row has no `user_id`
-because the request is unauthenticated.
+arbitrary request body or header. `completePasswordResetLink` takes the link
+token in its body, so its path has none; the path of the deprecated
+`completePasswordReset` is stored with its link token replaced by
+`[redacted]`. Neither row has a `user_id`, because the request is
+unauthenticated.
 
 Rollbacks and refused requests record no domain action, and neither does a
 write that changes no allowlisted value: a repeated identical policy write,

@@ -24,9 +24,12 @@ import {
   shuffleKeys,
   watchlistKeys,
 } from "./keys";
+import { sectionShowsWholeList } from "./homeRowLimit";
+import { PERSONAL_STATE_WRITE_KEY } from "./personalStateWrites";
 import {
   activeCatalogQueryMatchesLibrary,
   activeSectionQueryMatchesLibrary,
+  isLibraryLayoutQueryKey,
 } from "@/lib/queryInvalidation";
 import { bumpHomeRefreshSignal } from "@/pages/homeSurfaceRefresh";
 
@@ -91,18 +94,50 @@ const scheduledInvalidations = new WeakMap<
     }
   >
 >();
+const owedDetailRefreshes = new WeakMap<QueryClient, Set<string>>();
 
+// Writing data marks a query fresh. A detail that was already invalidated,
+// such as by another device's metadata save while no page showed it, still
+// owes a refetch (refetchDetailWhenWritesSettle).
 export function updateCatalogItemDetail(
   queryClient: QueryClient,
   itemId: string,
   updater: (detail: ItemDetail) => ItemDetail,
 ) {
-  queryClient.setQueriesData<ItemDetail>(
-    {
-      predicate: (query) => isItemDetailQueryKey(query.queryKey, itemId),
-    },
-    (current) => (current ? updater(current) : current),
+  const filters = { predicate: (query: Query) => isItemDetailQueryKey(query.queryKey, itemId) };
+  const owesRefetch = queryClient
+    .getQueryCache()
+    .findAll(filters)
+    .some((query) => query.state.isInvalidated);
+  queryClient.setQueriesData<ItemDetail>(filters, (current) =>
+    current ? updater(current) : current,
   );
+  if (owesRefetch) refetchDetailWhenWritesSettle(queryClient, itemId);
+}
+
+// A read made while a write is pending can miss it and replace the write's
+// patch, and the toggles' own refreshes skip the item's detail. So an owed
+// detail is invalidated once no personal-state write is pending: overlapping
+// writes share one refetch after the last of them, and a patch with no write
+// behind it, such as a realtime event's, refetches at once.
+function refetchDetailWhenWritesSettle(queryClient: QueryClient, itemId: string) {
+  const waiting = owedDetailRefreshes.get(queryClient);
+  if (waiting) {
+    waiting.add(itemId);
+    return;
+  }
+  const owed = new Set([itemId]);
+  owedDetailRefreshes.set(queryClient, owed);
+  const refetchOnceSettled = () => {
+    if (queryClient.isMutating({ mutationKey: PERSONAL_STATE_WRITE_KEY }) > 0) return;
+    unsubscribe();
+    owedDetailRefreshes.delete(queryClient);
+    void queryClient.invalidateQueries({
+      predicate: (query) => [...owed].some((id) => isItemDetailQueryKey(query.queryKey, id)),
+    });
+  };
+  const unsubscribe = queryClient.getMutationCache().subscribe(refetchOnceSettled);
+  refetchOnceSettled();
 }
 
 // Callers must await this before writing optimistic state. The default
@@ -161,6 +196,19 @@ export function removeItemFromHomeSectionCaches(
       if (nextItems.length === current.section.items.length) {
         return current;
       }
+      const section = {
+        ...current.section,
+        total_count: Math.max(
+          0,
+          current.section.total_count - (current.section.items.length - nextItems.length),
+        ),
+        items: nextItems,
+      };
+      // A row cut at its limit can hold more than its count says, so losing a
+      // card must not make it read as its whole list.
+      if (!sectionShowsWholeList(current.section) && sectionShowsWholeList(section)) {
+        section.total_count = nextItems.length + 1;
+      }
       return {
         ...current,
         // A completed row's shown cards lose the removed ones, so none of its
@@ -168,14 +216,7 @@ export function removeItemFromHomeSectionCaches(
         ...(current.shown !== undefined && {
           shown: current.section.items.slice(0, current.shown).filter(kept).length,
         }),
-        section: {
-          ...current.section,
-          total_count: Math.max(
-            0,
-            current.section.total_count - (current.section.items.length - nextItems.length),
-          ),
-          items: nextItems,
-        },
+        section,
       };
     },
   );
@@ -423,7 +464,10 @@ function shouldInvalidateMediaSurfaceQuery(
     return activeCatalogQueryMatchesLibrary(queryKey, options.libraryId);
   }
   if (queryKeyStartsWith(queryKey, sectionKeys.all)) {
-    return activeSectionQueryMatchesLibrary(queryKey, options.libraryId);
+    return (
+      !isLibraryLayoutQueryKey(queryKey) &&
+      activeSectionQueryMatchesLibrary(queryKey, options.libraryId)
+    );
   }
   if (queryKeyStartsWith(queryKey, recKeys.all)) {
     return !(options.skipSimilarItems && queryKey[1] === "similar");
@@ -647,20 +691,19 @@ export async function refreshLocalizedMediaQueries(queryClient: QueryClient) {
   bumpHomeRefreshSignal(queryClient);
 }
 
-// A letter index sorts the whole result, which on a large library can outlast
-// a scan's invalidation window, so cancelling and restarting it on every sweep
-// would keep it from ever finishing. A running read finishes instead, and one
-// more read follows it so changes made while it ran still land. Returns the
-// running reads, for the sweep to leave alone.
+// A letter index sorts the whole result and a browse count counts it, either
+// of which on a large library can outlast a scan's invalidation window, so
+// cancelling and restarting them on every sweep would keep them from ever
+// finishing. A running read finishes instead, and one more read follows it so
+// changes made while it ran still land. Returns the running reads, for the
+// sweep to leave alone.
 function refetchLetterIndexesWhenDone(
   queryClient: QueryClient,
   matches: (query: Query) => boolean,
 ): Set<Query> {
-  const running = queryClient.getQueryCache().findAll({
-    queryKey: catalogKeys.allLetters,
-    fetchStatus: "fetching",
-    predicate: matches,
-  });
+  const running = [catalogKeys.allLetters, catalogKeys.allCounts].flatMap((queryKey) =>
+    queryClient.getQueryCache().findAll({ queryKey, fetchStatus: "fetching", predicate: matches }),
+  );
   for (const query of running) {
     const refetchAfter = () =>
       queryClient.invalidateQueries(

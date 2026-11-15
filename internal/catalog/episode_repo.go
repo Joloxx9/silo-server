@@ -39,7 +39,8 @@ const episodeColumns = `content_id, series_id, season_id, season_number, episode
 	imdb_id, tmdb_id, tvdb_id,
 	still_path, still_source_path, still_thumbhash,
 	metadata_s3_path, metadata_etag, metadata_source,
-	created_at, updated_at, locked_fields`
+	created_at, updated_at, locked_fields,
+	sort_title, original_title, tagline`
 
 // refreshSeriesAirDatesSQL maintains the denormalized media_items columns
 // last_air_date_at (newest episode aired on or before today) and
@@ -231,6 +232,9 @@ func scanEpisode(row pgx.Row) (*models.Episode, error) {
 		&ep.CreatedAt,
 		&ep.UpdatedAt,
 		&ep.LockedFields,
+		&ep.SortTitle,
+		&ep.OriginalTitle,
+		&ep.Tagline,
 	)
 	if seasonID != nil {
 		ep.SeasonID = *seasonID
@@ -315,6 +319,9 @@ func scanEpisodes(rows pgx.Rows) ([]*models.Episode, error) {
 			&ep.CreatedAt,
 			&ep.UpdatedAt,
 			&ep.LockedFields,
+			&ep.SortTitle,
+			&ep.OriginalTitle,
+			&ep.Tagline,
 		)
 		if seasonID != nil {
 			ep.SeasonID = *seasonID
@@ -1298,7 +1305,10 @@ func (r *EpisodeRepository) UpdateMetadata(ctx context.Context, contentID string
 	}
 
 	addString("title", upd.Title)
+	addString(childColumnSortTitle, upd.SortTitle)
+	addString(childColumnOriginalTitle, upd.OriginalTitle)
 	addString("overview", upd.Overview)
+	addString(childColumnTagline, upd.Tagline)
 	if upd.LockedFields != nil {
 		setClauses = append(setClauses, fmt.Sprintf("locked_fields = $%d", argIdx))
 		args = append(args, lockableFields(*upd.LockedFields, episodeLockedColumns))
@@ -1456,10 +1466,11 @@ func (r *EpisodeRepository) BrowseEpisodes(ctx context.Context, seriesID, season
 	filters.LibraryIDs, filters.DisabledLibraryIDs, filters.MaxPlaybackQuality = access.AllowedLibraryIDs, access.DisabledLibraryIDs, access.MaxPlaybackQuality
 	appendCompatBrowsePredicates(filters, &extra, &args, &index)
 	// Episode fields stand in for an item's own; studios, genres and ratings
-	// come from the series.
+	// come from the series. Episodes have no critic score, so a minimum one
+	// matches none, as in Jellyfin.
 	rewrite := strings.NewReplacer(premiereDateKeyExpr, "e.air_date::text", sortTitleKeyExpr, "LOWER(e.title)",
 		"mi.content_id", "e.content_id", "mi.genres", "s.genres", "mi.studios", "s.studios", "mi.content_rating", "s.content_rating",
-		"mi.rating_imdb", "e.rating_imdb", "mi.year", "EXTRACT(YEAR FROM e.air_date)::int", "mi.title", "e.title")
+		"mi.rating_imdb", "e.rating_imdb", "mi.rating_rt_critic", "NULL::integer", "mi.year", "EXTRACT(YEAR FROM e.air_date)::int", "mi.title", "e.title")
 	for _, condition := range extra {
 		conditions = append(conditions, rewrite.Replace(condition))
 	}

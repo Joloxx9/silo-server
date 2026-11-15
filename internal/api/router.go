@@ -48,6 +48,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/httpstream"
 	"github.com/Silo-Server/silo-server/internal/intromarkers"
 	"github.com/Silo-Server/silo-server/internal/invitations"
+	"github.com/Silo-Server/silo-server/internal/jellycompat"
 	"github.com/Silo-Server/silo-server/internal/keptsub"
 	"github.com/Silo-Server/silo-server/internal/libraryingest"
 	"github.com/Silo-Server/silo-server/internal/literaryworks"
@@ -88,6 +89,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/shuffle"
 	"github.com/Silo-Server/silo-server/internal/storagetransition"
 	"github.com/Silo-Server/silo-server/internal/streamtelemetry"
+	"github.com/Silo-Server/silo-server/internal/streamtoken"
 	"github.com/Silo-Server/silo-server/internal/subtitles"
 	subtitleai "github.com/Silo-Server/silo-server/internal/subtitles/ai"
 	"github.com/Silo-Server/silo-server/internal/subtitles/opensubtitles"
@@ -1090,6 +1092,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		if userRepo != nil {
 			requestSvc.SetUserRepository(userRepo)
 		}
+		requestSvc.SetProfileStores(deps.UserStoreProvider)
 		requestSvc.SetRequesterIdentityResolver(plugins.RequesterIdentityFromLookup(plugins.NewPgUserIdentityLookup(deps.DB)))
 		if tvdbResolver, ok := deps.MetadataService.(mediarequests.TVDBIDResolver); ok {
 			requestSvc.SetTVDBIDResolver(tvdbResolver)
@@ -1247,6 +1250,8 @@ func newChiRouter(deps Dependencies) chi.Router {
 			// Ebook reading data lives there too.
 			profileHandler.EbookReaderPurger = handlers.NewPGEbookReaderProgressStore(deps.DB)
 			profileHandler.Connections = &connectionstore.Store{Pool: deps.DB}
+			// And Jellyfin-compatible sessions.
+			profileHandler.JellyfinSessionPurger = jellycompat.NewSessionRepository(deps.DB, deps.SecretCipher)
 		}
 		if watchlistRequestWithdrawer != nil {
 			profileHandler.WatchlistRequestWithdrawer = watchlistRequestWithdrawer
@@ -1518,6 +1523,21 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 		if deps.Config != nil && deps.Config.Auth.JWTSecret != "" {
 			playbackHandler.JWTSecret = deps.Config.Auth.JWTSecret
+			if authMiddleware != nil && playbackHandler.PlanStoreV3 != nil {
+				secret, attempts := deps.Config.Auth.JWTSecret, playbackHandler.PlanStoreV3
+				authMiddleware.SetStreamReferenceVerifier(func(reference string) (*streamtoken.Claims, error) {
+					return streamtoken.Verify(reference, secret)
+				}, func(ctx context.Context, sessionID string) (apimw.StreamReferenceAttempt, error) {
+					identity, err := attempts.GetAttemptIdentity(ctx, sessionID)
+					if errors.Is(err, playback.ErrSessionNotFound) {
+						return apimw.StreamReferenceAttempt{}, nil
+					}
+					if err != nil {
+						return apimw.StreamReferenceAttempt{}, err
+					}
+					return apimw.StreamReferenceAttempt{UserID: identity.UserID, ProfileID: identity.ProfileID, LoginSessionID: identity.LoginSessionID, Live: !identity.Stopped}, nil
+				})
+			}
 		}
 		// Hand proxy nodes the recipes they serve header-authenticated sessions
 		// from, so an attempt that negotiated authorized media origins egresses
@@ -2643,17 +2663,17 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 	}
 
-	// userRepo is a concrete pointer, so it has to stay out of the
+	// authService is a concrete pointer, so it has to stay out of the
 	// interface parameter when unset — a typed nil would satisfy the
 	// handler's nil check and panic on first use.
-	var compatUsers handlers.CompatConnectUsers
-	if userRepo != nil {
-		compatUsers = userRepo
+	var compatSignIn handlers.CompatPasswordSignIn
+	if authService != nil {
+		compatSignIn = authService
 	}
 	compatConnectInfoHandler := handlers.NewCompatConnectInfoHandler(
 		deps.Config,
 		settingsRepo,
-		compatUsers,
+		compatSignIn,
 	)
 	if authHandler != nil {
 		authHandler.SetOAuthRoutesAvailable(oauthHandler != nil)

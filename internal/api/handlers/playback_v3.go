@@ -2391,6 +2391,9 @@ func (h *PlaybackHandler) startPlannedPlaybackV3(r *http.Request, userID int, pr
 	}
 	response := playback.DecisionResponseV3{ProtocolVersion: playback.ProtocolV3, ServerFeatures: playback.NativeServerFeaturesV3(), Outcome: playback.OutcomePlayableV3, SessionID: session.ID, PlaybackPlan: result.Plan}
 	record := playback.AttemptRecordV3{PlaybackAttemptID: req.PlaybackAttemptID, SessionID: session.ID, UserID: userID, ProfileID: profileID, RequestedMediaFileID: requestedFile.ID, EffectiveMediaFileID: effectiveFile.ID, CurrentPlanID: result.Plan.PlanID, CurrentPlan: *result.Plan, FrozenRecipe: frozenRecipe, NormalizedRequest: req, ServerBitrateCapKbps: serverBitrateCapV3(r.Context()), StartResponse: response, RequestDigest: requestDigests.current, ExpiresAt: time.Now().Add(playback.MaxTokenTTL), DesiredTracks: h.startDesiredTracksV3(r.Context(), requestedFile, intent, effectiveFile, result.Plan, frozenRecipe)}
+	// The plan URL's st authorizes this attempt's media on its own only while
+	// the login session that started it is active.
+	record.LoginSessionID = apimw.LoginSessionID(r.Context())
 	if err := h.updateV3SessionState(r.Context(), session, effectiveFile, result, transport, mode); err != nil {
 		transport.rollback()
 		abort()
@@ -3183,6 +3186,11 @@ func (h *PlaybackHandler) prepareIdentityTransportV3(r *http.Request, session *p
 	if result.Plan != nil && result.Plan.Delivery == playback.DeliveryRemuxProgressiveV3 {
 		if seek := timeline.seekSeconds; seek > 0 {
 			streamURL = appendPlaybackQueryV3(streamURL, "seek", strconv.FormatFloat(seek, 'f', -1, 64))
+			// The resume leading-picture workaround primes the copy from the
+			// keyframe this plan's timeline starts on (playback.remuxIDRPrimer).
+			if result.RemuxResumeLeadingPictureDrop && timeline.copySeekAnchorResolved {
+				streamURL = appendPlaybackQueryV3(streamURL, playback.RemuxStreamOriginQueryParam, strconv.FormatFloat(timeline.streamOriginSeconds, 'f', -1, 64))
+			}
 		}
 		if mode.progressiveRangeRefusal && h.egressRefusesRemuxRangeV3(r.Context(), servedByProxy, proxyNode) {
 			streamURL = appendPlaybackQueryV3(streamURL, playback.RemuxRangeQueryParam, playback.RemuxRangeRefuse)
@@ -3265,7 +3273,7 @@ func (h *PlaybackHandler) prepareIdentityTransportV3(r *http.Request, session *p
 	}
 	var sessionRecipe *playback.RecipeCard
 	if mode.headerAuth {
-		sessionRecipe = sessionRecipeCardV3(identityRecipeCard(&routeSession), session)
+		sessionRecipe = sessionRecipeCardV3(identityRecipeCard(&routeSession), session, result.AdaptationReasons)
 	}
 	return preparedTransportV3{
 		sessionRecipe:      sessionRecipe,
@@ -4332,7 +4340,7 @@ func (h *PlaybackHandler) prepareLocalTransportV3(r *http.Request, session *play
 		}
 	}
 	url := fmt.Sprintf("/playback/transcode/%s/master.m3u8", session.ID)
-	card := playback.NewRecipeCard(session.UserID, session.ProfileID, file.ID, "", ts.Opts())
+	card := playback.NewRecipeCard(session.UserID, session.ProfileID, file.ID, "", ts.RecipeOpts())
 	card.OriginalStartedAt = session.StartedAt
 	card.StreamLocation = session.StreamLocation
 	card.RoutingNetworkProvider = new(netaccess.PathFromContext(r.Context()).Provider)
@@ -4341,7 +4349,7 @@ func (h *PlaybackHandler) prepareLocalTransportV3(r *http.Request, session *play
 	card.RoutingEgress = string(noderouting.EgressAPI)
 	var sessionRecipe *playback.RecipeCard
 	if mode.headerAuth {
-		sessionRecipe = sessionRecipeCardV3(card, session)
+		sessionRecipe = sessionRecipeCardV3(card, session, result.AdaptationReasons)
 	} else {
 		url = appendStreamToken(url, h.signSessionToken(card, mode.headerAuth))
 	}
@@ -4385,7 +4393,7 @@ func (h *PlaybackHandler) prepareLocalTransportV3(r *http.Request, session *play
 				h.maybeStartThrottler(ctx, ts)
 				h.tm.MonitorLocalTranscodeExit(session.ID, ts)
 			})
-			h.maybeStartThrottler(r.Context(), ts)
+			h.tm.StartInitialThrottler(r.Context(), ts)
 			h.tm.MonitorLocalTranscodeExit(session.ID, ts)
 			return nil
 		},
@@ -4683,7 +4691,7 @@ func (h *PlaybackHandler) prepareRemoteTransportV3(r *http.Request, session *pla
 	}
 	var sessionRecipe *playback.RecipeCard
 	if mode.headerAuth {
-		sessionRecipe = sessionRecipeCardV3(card, session)
+		sessionRecipe = sessionRecipeCardV3(card, session, result.AdaptationReasons)
 	}
 	return preparedTransportV3{sessionRecipe: sessionRecipe, url: url, nodeURL: node.URL, transportID: transportID, hwAccel: confirmedHWAccel, toneMapMode: confirmedToneMapMode,
 		routingWorkload: routingWorkloadV3(result), routingExecution: noderouting.ExecutionTranscode, routingExecutorID: node.ID, routingExecutorURL: node.URL,
@@ -4830,6 +4838,7 @@ func (h *PlaybackHandler) v3SessionStreamState(ctx context.Context, session *pla
 		BasePlayMethod:                result.PlayMethod,
 		AudioTrackIndex:               plannedAudioTrackIndexV3(result, session.AudioTrackIndex),
 		TranscodeAudio:                result.TranscodeAudio,
+		AdaptationReasons:             result.AdaptationReasons,
 		RemuxDVMode:                   remuxDVModeForPlanV3(result.Plan),
 		RemuxResumeLeadingPictureDrop: result.RemuxResumeLeadingPictureDrop,
 		TranscodeHWAccel:              transport.hwAccel,
@@ -5754,6 +5763,15 @@ func (h *PlaybackHandler) executeReplanV3(r *http.Request, record *playback.Atte
 		return playback.DecisionResponseV3{}, *record, nil, &transportErrorV3{reason: "source_unavailable", message: "The effective media source is unavailable."}
 	}
 	effectiveFile := currentEffectiveFile
+	if !seekReanchor {
+		// A seek reanchor reuses the frozen recipe, which already names the
+		// stored subtitle; every other replan plans the request's ordinal.
+		// Kept before the snapshot below, so an output change that falls
+		// back to the playing file plans the kept ordinal too.
+		if h.keepPlayingDownloadedSubtitleV3(r.Context(), record, currentEffectiveFile, &start) {
+			subtitleDegraded = true
+		}
+	}
 	currentEffectiveStart := start
 	keptActiveEditionForSubtitle := false
 	// What the viewer asked for, which a fallback version may not carry. Any
@@ -6091,6 +6109,11 @@ func (h *PlaybackHandler) executeReplanV3(r *http.Request, record *playback.Atte
 		transport = reusedHLSTransportV3(session, record.CurrentPlan.Stream.URL)
 		if mode.headerAuth {
 			transport.sessionRecipe = h.reusedSessionRecipeV3(r.Context(), session.ID, record.CurrentPlanID)
+			if transport.sessionRecipe != nil {
+				// The bytes are unchanged, but a subtitle change can change why
+				// the route adapts.
+				transport.sessionRecipe.AdaptationReasons = result.AdaptationReasons
+			}
 		}
 		slog.InfoContext(r.Context(), "protocol v3 replan reused active HLS A/V transport",
 			logComponentKey, playbackLogValueV3,
@@ -6742,6 +6765,47 @@ func subtitleSelectionDiffersFromStartV3(selected playback.SelectedTracksV3, sta
 		return start.SubtitleTrackIndex != nil
 	}
 	return selected.Subtitle.ID != start.SubtitleTrackID || !optionalIntEqualV3(selected.Subtitle.Index, start.SubtitleTrackIndex)
+}
+
+// keepPlayingDownloadedSubtitleV3 moves request's subtitle to the combined
+// ordinal the playing stored subtitle holds on file now, when request only
+// carries over the playing plan's subtitle. That ordinal goes stale when a
+// stored subtitle before it is deleted, and the next one added takes its
+// place; replanning it would switch the viewer to the added track. When the
+// playing stored subtitle was deleted, the request's subtitle is cleared, so
+// no unrelated track takes its ordinal, and dropped reports it. A new choice
+// is left alone, and so is the request when the stored subtitles cannot be
+// read.
+func (h *PlaybackHandler) keepPlayingDownloadedSubtitleV3(ctx context.Context, record *playback.AttemptRecordV3, file *models.MediaFile, request *playback.StartRequestV3) (dropped bool) {
+	if h.SubtitleRepo == nil || record == nil || file == nil || request == nil || record.EffectiveMediaFileID != file.ID {
+		return false
+	}
+	recipe := record.FrozenRecipe
+	if !recipe.ValidFor(record.CurrentPlan) || recipe.SubtitleSource != playback.SubtitleSourceDownloadedV3 || recipe.DownloadedSubtitleID <= 0 {
+		return false
+	}
+	requested := trackIdentityIndexV3(&playback.TrackIdentityV3{ID: request.SubtitleTrackID, Index: request.SubtitleTrackIndex}, file, "subtitle")
+	if requested < 0 || requested != trackIdentityIndexV3(record.CurrentPlan.SelectedTracks.Subtitle, file, "subtitle") {
+		return false
+	}
+	downloaded, err := h.SubtitleRepo.ListDownloadedSubtitles(ctx, file.ID)
+	if err != nil {
+		return false
+	}
+	index := sameFileSubtitleIndexV3(playback.DesiredSubtitleTrackV3{
+		Source: playback.SubtitleSourceDownloadedV3, DownloadedSubtitleID: recipe.DownloadedSubtitleID,
+	}, file, downloaded)
+	if index < 0 {
+		request.SubtitleTrackIndex = nil
+		request.SubtitleTrackID = ""
+		return true
+	}
+	if index == requested {
+		return false
+	}
+	request.SubtitleTrackIndex = &index
+	request.SubtitleTrackID = playback.TrackIDV3(file.ID, "subtitle", index)
+	return false
 }
 
 func sameSelectedTracksV3(left, right playback.SelectedTracksV3) bool {

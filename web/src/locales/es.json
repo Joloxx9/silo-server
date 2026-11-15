@@ -5720,6 +5720,12 @@
       "value": "¿Qué cambió? (opcional, se muestra en el historial)"
     }
   ],
+  "web.admin.access.policy.editor.compileIssueFallback": [
+    {
+      "type": 0,
+      "value": "Error de compilación de la política"
+    }
+  ],
   "web.admin.access.policy.editor.compileIssues": [
     {
       "type": 0,
@@ -6650,6 +6656,44 @@
       "value": "version"
     }
   ],
+  "web.admin.activity.bitrate.limit": [
+    {
+      "type": 0,
+      "value": "límite "
+    },
+    {
+      "type": 1,
+      "value": "rate"
+    }
+  ],
+  "web.admin.activity.bitrate.limitAndSource": [
+    {
+      "type": 0,
+      "value": "límite "
+    },
+    {
+      "type": 1,
+      "value": "limit"
+    },
+    {
+      "type": 0,
+      "value": " · origen "
+    },
+    {
+      "type": 1,
+      "value": "source"
+    }
+  ],
+  "web.admin.activity.bitrate.source": [
+    {
+      "type": 0,
+      "value": "origen "
+    },
+    {
+      "type": 1,
+      "value": "rate"
+    }
+  ],
   "web.admin.activity.client.agent": [
     {
       "type": 0,
@@ -6660,6 +6704,12 @@
     {
       "type": 0,
       "value": "Aplicación"
+    }
+  ],
+  "web.admin.activity.client.device": [
+    {
+      "type": 0,
+      "value": "Dispositivo"
     }
   ],
   "web.admin.activity.client.heading": [
@@ -6678,6 +6728,12 @@
     {
       "type": 0,
       "value": "Acciones"
+    }
+  ],
+  "web.admin.activity.column.bitrate": [
+    {
+      "type": 0,
+      "value": "Tasa de bits"
     }
   ],
   "web.admin.activity.column.playback": [
@@ -7218,16 +7274,16 @@
       "value": "Actividad"
     }
   ],
+  "web.admin.activity.panel.decision": [
+    {
+      "type": 0,
+      "value": "Decisión"
+    }
+  ],
   "web.admin.activity.panel.event": [
     {
       "type": 0,
       "value": "evento"
-    }
-  ],
-  "web.admin.activity.panel.heading": [
-    {
-      "type": 0,
-      "value": "Reproducción"
     }
   ],
   "web.admin.activity.panel.loadingFfmpeg": [
@@ -7246,6 +7302,12 @@
     {
       "type": 0,
       "value": "Abrir registros completos de FFmpeg"
+    }
+  ],
+  "web.admin.activity.panel.reasons": [
+    {
+      "type": 0,
+      "value": "Motivos"
     }
   ],
   "web.admin.activity.panel.refreshing": [
@@ -7304,6 +7366,210 @@
     {
       "type": 0,
       "value": "En directo"
+    }
+  ],
+  "web.admin.activity.reason.audioChannelsUnsupported.description": [
+    {
+      "type": 0,
+      "value": "El audio tiene más canales de los que admite la salida del dispositivo."
+    }
+  ],
+  "web.admin.activity.reason.audioChannelsUnsupported.label": [
+    {
+      "type": 0,
+      "value": "Demasiados canales de audio"
+    }
+  ],
+  "web.admin.activity.reason.audioCodecUnsupported.description": [
+    {
+      "type": 0,
+      "value": "El dispositivo, o el formato de transmisión que necesita, no puede reproducir este códec de audio."
+    }
+  ],
+  "web.admin.activity.reason.audioCodecUnsupported.label": [
+    {
+      "type": 0,
+      "value": "Códec de audio no compatible"
+    }
+  ],
+  "web.admin.activity.reason.audioTrackSelection.description": [
+    {
+      "type": 0,
+      "value": "La pista de audio seleccionada no se puede reproducir directamente desde el archivo original."
+    }
+  ],
+  "web.admin.activity.reason.audioTrackSelection.label": [
+    {
+      "type": 0,
+      "value": "Selección de pista de audio"
+    }
+  ],
+  "web.admin.activity.reason.bandwidthCap.description": [
+    {
+      "type": 0,
+      "value": "El ajuste Tasa de bits máxima del perfil o del dispositivo es inferior a la tasa de bits original."
+    }
+  ],
+  "web.admin.activity.reason.bandwidthCap.label": [
+    {
+      "type": 0,
+      "value": "Ajuste Tasa de bits máxima"
+    }
+  ],
+  "web.admin.activity.reason.bandwidthLimit.description": [
+    {
+      "type": 0,
+      "value": "La aplicación midió esta conexión como demasiado lenta para la tasa de bits original."
+    }
+  ],
+  "web.admin.activity.reason.bandwidthLimit.label": [
+    {
+      "type": 0,
+      "value": "Conexión demasiado lenta"
+    }
+  ],
+  "web.admin.activity.reason.buffering.description": [
+    {
+      "type": 0,
+      "value": "La reproducción se almacenó en búfer antes en este dispositivo y esta conexión, en esta sesión o en una reciente, así que el servidor bajó la calidad."
+    }
+  ],
+  "web.admin.activity.reason.buffering.label": [
+    {
+      "type": 0,
+      "value": "Almacenamiento en búfer previo"
+    }
+  ],
+  "web.admin.activity.reason.containerUnsupported.description": [
+    {
+      "type": 0,
+      "value": "El dispositivo no puede abrir el contenedor de este archivo."
+    }
+  ],
+  "web.admin.activity.reason.containerUnsupported.label": [
+    {
+      "type": 0,
+      "value": "Contenedor no compatible"
+    }
+  ],
+  "web.admin.activity.reason.deviceWorkaround.description": [
+    {
+      "type": 0,
+      "value": "El audio se convierte para evitar un error de reproducción conocido en este dispositivo."
+    }
+  ],
+  "web.admin.activity.reason.deviceWorkaround.label": [
+    {
+      "type": 0,
+      "value": "Solución de audio del dispositivo"
+    }
+  ],
+  "web.admin.activity.reason.directPlayFailed.description": [
+    {
+      "type": 0,
+      "value": "La transmisión original no se pudo reproducir en el dispositivo, así que el servidor la convierte."
+    }
+  ],
+  "web.admin.activity.reason.directPlayFailed.label": [
+    {
+      "type": 0,
+      "value": "Falló la reproducción directa"
+    }
+  ],
+  "web.admin.activity.reason.dynamicRangeUnsupported.description": [
+    {
+      "type": 0,
+      "value": "La pantalla no puede mostrar este video HDR o Dolby Vision tal como está."
+    }
+  ],
+  "web.admin.activity.reason.dynamicRangeUnsupported.label": [
+    {
+      "type": 0,
+      "value": "HDR no compatible"
+    }
+  ],
+  "web.admin.activity.reason.qualitySelected.description": [
+    {
+      "type": 0,
+      "value": "Quien ve eligió una calidad inferior a la original."
+    }
+  ],
+  "web.admin.activity.reason.qualitySelected.label": [
+    {
+      "type": 0,
+      "value": "Calidad elegida por quien ve"
+    }
+  ],
+  "web.admin.activity.reason.resolutionLimit.description": [
+    {
+      "type": 0,
+      "value": "La resolución del video es superior a la que admite el dispositivo."
+    }
+  ],
+  "web.admin.activity.reason.resolutionLimit.label": [
+    {
+      "type": 0,
+      "value": "Supera la resolución del dispositivo"
+    }
+  ],
+  "web.admin.activity.reason.serverBitrateLimit.description": [
+    {
+      "type": 0,
+      "value": "El grupo de acceso del usuario permite una tasa de bits inferior a la original para esta transmisión local o remota."
+    }
+  ],
+  "web.admin.activity.reason.serverBitrateLimit.label": [
+    {
+      "type": 0,
+      "value": "Límite del grupo de acceso"
+    }
+  ],
+  "web.admin.activity.reason.subtitleBurnIn.description": [
+    {
+      "type": 0,
+      "value": "Los subtítulos seleccionados se dibujan en el video porque el dispositivo no puede mostrarlos."
+    }
+  ],
+  "web.admin.activity.reason.subtitleBurnIn.label": [
+    {
+      "type": 0,
+      "value": "Subtítulos incrustados"
+    }
+  ],
+  "web.admin.activity.reason.subtitleUnsupported.description": [
+    {
+      "type": 0,
+      "value": "Los subtítulos seleccionados no se pueden entregar con el archivo original."
+    }
+  ],
+  "web.admin.activity.reason.subtitleUnsupported.label": [
+    {
+      "type": 0,
+      "value": "Subtítulos no compatibles"
+    }
+  ],
+  "web.admin.activity.reason.videoCapabilityUnconfirmed.description": [
+    {
+      "type": 0,
+      "value": "La aplicación no pudo confirmar que el dispositivo decodifique este video, así que el servidor lo convierte por seguridad."
+    }
+  ],
+  "web.admin.activity.reason.videoCapabilityUnconfirmed.label": [
+    {
+      "type": 0,
+      "value": "Compatibilidad de video sin confirmar"
+    }
+  ],
+  "web.admin.activity.reason.videoCodecUnsupported.description": [
+    {
+      "type": 0,
+      "value": "El dispositivo no puede decodificar el códec, el perfil o la profundidad de bits de este video."
+    }
+  ],
+  "web.admin.activity.reason.videoCodecUnsupported.label": [
+    {
+      "type": 0,
+      "value": "Códec de video no compatible"
     }
   ],
   "web.admin.activity.route.localServer": [
@@ -7404,6 +7670,74 @@
       "value": "method"
     }
   ],
+  "web.admin.activity.row.moreReasons": [
+    {
+      "type": 0,
+      "value": "+"
+    },
+    {
+      "type": 1,
+      "value": "count_text"
+    }
+  ],
+  "web.admin.activity.row.moreReasonsLabel": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "one": {
+          "value": [
+            {
+              "type": 0,
+              "value": "Mostrar "
+            },
+            {
+              "type": 1,
+              "value": "count_text"
+            },
+            {
+              "type": 0,
+              "value": " motivo más"
+            }
+          ]
+        },
+        "many": {
+          "value": [
+            {
+              "type": 0,
+              "value": "Mostrar "
+            },
+            {
+              "type": 1,
+              "value": "count_text"
+            },
+            {
+              "type": 0,
+              "value": " de motivos más"
+            }
+          ]
+        },
+        "other": {
+          "value": [
+            {
+              "type": 0,
+              "value": "Mostrar "
+            },
+            {
+              "type": 1,
+              "value": "count_text"
+            },
+            {
+              "type": 0,
+              "value": " motivos más"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
+    }
+  ],
   "web.admin.activity.row.paused": [
     {
       "type": 0,
@@ -7438,6 +7772,72 @@
       "value": "Ver registros"
     }
   ],
+  "web.admin.activity.session.heading": [
+    {
+      "type": 0,
+      "value": "Sesión"
+    }
+  ],
+  "web.admin.activity.session.id": [
+    {
+      "type": 0,
+      "value": "ID de sesión"
+    }
+  ],
+  "web.admin.activity.session.lastReport": [
+    {
+      "type": 0,
+      "value": "Último informe"
+    }
+  ],
+  "web.admin.activity.session.lastReportAgo": [
+    {
+      "type": 0,
+      "value": "hace "
+    },
+    {
+      "type": 1,
+      "value": "elapsed"
+    }
+  ],
+  "web.admin.activity.session.remoteControl": [
+    {
+      "type": 0,
+      "value": "Control remoto"
+    }
+  ],
+  "web.admin.activity.session.remoteControlAvailable": [
+    {
+      "type": 0,
+      "value": "Disponible"
+    }
+  ],
+  "web.admin.activity.session.remoteControlUnavailable": [
+    {
+      "type": 0,
+      "value": "No disponible"
+    }
+  ],
+  "web.admin.activity.session.started": [
+    {
+      "type": 0,
+      "value": "Inicio"
+    }
+  ],
+  "web.admin.activity.session.startedAgo": [
+    {
+      "type": 1,
+      "value": "time"
+    },
+    {
+      "type": 0,
+      "value": " · hace "
+    },
+    {
+      "type": 1,
+      "value": "elapsed"
+    }
+  ],
   "web.admin.activity.sort.group": [
     {
       "type": 0,
@@ -7448,6 +7848,16 @@
     {
       "type": 0,
       "value": "Ordenar"
+    }
+  ],
+  "web.admin.activity.summary.bandwidth": [
+    {
+      "type": 1,
+      "value": "rate"
+    },
+    {
+      "type": 0,
+      "value": " de salida"
     }
   ],
   "web.admin.activity.summary.byNode": [
@@ -7506,6 +7916,26 @@
       "value": "count"
     }
   ],
+  "web.admin.activity.summary.paused": [
+    {
+      "type": 1,
+      "value": "count_text"
+    },
+    {
+      "type": 0,
+      "value": " en pausa"
+    }
+  ],
+  "web.admin.activity.summary.remote": [
+    {
+      "type": 1,
+      "value": "count_text"
+    },
+    {
+      "type": 0,
+      "value": " en remoto"
+    }
+  ],
   "web.admin.activity.summary.unknownOutputContainer": [
     {
       "type": 0,
@@ -7516,6 +7946,52 @@
     {
       "type": 0,
       "value": "Origen desconocido"
+    }
+  ],
+  "web.admin.activity.summary.videoTranscodes": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "one": {
+          "value": [
+            {
+              "type": 1,
+              "value": "count_text"
+            },
+            {
+              "type": 0,
+              "value": " transcodificación de video"
+            }
+          ]
+        },
+        "many": {
+          "value": [
+            {
+              "type": 1,
+              "value": "count_text"
+            },
+            {
+              "type": 0,
+              "value": " de transcodificaciones de video"
+            }
+          ]
+        },
+        "other": {
+          "value": [
+            {
+              "type": 1,
+              "value": "count_text"
+            },
+            {
+              "type": 0,
+              "value": " transcodificaciones de video"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
     }
   ],
   "web.admin.activity.toneMap.hardware": [
@@ -9128,6 +9604,12 @@
     {
       "type": 0,
       "value": "Esta ruta coincide con más de una biblioteca."
+    }
+  ],
+  "web.admin.autoscan.activity.reason.pathIgnored": [
+    {
+      "type": 0,
+      "value": "Los archivos de exclusión de la biblioteca excluyen este archivo, así que no se escaneó."
     }
   ],
   "web.admin.autoscan.activity.reason.pathNotFileOrDir": [
@@ -31302,6 +31784,54 @@
       "value": "Con error"
     }
   ],
+  "web.admin.common.units.gigabytes": [
+    {
+      "type": 0,
+      "value": "GB"
+    }
+  ],
+  "web.admin.common.units.hourRange": [
+    {
+      "type": 0,
+      "value": "0-23"
+    }
+  ],
+  "web.admin.common.units.kilobytes": [
+    {
+      "type": 0,
+      "value": "KB"
+    }
+  ],
+  "web.admin.common.units.megabitsPerSecond": [
+    {
+      "type": 0,
+      "value": "Mbps"
+    }
+  ],
+  "web.admin.common.units.megabytes": [
+    {
+      "type": 0,
+      "value": "MB"
+    }
+  ],
+  "web.admin.common.units.milliseconds": [
+    {
+      "type": 0,
+      "value": "ms"
+    }
+  ],
+  "web.admin.common.units.percent": [
+    {
+      "type": 0,
+      "value": "%"
+    }
+  ],
+  "web.admin.common.units.pixels": [
+    {
+      "type": 0,
+      "value": "px"
+    }
+  ],
   "web.admin.common.userProfiles.createFailed": [
     {
       "type": 0,
@@ -31598,6 +32128,100 @@
       "value": "Restablecer el diseño predeterminado"
     }
   ],
+  "web.admin.dashboard.format.duration.days": [
+    {
+      "type": 1,
+      "value": "days"
+    },
+    {
+      "type": 0,
+      "value": " d"
+    }
+  ],
+  "web.admin.dashboard.format.duration.daysHours": [
+    {
+      "type": 1,
+      "value": "days"
+    },
+    {
+      "type": 0,
+      "value": " d "
+    },
+    {
+      "type": 1,
+      "value": "hours"
+    },
+    {
+      "type": 0,
+      "value": " h"
+    }
+  ],
+  "web.admin.dashboard.format.duration.hours": [
+    {
+      "type": 1,
+      "value": "hours"
+    },
+    {
+      "type": 0,
+      "value": " h"
+    }
+  ],
+  "web.admin.dashboard.format.duration.hoursMinutes": [
+    {
+      "type": 1,
+      "value": "hours"
+    },
+    {
+      "type": 0,
+      "value": " h "
+    },
+    {
+      "type": 1,
+      "value": "minutes"
+    },
+    {
+      "type": 0,
+      "value": " min"
+    }
+  ],
+  "web.admin.dashboard.format.duration.minutes": [
+    {
+      "type": 1,
+      "value": "minutes"
+    },
+    {
+      "type": 0,
+      "value": " min"
+    }
+  ],
+  "web.admin.dashboard.format.duration.minutesSeconds": [
+    {
+      "type": 1,
+      "value": "minutes"
+    },
+    {
+      "type": 0,
+      "value": " min "
+    },
+    {
+      "type": 1,
+      "value": "seconds"
+    },
+    {
+      "type": 0,
+      "value": " s"
+    }
+  ],
+  "web.admin.dashboard.format.duration.seconds": [
+    {
+      "type": 1,
+      "value": "seconds"
+    },
+    {
+      "type": 0,
+      "value": " s"
+    }
+  ],
   "web.admin.dashboard.format.fileCount": [
     {
       "type": 6,
@@ -31642,6 +32266,16 @@
       },
       "offset": 0,
       "pluralType": "cardinal"
+    }
+  ],
+  "web.admin.dashboard.format.latencyMs": [
+    {
+      "type": 1,
+      "value": "value"
+    },
+    {
+      "type": 0,
+      "value": " ms"
     }
   ],
   "web.admin.dashboard.format.scanQueued": [
@@ -31832,6 +32466,16 @@
     {
       "type": 0,
       "value": "Esperando capacidad disponible"
+    }
+  ],
+  "web.admin.dashboard.format.watchTimeHours": [
+    {
+      "type": 1,
+      "value": "hours"
+    },
+    {
+      "type": 0,
+      "value": " h"
     }
   ],
   "web.admin.dashboard.grid.added": [
@@ -33292,6 +33936,12 @@
       "value": "No se pudo cargar el historial de transmisiones."
     }
   ],
+  "web.admin.dashboard.widgets.concurrentStreams.otherMethod": [
+    {
+      "type": 0,
+      "value": "Otro"
+    }
+  ],
   "web.admin.dashboard.widgets.concurrentStreams.peak": [
     {
       "type": 0,
@@ -33312,6 +33962,42 @@
     {
       "type": 0,
       "value": "Transmisiones simultáneas"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewLines": [
+    {
+      "type": 0,
+      "value": "Líneas"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewLinesLabel": [
+    {
+      "type": 0,
+      "value": "Mostrar cada método de reproducción como una línea"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewStacked": [
+    {
+      "type": 0,
+      "value": "Apilado"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewStackedLabel": [
+    {
+      "type": 0,
+      "value": "Mostrar los métodos de reproducción apilados"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewTotal": [
+    {
+      "type": 0,
+      "value": "Total"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewTotalLabel": [
+    {
+      "type": 0,
+      "value": "Mostrar solo el total de transmisiones"
     }
   ],
   "web.admin.dashboard.widgets.downloads.empty": [
@@ -53475,6 +54161,30 @@
       "value": "Guardando..."
     }
   ],
+  "web.admin.nodes.form.sourceAccess": [
+    {
+      "type": 0,
+      "value": "Acceso al origen"
+    }
+  ],
+  "web.admin.nodes.form.sourceAccessCore": [
+    {
+      "type": 0,
+      "value": "A través de los servidores API"
+    }
+  ],
+  "web.admin.nodes.form.sourceAccessHelp": [
+    {
+      "type": 0,
+      "value": "A través de los servidores API, el nodo no necesita ningún montaje de biblioteca, pero cada byte que lee pasa por los servidores API, así que estos necesitan el ancho de banda para ello."
+    }
+  ],
+  "web.admin.nodes.form.sourceAccessLocal": [
+    {
+      "type": 0,
+      "value": "Montaje de biblioteca en el nodo"
+    }
+  ],
   "web.admin.nodes.form.type": [
     {
       "type": 0,
@@ -54107,6 +54817,200 @@
     {
       "type": 0,
       "value": "Software"
+    }
+  ],
+  "web.admin.nodes.key.close": [
+    {
+      "type": 0,
+      "value": "Cerrar"
+    }
+  ],
+  "web.admin.nodes.key.copied": [
+    {
+      "type": 0,
+      "value": "Copiado"
+    }
+  ],
+  "web.admin.nodes.key.copyFailed": [
+    {
+      "type": 0,
+      "value": "No se pudo copiar. Selecciona el texto y cópialo manualmente."
+    }
+  ],
+  "web.admin.nodes.key.copyKey": [
+    {
+      "type": 0,
+      "value": "Copiar clave"
+    }
+  ],
+  "web.admin.nodes.key.copySettings": [
+    {
+      "type": 0,
+      "value": "Copiar configuración"
+    }
+  ],
+  "web.admin.nodes.key.coreUrlHelp": [
+    {
+      "type": 0,
+      "value": "La dirección a la que llama el nodo para llegar a este servidor. Con varios servidores API, usa su dirección con balanceo de carga."
+    }
+  ],
+  "web.admin.nodes.key.coreUrlLabel": [
+    {
+      "type": 0,
+      "value": "Dirección del servidor para el nodo"
+    }
+  ],
+  "web.admin.nodes.key.coreUrlMissing": [
+    {
+      "type": 0,
+      "value": "Introduce la dirección del servidor para completar la configuración."
+    }
+  ],
+  "web.admin.nodes.key.dialogTitle": [
+    {
+      "type": 0,
+      "value": "Clave para "
+    },
+    {
+      "type": 1,
+      "value": "name"
+    }
+  ],
+  "web.admin.nodes.key.issue": [
+    {
+      "type": 0,
+      "value": "Emitir clave"
+    }
+  ],
+  "web.admin.nodes.key.issueFor": [
+    {
+      "type": 0,
+      "value": "Emitir una clave para "
+    },
+    {
+      "type": 1,
+      "value": "name"
+    }
+  ],
+  "web.admin.nodes.key.issued": [
+    {
+      "type": 0,
+      "value": "Clave emitida"
+    }
+  ],
+  "web.admin.nodes.key.issuing": [
+    {
+      "type": 0,
+      "value": "Emitiendo una clave…"
+    }
+  ],
+  "web.admin.nodes.key.keyLabel": [
+    {
+      "type": 0,
+      "value": "Clave del nodo"
+    }
+  ],
+  "web.admin.nodes.key.later": [
+    {
+      "type": 0,
+      "value": "Ahora no"
+    }
+  ],
+  "web.admin.nodes.key.missing": [
+    {
+      "type": 0,
+      "value": "Sin clave: este nodo no acepta trabajo hasta que se emita una clave"
+    }
+  ],
+  "web.admin.nodes.key.notShownAgain": [
+    {
+      "type": 0,
+      "value": "Copia la clave ahora. No se volverá a mostrar; si la pierdes, rota la clave y reinicia el nodo con la nueva."
+    }
+  ],
+  "web.admin.nodes.key.offer": [
+    {
+      "type": 1,
+      "value": "name"
+    },
+    {
+      "type": 0,
+      "value": " no acepta trabajo hasta que tenga una clave. Emite una ahora para obtener la configuración con la que se inicia el nodo."
+    }
+  ],
+  "web.admin.nodes.key.rotate": [
+    {
+      "type": 0,
+      "value": "Rotar clave"
+    }
+  ],
+  "web.admin.nodes.key.rotateDescription": [
+    {
+      "type": 0,
+      "value": "La clave actual deja de funcionar de inmediato. El nodo pierde la conexión con este servidor: sus transmisiones en curso fallan y no acepta trabajo hasta que lo reinicies con la nueva clave."
+    }
+  ],
+  "web.admin.nodes.key.rotateDrainHint": [
+    {
+      "type": 0,
+      "value": "Para no cortar transmisiones, vacía primero el nodo y rota la clave cuando muestre Vaciado."
+    }
+  ],
+  "web.admin.nodes.key.rotateFor": [
+    {
+      "type": 0,
+      "value": "Rotar la clave de "
+    },
+    {
+      "type": 1,
+      "value": "name"
+    }
+  ],
+  "web.admin.nodes.key.rotateTitle": [
+    {
+      "type": 0,
+      "value": "¿Rotar la clave de "
+    },
+    {
+      "type": 1,
+      "value": "name"
+    },
+    {
+      "type": 0,
+      "value": "?"
+    }
+  ],
+  "web.admin.nodes.key.saved": [
+    {
+      "type": 0,
+      "value": "Ya guardé la clave"
+    }
+  ],
+  "web.admin.nodes.key.settingsHelp": [
+    {
+      "type": 0,
+      "value": "Inicia el nodo con estos dos ajustes. Un nodo que ya está en ejecución conserva su clave anterior hasta que lo reinicies."
+    }
+  ],
+  "web.admin.nodes.key.settingsLabel": [
+    {
+      "type": 0,
+      "value": "Configuración del nodo"
+    }
+  ],
+  "web.admin.nodes.key.unconfirmed": [
+    {
+      "type": 0,
+      "value": "No se pudo confirmar una clave nueva para "
+    },
+    {
+      "type": 1,
+      "value": "name"
+    },
+    {
+      "type": 0,
+      "value": ". Actualiza la página antes de volver a intentarlo: si se emitió una clave, la anterior ya dejó de funcionar."
     }
   ],
   "web.admin.nodes.memory.noReading": [
@@ -91192,20 +92096,6 @@
       "value": "number"
     }
   ],
-  "web.audiobooks.chapters.count": [
-    {
-      "type": 0,
-      "value": "("
-    },
-    {
-      "type": 1,
-      "value": "count"
-    },
-    {
-      "type": 0,
-      "value": ")"
-    }
-  ],
   "web.audiobooks.chapters.duration": [
     {
       "type": 1,
@@ -91230,34 +92120,72 @@
       "value": "Capítulos"
     }
   ],
-  "web.audiobooks.chapters.listening": [
+  "web.audiobooks.chapters.leftInChapter": [
     {
       "type": 0,
-      "value": "escuchando"
+      "value": "Quedan "
+    },
+    {
+      "type": 1,
+      "value": "time"
+    },
+    {
+      "type": 0,
+      "value": " de este capítulo"
     }
   ],
-  "web.audiobooks.chapters.sort": [
+  "web.audiobooks.chapters.showAll": [
     {
       "type": 0,
-      "value": "Ordenar"
+      "value": "Mostrar los "
+    },
+    {
+      "type": 1,
+      "value": "count"
     }
   ],
-  "web.audiobooks.chapters.sortAria": [
+  "web.audiobooks.chapters.showFewer": [
     {
       "type": 0,
-      "value": "Ordenar capítulos"
+      "value": "Mostrar menos"
     }
   ],
-  "web.audiobooks.chapters.sortLongest": [
+  "web.audiobooks.detail.finished": [
     {
       "type": 0,
-      "value": "Más largos primero"
+      "value": "Terminado"
     }
   ],
-  "web.audiobooks.chapters.sortPosition": [
+  "web.audiobooks.detail.length": [
     {
       "type": 0,
-      "value": "Por posición"
+      "value": "Duración"
+    }
+  ],
+  "web.audiobooks.detail.publisher": [
+    {
+      "type": 0,
+      "value": "Editorial"
+    }
+  ],
+  "web.audiobooks.detail.released": [
+    {
+      "type": 0,
+      "value": "Publicado"
+    }
+  ],
+  "web.audiobooks.detail.seriesBook": [
+    {
+      "type": 1,
+      "value": "series"
+    },
+    {
+      "type": 0,
+      "value": ", libro "
+    },
+    {
+      "type": 1,
+      "value": "number"
     }
   ],
   "web.audiobooks.duration.hours": [
@@ -92150,6 +93078,12 @@
       "pluralType": "cardinal"
     }
   ],
+  "web.audiobooks.hero.alsoListening": [
+    {
+      "type": 0,
+      "value": "También escuchando"
+    }
+  ],
   "web.audiobooks.hero.ariaLabel": [
     {
       "type": 0,
@@ -92188,38 +93122,6 @@
       "value": "total"
     }
   ],
-  "web.audiobooks.hero.chapterPositionTitled": [
-    {
-      "type": 0,
-      "value": "Capítulo "
-    },
-    {
-      "type": 1,
-      "value": "index"
-    },
-    {
-      "type": 0,
-      "value": " de "
-    },
-    {
-      "type": 1,
-      "value": "total"
-    },
-    {
-      "type": 0,
-      "value": " · "
-    },
-    {
-      "type": 1,
-      "value": "chapter"
-    }
-  ],
-  "web.audiobooks.hero.eyebrow": [
-    {
-      "type": 0,
-      "value": "Escuchando ahora"
-    }
-  ],
   "web.audiobooks.hero.listen": [
     {
       "type": 0,
@@ -92252,12 +93154,6 @@
     {
       "type": 0,
       "value": "Reanudar"
-    }
-  ],
-  "web.audiobooks.narrator.heading": [
-    {
-      "type": 0,
-      "value": "Narrador"
     }
   ],
   "web.audiobooks.narrator.narrationCount": [
@@ -92315,20 +93211,16 @@
       "value": "Volver al reproductor"
     }
   ],
-  "web.audiobooks.player.chapterNumber": [
-    {
-      "type": 0,
-      "value": "Capítulo "
-    },
-    {
-      "type": 1,
-      "value": "number"
-    }
-  ],
   "web.audiobooks.player.close": [
     {
       "type": 0,
       "value": "Cerrar reproductor"
+    }
+  ],
+  "web.audiobooks.player.comingUp": [
+    {
+      "type": 0,
+      "value": "A continuación"
     }
   ],
   "web.audiobooks.player.faster": [
@@ -108079,6 +108971,20 @@
       "value": "Desconocido"
     }
   ],
+  "web.common.activity.subtitle.episode": [
+    {
+      "type": 1,
+      "value": "code"
+    },
+    {
+      "type": 0,
+      "value": " · "
+    },
+    {
+      "type": 1,
+      "value": "series"
+    }
+  ],
   "web.common.activity.subtitle.movie": [
     {
       "type": 0,
@@ -108225,6 +109131,12 @@
     {
       "type": 0,
       "value": "Estas reglas usan opciones que la vista guiada no puede mostrar."
+    }
+  ],
+  "web.common.collections.posterUpdateFailed": [
+    {
+      "type": 0,
+      "value": "No se pudo actualizar el póster"
     }
   ],
   "web.common.date.daysAgo": [
@@ -108443,6 +109355,270 @@
       "value": "Plataforma desconocida"
     }
   ],
+  "web.common.errors.accessGroupIdUnsupported": [
+    {
+      "type": 0,
+      "value": "Este grupo contiene un ID no compatible."
+    }
+  ],
+  "web.common.errors.accessGroupPaginationInvalid": [
+    {
+      "type": 0,
+      "value": "La paginación de grupos no es válida. Vuelve a cargar la lista."
+    }
+  ],
+  "web.common.errors.accessGroupReloadBeforeSaving": [
+    {
+      "type": 0,
+      "value": "Vuelve a cargar este grupo antes de guardar: se necesita un ETag fuerte."
+    }
+  ],
+  "web.common.errors.collectionVersionUnavailable": [
+    {
+      "type": 0,
+      "value": "Vuelve a cargar esta colección antes de editarla; su versión no está disponible."
+    }
+  ],
+  "web.common.errors.downloadUnavailable": [
+    {
+      "type": 0,
+      "value": "Descarga no disponible ("
+    },
+    {
+      "type": 1,
+      "value": "status"
+    },
+    {
+      "type": 0,
+      "value": ")."
+    }
+  ],
+  "web.common.errors.fileIdInvalid": [
+    {
+      "type": 0,
+      "value": "El ID de archivo no es válido."
+    }
+  ],
+  "web.common.errors.invitationAcceptanceUnavailable": [
+    {
+      "type": 0,
+      "value": "No se pueden aceptar invitaciones."
+    }
+  ],
+  "web.common.errors.invitationPaginationInvalid": [
+    {
+      "type": 0,
+      "value": "La paginación de invitaciones no es válida. Vuelve a cargar la lista."
+    }
+  ],
+  "web.common.errors.invitationResponseIncomplete": [
+    {
+      "type": 0,
+      "value": "Es posible que se haya creado la invitación, pero la respuesta estaba incompleta. Vuelve a cargar el historial antes de continuar."
+    }
+  ],
+  "web.common.errors.joinedRoomIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "La identidad de la sala a la que te uniste no es válida."
+    }
+  ],
+  "web.common.errors.memberIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "La identidad del miembro no es válida."
+    }
+  ],
+  "web.common.errors.memberStateLimit": [
+    {
+      "type": 0,
+      "value": "Las lecturas del estado de miembros están limitadas a "
+    },
+    {
+      "type": 1,
+      "value": "max"
+    },
+    {
+      "type": 0,
+      "value": " elementos."
+    }
+  ],
+  "web.common.errors.notificationDestinationContinuationInvalid": [
+    {
+      "type": 0,
+      "value": "La continuación de destinos de notificación no es válida."
+    }
+  ],
+  "web.common.errors.notificationDestinationPageInvalid": [
+    {
+      "type": 0,
+      "value": "La página de destinos de notificación no es válida."
+    }
+  ],
+  "web.common.errors.notificationDestinationsTooMany": [
+    {
+      "type": 0,
+      "value": "Hay demasiados destinos de notificación para mostrar. Vuelve a cargar la lista."
+    }
+  ],
+  "web.common.errors.notificationLibraryIdUnsupported": [
+    {
+      "type": 0,
+      "value": "La notificación contiene un ID de biblioteca no compatible."
+    }
+  ],
+  "web.common.errors.notificationPageInvalid": [
+    {
+      "type": 0,
+      "value": "La página de notificaciones no es válida. Vuelve a cargar las notificaciones."
+    }
+  ],
+  "web.common.errors.notificationSeriesPageInvalid": [
+    {
+      "type": 0,
+      "value": "La página de series no es válida. Vuelve a cargar las notificaciones."
+    }
+  ],
+  "web.common.errors.notificationsReloadBeforeMarkingRead": [
+    {
+      "type": 0,
+      "value": "Vuelve a cargar las notificaciones antes de marcarlas como leídas."
+    }
+  ],
+  "web.common.errors.onboardingProgressNoRevision": [
+    {
+      "type": 0,
+      "value": "El progreso de la introducción no tiene revisión. Vuelve a cargar para continuar."
+    }
+  ],
+  "web.common.errors.onboardingReloadTour": [
+    {
+      "type": 0,
+      "value": "Vuelve a cargar el recorrido antes de continuar."
+    }
+  ],
+  "web.common.errors.onboardingStateNoRevision": [
+    {
+      "type": 0,
+      "value": "El estado de la introducción no tiene revisión. Vuelve a cargar para continuar."
+    }
+  ],
+  "web.common.errors.onboardingStillSaving": [
+    {
+      "type": 0,
+      "value": "Todavía se está guardando el progreso de la introducción."
+    }
+  ],
+  "web.common.errors.playbackControlCredentialInvalid": [
+    {
+      "type": 0,
+      "value": "La credencial de control de reproducción no es válida."
+    }
+  ],
+  "web.common.errors.realtimeCredentialInvalid": [
+    {
+      "type": 0,
+      "value": "La credencial de conexión en tiempo real no es válida."
+    }
+  ],
+  "web.common.errors.roomIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "La identidad de la sala no es válida."
+    }
+  ],
+  "web.common.errors.roomSelectionIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "La identidad de la selección de la sala no es válida."
+    }
+  ],
+  "web.common.errors.roomSnapshotInvalid": [
+    {
+      "type": 0,
+      "value": "El estado de la sala no es válido."
+    }
+  ],
+  "web.common.errors.roomSocketCredentialInvalid": [
+    {
+      "type": 0,
+      "value": "La credencial de conexión de la sala no es válida."
+    }
+  ],
+  "web.common.errors.roomSuggestionInvalid": [
+    {
+      "type": 0,
+      "value": "La sugerencia de la sala no es válida."
+    }
+  ],
+  "web.common.errors.roomSuggestionsTooMany": [
+    {
+      "type": 0,
+      "value": "Hay demasiadas sugerencias en la sala. Vuelve a cargar la sala."
+    }
+  ],
+  "web.common.errors.sessionRefreshUnavailable": [
+    {
+      "type": 0,
+      "value": "No se pudo renovar la sesión porque el servidor no respondió."
+    }
+  ],
+  "web.common.errors.sourceFallbackIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "La identidad del origen alternativo no es válida."
+    }
+  ],
+  "web.common.errors.suggestionContinuationInvalid": [
+    {
+      "type": 0,
+      "value": "La continuación de sugerencias no es válida."
+    }
+  ],
+  "web.common.errors.suggestionContinuationMissing": [
+    {
+      "type": 0,
+      "value": "Falta la continuación de sugerencias."
+    }
+  ],
+  "web.common.errors.suggestionReceiptInvalid": [
+    {
+      "type": 0,
+      "value": "El comprobante de la sugerencia no es válido."
+    }
+  ],
+  "web.common.errors.verificationReceiptMismatch": [
+    {
+      "type": 0,
+      "value": "El comprobante de verificación no coincide con la solicitud enviada."
+    }
+  ],
+  "web.common.errors.watchlistPageRepeated": [
+    {
+      "type": 0,
+      "value": "La lista de títulos de la lista para ver repitió un cursor de página."
+    }
+  ],
+  "web.common.format.bitrate.bps": [
+    {
+      "type": 1,
+      "value": "rate"
+    },
+    {
+      "type": 0,
+      "value": " bps"
+    }
+  ],
+  "web.common.format.bitrate.gbps": [
+    {
+      "type": 1,
+      "value": "rate"
+    },
+    {
+      "type": 0,
+      "value": " Gbps"
+    }
+  ],
   "web.common.format.bitrate.kbps": [
     {
       "type": 1,
@@ -108553,6 +109729,16 @@
     {
       "type": 1,
       "value": "chapter"
+    }
+  ],
+  "web.common.format.percent": [
+    {
+      "type": 1,
+      "value": "percent"
+    },
+    {
+      "type": 0,
+      "value": " %"
     }
   ],
   "web.common.format.runtime.hoursMinutes": [
@@ -108697,6 +109883,36 @@
     {
       "type": 0,
       "value": " MiB"
+    }
+  ],
+  "web.common.format.size.pb": [
+    {
+      "type": 1,
+      "value": "size"
+    },
+    {
+      "type": 0,
+      "value": " PB"
+    }
+  ],
+  "web.common.format.size.tb": [
+    {
+      "type": 1,
+      "value": "size"
+    },
+    {
+      "type": 0,
+      "value": " TB"
+    }
+  ],
+  "web.common.format.size.tib": [
+    {
+      "type": 1,
+      "value": "size"
+    },
+    {
+      "type": 0,
+      "value": " TiB"
     }
   ],
   "web.common.genres.action": [
@@ -108869,6 +110085,12 @@
     {
       "type": 0,
       "value": "Western"
+    }
+  ],
+  "web.common.job.cancellationRequested": [
+    {
+      "type": 0,
+      "value": "Cancelación solicitada"
     }
   ],
   "web.common.job.cancelled": [
@@ -109881,6 +111103,12 @@
       "value": "Tus datos"
     }
   ],
+  "web.common.toast.collections.created": [
+    {
+      "type": 0,
+      "value": "Colección creada"
+    }
+  ],
   "web.common.toast.collections.deleteFailed": [
     {
       "type": 0,
@@ -109891,6 +111119,12 @@
     {
       "type": 0,
       "value": "Colección eliminada"
+    }
+  ],
+  "web.common.toast.collections.saved": [
+    {
+      "type": 0,
+      "value": "Colección guardada"
     }
   ],
   "web.common.toast.collections.syncFailed": [
@@ -110283,6 +111517,18 @@
     {
       "type": 0,
       "value": "Subtítulo subido"
+    }
+  ],
+  "web.common.toast.watchProviders.authDeclined": [
+    {
+      "type": 0,
+      "value": "Se rechazó la conexión en el sitio del proveedor. Selecciona Conectar para volver a intentarlo."
+    }
+  ],
+  "web.common.toast.watchProviders.authNotApproved": [
+    {
+      "type": 0,
+      "value": "Primero aprueba el código en el sitio del proveedor y vuelve a intentarlo."
     }
   ],
   "web.common.toast.watchProviders.connectFailed": [
@@ -117210,6 +118456,20 @@
       "value": "Esto no es una exportación de diseño de Inicio de Silo."
     }
   ],
+  "web.home.layout.transfer.pageTooLarge": [
+    {
+      "type": 0,
+      "value": "esta página tendría más de "
+    },
+    {
+      "type": 1,
+      "value": "max"
+    },
+    {
+      "type": 0,
+      "value": " cambios de sección guardados"
+    }
+  ],
   "web.home.layout.transfer.preferencesFailed": [
     {
       "type": 0,
@@ -118364,6 +119624,16 @@
     {
       "type": 0,
       "value": "Lo que guardaste para ver"
+    }
+  ],
+  "web.home.rows.describe.pageNameLibrary": [
+    {
+      "type": 0,
+      "value": "página "
+    },
+    {
+      "type": 1,
+      "value": "label"
     }
   ],
   "web.home.rows.describe.randomMix": [
@@ -122694,6 +123964,36 @@
       "value": " cap."
     }
   ],
+  "web.item.card.mangaStatus.cancelled": [
+    {
+      "type": 0,
+      "value": "Cancelada"
+    }
+  ],
+  "web.item.card.mangaStatus.completed": [
+    {
+      "type": 0,
+      "value": "Completada"
+    }
+  ],
+  "web.item.card.mangaStatus.hiatus": [
+    {
+      "type": 0,
+      "value": "En pausa"
+    }
+  ],
+  "web.item.card.mangaStatus.ongoing": [
+    {
+      "type": 0,
+      "value": "En curso"
+    }
+  ],
+  "web.item.card.mangaStatus.upcoming": [
+    {
+      "type": 0,
+      "value": "Próximamente"
+    }
+  ],
   "web.item.card.mangaVolumes": [
     {
       "type": 1,
@@ -124920,6 +126220,190 @@
     {
       "type": 0,
       "value": "Borrar filtros"
+    }
+  ],
+  "web.library.browse.countBooks": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "one": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " libro"
+            }
+          ]
+        },
+        "many": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " de libros"
+            }
+          ]
+        },
+        "other": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " libros"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
+    }
+  ],
+  "web.library.browse.countEpisodes": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "one": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " episodio"
+            }
+          ]
+        },
+        "many": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " de episodios"
+            }
+          ]
+        },
+        "other": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " episodios"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
+    }
+  ],
+  "web.library.browse.countMovies": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "one": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " película"
+            }
+          ]
+        },
+        "many": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " de películas"
+            }
+          ]
+        },
+        "other": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " películas"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
+    }
+  ],
+  "web.library.browse.countSeries": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "one": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " serie"
+            }
+          ]
+        },
+        "many": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " de series"
+            }
+          ]
+        },
+        "other": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": " series"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
     }
   ],
   "web.library.browse.lettersRefreshFailed": [
@@ -127938,6 +129422,26 @@
       "value": "La transcodificación está desactivada"
     }
   ],
+  "web.player.error.unknownMediaError": [
+    {
+      "type": 0,
+      "value": "Error desconocido del elemento multimedia"
+    }
+  ],
+  "web.player.error.updateFailed": [
+    {
+      "type": 0,
+      "value": "No se pudo actualizar la reproducción ("
+    },
+    {
+      "type": 1,
+      "value": "status"
+    },
+    {
+      "type": 0,
+      "value": ")"
+    }
+  ],
   "web.player.error.upgradeRequired.message": [
     {
       "type": 0,
@@ -130728,6 +132232,18 @@
       "value": "Quitar PIN"
     }
   ],
+  "web.profiles.editor.requestsAllowed": [
+    {
+      "type": 0,
+      "value": "Permitir solicitudes"
+    }
+  ],
+  "web.profiles.editor.requestsAllowedHint": [
+    {
+      "type": 0,
+      "value": "Permite que este perfil explore títulos que no están en la biblioteca y los solicite. La clasificación por edad limita esos títulos solo por su clasificación de EE. UU., y el límite de edad recomendada no se aplica a ellos."
+    }
+  ],
   "web.profiles.editor.restrictLibraries": [
     {
       "type": 0,
@@ -130856,6 +132372,12 @@
       },
       "offset": 0,
       "pluralType": "cardinal"
+    }
+  ],
+  "web.profiles.helpers.access.noRequests": [
+    {
+      "type": 0,
+      "value": "Sin solicitudes"
     }
   ],
   "web.profiles.helpers.access.quality": [
@@ -131842,6 +133364,12 @@
       "value": "0 = ilimitado"
     }
   ],
+  "web.reader.document.fallbackTitle": [
+    {
+      "type": 0,
+      "value": "Documento"
+    }
+  ],
   "web.reader.endOfBook.nextChapter": [
     {
       "type": 0,
@@ -131850,6 +133378,12 @@
     {
       "type": 1,
       "value": "chapter"
+    }
+  ],
+  "web.reader.error.fileEmpty": [
+    {
+      "type": 0,
+      "value": "El archivo está vacío"
     }
   ],
   "web.reader.error.fileIdentifier": [
@@ -131868,6 +133402,18 @@
     {
       "type": 0,
       "value": "Este archivo es demasiado grande para abrirlo en el navegador. Descárgalo."
+    }
+  ],
+  "web.reader.error.unsupportedFormat": [
+    {
+      "type": 0,
+      "value": "Formato de libro no compatible"
+    }
+  ],
+  "web.reader.error.unsupportedOrCorrupted": [
+    {
+      "type": 0,
+      "value": "Archivo de libro no compatible o dañado"
     }
   ],
   "web.reader.fileOption.unnamed": [
@@ -132066,6 +133612,54 @@
     {
       "type": 0,
       "value": "Buscar"
+    }
+  ],
+  "web.reader.search.truncated": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "one": {
+          "value": [
+            {
+              "type": 0,
+              "value": "Se muestra la primera coincidencia."
+            }
+          ]
+        },
+        "many": {
+          "value": [
+            {
+              "type": 0,
+              "value": "Se muestran las primeras "
+            },
+            {
+              "type": 7
+            },
+            {
+              "type": 0,
+              "value": " de coincidencias."
+            }
+          ]
+        },
+        "other": {
+          "value": [
+            {
+              "type": 0,
+              "value": "Se muestran las primeras "
+            },
+            {
+              "type": 7
+            },
+            {
+              "type": 0,
+              "value": " coincidencias."
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
     }
   ],
   "web.reader.settings.brightness": [
@@ -132940,6 +134534,12 @@
       "value": "En espera de importación"
     }
   ],
+  "web.requests.hub.blockedIntro": [
+    {
+      "type": 0,
+      "value": "Las solicitudes están desactivadas para este perfil. Aún puedes ver y cancelar las solicitudes que hizo."
+    }
+  ],
   "web.requests.hub.browseDiscover": [
     {
       "type": 0,
@@ -133158,6 +134758,12 @@
     {
       "type": 0,
       "value": "Solicitudes de tu cuenta, agrupadas según lo que sucede a continuación."
+    }
+  ],
+  "web.requests.hub.yoursIntroProfile": [
+    {
+      "type": 0,
+      "value": "Solicitudes que hizo este perfil, agrupadas según lo que sucede a continuación."
     }
   ],
   "web.requests.pageTitle": [
@@ -140237,6 +141843,38 @@
       "value": "Canales de audio"
     }
   ],
+  "web.settings.overlays.badge.availability.description": [
+    {
+      "type": 0,
+      "value": "Temporadas completas de una serie, o episodios de una temporada que están en la biblioteca"
+    }
+  ],
+  "web.settings.overlays.badge.availability.label": [
+    {
+      "type": 0,
+      "value": "Disponibilidad"
+    }
+  ],
+  "web.settings.overlays.badge.availability.value.complete": [
+    {
+      "type": 0,
+      "value": "Completa"
+    }
+  ],
+  "web.settings.overlays.badge.availability.value.fraction": [
+    {
+      "type": 1,
+      "value": "have"
+    },
+    {
+      "type": 0,
+      "value": "/"
+    },
+    {
+      "type": 1,
+      "value": "total"
+    }
+  ],
   "web.settings.overlays.badge.container.description": [
     {
       "type": 0,
@@ -140313,6 +141951,12 @@
     {
       "type": 0,
       "value": "Subtítulos disponibles"
+    }
+  ],
+  "web.settings.overlays.badge.multiSub.value": [
+    {
+      "type": 0,
+      "value": "CC"
     }
   ],
   "web.settings.overlays.badge.network.description": [
@@ -142189,6 +143833,12 @@
     {
       "type": 0,
       "value": "Wi-Fi"
+    }
+  ],
+  "web.settings.plexAuth.homeUserFallbackName": [
+    {
+      "type": 0,
+      "value": "Usuario de Plex"
     }
   ],
   "web.settings.plexAuth.homeUserNoServerAccess": [

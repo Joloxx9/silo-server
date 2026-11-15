@@ -149,6 +149,7 @@ import {
 } from "@/lib/watchTogetherActions";
 import { toast } from "sonner";
 import { codeNumber, numberText, useT, type Translate } from "@/i18n";
+import { joinList } from "@/lib/appLocale";
 import { MediaDataMeter } from "../media-data-meter";
 import { mediaElementReleased, sourceLoadStarted } from "../bandwidth-probe";
 import { networkInformation, type NetworkInformationLike } from "../network-information";
@@ -164,7 +165,7 @@ function pillKey(
   const isEditingOrInMenu =
     !targetInPrompt &&
     target?.closest(
-      'input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"], [role="listbox"]',
+      'input, textarea, select, [contenteditable="true"], dialog, [role="dialog"], [role="menu"], [role="listbox"]',
     ) != null;
   if (isEditingOrInMenu) return null;
 
@@ -278,7 +279,11 @@ interface VideoPlayerProps {
     onAdopt?: (planRevision?: number, sent?: boolean) => void,
   ) => void;
   /** `track_change` replan for a subtitle the server has to render. */
-  onSubtitleTrackChange?: (combinedIndex: number | null, currentPosition: number) => void;
+  onSubtitleTrackChange?: (
+    combinedIndex: number | null,
+    currentPosition: number,
+    storedSubtitleId?: number,
+  ) => void;
   /** `failure_recovery` replan after the client could not play the plan. */
   onPlanFailure?: (failure: FailureV3, currentPosition: number) => void;
   /**
@@ -345,9 +350,14 @@ interface VideoPlayerProps {
   preview?: PlayerTimeRange | null;
   markerSegments?: PlayerMarkerSegment[];
   autoPlayNextPreview?: boolean;
+  /** The viewer's Auto-play next episode setting; off, the Up next card does not count down. */
+  autoPlayNext?: boolean;
   canEditMarkers?: boolean;
-  /** Notified after a successful in-player marker edit so the host can patch local state. */
-  onMarkersEdited?: (fileId: number, markers: MarkerDraft) => void;
+  /**
+   * Notified after a successful in-player marker edit, with only the kinds it
+   * wrote, so the host can patch local state.
+   */
+  onMarkersEdited?: (fileId: number, markers: Partial<MarkerDraft>) => void;
   duration?: number;
   seriesContext?: SeriesContext;
   onNavigateEpisode?: (contentId: string, trigger: PlaybackStartTrigger) => void;
@@ -560,6 +570,7 @@ export function VideoPlayer({
   preview = null,
   markerSegments,
   autoPlayNextPreview = false,
+  autoPlayNext = true,
   canEditMarkers = true,
   onMarkersEdited,
   duration: propDuration,
@@ -805,6 +816,12 @@ export function VideoPlayer({
   );
   const lastSubtitleIndexRef = useRef<number | null>(null);
   const subtitleSelectionWasManualRef = useRef(false);
+  // The stored subtitle the viewer picked and its ordinal. The track list can
+  // lag the server's (an announced track not folded in yet), so the pick's
+  // identity is taken from the track picked, not looked up by its ordinal.
+  const pickedStoredSubtitleRef = useRef<{ index: number | null; storedId?: number }>({
+    index: null,
+  });
   // Sync keys of the stored subtitles someone added while this session plays.
   // Auto-selection never picks them, so another viewer's download or upload
   // can't change this viewer's subtitle.
@@ -2078,6 +2095,12 @@ export function VideoPlayer({
   const handleSubtitleSelect = useCallback(
     (index: number | null, inventoryTrack?: SubtitleInventoryItemV3) => {
       subtitleSelectionWasManualRef.current = true;
+      pickedStoredSubtitleRef.current = {
+        index,
+        storedId:
+          inventoryTrack?.stored_subtitle_id ??
+          effectiveSubtitleTracks.find((track) => track.index === index)?.stored_subtitle_id,
+      };
       setActiveSubtitleIndex(index);
       // The in-progress live translation track is synthetic (a sentinel index
       // that exists only in memory); never persist it as the saved preference or
@@ -2085,7 +2108,7 @@ export function VideoPlayer({
       if (index === LIVE_SUBTITLE_INDEX) return;
       onSubtitleChanged?.(index, inventoryTrack);
     },
-    [onSubtitleChanged],
+    [effectiveSubtitleTracks, onSubtitleChanged],
   );
 
   // A choice in the subtitle menu wins over a reused track still waiting for
@@ -2491,6 +2514,7 @@ export function VideoPlayer({
     roomPlaybackActive ? undefined : seriesContext,
     currentTime,
     handleNavigate,
+    { autoPlay: autoPlayNext, playing },
   );
 
   // Previous-episode lookup (mirrors the helper in useNextEpisode). Auto-play
@@ -3430,7 +3454,11 @@ export function VideoPlayer({
         if (video.error.code === MEDIA_ERR_NETWORK && reportConnectionLost()) return;
         const message = video.error.message || "Unknown media element error";
         if (!reportCurrentPlanFailure({ classification: "decoder_error", message })) {
-          setError(tRef.current("web.player.error.playbackError", { message }));
+          setError(
+            tRef.current("web.player.error.playbackError", {
+              message: video.error.message || tRef.current("web.player.error.unknownMediaError"),
+            }),
+          );
         }
       }
     };
@@ -3651,7 +3679,7 @@ export function VideoPlayer({
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const interactionInProgress =
       active?.closest(
-        'input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"], [role="listbox"], [role="slider"]',
+        'input, textarea, select, [contenteditable="true"], dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="slider"]',
       ) !== null ||
       containerRef.current?.querySelector('[role="dialog"], [role="menu"], [role="listbox"]') !=
         null;
@@ -3890,12 +3918,26 @@ export function VideoPlayer({
   const lastPlanSubtitleRef = useRef({
     sessionId,
     planId: plan.plan_id,
+    mediaFileId: plan.effective_media_file_id,
     index: plan.selected_tracks.subtitle?.index ?? null,
+    tracks: effectiveSubtitleTracks,
   });
   useEffect(() => {
+    // The stored subtitle the active selection names: the viewer's pick, or
+    // the track at its ordinal in `tracks`.
+    const activeStoredSubtitleId = (tracks: readonly PlayerSubtitleInfo[]) =>
+      pickedStoredSubtitleRef.current.index === activeSubtitleIndex
+        ? pickedStoredSubtitleRef.current.storedId
+        : tracks.find((track) => track.index === activeSubtitleIndex)?.stored_subtitle_id;
     const planSubtitleIndex = plan.selected_tracks.subtitle?.index ?? null;
     const previousPlan = lastPlanSubtitleRef.current;
-    lastPlanSubtitleRef.current = { sessionId, planId: plan.plan_id, index: planSubtitleIndex };
+    lastPlanSubtitleRef.current = {
+      sessionId,
+      planId: plan.plan_id,
+      mediaFileId: plan.effective_media_file_id,
+      index: planSubtitleIndex,
+      tracks: effectiveSubtitleTracks,
+    };
     // A replan in the same session that moved the subtitle on its own (a
     // version change dropping it, or bringing the viewer's kept subtitle back)
     // is the server's selection to adopt, not a difference to send back. Only
@@ -3911,6 +3953,28 @@ export function VideoPlayer({
       requestedSubtitleTrackChangeRef.current = null;
       setActiveSubtitleIndex(planSubtitleIndex);
       return;
+    }
+    // A pick of the viewer's own that has not landed yet names a stored
+    // subtitle by its ordinal in the previous plan. Deleting an earlier stored
+    // subtitle moves it down, and the new plan gives that ordinal another
+    // track, so the pick follows its stored subtitle, or turns subtitles off
+    // when it was deleted.
+    if (
+      previousPlan.sessionId === sessionId &&
+      previousPlan.planId !== plan.plan_id &&
+      previousPlan.mediaFileId === plan.effective_media_file_id
+    ) {
+      const storedId = activeStoredSubtitleId(previousPlan.tracks);
+      if (storedId !== undefined) {
+        const moved =
+          effectiveSubtitleTracks.find((track) => track.stored_subtitle_id === storedId)?.index ??
+          null;
+        if (moved !== activeSubtitleIndex) {
+          pickedStoredSubtitleRef.current = { index: moved, storedId };
+          setActiveSubtitleIndex(moved);
+          return;
+        }
+      }
     }
     // Live AI cues belong to the client overlay, not the server inventory.
     // Leave the current plan alone until a real downloaded track is ready.
@@ -3946,11 +4010,16 @@ export function VideoPlayer({
       currentTimeRef.current,
       subtitleFetchAnchorRef.current,
     );
-    onSubtitleTrackChange?.(desiredServerIndex, position);
+    const storedId =
+      desiredServerIndex === null ? undefined : activeStoredSubtitleId(effectiveSubtitleTracks);
+    if (storedId === undefined) onSubtitleTrackChange?.(desiredServerIndex, position);
+    else onSubtitleTrackChange?.(desiredServerIndex, position, storedId);
   }, [
     activeSubtitleIndex,
     activeSubtitleTrack?.burn_in_only,
+    effectiveSubtitleTracks,
     onSubtitleTrackChange,
+    plan.effective_media_file_id,
     plan.plan_id,
     plan.selected_tracks.subtitle?.index,
     plan.subtitle.mode,
@@ -5035,7 +5104,7 @@ export function VideoPlayer({
     const leftBehind = roomMembersLeftBehind(previous, watchTogether.room);
     if (leftBehind.length > 0) {
       showWatchTogetherNotice(
-        tRef.current("web.player.room.continuingWithout", { names: leftBehind.join(", ") }),
+        tRef.current("web.player.room.continuingWithout", { names: joinList(leftBehind) }),
         "info",
       );
     }
@@ -5471,12 +5540,13 @@ export function VideoPlayer({
             <div className="mt-1 text-xs text-[var(--hud-ash)]">
               {watchTogether.room?.members?.some((member) => member.is_syncing)
                 ? t("web.player.room.waitingFor", {
-                    names: watchTogether.room.members
-                      .filter((member) => member.is_syncing)
-                      .map((member) =>
-                        member.is_self ? t("web.player.room.waitingForYou") : member.display_name,
-                      )
-                      .join(", "),
+                    names: joinList(
+                      watchTogether.room.members
+                        .filter((member) => member.is_syncing)
+                        .map((member) =>
+                          member.is_self ? t("web.player.room.waitingForYou") : member.display_name,
+                        ),
+                    ),
                   })
                 : t("web.player.room.waitingForEveryone")}
             </div>

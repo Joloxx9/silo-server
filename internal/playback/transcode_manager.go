@@ -413,18 +413,20 @@ func (m *TranscodeManager) RestartSessionLocked(ctx context.Context, sessionID s
 // RestartSegmentLocked resolves and restarts one missing HLS segment under the
 // per-session lifecycle lock. Copy-video resolution reads the current manifest,
 // so keeping resolution and restart inside the same lock preserves the mapping
-// it observed.
+// it observed. seenGeneration is the GenerationStartedAt of the progress the
+// restart was decided on (see TranscodeSession.RestartSegmentSince).
 func (m *TranscodeManager) RestartSegmentLocked(
 	ctx context.Context,
 	sessionID string,
 	ts *TranscodeSession,
 	segNum int,
+	seenGeneration time.Time,
 ) (SegmentRecoveryTarget, bool, error) {
 	var target SegmentRecoveryTarget
 	var ok bool
 	err := m.restartSessionLocked(sessionID, ts, func() error {
 		var restartErr error
-		target, ok, restartErr = ts.RestartSegment(ctx, segNum)
+		target, ok, restartErr = ts.RestartSegmentSince(ctx, segNum, seenGeneration)
 		return restartErr
 	})
 	return target, ok, err
@@ -810,6 +812,8 @@ func (m *TranscodeManager) reconstructSession(ctx context.Context, sessionID str
 		DeviceID:         normalizeClientMetadataValue(card.DeviceID, 128),
 		DevicePlatform:   normalizeClientMetadataValue(card.DevicePlatform, 40),
 		IsJellyfinCompat: card.IsJellyfinCompat,
+		// So do the reasons the admin views give for the adaptation.
+		AdaptationReasons: NormalizeAdaptationReasons(card.AdaptationReasons),
 		// The card carries no address; the media request rebuilding the
 		// session comes from the viewer's player.
 		ClientIP: clientip.FromContext(ctx),
@@ -988,6 +992,7 @@ func (m *TranscodeManager) doReconstructTranscode(ctx context.Context, sessionID
 	cfg := m.runtimeConfig()
 	outputDir := reconstructionOutputDir(cfg.TranscodeDir, sessionID, card.OutputSubdir)
 	opts := card.TranscodeOpts(outputDir, cfg.FFmpegPath, m.logSink())
+	opts.Reconstructed = true
 	// Recipe cards preserve the original launch tuning, but a reconstruction is
 	// not a fresh generation: restore the conservative manifest lead so recovery
 	// never exposes a hardware encoder after only one fragment.
@@ -1087,14 +1092,35 @@ func (m *TranscodeManager) doReconstructTranscode(ctx context.Context, sessionID
 		m.MonitorLocalTranscodeExit(sessionID, transcodeSession)
 	})
 
-	if m.StartThrottler != nil {
-		m.StartThrottler(ctx, transcodeSession)
-	}
+	m.StartInitialThrottler(ctx, transcodeSession)
 	m.MonitorLocalTranscodeExit(sessionID, transcodeSession)
 	slog.InfoContext(ctx, "transcode process reconstructed from recipe card", "component", "playback",
 		"session", sessionID, "playback_session_id", sessionID,
 		"requested_segment", requestedSegment, "start_segment_number", opts.StartSegmentNumber)
 	return transcodeSession, nil
+}
+
+// initialThrottleSettingsTimeout bounds the settings read behind a transcode's
+// first throttler start. A rebuild holds the session lifecycle lock and a
+// reconstruct slot across that read, so a stalled database must not keep them.
+const initialThrottleSettingsTimeout = 5 * time.Second
+
+// StartInitialThrottler starts the throttler for a transcode that was just
+// started or rebuilt. The transcode outlives the request that asked for it, so
+// the settings read is detached from that request and bounded instead. A
+// restart hook calls StartThrottler with the context Restart gives it, which
+// ends when the session closes or restartHookTimeout passes.
+func (m *TranscodeManager) StartInitialThrottler(ctx context.Context, ts *TranscodeSession) {
+	if m.StartThrottler == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), initialThrottleSettingsTimeout)
+	defer cancel()
+	m.StartThrottler(ctx, ts)
+	if ctx.Err() != nil {
+		slog.WarnContext(ctx, "transcode throttle settings read timed out; the transcode may run unthrottled until its next restart",
+			"component", "playback", "playback_session_id", ts.Opts().SessionID, "timeout", initialThrottleSettingsTimeout)
+	}
 }
 
 func reconstructionOutputDir(root, sessionID, signedSubdir string) string {
@@ -1305,6 +1331,13 @@ func (m *TranscodeManager) CloseTranscodeSessionIfSessionGone(sessionID string, 
 	}
 	unlock := m.LockSessionLifecycle(sessionID)
 	defer unlock()
+	return m.CloseTranscodeSessionIfSessionGoneLocked(sessionID, expected, hasSession)
+}
+
+// CloseTranscodeSessionIfSessionGoneLocked is CloseTranscodeSessionIfSessionGone
+// for a caller that already holds sessionID's lifecycle lock, such as a start
+// publishing its transcode.
+func (m *TranscodeManager) CloseTranscodeSessionIfSessionGoneLocked(sessionID string, expected *TranscodeSession, hasSession func() bool) bool {
 	m.transcodeMu.Lock()
 	if hasSession() {
 		m.transcodeMu.Unlock()

@@ -5478,6 +5478,12 @@
       "value": "変更内容（任意、履歴に表示）"
     }
   ],
+  "web.admin.access.policy.editor.compileIssueFallback": [
+    {
+      "type": 0,
+      "value": "ポリシーのコンパイルエラー"
+    }
+  ],
   "web.admin.access.policy.editor.compileIssues": [
     {
       "type": 0,
@@ -6408,6 +6414,44 @@
       "value": "version"
     }
   ],
+  "web.admin.activity.bitrate.limit": [
+    {
+      "type": 0,
+      "value": "上限"
+    },
+    {
+      "type": 1,
+      "value": "rate"
+    }
+  ],
+  "web.admin.activity.bitrate.limitAndSource": [
+    {
+      "type": 0,
+      "value": "上限"
+    },
+    {
+      "type": 1,
+      "value": "limit"
+    },
+    {
+      "type": 0,
+      "value": " · ソース"
+    },
+    {
+      "type": 1,
+      "value": "source"
+    }
+  ],
+  "web.admin.activity.bitrate.source": [
+    {
+      "type": 0,
+      "value": "ソース"
+    },
+    {
+      "type": 1,
+      "value": "rate"
+    }
+  ],
   "web.admin.activity.client.agent": [
     {
       "type": 0,
@@ -6418,6 +6462,12 @@
     {
       "type": 0,
       "value": "アプリ"
+    }
+  ],
+  "web.admin.activity.client.device": [
+    {
+      "type": 0,
+      "value": "デバイス"
     }
   ],
   "web.admin.activity.client.heading": [
@@ -6436,6 +6486,12 @@
     {
       "type": 0,
       "value": "操作"
+    }
+  ],
+  "web.admin.activity.column.bitrate": [
+    {
+      "type": 0,
+      "value": "ビットレート"
     }
   ],
   "web.admin.activity.column.playback": [
@@ -6856,16 +6912,16 @@
       "value": "アクティビティ"
     }
   ],
+  "web.admin.activity.panel.decision": [
+    {
+      "type": 0,
+      "value": "判定"
+    }
+  ],
   "web.admin.activity.panel.event": [
     {
       "type": 0,
       "value": "イベント"
-    }
-  ],
-  "web.admin.activity.panel.heading": [
-    {
-      "type": 0,
-      "value": "再生"
     }
   ],
   "web.admin.activity.panel.loadingFfmpeg": [
@@ -6884,6 +6940,12 @@
     {
       "type": 0,
       "value": "FFmpegの全ログを開く"
+    }
+  ],
+  "web.admin.activity.panel.reasons": [
+    {
+      "type": 0,
+      "value": "理由"
     }
   ],
   "web.admin.activity.panel.refreshing": [
@@ -6942,6 +7004,210 @@
     {
       "type": 0,
       "value": "ライブ"
+    }
+  ],
+  "web.admin.activity.reason.audioChannelsUnsupported.description": [
+    {
+      "type": 0,
+      "value": "音声のチャンネル数が、デバイスの出力が対応する数を超えています。"
+    }
+  ],
+  "web.admin.activity.reason.audioChannelsUnsupported.label": [
+    {
+      "type": 0,
+      "value": "音声チャンネル数が多すぎる"
+    }
+  ],
+  "web.admin.activity.reason.audioCodecUnsupported.description": [
+    {
+      "type": 0,
+      "value": "デバイス、またはデバイスに必要なストリーム形式が、この音声コーデックを再生できません。"
+    }
+  ],
+  "web.admin.activity.reason.audioCodecUnsupported.label": [
+    {
+      "type": 0,
+      "value": "非対応の音声コーデック"
+    }
+  ],
+  "web.admin.activity.reason.audioTrackSelection.description": [
+    {
+      "type": 0,
+      "value": "選択された音声トラックは、元のファイルから直接再生できません。"
+    }
+  ],
+  "web.admin.activity.reason.audioTrackSelection.label": [
+    {
+      "type": 0,
+      "value": "音声トラックの選択"
+    }
+  ],
+  "web.admin.activity.reason.bandwidthCap.description": [
+    {
+      "type": 0,
+      "value": "プロフィールまたはデバイスの「最大ビットレート」設定が、元のビットレートを下回っています。"
+    }
+  ],
+  "web.admin.activity.reason.bandwidthCap.label": [
+    {
+      "type": 0,
+      "value": "最大ビットレートの設定"
+    }
+  ],
+  "web.admin.activity.reason.bandwidthLimit.description": [
+    {
+      "type": 0,
+      "value": "アプリがこの接続を、元のビットレートには遅すぎると判定しました。"
+    }
+  ],
+  "web.admin.activity.reason.bandwidthLimit.label": [
+    {
+      "type": 0,
+      "value": "接続速度不足"
+    }
+  ],
+  "web.admin.activity.reason.buffering.description": [
+    {
+      "type": 0,
+      "value": "このデバイスと接続で、今回または最近のセッション中にバッファリングが発生したため、サーバーが画質を下げました。"
+    }
+  ],
+  "web.admin.activity.reason.buffering.label": [
+    {
+      "type": 0,
+      "value": "過去のバッファリング"
+    }
+  ],
+  "web.admin.activity.reason.containerUnsupported.description": [
+    {
+      "type": 0,
+      "value": "デバイスがこのファイルのコンテナを開けません。"
+    }
+  ],
+  "web.admin.activity.reason.containerUnsupported.label": [
+    {
+      "type": 0,
+      "value": "非対応のコンテナ"
+    }
+  ],
+  "web.admin.activity.reason.deviceWorkaround.description": [
+    {
+      "type": 0,
+      "value": "このデバイスの既知の再生不具合を避けるため、音声を変換しています。"
+    }
+  ],
+  "web.admin.activity.reason.deviceWorkaround.label": [
+    {
+      "type": 0,
+      "value": "デバイスの音声不具合対策"
+    }
+  ],
+  "web.admin.activity.reason.directPlayFailed.description": [
+    {
+      "type": 0,
+      "value": "元のストリームをデバイスで再生できなかったため、サーバーが変換しています。"
+    }
+  ],
+  "web.admin.activity.reason.directPlayFailed.label": [
+    {
+      "type": 0,
+      "value": "ダイレクト再生に失敗"
+    }
+  ],
+  "web.admin.activity.reason.dynamicRangeUnsupported.description": [
+    {
+      "type": 0,
+      "value": "ディスプレイがこのHDRまたはDolby Visionの映像をそのまま表示できません。"
+    }
+  ],
+  "web.admin.activity.reason.dynamicRangeUnsupported.label": [
+    {
+      "type": 0,
+      "value": "HDR非対応"
+    }
+  ],
+  "web.admin.activity.reason.qualitySelected.description": [
+    {
+      "type": 0,
+      "value": "視聴者が元より低い画質を選択しました。"
+    }
+  ],
+  "web.admin.activity.reason.qualitySelected.label": [
+    {
+      "type": 0,
+      "value": "視聴者が選択した画質"
+    }
+  ],
+  "web.admin.activity.reason.resolutionLimit.description": [
+    {
+      "type": 0,
+      "value": "映像の解像度が、デバイスが対応する解像度を超えています。"
+    }
+  ],
+  "web.admin.activity.reason.resolutionLimit.label": [
+    {
+      "type": 0,
+      "value": "デバイスの解像度超過"
+    }
+  ],
+  "web.admin.activity.reason.serverBitrateLimit.description": [
+    {
+      "type": 0,
+      "value": "このローカルまたはリモートのストリームで、ユーザーのアクセスグループが許可するビットレートが元より低く設定されています。"
+    }
+  ],
+  "web.admin.activity.reason.serverBitrateLimit.label": [
+    {
+      "type": 0,
+      "value": "アクセスグループの制限"
+    }
+  ],
+  "web.admin.activity.reason.subtitleBurnIn.description": [
+    {
+      "type": 0,
+      "value": "デバイスが選択された字幕を表示できないため、字幕を映像に焼き込んでいます。"
+    }
+  ],
+  "web.admin.activity.reason.subtitleBurnIn.label": [
+    {
+      "type": 0,
+      "value": "字幕の焼き込み"
+    }
+  ],
+  "web.admin.activity.reason.subtitleUnsupported.description": [
+    {
+      "type": 0,
+      "value": "選択された字幕は、元のファイルと一緒に配信できません。"
+    }
+  ],
+  "web.admin.activity.reason.subtitleUnsupported.label": [
+    {
+      "type": 0,
+      "value": "非対応の字幕"
+    }
+  ],
+  "web.admin.activity.reason.videoCapabilityUnconfirmed.description": [
+    {
+      "type": 0,
+      "value": "デバイスがこの映像をデコードできることをアプリが確認できなかったため、安全のためにサーバーが変換しています。"
+    }
+  ],
+  "web.admin.activity.reason.videoCapabilityUnconfirmed.label": [
+    {
+      "type": 0,
+      "value": "映像の対応を未確認"
+    }
+  ],
+  "web.admin.activity.reason.videoCodecUnsupported.description": [
+    {
+      "type": 0,
+      "value": "デバイスがこの映像のコーデック、プロファイル、またはビット深度をデコードできません。"
+    }
+  ],
+  "web.admin.activity.reason.videoCodecUnsupported.label": [
+    {
+      "type": 0,
+      "value": "非対応の映像コーデック"
     }
   ],
   "web.admin.activity.route.localServer": [
@@ -7042,6 +7308,42 @@
       "value": "method"
     }
   ],
+  "web.admin.activity.row.moreReasons": [
+    {
+      "type": 0,
+      "value": "+"
+    },
+    {
+      "type": 1,
+      "value": "count_text"
+    }
+  ],
+  "web.admin.activity.row.moreReasonsLabel": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "other": {
+          "value": [
+            {
+              "type": 0,
+              "value": "理由をあと"
+            },
+            {
+              "type": 1,
+              "value": "count_text"
+            },
+            {
+              "type": 0,
+              "value": "件表示"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
+    }
+  ],
   "web.admin.activity.row.paused": [
     {
       "type": 0,
@@ -7076,6 +7378,76 @@
       "value": "ログを表示"
     }
   ],
+  "web.admin.activity.session.heading": [
+    {
+      "type": 0,
+      "value": "セッション"
+    }
+  ],
+  "web.admin.activity.session.id": [
+    {
+      "type": 0,
+      "value": "セッションID"
+    }
+  ],
+  "web.admin.activity.session.lastReport": [
+    {
+      "type": 0,
+      "value": "最終報告"
+    }
+  ],
+  "web.admin.activity.session.lastReportAgo": [
+    {
+      "type": 1,
+      "value": "elapsed"
+    },
+    {
+      "type": 0,
+      "value": "前"
+    }
+  ],
+  "web.admin.activity.session.remoteControl": [
+    {
+      "type": 0,
+      "value": "リモート操作"
+    }
+  ],
+  "web.admin.activity.session.remoteControlAvailable": [
+    {
+      "type": 0,
+      "value": "利用可能"
+    }
+  ],
+  "web.admin.activity.session.remoteControlUnavailable": [
+    {
+      "type": 0,
+      "value": "利用不可"
+    }
+  ],
+  "web.admin.activity.session.started": [
+    {
+      "type": 0,
+      "value": "開始"
+    }
+  ],
+  "web.admin.activity.session.startedAgo": [
+    {
+      "type": 1,
+      "value": "time"
+    },
+    {
+      "type": 0,
+      "value": " · "
+    },
+    {
+      "type": 1,
+      "value": "elapsed"
+    },
+    {
+      "type": 0,
+      "value": "前"
+    }
+  ],
   "web.admin.activity.sort.group": [
     {
       "type": 0,
@@ -7086,6 +7458,16 @@
     {
       "type": 0,
       "value": "並べ替え"
+    }
+  ],
+  "web.admin.activity.summary.bandwidth": [
+    {
+      "type": 0,
+      "value": "送信"
+    },
+    {
+      "type": 1,
+      "value": "rate"
     }
   ],
   "web.admin.activity.summary.byNode": [
@@ -7144,6 +7526,34 @@
       "value": "count"
     }
   ],
+  "web.admin.activity.summary.paused": [
+    {
+      "type": 0,
+      "value": "一時停止中"
+    },
+    {
+      "type": 1,
+      "value": "count_text"
+    },
+    {
+      "type": 0,
+      "value": "件"
+    }
+  ],
+  "web.admin.activity.summary.remote": [
+    {
+      "type": 0,
+      "value": "リモート"
+    },
+    {
+      "type": 1,
+      "value": "count_text"
+    },
+    {
+      "type": 0,
+      "value": "件"
+    }
+  ],
   "web.admin.activity.summary.unknownOutputContainer": [
     {
       "type": 0,
@@ -7154,6 +7564,32 @@
     {
       "type": 0,
       "value": "不明なソース"
+    }
+  ],
+  "web.admin.activity.summary.videoTranscodes": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "other": {
+          "value": [
+            {
+              "type": 0,
+              "value": "映像トランスコード"
+            },
+            {
+              "type": 1,
+              "value": "count_text"
+            },
+            {
+              "type": 0,
+              "value": "件"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
     }
   ],
   "web.admin.activity.toneMap.hardware": [
@@ -8550,6 +8986,12 @@
     {
       "type": 0,
       "value": "このパスは複数のライブラリに一致します。"
+    }
+  ],
+  "web.admin.autoscan.activity.reason.pathIgnored": [
+    {
+      "type": 0,
+      "value": "ライブラリの除外ファイルによってこのファイルは除外されているため、スキャンされませんでした。"
     }
   ],
   "web.admin.autoscan.activity.reason.pathNotFileOrDir": [
@@ -25688,6 +26130,54 @@
       "value": "失敗"
     }
   ],
+  "web.admin.common.units.gigabytes": [
+    {
+      "type": 0,
+      "value": "GB"
+    }
+  ],
+  "web.admin.common.units.hourRange": [
+    {
+      "type": 0,
+      "value": "0～23"
+    }
+  ],
+  "web.admin.common.units.kilobytes": [
+    {
+      "type": 0,
+      "value": "KB"
+    }
+  ],
+  "web.admin.common.units.megabitsPerSecond": [
+    {
+      "type": 0,
+      "value": "Mbps"
+    }
+  ],
+  "web.admin.common.units.megabytes": [
+    {
+      "type": 0,
+      "value": "MB"
+    }
+  ],
+  "web.admin.common.units.milliseconds": [
+    {
+      "type": 0,
+      "value": "ミリ秒"
+    }
+  ],
+  "web.admin.common.units.percent": [
+    {
+      "type": 0,
+      "value": "%"
+    }
+  ],
+  "web.admin.common.units.pixels": [
+    {
+      "type": 0,
+      "value": "px"
+    }
+  ],
   "web.admin.common.userProfiles.createFailed": [
     {
       "type": 0,
@@ -25924,6 +26414,100 @@
       "value": "デフォルトのレイアウトに戻す"
     }
   ],
+  "web.admin.dashboard.format.duration.days": [
+    {
+      "type": 1,
+      "value": "days"
+    },
+    {
+      "type": 0,
+      "value": "日"
+    }
+  ],
+  "web.admin.dashboard.format.duration.daysHours": [
+    {
+      "type": 1,
+      "value": "days"
+    },
+    {
+      "type": 0,
+      "value": "日"
+    },
+    {
+      "type": 1,
+      "value": "hours"
+    },
+    {
+      "type": 0,
+      "value": "時間"
+    }
+  ],
+  "web.admin.dashboard.format.duration.hours": [
+    {
+      "type": 1,
+      "value": "hours"
+    },
+    {
+      "type": 0,
+      "value": "時間"
+    }
+  ],
+  "web.admin.dashboard.format.duration.hoursMinutes": [
+    {
+      "type": 1,
+      "value": "hours"
+    },
+    {
+      "type": 0,
+      "value": "時間"
+    },
+    {
+      "type": 1,
+      "value": "minutes"
+    },
+    {
+      "type": 0,
+      "value": "分"
+    }
+  ],
+  "web.admin.dashboard.format.duration.minutes": [
+    {
+      "type": 1,
+      "value": "minutes"
+    },
+    {
+      "type": 0,
+      "value": "分"
+    }
+  ],
+  "web.admin.dashboard.format.duration.minutesSeconds": [
+    {
+      "type": 1,
+      "value": "minutes"
+    },
+    {
+      "type": 0,
+      "value": "分"
+    },
+    {
+      "type": 1,
+      "value": "seconds"
+    },
+    {
+      "type": 0,
+      "value": "秒"
+    }
+  ],
+  "web.admin.dashboard.format.duration.seconds": [
+    {
+      "type": 1,
+      "value": "seconds"
+    },
+    {
+      "type": 0,
+      "value": "秒"
+    }
+  ],
   "web.admin.dashboard.format.fileCount": [
     {
       "type": 6,
@@ -25944,6 +26528,16 @@
       },
       "offset": 0,
       "pluralType": "cardinal"
+    }
+  ],
+  "web.admin.dashboard.format.latencyMs": [
+    {
+      "type": 1,
+      "value": "value"
+    },
+    {
+      "type": 0,
+      "value": "ミリ秒"
     }
   ],
   "web.admin.dashboard.format.scanQueued": [
@@ -26038,6 +26632,16 @@
     {
       "type": 0,
       "value": "空き待ち"
+    }
+  ],
+  "web.admin.dashboard.format.watchTimeHours": [
+    {
+      "type": 1,
+      "value": "hours"
+    },
+    {
+      "type": 0,
+      "value": "時間"
     }
   ],
   "web.admin.dashboard.grid.added": [
@@ -27154,6 +27758,12 @@
       "value": "ストリーム履歴を読み込めませんでした。"
     }
   ],
+  "web.admin.dashboard.widgets.concurrentStreams.otherMethod": [
+    {
+      "type": 0,
+      "value": "その他"
+    }
+  ],
   "web.admin.dashboard.widgets.concurrentStreams.peak": [
     {
       "type": 0,
@@ -27174,6 +27784,42 @@
     {
       "type": 0,
       "value": "同時ストリーム数"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewLines": [
+    {
+      "type": 0,
+      "value": "折れ線"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewLinesLabel": [
+    {
+      "type": 0,
+      "value": "再生方法ごとに折れ線で表示"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewStacked": [
+    {
+      "type": 0,
+      "value": "積み上げ"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewStackedLabel": [
+    {
+      "type": 0,
+      "value": "再生方法を積み上げて表示"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewTotal": [
+    {
+      "type": 0,
+      "value": "合計"
+    }
+  ],
+  "web.admin.dashboard.widgets.concurrentStreams.viewTotalLabel": [
+    {
+      "type": 0,
+      "value": "ストリームの合計のみを表示"
     }
   ],
   "web.admin.dashboard.widgets.downloads.empty": [
@@ -42300,6 +42946,30 @@
       "value": "保存中…"
     }
   ],
+  "web.admin.nodes.form.sourceAccess": [
+    {
+      "type": 0,
+      "value": "ソースへのアクセス"
+    }
+  ],
+  "web.admin.nodes.form.sourceAccessCore": [
+    {
+      "type": 0,
+      "value": "APIサーバー経由"
+    }
+  ],
+  "web.admin.nodes.form.sourceAccessHelp": [
+    {
+      "type": 0,
+      "value": "APIサーバー経由の場合、ノードにライブラリのマウントは不要ですが、ノードが読み込むすべてのデータがAPIサーバーを経由するため、APIサーバーにはそのための帯域幅が必要です。"
+    }
+  ],
+  "web.admin.nodes.form.sourceAccessLocal": [
+    {
+      "type": 0,
+      "value": "ノード上のライブラリマウント"
+    }
+  ],
   "web.admin.nodes.form.type": [
     {
       "type": 0,
@@ -42808,6 +43478,192 @@
     {
       "type": 0,
       "value": "ソフトウェア"
+    }
+  ],
+  "web.admin.nodes.key.close": [
+    {
+      "type": 0,
+      "value": "閉じる"
+    }
+  ],
+  "web.admin.nodes.key.copied": [
+    {
+      "type": 0,
+      "value": "コピーしました"
+    }
+  ],
+  "web.admin.nodes.key.copyFailed": [
+    {
+      "type": 0,
+      "value": "コピーできませんでした。テキストを選択して手動でコピーしてください。"
+    }
+  ],
+  "web.admin.nodes.key.copyKey": [
+    {
+      "type": 0,
+      "value": "キーをコピー"
+    }
+  ],
+  "web.admin.nodes.key.copySettings": [
+    {
+      "type": 0,
+      "value": "設定をコピー"
+    }
+  ],
+  "web.admin.nodes.key.coreUrlHelp": [
+    {
+      "type": 0,
+      "value": "ノードがこのサーバーに接続するためのアドレスです。APIサーバーが複数ある場合は、負荷分散されたアドレスを使用してください。"
+    }
+  ],
+  "web.admin.nodes.key.coreUrlLabel": [
+    {
+      "type": 0,
+      "value": "ノード用のサーバーアドレス"
+    }
+  ],
+  "web.admin.nodes.key.coreUrlMissing": [
+    {
+      "type": 0,
+      "value": "設定を完成させるには、サーバーアドレスを入力してください。"
+    }
+  ],
+  "web.admin.nodes.key.dialogTitle": [
+    {
+      "type": 1,
+      "value": "name"
+    },
+    {
+      "type": 0,
+      "value": "のキー"
+    }
+  ],
+  "web.admin.nodes.key.issue": [
+    {
+      "type": 0,
+      "value": "キーを発行"
+    }
+  ],
+  "web.admin.nodes.key.issueFor": [
+    {
+      "type": 1,
+      "value": "name"
+    },
+    {
+      "type": 0,
+      "value": "のキーを発行"
+    }
+  ],
+  "web.admin.nodes.key.issued": [
+    {
+      "type": 0,
+      "value": "キー発行済み"
+    }
+  ],
+  "web.admin.nodes.key.issuing": [
+    {
+      "type": 0,
+      "value": "キーを発行中…"
+    }
+  ],
+  "web.admin.nodes.key.keyLabel": [
+    {
+      "type": 0,
+      "value": "ノードキー"
+    }
+  ],
+  "web.admin.nodes.key.later": [
+    {
+      "type": 0,
+      "value": "今はしない"
+    }
+  ],
+  "web.admin.nodes.key.missing": [
+    {
+      "type": 0,
+      "value": "キーなし：キーが発行されるまで、このノードは処理を受け付けません"
+    }
+  ],
+  "web.admin.nodes.key.notShownAgain": [
+    {
+      "type": 0,
+      "value": "今すぐキーをコピーしてください。キーは再表示されません。紛失した場合は、キーをローテーションし、新しいキーでノードを再起動してください。"
+    }
+  ],
+  "web.admin.nodes.key.offer": [
+    {
+      "type": 1,
+      "value": "name"
+    },
+    {
+      "type": 0,
+      "value": "はキーを取得するまで処理を受け付けません。今すぐキーを発行して、ノードの起動に必要な設定を取得してください。"
+    }
+  ],
+  "web.admin.nodes.key.rotate": [
+    {
+      "type": 0,
+      "value": "キーをローテーション"
+    }
+  ],
+  "web.admin.nodes.key.rotateDescription": [
+    {
+      "type": 0,
+      "value": "現在のキーはすぐに使用できなくなります。ノードはこのサーバーとの接続を失い、実行中のストリームは失敗します。新しいキーで再起動するまで、ノードは処理を受け付けません。"
+    }
+  ],
+  "web.admin.nodes.key.rotateDrainHint": [
+    {
+      "type": 0,
+      "value": "ストリームの中断を避けるには、先にノードをドレインし、「ドレイン完了」と表示されてからキーをローテーションしてください。"
+    }
+  ],
+  "web.admin.nodes.key.rotateFor": [
+    {
+      "type": 1,
+      "value": "name"
+    },
+    {
+      "type": 0,
+      "value": "のキーをローテーション"
+    }
+  ],
+  "web.admin.nodes.key.rotateTitle": [
+    {
+      "type": 1,
+      "value": "name"
+    },
+    {
+      "type": 0,
+      "value": "のキーをローテーションしますか？"
+    }
+  ],
+  "web.admin.nodes.key.saved": [
+    {
+      "type": 0,
+      "value": "キーを保存しました"
+    }
+  ],
+  "web.admin.nodes.key.settingsHelp": [
+    {
+      "type": 0,
+      "value": "この2つの設定でノードを起動してください。すでに実行中のノードは、再起動するまで古いキーを使い続けます。"
+    }
+  ],
+  "web.admin.nodes.key.settingsLabel": [
+    {
+      "type": 0,
+      "value": "ノードの設定"
+    }
+  ],
+  "web.admin.nodes.key.unconfirmed": [
+    {
+      "type": 1,
+      "value": "name"
+    },
+    {
+      "type": 0,
+      "value": "の新しいキーを確認できませんでした。もう一度試す前にページを再読み込みしてください。キーが発行されていた場合、以前のキーはすでに使用できなくなっています。"
     }
   ],
   "web.admin.nodes.memory.noReading": [
@@ -76345,20 +77201,6 @@
       "value": "number"
     }
   ],
-  "web.audiobooks.chapters.count": [
-    {
-      "type": 0,
-      "value": "（"
-    },
-    {
-      "type": 1,
-      "value": "count"
-    },
-    {
-      "type": 0,
-      "value": "）"
-    }
-  ],
   "web.audiobooks.chapters.duration": [
     {
       "type": 1,
@@ -76383,34 +77225,76 @@
       "value": "チャプター"
     }
   ],
-  "web.audiobooks.chapters.listening": [
+  "web.audiobooks.chapters.leftInChapter": [
     {
       "type": 0,
-      "value": "再生中"
+      "value": "このチャプターの残り："
+    },
+    {
+      "type": 1,
+      "value": "time"
     }
   ],
-  "web.audiobooks.chapters.sort": [
+  "web.audiobooks.chapters.showAll": [
     {
       "type": 0,
-      "value": "並べ替え"
+      "value": "すべて表示（"
+    },
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "）"
     }
   ],
-  "web.audiobooks.chapters.sortAria": [
+  "web.audiobooks.chapters.showFewer": [
     {
       "type": 0,
-      "value": "チャプターを並べ替え"
+      "value": "表示を減らす"
     }
   ],
-  "web.audiobooks.chapters.sortLongest": [
+  "web.audiobooks.detail.finished": [
     {
       "type": 0,
-      "value": "長い順"
+      "value": "聴き終わり"
     }
   ],
-  "web.audiobooks.chapters.sortPosition": [
+  "web.audiobooks.detail.length": [
     {
       "type": 0,
-      "value": "収録順"
+      "value": "再生時間"
+    }
+  ],
+  "web.audiobooks.detail.publisher": [
+    {
+      "type": 0,
+      "value": "出版社"
+    }
+  ],
+  "web.audiobooks.detail.released": [
+    {
+      "type": 0,
+      "value": "発行年"
+    }
+  ],
+  "web.audiobooks.detail.seriesBook": [
+    {
+      "type": 1,
+      "value": "series"
+    },
+    {
+      "type": 0,
+      "value": "、第"
+    },
+    {
+      "type": 1,
+      "value": "number"
+    },
+    {
+      "type": 0,
+      "value": "巻"
     }
   ],
   "web.audiobooks.duration.hours": [
@@ -77011,6 +77895,12 @@
       "pluralType": "cardinal"
     }
   ],
+  "web.audiobooks.hero.alsoListening": [
+    {
+      "type": 0,
+      "value": "ほかに聴いている本"
+    }
+  ],
   "web.audiobooks.hero.ariaLabel": [
     {
       "type": 0,
@@ -77049,38 +77939,6 @@
       "value": "total"
     }
   ],
-  "web.audiobooks.hero.chapterPositionTitled": [
-    {
-      "type": 0,
-      "value": "チャプター"
-    },
-    {
-      "type": 1,
-      "value": "index"
-    },
-    {
-      "type": 0,
-      "value": "/"
-    },
-    {
-      "type": 1,
-      "value": "total"
-    },
-    {
-      "type": 0,
-      "value": " · "
-    },
-    {
-      "type": 1,
-      "value": "chapter"
-    }
-  ],
-  "web.audiobooks.hero.eyebrow": [
-    {
-      "type": 0,
-      "value": "再生中"
-    }
-  ],
   "web.audiobooks.hero.listen": [
     {
       "type": 0,
@@ -77113,12 +77971,6 @@
     {
       "type": 0,
       "value": "再開"
-    }
-  ],
-  "web.audiobooks.narrator.heading": [
-    {
-      "type": 0,
-      "value": "ナレーター"
     }
   ],
   "web.audiobooks.narrator.narrationCount": [
@@ -77158,20 +78010,16 @@
       "value": "プレーヤーに戻る"
     }
   ],
-  "web.audiobooks.player.chapterNumber": [
-    {
-      "type": 0,
-      "value": "チャプター"
-    },
-    {
-      "type": 1,
-      "value": "number"
-    }
-  ],
   "web.audiobooks.player.close": [
     {
       "type": 0,
       "value": "プレーヤーを閉じる"
+    }
+  ],
+  "web.audiobooks.player.comingUp": [
+    {
+      "type": 0,
+      "value": "次のチャプター"
     }
   ],
   "web.audiobooks.player.faster": [
@@ -89623,6 +90471,20 @@
       "value": "不明"
     }
   ],
+  "web.common.activity.subtitle.episode": [
+    {
+      "type": 1,
+      "value": "code"
+    },
+    {
+      "type": 0,
+      "value": " · "
+    },
+    {
+      "type": 1,
+      "value": "series"
+    }
+  ],
   "web.common.activity.subtitle.movie": [
     {
       "type": 0,
@@ -89771,6 +90633,12 @@
       "value": "これらのルールには、ガイド表示では表示できないオプションが使われています。"
     }
   ],
+  "web.common.collections.posterUpdateFailed": [
+    {
+      "type": 0,
+      "value": "ポスターを更新できませんでした"
+    }
+  ],
   "web.common.date.daysAgo": [
     {
       "type": 6,
@@ -89879,6 +90747,270 @@
       "value": "不明なプラットフォーム"
     }
   ],
+  "web.common.errors.accessGroupIdUnsupported": [
+    {
+      "type": 0,
+      "value": "このグループにはサポートされていないIDが含まれています。"
+    }
+  ],
+  "web.common.errors.accessGroupPaginationInvalid": [
+    {
+      "type": 0,
+      "value": "グループのページ情報が無効です。リストを再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.accessGroupReloadBeforeSaving": [
+    {
+      "type": 0,
+      "value": "保存する前にこのグループを再読み込みしてください。強いETagが必要です。"
+    }
+  ],
+  "web.common.errors.collectionVersionUnavailable": [
+    {
+      "type": 0,
+      "value": "このコレクションのバージョンを取得できません。編集する前に再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.downloadUnavailable": [
+    {
+      "type": 0,
+      "value": "ダウンロードできません（"
+    },
+    {
+      "type": 1,
+      "value": "status"
+    },
+    {
+      "type": 0,
+      "value": "）。"
+    }
+  ],
+  "web.common.errors.fileIdInvalid": [
+    {
+      "type": 0,
+      "value": "ファイルIDが無効です。"
+    }
+  ],
+  "web.common.errors.invitationAcceptanceUnavailable": [
+    {
+      "type": 0,
+      "value": "招待を承諾できません。"
+    }
+  ],
+  "web.common.errors.invitationPaginationInvalid": [
+    {
+      "type": 0,
+      "value": "招待のページ情報が無効です。リストを再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.invitationResponseIncomplete": [
+    {
+      "type": 0,
+      "value": "招待は作成された可能性がありますが、応答が不完全でした。続行する前に履歴を再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.joinedRoomIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "参加したルームのIDが無効です。"
+    }
+  ],
+  "web.common.errors.memberIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "メンバーのIDが無効です。"
+    }
+  ],
+  "web.common.errors.memberStateLimit": [
+    {
+      "type": 0,
+      "value": "メンバーの状態を一度に読み込めるのは"
+    },
+    {
+      "type": 1,
+      "value": "max"
+    },
+    {
+      "type": 0,
+      "value": "件までです。"
+    }
+  ],
+  "web.common.errors.notificationDestinationContinuationInvalid": [
+    {
+      "type": 0,
+      "value": "通知先リストの続きの情報が無効です。"
+    }
+  ],
+  "web.common.errors.notificationDestinationPageInvalid": [
+    {
+      "type": 0,
+      "value": "通知先のページが無効です。"
+    }
+  ],
+  "web.common.errors.notificationDestinationsTooMany": [
+    {
+      "type": 0,
+      "value": "通知先が多すぎて表示できません。リストを再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.notificationLibraryIdUnsupported": [
+    {
+      "type": 0,
+      "value": "通知にサポートされていないライブラリIDが含まれています。"
+    }
+  ],
+  "web.common.errors.notificationPageInvalid": [
+    {
+      "type": 0,
+      "value": "通知のページが無効です。通知を再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.notificationSeriesPageInvalid": [
+    {
+      "type": 0,
+      "value": "シリーズのページが無効です。通知を再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.notificationsReloadBeforeMarkingRead": [
+    {
+      "type": 0,
+      "value": "既読にする前に通知を再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.onboardingProgressNoRevision": [
+    {
+      "type": 0,
+      "value": "オンボーディングの進行状況にリビジョンがありません。再読み込みして続行してください。"
+    }
+  ],
+  "web.common.errors.onboardingReloadTour": [
+    {
+      "type": 0,
+      "value": "続行する前にツアーを再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.onboardingStateNoRevision": [
+    {
+      "type": 0,
+      "value": "オンボーディングの状態にリビジョンがありません。再読み込みして続行してください。"
+    }
+  ],
+  "web.common.errors.onboardingStillSaving": [
+    {
+      "type": 0,
+      "value": "オンボーディングの進行状況を保存中です。"
+    }
+  ],
+  "web.common.errors.playbackControlCredentialInvalid": [
+    {
+      "type": 0,
+      "value": "再生コントロールの認証情報が無効です。"
+    }
+  ],
+  "web.common.errors.realtimeCredentialInvalid": [
+    {
+      "type": 0,
+      "value": "リアルタイム接続のハンドシェイク認証情報が無効です。"
+    }
+  ],
+  "web.common.errors.roomIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "ルームのIDが無効です。"
+    }
+  ],
+  "web.common.errors.roomSelectionIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "ルームの選択のIDが無効です。"
+    }
+  ],
+  "web.common.errors.roomSnapshotInvalid": [
+    {
+      "type": 0,
+      "value": "ルームのスナップショットが無効です。"
+    }
+  ],
+  "web.common.errors.roomSocketCredentialInvalid": [
+    {
+      "type": 0,
+      "value": "ルームのソケット認証情報が無効です。"
+    }
+  ],
+  "web.common.errors.roomSuggestionInvalid": [
+    {
+      "type": 0,
+      "value": "ルームの提案が無効です。"
+    }
+  ],
+  "web.common.errors.roomSuggestionsTooMany": [
+    {
+      "type": 0,
+      "value": "ルームの提案が多すぎます。ルームを再読み込みしてください。"
+    }
+  ],
+  "web.common.errors.sessionRefreshUnavailable": [
+    {
+      "type": 0,
+      "value": "サーバーが応答しなかったため、セッションを更新できませんでした。"
+    }
+  ],
+  "web.common.errors.sourceFallbackIdentityInvalid": [
+    {
+      "type": 0,
+      "value": "ソースのフォールバックのIDが無効です。"
+    }
+  ],
+  "web.common.errors.suggestionContinuationInvalid": [
+    {
+      "type": 0,
+      "value": "提案リストの続きの情報が無効です。"
+    }
+  ],
+  "web.common.errors.suggestionContinuationMissing": [
+    {
+      "type": 0,
+      "value": "提案リストの続きの情報がありません。"
+    }
+  ],
+  "web.common.errors.suggestionReceiptInvalid": [
+    {
+      "type": 0,
+      "value": "提案の受領情報が無効です。"
+    }
+  ],
+  "web.common.errors.verificationReceiptMismatch": [
+    {
+      "type": 0,
+      "value": "確認の受領情報が送信したリクエストと一致しません。"
+    }
+  ],
+  "web.common.errors.watchlistPageRepeated": [
+    {
+      "type": 0,
+      "value": "ウォッチリストのタイトル一覧でページカーソルが重複しました。"
+    }
+  ],
+  "web.common.format.bitrate.bps": [
+    {
+      "type": 1,
+      "value": "rate"
+    },
+    {
+      "type": 0,
+      "value": " bps"
+    }
+  ],
+  "web.common.format.bitrate.gbps": [
+    {
+      "type": 1,
+      "value": "rate"
+    },
+    {
+      "type": 0,
+      "value": " Gbps"
+    }
+  ],
   "web.common.format.bitrate.kbps": [
     {
       "type": 1,
@@ -89973,6 +91105,16 @@
     {
       "type": 1,
       "value": "chapter"
+    }
+  ],
+  "web.common.format.percent": [
+    {
+      "type": 1,
+      "value": "percent"
+    },
+    {
+      "type": 0,
+      "value": "%"
     }
   ],
   "web.common.format.runtime.hoursMinutes": [
@@ -90093,6 +91235,36 @@
     {
       "type": 0,
       "value": " MiB"
+    }
+  ],
+  "web.common.format.size.pb": [
+    {
+      "type": 1,
+      "value": "size"
+    },
+    {
+      "type": 0,
+      "value": " PB"
+    }
+  ],
+  "web.common.format.size.tb": [
+    {
+      "type": 1,
+      "value": "size"
+    },
+    {
+      "type": 0,
+      "value": " TB"
+    }
+  ],
+  "web.common.format.size.tib": [
+    {
+      "type": 1,
+      "value": "size"
+    },
+    {
+      "type": 0,
+      "value": " TiB"
     }
   ],
   "web.common.genres.action": [
@@ -90265,6 +91437,12 @@
     {
       "type": 0,
       "value": "西部劇"
+    }
+  ],
+  "web.common.job.cancellationRequested": [
+    {
+      "type": 0,
+      "value": "キャンセルをリクエスト済み"
     }
   ],
   "web.common.job.cancelled": [
@@ -91121,6 +92299,12 @@
       "value": "データ"
     }
   ],
+  "web.common.toast.collections.created": [
+    {
+      "type": 0,
+      "value": "コレクションを作成しました"
+    }
+  ],
   "web.common.toast.collections.deleteFailed": [
     {
       "type": 0,
@@ -91131,6 +92315,12 @@
     {
       "type": 0,
       "value": "コレクションを削除しました"
+    }
+  ],
+  "web.common.toast.collections.saved": [
+    {
+      "type": 0,
+      "value": "コレクションを保存しました"
     }
   ],
   "web.common.toast.collections.syncFailed": [
@@ -91459,6 +92649,18 @@
     {
       "type": 0,
       "value": "字幕をアップロードしました"
+    }
+  ],
+  "web.common.toast.watchProviders.authDeclined": [
+    {
+      "type": 0,
+      "value": "プロバイダーのサイトで接続が拒否されました。もう一度お試しいただくには「接続」を選択してください。"
+    }
+  ],
+  "web.common.toast.watchProviders.authNotApproved": [
+    {
+      "type": 0,
+      "value": "先にプロバイダーのサイトでコードを承認してから、もう一度お試しください。"
     }
   ],
   "web.common.toast.watchProviders.connectFailed": [
@@ -97384,6 +98586,20 @@
       "value": "Siloのホームのレイアウトのエクスポートではありません。"
     }
   ],
+  "web.home.layout.transfer.pageTooLarge": [
+    {
+      "type": 0,
+      "value": "このページの保存済みセクション変更が"
+    },
+    {
+      "type": 1,
+      "value": "max"
+    },
+    {
+      "type": 0,
+      "value": "件を超えます"
+    }
+  ],
   "web.home.layout.transfer.preferencesFailed": [
     {
       "type": 0,
@@ -98324,6 +99540,16 @@
     {
       "type": 0,
       "value": "後で見るために保存したもの"
+    }
+  ],
+  "web.home.rows.describe.pageNameLibrary": [
+    {
+      "type": 1,
+      "value": "label"
+    },
+    {
+      "type": 0,
+      "value": "ページ"
     }
   ],
   "web.home.rows.describe.randomMix": [
@@ -102134,6 +103360,36 @@
       "value": "話"
     }
   ],
+  "web.item.card.mangaStatus.cancelled": [
+    {
+      "type": 0,
+      "value": "打ち切り"
+    }
+  ],
+  "web.item.card.mangaStatus.completed": [
+    {
+      "type": 0,
+      "value": "完結"
+    }
+  ],
+  "web.item.card.mangaStatus.hiatus": [
+    {
+      "type": 0,
+      "value": "休載中"
+    }
+  ],
+  "web.item.card.mangaStatus.ongoing": [
+    {
+      "type": 0,
+      "value": "連載中"
+    }
+  ],
+  "web.item.card.mangaStatus.upcoming": [
+    {
+      "type": 0,
+      "value": "連載予定"
+    }
+  ],
   "web.item.card.mangaVolumes": [
     {
       "type": 1,
@@ -104128,6 +105384,94 @@
     {
       "type": 0,
       "value": "フィルターをクリア"
+    }
+  ],
+  "web.library.browse.countBooks": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "other": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": "冊"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
+    }
+  ],
+  "web.library.browse.countEpisodes": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "other": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": "エピソード"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
+    }
+  ],
+  "web.library.browse.countMovies": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "other": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": "本の映画"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
+    }
+  ],
+  "web.library.browse.countSeries": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "other": {
+          "value": [
+            {
+              "type": 1,
+              "value": "shown"
+            },
+            {
+              "type": 0,
+              "value": "シリーズ"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
     }
   ],
   "web.library.browse.lettersRefreshFailed": [
@@ -106910,6 +108254,26 @@
       "value": "トランスコードが無効です"
     }
   ],
+  "web.player.error.unknownMediaError": [
+    {
+      "type": 0,
+      "value": "不明なメディア要素エラー"
+    }
+  ],
+  "web.player.error.updateFailed": [
+    {
+      "type": 0,
+      "value": "再生状況を更新できませんでした（"
+    },
+    {
+      "type": 1,
+      "value": "status"
+    },
+    {
+      "type": 0,
+      "value": "）"
+    }
+  ],
   "web.player.error.upgradeRequired.message": [
     {
       "type": 0,
@@ -109328,6 +110692,18 @@
       "value": "PINを削除"
     }
   ],
+  "web.profiles.editor.requestsAllowed": [
+    {
+      "type": 0,
+      "value": "リクエストを許可"
+    }
+  ],
+  "web.profiles.editor.requestsAllowedHint": [
+    {
+      "type": 0,
+      "value": "このプロフィールで、ライブラリにないタイトルを閲覧してリクエストできるようにします。これらのタイトルには、年齢制限の上限が米国のレーティングのみで適用され、推奨年齢の上限は適用されません。"
+    }
+  ],
   "web.profiles.editor.restrictLibraries": [
     {
       "type": 0,
@@ -109440,6 +110816,12 @@
       },
       "offset": 0,
       "pluralType": "cardinal"
+    }
+  ],
+  "web.profiles.helpers.access.noRequests": [
+    {
+      "type": 0,
+      "value": "リクエスト不可"
     }
   ],
   "web.profiles.helpers.access.quality": [
@@ -110266,6 +111648,12 @@
       "value": "0＝無制限"
     }
   ],
+  "web.reader.document.fallbackTitle": [
+    {
+      "type": 0,
+      "value": "ドキュメント"
+    }
+  ],
   "web.reader.endOfBook.nextChapter": [
     {
       "type": 0,
@@ -110274,6 +111662,12 @@
     {
       "type": 1,
       "value": "chapter"
+    }
+  ],
+  "web.reader.error.fileEmpty": [
+    {
+      "type": 0,
+      "value": "ファイルが空です"
     }
   ],
   "web.reader.error.fileIdentifier": [
@@ -110292,6 +111686,18 @@
     {
       "type": 0,
       "value": "このファイルは大きすぎるため、ブラウザーで開けません。代わりにダウンロードしてください。"
+    }
+  ],
+  "web.reader.error.unsupportedFormat": [
+    {
+      "type": 0,
+      "value": "サポートされていない書籍形式です"
+    }
+  ],
+  "web.reader.error.unsupportedOrCorrupted": [
+    {
+      "type": 0,
+      "value": "サポートされていないか、破損した書籍ファイルです"
     }
   ],
   "web.reader.fileOption.unnamed": [
@@ -110490,6 +111896,31 @@
     {
       "type": 0,
       "value": "検索を実行"
+    }
+  ],
+  "web.reader.search.truncated": [
+    {
+      "type": 6,
+      "value": "count",
+      "options": {
+        "other": {
+          "value": [
+            {
+              "type": 0,
+              "value": "最初の"
+            },
+            {
+              "type": 7
+            },
+            {
+              "type": 0,
+              "value": "件の一致を表示しています。"
+            }
+          ]
+        }
+      },
+      "offset": 0,
+      "pluralType": "cardinal"
     }
   ],
   "web.reader.settings.brightness": [
@@ -111332,6 +112763,12 @@
       "value": "インポート待ち"
     }
   ],
+  "web.requests.hub.blockedIntro": [
+    {
+      "type": 0,
+      "value": "このプロフィールではリクエストがオフになっています。このプロフィールが行ったリクエストは、引き続き確認やキャンセルができます。"
+    }
+  ],
   "web.requests.hub.browseDiscover": [
     {
       "type": 0,
@@ -111546,6 +112983,12 @@
     {
       "type": 0,
       "value": "このアカウントからのリクエストを、次に起こることごとにまとめています。"
+    }
+  ],
+  "web.requests.hub.yoursIntroProfile": [
+    {
+      "type": 0,
+      "value": "このプロフィールが行ったリクエストを、次に起こることごとにまとめています。"
     }
   ],
   "web.requests.pageTitle": [
@@ -117769,6 +119212,38 @@
       "value": "音声チャンネル"
     }
   ],
+  "web.settings.overlays.badge.availability.description": [
+    {
+      "type": 0,
+      "value": "シリーズでは全エピソードが揃ったシーズン、シーズンではライブラリにあるエピソード"
+    }
+  ],
+  "web.settings.overlays.badge.availability.label": [
+    {
+      "type": 0,
+      "value": "収録状況"
+    }
+  ],
+  "web.settings.overlays.badge.availability.value.complete": [
+    {
+      "type": 0,
+      "value": "コンプリート"
+    }
+  ],
+  "web.settings.overlays.badge.availability.value.fraction": [
+    {
+      "type": 1,
+      "value": "have"
+    },
+    {
+      "type": 0,
+      "value": "/"
+    },
+    {
+      "type": 1,
+      "value": "total"
+    }
+  ],
   "web.settings.overlays.badge.container.description": [
     {
       "type": 0,
@@ -117845,6 +119320,12 @@
     {
       "type": 0,
       "value": "字幕あり"
+    }
+  ],
+  "web.settings.overlays.badge.multiSub.value": [
+    {
+      "type": 0,
+      "value": "CC"
     }
   ],
   "web.settings.overlays.badge.network.description": [
@@ -119521,6 +121002,12 @@
     {
       "type": 0,
       "value": "Wi-Fi"
+    }
+  ],
+  "web.settings.plexAuth.homeUserFallbackName": [
+    {
+      "type": 0,
+      "value": "Plexユーザー"
     }
   ],
   "web.settings.plexAuth.homeUserNoServerAccess": [

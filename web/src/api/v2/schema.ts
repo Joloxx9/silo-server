@@ -3991,7 +3991,7 @@ export interface paths {
     put?: never;
     /**
      * Test an auth plugin's connection with staged, unsaved settings.
-     * @description The running plugin tests the staged configuration (merged over the stored entries it does not replace) and persists nothing. A failed check is a 200 result with ok false. A plugin without a connection test, or a disabled installation, is 409. The check reaches the provider and is bounded by a server timeout; never retry an uncertain result automatically.
+     * @description The running plugin tests the staged configuration (merged over the stored entries it does not replace) and persists nothing. A blank secret field reuses the stored secret only while the rest of that entry is unchanged and no secret in it is entered (a secret object or list sent in it counts as entered); otherwise that entry is tested with only the secrets entered. The rule is per entry: stored entries not named here keep their secrets. A failed check is a 200 result with ok false. A plugin without a connection test, or a disabled installation, is 409. The check reaches the provider and is bounded by a server timeout; never retry an uncertain result automatically.
      */
     post: operations["testAdminPluginAuthBinding"];
     delete?: never;
@@ -7513,7 +7513,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Search people by name, with exact matches first and optional media scope. */
+    /** Search people by name, with exact matches first, then the most credited for a specific query, and optional media scope. */
     get: operations["listPeople"];
     put?: never;
     post?: never;
@@ -9113,7 +9113,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Manage emailed invitations. */
+    /**
+     * Manage emailed invitations.
+     * @deprecated
+     * @description Deprecated: a token in the path reaches the access logs of anything in front of the server. Use lookupInvitationLink.
+     */
     get: operations["lookupInvitation"];
     put?: never;
     post?: never;
@@ -9132,8 +9136,29 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Manage emailed invitations. */
+    /**
+     * Manage emailed invitations.
+     * @deprecated
+     * @description Deprecated: a token in the path reaches the access logs of anything in front of the server. Use acceptInvitationLink.
+     */
     post: operations["acceptInvitation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/invitations/accept": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create the invited account through an invitation link. */
+    post: operations["acceptInvitationLink"];
     delete?: never;
     options?: never;
     head?: never;
@@ -9151,6 +9176,23 @@ export interface paths {
     get: operations["getInvitationCapabilities"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/invitations/lookup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Describe an invitation link for the claim screen. */
+    post: operations["lookupInvitationLink"];
     delete?: never;
     options?: never;
     head?: never;
@@ -10530,7 +10572,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Describe a usable password reset link for the reset screen. */
+    /**
+     * Describe a usable password reset link for the reset screen.
+     * @deprecated
+     * @description Deprecated: a token in the path reaches the access logs of anything in front of the server. Use lookupPasswordResetLink.
+     */
     get: operations["lookupPasswordReset"];
     put?: never;
     post?: never;
@@ -10549,8 +10595,46 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Set a new password through a reset link, sign out everywhere, and sign in. */
+    /**
+     * Set a new password through a reset link, sign out everywhere, and sign in.
+     * @deprecated
+     * @description Deprecated: a token in the path reaches the access logs of anything in front of the server. Use completePasswordResetLink.
+     */
     post: operations["completePasswordReset"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/password-resets/complete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Set a new password through a reset link, sign out everywhere, and sign in. */
+    post: operations["completePasswordResetLink"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/password-resets/lookup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Describe a usable password reset link for the reset screen. */
+    post: operations["lookupPasswordResetLink"];
     delete?: never;
     options?: never;
     head?: never;
@@ -11458,7 +11542,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get one of the account's media requests. */
+    /**
+     * Get one of the account's media requests.
+     * @description A profile the household manager blocked from requests gets 403 for a request another profile made, unless it acts as an admin.
+     */
     get: operations["getRequest"];
     put?: never;
     post?: never;
@@ -11681,7 +11768,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List the account's media requests, newest first. */
+    /**
+     * List the account's media requests, newest first.
+     * @description Lists the requests every profile on the account made. A profile the household manager blocked from requests sees only the requests it made itself.
+     */
     get: operations["listMyRequests"];
     put?: never;
     post?: never;
@@ -12376,7 +12466,7 @@ export interface paths {
     put?: never;
     /**
      * Submit a bounded subtitle multipart form.
-     * @description Detect a subtitle language from filename, metadata or content with an optional manual fallback. Does not store the file.
+     * @description Detect a subtitle language from filename, metadata or content with an optional manual fallback. Does not store the file. A server runs at most 4 detections at once and an account may run two of them; beyond either limit the request gets 429 with Retry-After.
      */
     post: operations["detectSubtitleLanguage"];
     delete?: never;
@@ -12812,7 +12902,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Poll device authorization. Concurrent polls are not durably coalesced. */
+    /**
+     * Poll device authorization. Concurrent polls are not durably coalesced.
+     * @description Refusals, by problem type: 409 conflict (the person has not approved the code yet); 410 device_login_expired (the code expired, or was already used and the connection no longer exists); 403 not_permitted (the person declined it on the provider's site). Polling a session that already completed answers the connection again, so retrying after a lost answer is safe.
+     */
     post: operations["pollWatchProviderDeviceAuth"];
     delete?: never;
     options?: never;
@@ -16390,6 +16483,7 @@ export interface components {
        * @enum {string}
        */
       state: "available" | "disabled" | "not_configured" | "unsupported";
+      streams_by_method: boolean;
       timeseries: boolean;
       top_activity: boolean;
       watch_providers: boolean;
@@ -16517,6 +16611,14 @@ export interface components {
       total_users: number;
       watch_providers: components["schemas"]["AdminDashboardWatchProviderStats"][];
     };
+    AdminDashboardStreamsByMethod: {
+      /** Format: int64 */
+      direct: number;
+      /** Format: int64 */
+      remux: number;
+      /** Format: int64 */
+      transcode: number;
+    };
     AdminDashboardTimeseries: {
       /** Format: int64 */
       download_egress_bytes: number;
@@ -16558,6 +16660,8 @@ export interface components {
       remux: number;
       /** Format: int64 */
       streams: number;
+      /** @description streams split by play method, from the bucket's peak-streams minute, so the parts add up to no more than streams and can be stacked. direct, remux and transcode on the point are each their own peak and may come from different minutes. Sessions with any other play method are streams minus the sum of these values. */
+      streams_by_method: components["schemas"]["AdminDashboardStreamsByMethod"];
       /**
        * Format: date-time
        * @description RFC 3339 instant in UTC with millisecond precision
@@ -18288,6 +18392,8 @@ export interface components {
        * @enum {string}
        */
       state: "available" | "disabled" | "not_configured" | "unsupported";
+      /** @description Whether lookupInvitationLink and acceptInvitationLink, which take the token in the request body, are available. Servers that predate them omit this; read an absent value as false and use the deprecated path operations there. */
+      token_in_body?: boolean;
     };
     AdminInvitationCreateInputBody: {
       /**
@@ -18450,6 +18556,7 @@ export interface components {
       /** @description Null clears the stored date */
       first_air_date?: string | null;
       genres?: string[] | null;
+      /** @description IMDb title ID, stored trimmed and in lowercase; an empty string clears it */
       imdb_id?: string | null;
       /** @description Null clears the stored date */
       last_air_date?: string | null;
@@ -18492,7 +18599,9 @@ export interface components {
       studios?: string[] | null;
       tagline?: string | null;
       title?: string | null;
+      /** @description TMDB ID, stored trimmed and without a TMDB URL slug (550-fight-club saves as 550); an empty string clears it */
       tmdb_id?: string | null;
+      /** @description TheTVDB ID, stored trimmed; an empty string clears it */
       tvdb_id?: string | null;
       /** Format: int64 */
       year?: number | null;
@@ -19377,8 +19486,8 @@ export interface components {
       expires_at: string;
       /**
        * Format: uri
-       * @description Present for delivery=link only. One-time disclosure of a bearer credential for the account's password; share it only with the account holder
-       * @example https://silo.example.test/reset-password/3f2b47eb7b36dd2d
+       * @description Present for delivery=link only. One-time disclosure of a bearer credential for the account's password; share it only with the account holder. The token is the URL's fragment, which browsers never send to the server
+       * @example https://silo.example.test/reset-password#3f2b47eb7b36dd2d
        */
       reset_url?: string;
     };
@@ -19640,6 +19749,8 @@ export interface components {
       workloads: string[];
     };
     AdminPlaybackSession: {
+      /** @description Why the route changes the file instead of playing it as it is, video causes first, from the vocabulary in the capabilities' adaptation_reason_values. Absent for direct play, for a session planned before the server recorded reasons, and for Jellyfin-protocol sessions. Clients ignore values they do not know. */
+      adaptation_reasons?: string[];
       audio_decision?: string;
       /** Format: int64 */
       audio_track_index: number;
@@ -19661,7 +19772,10 @@ export interface components {
       episode_name?: string;
       /** Format: int64 */
       episode_number?: number;
-      /** Format: int64 */
+      /**
+       * Format: int64
+       * @description Length in seconds of what position_seconds is measured against: the file, or the whole book for a multi-file audiobook; null when unknown
+       */
       file_duration: number | null;
       has_playback_control: boolean;
       is_jellyfin_client?: boolean;
@@ -19772,6 +19886,10 @@ export interface components {
       video_decision?: string;
     };
     AdminPlaybackSessionCapabilitiesOutputBody: {
+      /** @description Every adaptation_reasons value this server emits, in the order it reports them. A later server may add values. */
+      adaptation_reason_values: string[];
+      /** @description Rows may carry adaptation_reasons */
+      adaptation_reasons: boolean;
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
       available: boolean;
@@ -19912,7 +20030,7 @@ export interface components {
     AdminPluginAuthBindingTestInputBody: {
       /** @description auth_provider.v1 capability to test; empty tests the plugin's first one */
       capability_id?: string;
-      /** @description Staged global configuration entries, unsaved, merged as updateAdminPluginInstallationConfig would merge them. Entries and fields not named here use the stored values; a declared non-secret field sent as null or a blank string is cleared so the plugin default applies; blank secret fields use the stored secret; clear_secrets drops it from the test */
+      /** @description Staged global configuration entries, unsaved, merged as updateAdminPluginInstallationConfig would merge them. Entries and fields not named here use the stored values; a declared non-secret field sent as null or a blank string is cleared so the plugin default applies; blank secret fields use the stored secret only while the rest of that entry is unchanged and no secret in it is entered (a secret object or list sent in it counts as entered), otherwise only the secrets entered are used and stored top-level fields the schema does not declare are left out of that entry; clear_secrets drops it from the test */
       config?: components["schemas"]["AdminPluginConfigWrite"][];
     };
     AdminPluginAuthBindingWrite: {
@@ -20024,7 +20142,7 @@ export interface components {
       clear_secrets?: string[];
       /** @description The manifest global_config_schema key */
       key: string;
-      /** @description The entry's fields, merged over the stored entry. A declared non-secret top-level field sent as null or a blank string is removed so the plugin default applies; blank secret fields preserve the stored secret */
+      /** @description The entry's fields, merged over the stored entry. A declared non-secret top-level field sent as null or a blank string is removed so the plugin default applies; blank secret fields preserve the stored secret. A connection test reuses a stored secret only while the rest of the entry is unchanged and no secret in it is entered (a secret object or list sent in it counts as entered); otherwise it also leaves out stored top-level fields the schema does not declare */
       value: {
         [key: string]: unknown;
       };
@@ -21950,6 +22068,11 @@ export interface components {
       next_run_at?: string;
       /** Format: double */
       progress: number;
+      /**
+       * Format: date-time
+       * @description When the run in progress on this process started. Absent while the task is idle.
+       */
+      started_at?: string;
       /** @enum {string} */
       state: "idle" | "running" | "cancelling";
       triggers: components["schemas"]["AdminTaskTrigger"][];
@@ -23277,7 +23400,7 @@ export interface components {
       device_id: string;
     };
     ApplePushResetReceipt: {
-      /** @description True when the server cleared the installation's binding and its Apple push registrations. False when there was nothing to clear: no ordered record for this device_id, or one already bound to the sent key, whose generation order still applies. After a cleared or absent record, the next registration with that key binds at any positive generation. */
+      /** @description True when the server cleared the installation's binding and its Apple push registrations. False when there was nothing to clear: no ordered record for this device_id, or one already bound to the sent key, whose generation order still applies. After a cleared or absent record, the next registration with that key binds at any positive generation, unless a retirement reached the cleared record first and fenced older generations. */
       reset: boolean;
     };
     ApplePushRetirementBody: {
@@ -23364,8 +23487,27 @@ export interface components {
     };
     AudiobookRelatedItem: {
       content_id: string;
+      /**
+       * Format: int64
+       * @description Audiobooks only: total listening time, summed over the book's files the viewer can play, as the book's own total_duration_seconds is. Absent for ebooks and when no file reports a duration
+       * @example 41520
+       */
+      duration_seconds?: number;
+      /**
+       * @description The profile finished this book, by the rule a catalog card's user_state.played follows: an audiobook's visible progress or a visible completed history row, an ebook's reading progress. Absent when false and without a profile
+       * @example true
+       */
+      played?: boolean;
+      /** @description The poster's ThumbHash, for a blurred preview while poster_url loads */
+      poster_thumbhash?: string;
       /** Format: uri-reference */
       poster_url?: string;
+      /**
+       * Format: double
+       * @description How far the profile is into the book, 0-1: listening position over the progress row's duration for an audiobook, reading progress for an ebook. Present only while the book is started and not played
+       * @example 0.42
+       */
+      progress_ratio?: number;
       /** Format: int64 */
       series_index?: number;
       title: string;
@@ -23762,6 +23904,20 @@ export interface components {
       tmdb_id?: string;
       tvdb_id?: string;
     };
+    CatalogAvailability: {
+      /**
+       * Format: int64
+       * @description Complete seasons, or episodes in the library
+       * @example 2
+       */
+      have: number;
+      /**
+       * Format: int64
+       * @description Seasons that have aired, or known episodes
+       * @example 3
+       */
+      total: number;
+    };
     CatalogBoxSet: {
       backdrop_thumbhash?: string;
       /**
@@ -23961,6 +24117,15 @@ export interface components {
        * @enum {string}
        */
       advisory_source?: "commonsense" | "mdblist";
+      /**
+       * @description On an audiobook or ebook card in a catalog browse listing: up to three author names in credit order, the names the book's detail page lists under authors. Absent for other types, on other listings, and when the book credits no author
+       * @example [
+       *       "Frank Herbert"
+       *     ]
+       */
+      authors?: string[];
+      /** @description On a series, complete seasons out of seasons that have aired. On a season, episodes in the library out of the episodes the season lists. Sent only while the acting profile's poster badges are on and include the availability badge. Absent for other types, for specials, and when episode metadata is incomplete. */
+      availability?: components["schemas"]["CatalogAvailability"];
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -23978,7 +24143,10 @@ export interface components {
       content_id: string;
       /** @example R */
       content_rating?: string;
-      /** Format: double */
+      /**
+       * Format: double
+       * @description The length position_seconds is measured against, in seconds, as the progress record holds it. Present with position_seconds; a card draws its progress bar and time left from the pair
+       */
       duration_seconds?: number;
       /** Format: int64 */
       episode_number?: number;
@@ -24024,7 +24192,7 @@ export interface components {
       play_content_id?: string;
       /**
        * Format: double
-       * @description Resume position on a continue-watching card
+       * @description The profile's resume position, in seconds. On a Continue Watching card, and on a catalog browse or box set card for a title the profile has started and not finished (absent while user_state.played is true); other listings leave it absent. Series, seasons, and ebooks never carry it on a browse card
        */
       position_seconds?: number;
       /** @description Whether poster_url is an episode still. False for series or season artwork; absent when provenance is unavailable. */
@@ -24169,6 +24337,15 @@ export interface components {
       air_time?: string;
       air_timezone?: string;
       audiobook?: components["schemas"]["AudiobookDetailExtension"];
+      /**
+       * @description On an audiobook or ebook card in a catalog browse listing: up to three author names in credit order, the names the book's detail page lists under authors. Absent for other types, on other listings, and when the book credits no author
+       * @example [
+       *       "Frank Herbert"
+       *     ]
+       */
+      authors?: string[];
+      /** @description On a series, complete seasons out of seasons that have aired. On a season, episodes in the library out of the episodes the season lists. Sent only while the acting profile's poster badges are on and include the availability badge. Absent for other types, for specials, and when episode metadata is incomplete. */
+      availability?: components["schemas"]["CatalogAvailability"];
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -24211,7 +24388,10 @@ export interface components {
        * @description Presigned, short-lived. Transparent disc art. Movies only
        */
       disc_url?: string;
-      /** Format: double */
+      /**
+       * Format: double
+       * @description The length position_seconds is measured against, in seconds, as the progress record holds it. Present with position_seconds; a card draws its progress bar and time left from the pair
+       */
       duration_seconds?: number;
       ebook?: components["schemas"]["EbookDetailExtension"];
       /** @description Whether forced subtitles show for this item under the viewer's preferences */
@@ -24291,7 +24471,7 @@ export interface components {
       playback_variants?: components["schemas"]["PlaybackVariant"][];
       /**
        * Format: double
-       * @description Resume position on a continue-watching card
+       * @description The profile's resume position, in seconds. On a Continue Watching card, and on a catalog browse or box set card for a title the profile has started and not finished (absent while user_state.played is true); other listings leave it absent. Series, seasons, and ebooks never carry it on a browse card
        */
       position_seconds?: number;
       /** @description Whether poster_url is an episode still. False for series or season artwork; absent when provenance is unavailable. */
@@ -25550,6 +25730,14 @@ export interface components {
       page?: components["schemas"]["PageInfo"];
     };
     CompatConnectAccountInfo: {
+      /** @description True when a password sign-in without a provider, such as a Jellyfin client's, goes to the server's directory (LDAP), where this account has a linked identity, so the directory username and password sign in */
+      directory_login_available: boolean;
+      /**
+       * @description The account's username at that directory; present when directory_login_available is true
+       * @example alice
+       */
+      directory_username?: string;
+      /** @description True when the account's own Silo password signs in */
       password_login_available: boolean;
     };
     CompatConnectInfoResponse: {
@@ -26614,17 +26802,17 @@ export interface components {
       series_id: string;
     };
     DownloadSubscriptionPatchBody: {
-      active?: boolean | null;
-      delete_watched?: boolean | null;
+      active?: boolean;
+      delete_watched?: boolean;
       /** Format: int64 */
-      max_storage_bytes?: number | null;
-      mode?: string | null;
+      max_storage_bytes?: number;
+      mode?: string;
       /**
        * @description Quality preset for episodes registered from now on; already-registered downloads keep theirs.
-       * @enum {string|null}
+       * @enum {string}
        */
-      quality?: "original" | "20mbps" | "10mbps" | "5mbps" | "2mbps" | "1mbps" | null;
-      season_numbers?: number[] | null;
+      quality?: "original" | "20mbps" | "10mbps" | "5mbps" | "2mbps" | "1mbps";
+      season_numbers?: number[];
     };
     DownloadSubscriptionSync: {
       /**
@@ -27309,7 +27497,7 @@ export interface components {
       state: "available" | "disabled" | "not_configured" | "unsupported";
       /** @description Whether adding a title the library doesn't have to the watchlist also requests it (or follows its request) for this viewer: requests and watchlist requests are on for the server, the profile has not opted out, and the viewer may request. */
       watchlist_requests: boolean;
-      /** @description Whether the server keeps watchlist entries for titles the library doesn't have: the /watchlist/titles operations, and in_watchlist on discovery results and the title detail. False while requests are disabled, when those operations answer 409 capability_disabled; the entries are kept. */
+      /** @description Whether the server keeps watchlist entries for titles the library doesn't have: the /watchlist/titles operations, and in_watchlist on discovery results and the title detail. False while requests are disabled, when those operations answer 409 capability_disabled, and for a profile blocked from requests, when they answer 403; the entries are kept. */
       watchlist_titles_supported: boolean;
     };
     FileMarkers: {
@@ -27435,6 +27623,15 @@ export interface components {
        * @enum {string}
        */
       advisory_source?: "commonsense" | "mdblist";
+      /**
+       * @description On an audiobook or ebook card in a catalog browse listing: up to three author names in credit order, the names the book's detail page lists under authors. Absent for other types, on other listings, and when the book credits no author
+       * @example [
+       *       "Frank Herbert"
+       *     ]
+       */
+      authors?: string[];
+      /** @description On a series, complete seasons out of seasons that have aired. On a season, episodes in the library out of the episodes the season lists. Sent only while the acting profile's poster badges are on and include the availability badge. Absent for other types, for specials, and when episode metadata is incomplete. */
+      availability?: components["schemas"]["CatalogAvailability"];
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -27452,7 +27649,10 @@ export interface components {
       content_id: string;
       /** @example R */
       content_rating?: string;
-      /** Format: double */
+      /**
+       * Format: double
+       * @description The length position_seconds is measured against, in seconds, as the progress record holds it. Present with position_seconds; a card draws its progress bar and time left from the pair
+       */
       duration_seconds?: number;
       /** Format: int64 */
       episode_number?: number;
@@ -27498,7 +27698,7 @@ export interface components {
       play_content_id?: string;
       /**
        * Format: double
-       * @description Resume position on a continue-watching card
+       * @description The profile's resume position, in seconds. On a Continue Watching card, and on a catalog browse or box set card for a title the profile has started and not finished (absent while user_state.played is true); other listings leave it absent. Series, seasons, and ebooks never carry it on a browse card
        */
       position_seconds?: number;
       /** @description Whether poster_url is an episode still. False for series or season artwork; absent when provenance is unavailable. */
@@ -28098,11 +28298,13 @@ export interface components {
        * @enum {string}
        */
       state: "available" | "disabled" | "not_configured" | "unsupported";
+      /** @description Whether lookupInvitationLink and acceptInvitationLink, which take the token in the request body, are available. Servers that predate them omit this; read an absent value as false and use the deprecated path operations there. */
+      token_in_body?: boolean;
     };
     InvitationDelivery: {
       /**
        * Format: uri
-       * @description One-time disclosure; never retained for replay. Contains the bearer claim token.
+       * @description One-time disclosure; never retained for replay. Contains the bearer claim token as the URL's fragment, which browsers never send to the server.
        */
       claim_url: string;
       /**
@@ -28111,6 +28313,17 @@ export interface components {
        */
       delivery_status: "sent" | "not_configured" | "failed_or_unknown" | "not_requested";
       invitation: components["schemas"]["AdminInvitation"];
+    };
+    InvitationLinkAcceptInputBody: {
+      /** @description The invitee's address. Required when the lookup reports email_required; ignored otherwise. */
+      email?: string;
+      password: string;
+      /** @description The token from the invitation link's fragment */
+      token: string;
+    };
+    InvitationLinkInputBody: {
+      /** @description The token from the invitation link's fragment */
+      token: string;
     };
     InvitationLookup: {
       acceptance_available: boolean;
@@ -30800,6 +31013,19 @@ export interface components {
       tokens?: components["schemas"]["TokenPair"];
       username: string;
     };
+    PasswordResetLinkCompleteInputBody: {
+      /**
+       * @description The new password
+       * @example margin fossil quench hollow
+       */
+      password: string;
+      /** @description The token from the reset link's fragment */
+      token: string;
+    };
+    PasswordResetLinkInputBody: {
+      /** @description The token from the reset link's fragment */
+      token: string;
+    };
     PasswordResetLookup: {
       /**
        * Format: date-time
@@ -31615,7 +31841,7 @@ export interface components {
       episode_number: number | null;
       /**
        * Format: int64
-       * @description Seconds; null when unknown
+       * @description Length in seconds of what position_seconds is measured against: the file, or the whole book for a multi-file audiobook; null when unknown
        * @example 8520
        */
       file_duration: number | null;
@@ -32441,6 +32667,11 @@ export interface components {
        */
       quality_preference: string;
       /**
+       * @description Whether the profile may make and follow requests and use request discovery. False keeps it out of those even when the account may request; it can still list, read and cancel the requests it made before. The account's own requests switch still applies on top. Set by the household manager
+       * @example true
+       */
+      requests_allowed: boolean;
+      /**
        * @description Hide titles with no advisory age as well, so the profile sees only titles an advisory service rated at or under max_advisory_age. Advisory ages are looked up over time, so on a large library a profile with this set starts with few titles. No effect without max_advisory_age
        * @example false
        */
@@ -32492,6 +32723,11 @@ export interface components {
       max_profiles?: number;
       /** @description Cursor state; absent for bounded unpaginated collections */
       page?: components["schemas"]["PageInfo"];
+      /**
+       * @description Whether profiles accept requests_allowed and the server enforces it
+       * @example true
+       */
+      requests_allowed_supported: boolean;
       /**
        * @description Whether profiles accept require_advisory_age and the server enforces it
        * @example true
@@ -32569,6 +32805,11 @@ export interface components {
        * @example auto
        */
       quality_preference?: string;
+      /**
+       * @description Whether the profile may make and follow requests and use request discovery. False keeps it out of those even when the account may request; it can still list, read and cancel the requests it made before. The account's own requests switch still applies on top. Set by the household manager. Omitted means allowed
+       * @example false
+       */
+      requests_allowed?: boolean;
       /**
        * @description Hide titles with no advisory age as well, so the profile sees only titles an advisory service rated at or under max_advisory_age. Advisory ages are looked up over time, so on a large library a profile with this set starts with few titles. No effect without max_advisory_age
        * @example true
@@ -32821,6 +33062,11 @@ export interface components {
        * @example auto
        */
       quality_preference?: string;
+      /**
+       * @description Whether the profile may make and follow requests and use request discovery. False keeps it out of those even when the account may request; it can still list, read and cancel the requests it made before. The account's own requests switch still applies on top. Set by the household manager
+       * @example false
+       */
+      requests_allowed?: boolean;
       /**
        * @description Hide titles with no advisory age as well, so the profile sees only titles an advisory service rated at or under max_advisory_age. Advisory ages are looked up over time, so on a large library a profile with this set starts with few titles. No effect without max_advisory_age
        * @example true
@@ -33842,6 +34088,8 @@ export interface components {
        * @description Calendar date, YYYY-MM-DD
        */
       air_date?: string;
+      /** @description Episodes in the library out of the episodes this season lists. Sent only while the acting profile's poster badges are on and include the availability badge. Absent for specials and when episode metadata is incomplete. */
+      availability?: components["schemas"]["CatalogAvailability"];
       /** @example series:severance-S01 */
       content_id: string;
       /** Format: int64 */
@@ -35822,7 +36070,7 @@ export interface components {
       /** @example Movies */
       library_name: string;
       /**
-       * @description unmatched, pending or ambiguous
+       * @description unmatched, pending or ambiguous. An audiobook without a provider match is unmatched
        * @example unmatched
        */
       status: string;
@@ -36011,6 +36259,8 @@ export interface components {
       /** Format: int64 */
       dv_profile?: number;
       dv_rpu_present?: boolean;
+      /** @description Color range FFmpeg reported on the first decoded frame of a PQ track (tv, pc, or unknown when the frame carried none); absent when the frame was not read. Can differ from color_range, the container's tag */
+      frame_color_range?: string;
       frame_rate?: string;
       hdr10_plus?: boolean;
       /** Format: int64 */
@@ -36994,6 +37244,15 @@ export interface components {
        * @enum {string}
        */
       advisory_source?: "commonsense" | "mdblist";
+      /**
+       * @description On an audiobook or ebook card in a catalog browse listing: up to three author names in credit order, the names the book's detail page lists under authors. Absent for other types, on other listings, and when the book credits no author
+       * @example [
+       *       "Frank Herbert"
+       *     ]
+       */
+      authors?: string[];
+      /** @description On a series, complete seasons out of seasons that have aired. On a season, episodes in the library out of the episodes the season lists. Sent only while the acting profile's poster badges are on and include the availability badge. Absent for other types, for specials, and when episode metadata is incomplete. */
+      availability?: components["schemas"]["CatalogAvailability"];
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -37013,7 +37272,10 @@ export interface components {
       content_id: string;
       /** @example R */
       content_rating?: string;
-      /** Format: double */
+      /**
+       * Format: double
+       * @description The length position_seconds is measured against, in seconds, as the progress record holds it. Present with position_seconds; a card draws its progress bar and time left from the pair
+       */
       duration_seconds?: number;
       /** Format: int64 */
       episode_number?: number;
@@ -37059,7 +37321,7 @@ export interface components {
       play_content_id?: string;
       /**
        * Format: double
-       * @description Resume position on a continue-watching card
+       * @description The profile's resume position, in seconds. On a Continue Watching card, and on a catalog browse or box set card for a title the profile has started and not finished (absent while user_state.played is true); other listings leave it absent. Series, seasons, and ebooks never carry it on a browse card
        */
       position_seconds?: number;
       /** @description Whether poster_url is an episode still. False for series or season artwork; absent when provenance is unavailable. */
@@ -37222,6 +37484,15 @@ export interface components {
        * @enum {string}
        */
       advisory_source?: "commonsense" | "mdblist";
+      /**
+       * @description On an audiobook or ebook card in a catalog browse listing: up to three author names in credit order, the names the book's detail page lists under authors. Absent for other types, on other listings, and when the book credits no author
+       * @example [
+       *       "Frank Herbert"
+       *     ]
+       */
+      authors?: string[];
+      /** @description On a series, complete seasons out of seasons that have aired. On a season, episodes in the library out of the episodes the season lists. Sent only while the acting profile's poster badges are on and include the availability badge. Absent for other types, for specials, and when episode metadata is incomplete. */
+      availability?: components["schemas"]["CatalogAvailability"];
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -37239,7 +37510,10 @@ export interface components {
       content_id: string;
       /** @example R */
       content_rating?: string;
-      /** Format: double */
+      /**
+       * Format: double
+       * @description The length position_seconds is measured against, in seconds, as the progress record holds it. Present with position_seconds; a card draws its progress bar and time left from the pair
+       */
       duration_seconds?: number;
       /** Format: int64 */
       episode_number?: number;
@@ -37285,7 +37559,7 @@ export interface components {
       play_content_id?: string;
       /**
        * Format: double
-       * @description Resume position on a continue-watching card
+       * @description The profile's resume position, in seconds. On a Continue Watching card, and on a catalog browse or box set card for a title the profile has started and not finished (absent while user_state.played is true); other listings leave it absent. Series, seasons, and ebooks never carry it on a browse card
        */
       position_seconds?: number;
       /** @description Whether poster_url is an episode still. False for series or season artwork; absent when provenance is unavailable. */
@@ -119153,6 +119427,155 @@ export interface operations {
       };
     };
   };
+  acceptInvitationLink: {
+    parameters: {
+      query?: never;
+      header?: {
+        "User-Agent"?: string;
+        /** @description The client's stable device identifier, recorded on the login session this sign-in opens */
+        "X-Silo-Device-Id"?: string;
+        /** @description Optional device name recorded on the login session (first 120 characters) */
+        "X-Silo-Device-Name"?: string;
+        /** @description Optional platform recorded on the login session (first 40 characters) */
+        "X-Silo-Device-Platform"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["InvitationLinkAcceptInputBody"];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvitationAcceptance"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Implemented */
+      501: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   getInvitationCapabilities: {
     parameters: {
       query?: never;
@@ -119219,6 +119642,129 @@ export interface operations {
         headers: {
           /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
           ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  lookupInvitationLink: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["InvitationLinkInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvitationLookup"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -130923,6 +131469,15 @@ export interface operations {
           "application/problem+json": components["schemas"]["Problem"];
         };
       };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
       /** @description Unprocessable Entity */
       422: {
         headers: {
@@ -131022,6 +131577,269 @@ export interface operations {
       };
       /** @description Request Timeout */
       408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  completePasswordResetLink: {
+    parameters: {
+      query?: never;
+      header?: {
+        "User-Agent"?: string;
+        /** @description The client's stable device identifier, recorded on the login session this sign-in opens */
+        "X-Silo-Device-Id"?: string;
+        /** @description Optional device name recorded on the login session (first 120 characters) */
+        "X-Silo-Device-Name"?: string;
+        /** @description Optional platform recorded on the login session (first 40 characters) */
+        "X-Silo-Device-Platform"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasswordResetLinkCompleteInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordResetCompletion"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  lookupPasswordResetLink: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasswordResetLinkInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordResetLookup"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
         headers: {
           [name: string]: unknown;
         };
@@ -132865,7 +133683,7 @@ export interface operations {
         silo_rendition?: "video" | "subtitles";
         /** @description Set with silo_rendition=subtitles by the multivariant playlist of a plan with on-demand renditions (hls_subtitle_renditions_all_v1): the container track number whose WebVTT playlist to answer. */
         silo_track?: string;
-        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Omitted for header-authenticated media. Account and viewer authorization are always required. */
+        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Without an Authorization header or token, it alone authorizes this session's media as the account and profile it names, while the login session that started playback is active; viewer authorization still applies. Omitted for header-authenticated media. */
         st?: string;
         /** @description Media-element fallback for the account bearer token when an Authorization header cannot be set. Header-authenticated media requires the Authorization header and the profile selector. */
         token?: string;
@@ -132989,7 +133807,7 @@ export interface operations {
   getPlaybackSegment: {
     parameters: {
       query?: {
-        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Omitted for header-authenticated media. Account and viewer authorization are always required. */
+        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Without an Authorization header or token, it alone authorizes this session's media as the account and profile it names, while the login session that started playback is active; viewer authorization still applies. Omitted for header-authenticated media. */
         st?: string;
         /** @description Media-element fallback for the account bearer token when an Authorization header cannot be set. Header-authenticated media requires the Authorization header and the profile selector. */
         token?: string;
@@ -144585,7 +145403,7 @@ export interface operations {
       query?: {
         /** @description Set to refuse by the server on a server_remux_progressive URL whose attempt listed progressive_range_refusal_v1 in deliveries.progressive.features. A progressive remux streams from its seek origin and cannot resume: with it, a GET whose Range starts past byte 0 (or is a suffix range) answers 409 before the remux starts, and the client reopens the stream at its current position. Without it such a range streams from the origin with 200. */
         remux_range?: "refuse";
-        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Omitted for header-authenticated media. Account and viewer authorization are always required. */
+        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Without an Authorization header or token, it alone authorizes this session's media as the account and profile it names, while the login session that started playback is active; viewer authorization still applies. Omitted for header-authenticated media. */
         st?: string;
         /** @description Media-element fallback for the account bearer token when an Authorization header cannot be set. Header-authenticated media requires the Authorization header and the profile selector. */
         token?: string;
@@ -144796,7 +145614,7 @@ export interface operations {
       query?: {
         /** @description Set to refuse by the server on a server_remux_progressive URL whose attempt listed progressive_range_refusal_v1 in deliveries.progressive.features. A progressive remux streams from its seek origin and cannot resume: with it, a GET whose Range starts past byte 0 (or is a suffix range) answers 409 before the remux starts, and the client reopens the stream at its current position. Without it such a range streams from the origin with 200. */
         remux_range?: "refuse";
-        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Omitted for header-authenticated media. Account and viewer authorization are always required. */
+        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Without an Authorization header or token, it alone authorizes this session's media as the account and profile it names, while the login session that started playback is active; viewer authorization still applies. Omitted for header-authenticated media. */
         st?: string;
         /** @description Media-element fallback for the account bearer token when an Authorization header cannot be set. Header-authenticated media requires the Authorization header and the profile selector. */
         token?: string;
@@ -144971,7 +145789,7 @@ export interface operations {
         original?: string;
         /** @description Seek position in seconds for windowed text extraction. */
         position?: number;
-        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Omitted for header-authenticated media. Account and viewer authorization are always required. */
+        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Without an Authorization header or token, it alone authorizes this session's media as the account and profile it names, while the login session that started playback is active; viewer authorization still applies. Omitted for header-authenticated media. */
         st?: string;
         /** @description Media-element fallback for the account bearer token when an Authorization header cannot be set. Header-authenticated media requires the Authorization header and the profile selector. */
         token?: string;
@@ -145121,7 +145939,7 @@ export interface operations {
         original?: string;
         /** @description Seek position in seconds for windowed text extraction. */
         position?: number;
-        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Omitted for header-authenticated media. Account and viewer authorization are always required. */
+        /** @description Signed stream reference the plan URL carries; it reconstructs the session after a restart. Without an Authorization header or token, it alone authorizes this session's media as the account and profile it names, while the login session that started playback is active; viewer authorization still applies. Omitted for header-authenticated media. */
         st?: string;
         /** @description Media-element fallback for the account bearer token when an Authorization header cannot be set. Header-authenticated media requires the Authorization header and the profile selector. */
         token?: string;
@@ -150210,6 +151028,15 @@ export interface operations {
       };
       /** @description Conflict */
       409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Gone */
+      410: {
         headers: {
           [name: string]: unknown;
         };
