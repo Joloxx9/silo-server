@@ -289,7 +289,7 @@
 ./internal/auth TestUserRepositoryUpdateAccessGroupIDDB
 ./internal/auth TestUserRepositoryUpdatePromotingToAdminClearsAccessGroupDB
 ./internal/auth TestUserRepositoryUpdateDemotingAdminAssignsDefaultAccessGroupDB
-./internal/auth TestUserRepositoryUpdateUsernameRenamesPrimaryProfileDB
+./internal/auth TestUserRepositoryUsernameChangeRenamesPrimaryProfileDB
 ./internal/auth TestUserWithoutEmailOrUsernameDB
 ./internal/auth TestLoginIdentitySpaceDB
 ./internal/auth TestPasswordSignInForDB
@@ -919,6 +919,7 @@
 # folder-delete reference check over the new columns, provider backfill and
 # repair of the new slots, and Jellyfin recommendations listing every backdrop.
 ./migrations TestItemExtraArtworkMigrationUpAndDownPostgres
+./migrations TestRatingsTenPointScoresMigrationUpAndDownPostgres
 ./internal/catalog TestItemExtraArtworkSlotsRoundTripDB
 ./internal/catalog TestItemBackdropRepositoryDB
 ./internal/catalog TestItemBackdropReplaceWaitsForCacheWriteDB
