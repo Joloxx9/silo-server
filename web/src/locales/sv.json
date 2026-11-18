@@ -52671,6 +52671,20 @@
       "value": "Anslutningskontrollen misslyckades."
     }
   ],
+  "web.admin.recommendations.embedding.lockConflictNoProvider": [
+    {
+      "type": 0,
+      "value": "Ingen embeddingleverantör är vald. Välj en leverantör som tillhandahåller ”"
+    },
+    {
+      "type": 1,
+      "value": "locked_model"
+    },
+    {
+      "type": 0,
+      "value": "”, eller återställ embeddings för att använda en annan modell."
+    }
+  ],
   "web.admin.recommendations.embedding.model": [
     {
       "type": 0,
@@ -58711,6 +58725,18 @@
     {
       "type": 0,
       "value": "Autoscan"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrant": [
+    {
+      "type": 0,
+      "value": "Spela upp utan inloggning från samma adress"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrantDescription": [
+    {
+      "type": 0,
+      "value": "Vissa Jellyfin-appar, till exempel Findroid, öppnar länkar för direktuppspelning och nedladdning utan att logga in. När detta är på hanterar Silo en sådan förfrågan om en inloggad app på samma nätverksadress har bett om att spela upp filen under de senaste två timmarna. Alla som delar den adressen, till exempel personer i samma hemnätverk, hos samma mobiloperatör eller i samma VPN, kan då också spela upp filen. Slå bara på det om du använder någon av de apparna."
     }
   ],
   "web.admin.settings.compatibilityProxies.advanced.playbackTtl": [
@@ -89518,6 +89544,12 @@
       "value": "Ordning"
     }
   ],
+  "web.catalog.sort.relevance": [
+    {
+      "type": 0,
+      "value": "Relevans"
+    }
+  ],
   "web.catalog.sort.sortBy": [
     {
       "type": 0,
@@ -106294,6 +106326,12 @@
       "value": "Samling"
     }
   ],
+  "web.home.addRow.collection.library": [
+    {
+      "type": 0,
+      "value": "Bibliotek"
+    }
+  ],
   "web.home.addRow.collection.loading": [
     {
       "type": 0,
@@ -106338,6 +106376,12 @@
     {
       "type": 0,
       "value": "Inga samlingar än. Skapa en i Samlingar först."
+    }
+  ],
+  "web.home.addRow.collection.noneInLibrary": [
+    {
+      "type": 0,
+      "value": "Inga samlingar av den här typen i det här biblioteket."
     }
   ],
   "web.home.addRow.collection.noneOfType": [
@@ -122087,6 +122131,12 @@
       "value": "Du kan pausa och återuppta"
     }
   ],
+  "web.player.watchTogether.redisRequired": [
+    {
+      "type": 0,
+      "value": "Watch Party kräver Redis, som inte är konfigurerat på den här servern. Be serveradministratören att konfigurera det."
+    }
+  ],
   "web.player.watchTogether.selfName": [
     {
       "type": 1,
@@ -126009,6 +126059,86 @@
     {
       "type": 0,
       "value": "Sök i biblioteket eller hitta titlar att begära…"
+    }
+  ],
+  "web.search.results.allInLibrary": [
+    {
+      "type": 0,
+      "value": "Alla resultat i ditt bibliotek"
+    }
+  ],
+  "web.search.results.atLeastCount": [
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "+"
+    }
+  ],
+  "web.search.results.backToRelevance": [
+    {
+      "type": 0,
+      "value": "Tillbaka till relevans"
+    }
+  ],
+  "web.search.results.bestMatches": [
+    {
+      "type": 0,
+      "value": "Bästa träffar"
+    }
+  ],
+  "web.search.results.inLibrary": [
+    {
+      "type": 0,
+      "value": "I ditt bibliotek"
+    }
+  ],
+  "web.search.results.moreResults": [
+    {
+      "type": 0,
+      "value": "Fler resultat"
+    }
+  ],
+  "web.search.results.notInLibrary": [
+    {
+      "type": 0,
+      "value": "Inte i ditt bibliotek"
+    }
+  ],
+  "web.search.results.overview": [
+    {
+      "type": 0,
+      "value": "Översikt"
+    }
+  ],
+  "web.search.results.requestToAdd": [
+    {
+      "type": 0,
+      "value": "Begär att lägga till"
+    }
+  ],
+  "web.search.results.showAll": [
+    {
+      "type": 0,
+      "value": "Visa alla resultat"
+    }
+  ],
+  "web.search.results.sortedBy": [
+    {
+      "type": 0,
+      "value": "Sorterade efter "
+    },
+    {
+      "type": 1,
+      "value": "sort"
+    }
+  ],
+  "web.search.results.viewsLabel": [
+    {
+      "type": 0,
+      "value": "Resultatvyer"
     }
   ],
   "web.search.resultsLabel": [

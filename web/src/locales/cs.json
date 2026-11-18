@@ -64883,6 +64883,20 @@
       "value": "Kontrola připojení selhala."
     }
   ],
+  "web.admin.recommendations.embedding.lockConflictNoProvider": [
+    {
+      "type": 0,
+      "value": "Není vybrán žádný poskytovatel embeddingů. Vyberte poskytovatele, který poskytuje model „"
+    },
+    {
+      "type": 1,
+      "value": "locked_model"
+    },
+    {
+      "type": 0,
+      "value": "“, nebo resetujte embeddingy a použijte jiný model."
+    }
+  ],
   "web.admin.recommendations.embedding.model": [
     {
       "type": 0,
@@ -72163,6 +72177,18 @@
     {
       "type": 0,
       "value": "Autoscan"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrant": [
+    {
+      "type": 0,
+      "value": "Přehrávat bez přihlášení ze stejné adresy"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrantDescription": [
+    {
+      "type": 0,
+      "value": "Některé aplikace Jellyfin, například Findroid, otevírají odkazy pro přímé přehrávání a stahování bez přihlášení. Když je tato možnost zapnutá, Silo takový požadavek obslouží, pokud o přehrání daného souboru během posledních dvou hodin požádala přihlášená aplikace ze stejné síťové adresy. Kdokoli, kdo tuto adresu sdílí, například lidé ve stejné domácí síti, u stejného mobilního operátora nebo ve stejné VPN, pak může tento soubor přehrát také. Zapněte ji, jen pokud některou z těchto aplikací používáte."
     }
   ],
   "web.admin.settings.compatibilityProxies.advanced.playbackTtl": [
@@ -105674,6 +105700,12 @@
       "value": "Pořadí"
     }
   ],
+  "web.catalog.sort.relevance": [
+    {
+      "type": 0,
+      "value": "Relevance"
+    }
+  ],
   "web.catalog.sort.sortBy": [
     {
       "type": 0,
@@ -126380,6 +126412,12 @@
       "value": "Kolekce"
     }
   ],
+  "web.home.addRow.collection.library": [
+    {
+      "type": 0,
+      "value": "Knihovna"
+    }
+  ],
   "web.home.addRow.collection.loading": [
     {
       "type": 0,
@@ -126424,6 +126462,12 @@
     {
       "type": 0,
       "value": "Zatím nemáte žádné kolekce. Nejdřív nějakou vytvořte v sekci Kolekce."
+    }
+  ],
+  "web.home.addRow.collection.noneInLibrary": [
+    {
+      "type": 0,
+      "value": "V této knihovně nejsou žádné kolekce tohoto typu."
     }
   ],
   "web.home.addRow.collection.noneOfType": [
@@ -144127,6 +144171,12 @@
       "value": "Můžete pozastavit a obnovit přehrávání"
     }
   ],
+  "web.player.watchTogether.redisRequired": [
+    {
+      "type": 0,
+      "value": "Watch Party vyžaduje Redis, který tento server nemá nastavený. Požádejte správce serveru, aby ho nakonfiguroval."
+    }
+  ],
   "web.player.watchTogether.selfName": [
     {
       "type": 1,
@@ -148529,6 +148579,86 @@
     {
       "type": 0,
       "value": "Hledat v knihovně nebo najít tituly k vyžádání…"
+    }
+  ],
+  "web.search.results.allInLibrary": [
+    {
+      "type": 0,
+      "value": "Všechny výsledky ve vaší knihovně"
+    }
+  ],
+  "web.search.results.atLeastCount": [
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "+"
+    }
+  ],
+  "web.search.results.backToRelevance": [
+    {
+      "type": 0,
+      "value": "Zpět na řazení podle relevance"
+    }
+  ],
+  "web.search.results.bestMatches": [
+    {
+      "type": 0,
+      "value": "Nejlepší shody"
+    }
+  ],
+  "web.search.results.inLibrary": [
+    {
+      "type": 0,
+      "value": "Ve vaší knihovně"
+    }
+  ],
+  "web.search.results.moreResults": [
+    {
+      "type": 0,
+      "value": "Další výsledky"
+    }
+  ],
+  "web.search.results.notInLibrary": [
+    {
+      "type": 0,
+      "value": "Není ve vaší knihovně"
+    }
+  ],
+  "web.search.results.overview": [
+    {
+      "type": 0,
+      "value": "Přehled"
+    }
+  ],
+  "web.search.results.requestToAdd": [
+    {
+      "type": 0,
+      "value": "Vyžádat si přidání"
+    }
+  ],
+  "web.search.results.showAll": [
+    {
+      "type": 0,
+      "value": "Zobrazit všechny výsledky"
+    }
+  ],
+  "web.search.results.sortedBy": [
+    {
+      "type": 0,
+      "value": "Řazení: "
+    },
+    {
+      "type": 1,
+      "value": "sort"
+    }
+  ],
+  "web.search.results.viewsLabel": [
+    {
+      "type": 0,
+      "value": "Zobrazení výsledků"
     }
   ],
   "web.search.resultsLabel": [

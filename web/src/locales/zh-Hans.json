@@ -47300,6 +47300,20 @@
       "value": "连接检查失败。"
     }
   ],
+  "web.admin.recommendations.embedding.lockConflictNoProvider": [
+    {
+      "type": 0,
+      "value": "未选择嵌入提供商。请选择提供“"
+    },
+    {
+      "type": 1,
+      "value": "locked_model"
+    },
+    {
+      "type": 0,
+      "value": "”的提供商，或重置嵌入以使用其他模型。"
+    }
+  ],
   "web.admin.recommendations.embedding.model": [
     {
       "type": 0,
@@ -52856,6 +52870,18 @@
     {
       "type": 0,
       "value": "Autoscan"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrant": [
+    {
+      "type": 0,
+      "value": "允许同一地址免登录播放"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrantDescription": [
+    {
+      "type": 0,
+      "value": "部分Jellyfin应用（如Findroid）会在未登录的情况下打开直接播放和下载链接。开启后，如果同一网络地址上已登录的应用在过去2小时内请求播放该文件，Silo就会处理此类请求。这样一来，共享该地址的任何人（例如同一家庭网络、移动运营商或VPN上的用户）也都能播放该文件。仅在你使用这类应用时才开启此选项。"
     }
   ],
   "web.admin.settings.compatibilityProxies.advanced.playbackTtl": [
@@ -82481,6 +82507,12 @@
       "value": "顺序"
     }
   ],
+  "web.catalog.sort.relevance": [
+    {
+      "type": 0,
+      "value": "相关性"
+    }
+  ],
   "web.catalog.sort.sortBy": [
     {
       "type": 0,
@@ -97365,6 +97397,12 @@
       "value": "合集"
     }
   ],
+  "web.home.addRow.collection.library": [
+    {
+      "type": 0,
+      "value": "媒体库"
+    }
+  ],
   "web.home.addRow.collection.loading": [
     {
       "type": 0,
@@ -97413,6 +97451,12 @@
     {
       "type": 0,
       "value": "还没有合集。请先在合集中创建一个。"
+    }
+  ],
+  "web.home.addRow.collection.noneInLibrary": [
+    {
+      "type": 0,
+      "value": "此媒体库中没有此类型的合集。"
     }
   ],
   "web.home.addRow.collection.noneOfType": [
@@ -112227,6 +112271,12 @@
       "value": "你可以暂停和继续播放"
     }
   ],
+  "web.player.watchTogether.redisRequired": [
+    {
+      "type": 0,
+      "value": "Watch Party需要Redis，但此服务器尚未设置。请让你的服务器管理员进行配置。"
+    }
+  ],
   "web.player.watchTogether.selfName": [
     {
       "type": 1,
@@ -115963,6 +116013,90 @@
     {
       "type": 0,
       "value": "搜索媒体库或查找要请求的作品……"
+    }
+  ],
+  "web.search.results.allInLibrary": [
+    {
+      "type": 0,
+      "value": "你的媒体库中的所有结果"
+    }
+  ],
+  "web.search.results.atLeastCount": [
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "+"
+    }
+  ],
+  "web.search.results.backToRelevance": [
+    {
+      "type": 0,
+      "value": "恢复按相关性排序"
+    }
+  ],
+  "web.search.results.bestMatches": [
+    {
+      "type": 0,
+      "value": "最佳匹配"
+    }
+  ],
+  "web.search.results.inLibrary": [
+    {
+      "type": 0,
+      "value": "在你的媒体库中"
+    }
+  ],
+  "web.search.results.moreResults": [
+    {
+      "type": 0,
+      "value": "更多结果"
+    }
+  ],
+  "web.search.results.notInLibrary": [
+    {
+      "type": 0,
+      "value": "不在你的媒体库中"
+    }
+  ],
+  "web.search.results.overview": [
+    {
+      "type": 0,
+      "value": "概览"
+    }
+  ],
+  "web.search.results.requestToAdd": [
+    {
+      "type": 0,
+      "value": "请求添加"
+    }
+  ],
+  "web.search.results.showAll": [
+    {
+      "type": 0,
+      "value": "显示所有结果"
+    }
+  ],
+  "web.search.results.sortedBy": [
+    {
+      "type": 0,
+      "value": "按"
+    },
+    {
+      "type": 1,
+      "value": "sort"
+    },
+    {
+      "type": 0,
+      "value": "排序"
+    }
+  ],
+  "web.search.results.viewsLabel": [
+    {
+      "type": 0,
+      "value": "结果视图"
     }
   ],
   "web.search.resultsLabel": [

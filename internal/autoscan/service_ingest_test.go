@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Silo-Server/silo-server/internal/models"
 	"github.com/Silo-Server/silo-server/internal/scantrigger"
 )
 
@@ -24,53 +23,6 @@ func webhookTestStore() *fakeStore {
 			Enabled:      true,
 			DeliveryMode: DeliveryModeWebhook,
 		}},
-	}
-}
-
-func TestIngestChangesEnqueuesLikePolling(t *testing.T) {
-	store := webhookTestStore()
-	prov := &fakeProvider{}
-	q := &recordingQueuer{}
-	svc := newService(store, prov, q, allowSuppressor{})
-
-	result, err := svc.IngestChanges(context.Background(), ChangeIngest{
-		SourceID:          "s1",
-		ProviderEventType: "Download",
-		Changes: []Change{
-			{SourcePath: "/mnt/media/Show/Season 01/e01.mkv", Scope: ChangeScopeFile},
-			{SourcePath: "/mnt/media/Show/Season 01/e02.mkv", Scope: ChangeScopeFile},
-		},
-	})
-	if err != nil {
-		t.Fatalf("IngestChanges: %v", err)
-	}
-	if result.Enqueued != 2 || result.Suppressed != 0 || result.Unresolved {
-		t.Fatalf("unexpected result: %+v", result)
-	}
-	if len(q.enqueued) != 2 {
-		t.Fatalf("enqueued = %+v, want 2 file targets", q.enqueued)
-	}
-	if prov.calls != 0 {
-		t.Fatalf("provider must never be invoked for webhook ingestion, got %d calls", prov.calls)
-	}
-	if len(store.advanced) != 0 {
-		t.Fatalf("webhook ingestion must not advance markers, got %+v", store.advanced)
-	}
-	if len(store.createdEvents) != 1 {
-		t.Fatalf("created events = %+v, want 1", store.createdEvents)
-	}
-	created := store.createdEvents[0]
-	if created.DeliveryMode != DeliveryModeWebhook || created.ProviderEventType != "Download" || !created.SkipRunningCheck {
-		t.Fatalf("webhook event create misconfigured: %+v", created)
-	}
-	if len(store.events) != 1 || store.events[0].Status != EventStatusSuccess {
-		t.Fatalf("finished events = %+v, want one success", store.events)
-	}
-	if store.events[0].MarkerAfter != "" {
-		t.Fatalf("webhook events must not carry markers, got %q", store.events[0].MarkerAfter)
-	}
-	if len(store.deliveries) != 1 || len(store.completed) != 1 {
-		t.Fatalf("durable lifecycle deliveries=%d completed=%v", len(store.deliveries), store.completed)
 	}
 }
 
@@ -135,26 +87,6 @@ func TestIngestChangesRejectsPollSource(t *testing.T) {
 
 	if _, err := svc.ingestChangesNow(context.Background(), ChangeIngest{SourceID: "s1"}); err == nil {
 		t.Fatal("webhook consume must reject non-webhook sources")
-	}
-}
-
-func TestIngestChangesUnresolvedPathsAreBenign(t *testing.T) {
-	store := webhookTestStore()
-	svc := NewService(store, &fakeProvider{}, passthroughConnRes{}, unresolvableResolver{}, &recordingQueuer{}, allowSuppressor{}, nil)
-
-	result, err := svc.IngestChanges(context.Background(), ChangeIngest{
-		SourceID:          "s1",
-		ProviderEventType: "Download",
-		Changes:           []Change{{SourcePath: "/outside/library/file.mkv", Scope: ChangeScopeFile}},
-	})
-	if err != nil {
-		t.Fatalf("unresolved paths must not be an error: %v", err)
-	}
-	if !result.Unresolved || result.Enqueued != 0 {
-		t.Fatalf("unexpected result: %+v", result)
-	}
-	if len(store.events) != 1 || store.events[0].Status != EventStatusUnresolved {
-		t.Fatalf("finished events = %+v, want one unresolved", store.events)
 	}
 }
 

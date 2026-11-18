@@ -46980,6 +46980,20 @@
       "value": "接続チェックに失敗しました。"
     }
   ],
+  "web.admin.recommendations.embedding.lockConflictNoProvider": [
+    {
+      "type": 0,
+      "value": "エンベディングプロバイダーが選択されていません。「"
+    },
+    {
+      "type": 1,
+      "value": "locked_model"
+    },
+    {
+      "type": 0,
+      "value": "」を提供するプロバイダーを選択するか、別のモデルを使用する場合はエンベディングをリセットしてください。"
+    }
+  ],
   "web.admin.recommendations.embedding.model": [
     {
       "type": 0,
@@ -52488,6 +52502,18 @@
     {
       "type": 0,
       "value": "Autoscan"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrant": [
+    {
+      "type": 0,
+      "value": "同じアドレスからサインインなしで再生"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrantDescription": [
+    {
+      "type": 0,
+      "value": "Findroidなど一部のJellyfinアプリは、サインインせずにダイレクト再生やダウンロードのリンクを開きます。オンにすると、同じネットワークアドレスでサインインしているアプリが過去2時間以内にそのファイルの再生をリクエストしていた場合、Siloはそのようなリクエストに応答します。その場合、同じ自宅のネットワーク、モバイル通信事業者、VPNを使う人など、そのアドレスを共有する人もそのファイルを再生できるようになります。これらのアプリを使用する場合にのみオンにしてください。"
     }
   ],
   "web.admin.settings.compatibilityProxies.advanced.playbackTtl": [
@@ -81869,6 +81895,12 @@
       "value": "並び順"
     }
   ],
+  "web.catalog.sort.relevance": [
+    {
+      "type": 0,
+      "value": "関連度"
+    }
+  ],
   "web.catalog.sort.sortBy": [
     {
       "type": 0,
@@ -96465,6 +96497,12 @@
       "value": "コレクション"
     }
   ],
+  "web.home.addRow.collection.library": [
+    {
+      "type": 0,
+      "value": "ライブラリ"
+    }
+  ],
   "web.home.addRow.collection.loading": [
     {
       "type": 0,
@@ -96513,6 +96551,12 @@
     {
       "type": 0,
       "value": "コレクションはまだありません。先にコレクションで作成してください。"
+    }
+  ],
+  "web.home.addRow.collection.noneInLibrary": [
+    {
+      "type": 0,
+      "value": "このライブラリにはこの種類のコレクションはありません。"
     }
   ],
   "web.home.addRow.collection.noneOfType": [
@@ -111095,6 +111139,12 @@
       "value": "一時停止・再開できます"
     }
   ],
+  "web.player.watchTogether.redisRequired": [
+    {
+      "type": 0,
+      "value": "Watch Partyを利用するにはRedisが必要ですが、このサーバーでは設定されていません。サーバー管理者に設定を依頼してください。"
+    }
+  ],
   "web.player.watchTogether.selfName": [
     {
       "type": 1,
@@ -114767,6 +114817,86 @@
     {
       "type": 0,
       "value": "ライブラリを検索、またはリクエストするタイトルを探す…"
+    }
+  ],
+  "web.search.results.allInLibrary": [
+    {
+      "type": 0,
+      "value": "ライブラリ内のすべての結果"
+    }
+  ],
+  "web.search.results.atLeastCount": [
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "+"
+    }
+  ],
+  "web.search.results.backToRelevance": [
+    {
+      "type": 0,
+      "value": "関連度順に戻す"
+    }
+  ],
+  "web.search.results.bestMatches": [
+    {
+      "type": 0,
+      "value": "最も一致する結果"
+    }
+  ],
+  "web.search.results.inLibrary": [
+    {
+      "type": 0,
+      "value": "ライブラリ内"
+    }
+  ],
+  "web.search.results.moreResults": [
+    {
+      "type": 0,
+      "value": "その他の結果"
+    }
+  ],
+  "web.search.results.notInLibrary": [
+    {
+      "type": 0,
+      "value": "ライブラリにないタイトル"
+    }
+  ],
+  "web.search.results.overview": [
+    {
+      "type": 0,
+      "value": "概要"
+    }
+  ],
+  "web.search.results.requestToAdd": [
+    {
+      "type": 0,
+      "value": "追加をリクエスト"
+    }
+  ],
+  "web.search.results.showAll": [
+    {
+      "type": 0,
+      "value": "すべての結果を表示"
+    }
+  ],
+  "web.search.results.sortedBy": [
+    {
+      "type": 0,
+      "value": "並べ替え："
+    },
+    {
+      "type": 1,
+      "value": "sort"
+    }
+  ],
+  "web.search.results.viewsLabel": [
+    {
+      "type": 0,
+      "value": "結果の表示"
     }
   ],
   "web.search.resultsLabel": [

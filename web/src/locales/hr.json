@@ -58769,6 +58769,20 @@
       "value": "Provjera veze nije uspjela."
     }
   ],
+  "web.admin.recommendations.embedding.lockConflictNoProvider": [
+    {
+      "type": 0,
+      "value": "Nije odabran pružatelj embeddinga. Odaberite pružatelja koji nudi „"
+    },
+    {
+      "type": 1,
+      "value": "locked_model"
+    },
+    {
+      "type": 0,
+      "value": "“ ili resetirajte embeddinge kako biste koristili drugi model."
+    }
+  ],
   "web.admin.recommendations.embedding.model": [
     {
       "type": 0,
@@ -65449,6 +65463,18 @@
     {
       "type": 0,
       "value": "Autoscan"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrant": [
+    {
+      "type": 0,
+      "value": "Reprodukcija bez prijave s iste adrese"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrantDescription": [
+    {
+      "type": 0,
+      "value": "Neke aplikacije za Jellyfin, poput aplikacije Findroid, otvaraju poveznice za izravnu reprodukciju i preuzimanje bez prijave. Kada je ovo uključeno, Silo poslužuje takav zahtjev ako je prijavljena aplikacija s iste mrežne adrese zatražila reprodukciju te datoteke u posljednja dva sata. Tada tu datoteku može reproducirati i svatko tko dijeli tu adresu, primjerice osobe na istoj kućnoj mreži, kod istog mobilnog operatera ili na istom VPN-u. Uključite ovo samo ako koristite neku od tih aplikacija."
     }
   ],
   "web.admin.settings.compatibilityProxies.advanced.playbackTtl": [
@@ -97644,6 +97670,12 @@
       "value": "Redoslijed"
     }
   ],
+  "web.catalog.sort.relevance": [
+    {
+      "type": 0,
+      "value": "Relevantnost"
+    }
+  ],
   "web.catalog.sort.sortBy": [
     {
       "type": 0,
@@ -116403,6 +116435,12 @@
       "value": "Kolekcija"
     }
   ],
+  "web.home.addRow.collection.library": [
+    {
+      "type": 0,
+      "value": "Medijateka"
+    }
+  ],
   "web.home.addRow.collection.loading": [
     {
       "type": 0,
@@ -116447,6 +116485,12 @@
     {
       "type": 0,
       "value": "Još nema kolekcija. Najprije izradite kolekciju u odjeljku Kolekcije."
+    }
+  ],
+  "web.home.addRow.collection.noneInLibrary": [
+    {
+      "type": 0,
+      "value": "U ovoj medijateci nema kolekcija ove vrste."
     }
   ],
   "web.home.addRow.collection.noneOfType": [
@@ -133112,6 +133156,12 @@
       "value": "Možete pauzirati i nastaviti"
     }
   ],
+  "web.player.watchTogether.redisRequired": [
+    {
+      "type": 0,
+      "value": "Watch Party zahtijeva Redis, koji na ovom poslužitelju nije postavljen. Zamolite administratora poslužitelja da ga konfigurira."
+    }
+  ],
   "web.player.watchTogether.selfName": [
     {
       "type": 1,
@@ -137252,6 +137302,86 @@
     {
       "type": 0,
       "value": "Pretražite medijateku ili pronađite naslove za zahtjev…"
+    }
+  ],
+  "web.search.results.allInLibrary": [
+    {
+      "type": 0,
+      "value": "Svi rezultati u vašoj medijateci"
+    }
+  ],
+  "web.search.results.atLeastCount": [
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "+"
+    }
+  ],
+  "web.search.results.backToRelevance": [
+    {
+      "type": 0,
+      "value": "Natrag na relevantnost"
+    }
+  ],
+  "web.search.results.bestMatches": [
+    {
+      "type": 0,
+      "value": "Najbolja podudaranja"
+    }
+  ],
+  "web.search.results.inLibrary": [
+    {
+      "type": 0,
+      "value": "U vašoj medijateci"
+    }
+  ],
+  "web.search.results.moreResults": [
+    {
+      "type": 0,
+      "value": "Više rezultata"
+    }
+  ],
+  "web.search.results.notInLibrary": [
+    {
+      "type": 0,
+      "value": "Nije u vašoj medijateci"
+    }
+  ],
+  "web.search.results.overview": [
+    {
+      "type": 0,
+      "value": "Pregled"
+    }
+  ],
+  "web.search.results.requestToAdd": [
+    {
+      "type": 0,
+      "value": "Zatraži dodavanje"
+    }
+  ],
+  "web.search.results.showAll": [
+    {
+      "type": 0,
+      "value": "Prikaži sve rezultate"
+    }
+  ],
+  "web.search.results.sortedBy": [
+    {
+      "type": 0,
+      "value": "Sortirano po: "
+    },
+    {
+      "type": 1,
+      "value": "sort"
+    }
+  ],
+  "web.search.results.viewsLabel": [
+    {
+      "type": 0,
+      "value": "Prikazi rezultata"
     }
   ],
   "web.search.resultsLabel": [

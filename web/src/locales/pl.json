@@ -65417,6 +65417,20 @@
       "value": "Sprawdzenie połączenia nie powiodło się."
     }
   ],
+  "web.admin.recommendations.embedding.lockConflictNoProvider": [
+    {
+      "type": 0,
+      "value": "Nie wybrano dostawcy embeddingów. Wybierz dostawcę obsługującego model „"
+    },
+    {
+      "type": 1,
+      "value": "locked_model"
+    },
+    {
+      "type": 0,
+      "value": "” lub zresetuj embeddingi, aby użyć innego modelu."
+    }
+  ],
   "web.admin.recommendations.embedding.model": [
     {
       "type": 0,
@@ -72761,6 +72775,18 @@
     {
       "type": 0,
       "value": "Autoscan"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrant": [
+    {
+      "type": 0,
+      "value": "Odtwarzanie bez logowania z tego samego adresu"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrantDescription": [
+    {
+      "type": 0,
+      "value": "Niektóre aplikacje Jellyfin, takie jak Findroid, otwierają linki do odtwarzania bezpośredniego i pobierania bez logowania. Gdy ta opcja jest włączona, Silo obsługuje takie żądanie, jeśli zalogowana aplikacja z tego samego adresu sieciowego poprosiła o odtworzenie tego pliku w ciągu ostatnich dwóch godzin. Wtedy ten plik może odtworzyć również każda osoba korzystająca z tego adresu, np. w tej samej sieci domowej, u tego samego operatora komórkowego lub w tej samej sieci VPN. Włącz tę opcję tylko wtedy, gdy używasz jednej z tych aplikacji."
     }
   ],
   "web.admin.settings.compatibilityProxies.advanced.playbackTtl": [
@@ -106304,6 +106330,12 @@
       "value": "Kolejność"
     }
   ],
+  "web.catalog.sort.relevance": [
+    {
+      "type": 0,
+      "value": "Trafność"
+    }
+  ],
   "web.catalog.sort.sortBy": [
     {
       "type": 0,
@@ -126878,6 +126910,12 @@
       "value": "Kolekcja"
     }
   ],
+  "web.home.addRow.collection.library": [
+    {
+      "type": 0,
+      "value": "Biblioteka"
+    }
+  ],
   "web.home.addRow.collection.loading": [
     {
       "type": 0,
@@ -126922,6 +126960,12 @@
     {
       "type": 0,
       "value": "Nie masz jeszcze kolekcji. Najpierw utwórz ją w sekcji Kolekcje."
+    }
+  ],
+  "web.home.addRow.collection.noneInLibrary": [
+    {
+      "type": 0,
+      "value": "Brak kolekcji tego typu w tej bibliotece."
     }
   ],
   "web.home.addRow.collection.noneOfType": [
@@ -144625,6 +144669,12 @@
       "value": "Możesz wstrzymywać i wznawiać"
     }
   ],
+  "web.player.watchTogether.redisRequired": [
+    {
+      "type": 0,
+      "value": "Watch Party wymaga usługi Redis, której ten serwer nie ma skonfigurowanej. Poproś administratora serwera o jej skonfigurowanie."
+    }
+  ],
   "web.player.watchTogether.selfName": [
     {
       "type": 1,
@@ -149007,6 +149057,86 @@
     {
       "type": 0,
       "value": "Szukaj w bibliotece lub znajdź tytuły, o które możesz poprosić…"
+    }
+  ],
+  "web.search.results.allInLibrary": [
+    {
+      "type": 0,
+      "value": "Wszystkie wyniki w twojej bibliotece"
+    }
+  ],
+  "web.search.results.atLeastCount": [
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "+"
+    }
+  ],
+  "web.search.results.backToRelevance": [
+    {
+      "type": 0,
+      "value": "Wróć do sortowania według trafności"
+    }
+  ],
+  "web.search.results.bestMatches": [
+    {
+      "type": 0,
+      "value": "Najlepsze dopasowania"
+    }
+  ],
+  "web.search.results.inLibrary": [
+    {
+      "type": 0,
+      "value": "W twojej bibliotece"
+    }
+  ],
+  "web.search.results.moreResults": [
+    {
+      "type": 0,
+      "value": "Więcej wyników"
+    }
+  ],
+  "web.search.results.notInLibrary": [
+    {
+      "type": 0,
+      "value": "Brak w twojej bibliotece"
+    }
+  ],
+  "web.search.results.overview": [
+    {
+      "type": 0,
+      "value": "Przegląd"
+    }
+  ],
+  "web.search.results.requestToAdd": [
+    {
+      "type": 0,
+      "value": "Poproś o dodanie"
+    }
+  ],
+  "web.search.results.showAll": [
+    {
+      "type": 0,
+      "value": "Pokaż wszystkie wyniki"
+    }
+  ],
+  "web.search.results.sortedBy": [
+    {
+      "type": 0,
+      "value": "Sortowanie: "
+    },
+    {
+      "type": 1,
+      "value": "sort"
+    }
+  ],
+  "web.search.results.viewsLabel": [
+    {
+      "type": 0,
+      "value": "Widoki wyników"
     }
   ],
   "web.search.resultsLabel": [

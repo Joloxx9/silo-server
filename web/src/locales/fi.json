@@ -52759,6 +52759,20 @@
       "value": "Yhteyden tarkistus epäonnistui."
     }
   ],
+  "web.admin.recommendations.embedding.lockConflictNoProvider": [
+    {
+      "type": 0,
+      "value": "Upotuspalvelua ei ole valittu. Valitse palvelu, joka tarjoaa mallin ”"
+    },
+    {
+      "type": 1,
+      "value": "locked_model"
+    },
+    {
+      "type": 0,
+      "value": "”, tai nollaa upotukset, jotta voit käyttää toista mallia."
+    }
+  ],
   "web.admin.recommendations.embedding.model": [
     {
       "type": 0,
@@ -58823,6 +58837,18 @@
     {
       "type": 0,
       "value": "Autoscan"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrant": [
+    {
+      "type": 0,
+      "value": "Toisto ilman kirjautumista samasta osoitteesta"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrantDescription": [
+    {
+      "type": 0,
+      "value": "Jotkin Jellyfin-sovellukset, kuten Findroid, avaavat suoran toiston linkkejä ja latauslinkkejä kirjautumatta sisään. Kun tämä on päällä, Silo käsittelee tällaisen pyynnön, jos samassa verkko-osoitteessa oleva kirjautunut sovellus on pyytänyt kyseisen tiedoston toistoa viimeisten kahden tunnin aikana. Silloin kuka tahansa, jolla on sama osoite, kuten saman kotiverkon, mobiilioperaattorin tai VPN:n käyttäjät, voi myös toistaa kyseisen tiedoston. Ota tämä käyttöön vain, jos käytät jotakin näistä sovelluksista."
     }
   ],
   "web.admin.settings.compatibilityProxies.advanced.playbackTtl": [
@@ -89614,6 +89640,12 @@
       "value": "Järjestys"
     }
   ],
+  "web.catalog.sort.relevance": [
+    {
+      "type": 0,
+      "value": "Osuvuus"
+    }
+  ],
   "web.catalog.sort.sortBy": [
     {
       "type": 0,
@@ -106458,6 +106490,12 @@
       "value": "Kokoelma"
     }
   ],
+  "web.home.addRow.collection.library": [
+    {
+      "type": 0,
+      "value": "Kirjasto"
+    }
+  ],
   "web.home.addRow.collection.loading": [
     {
       "type": 0,
@@ -106502,6 +106540,12 @@
     {
       "type": 0,
       "value": "Ei vielä kokoelmia. Luo ensin kokoelma Kokoelmat-sivulla."
+    }
+  ],
+  "web.home.addRow.collection.noneInLibrary": [
+    {
+      "type": 0,
+      "value": "Tässä kirjastossa ei ole tämäntyyppisiä kokoelmia."
     }
   ],
   "web.home.addRow.collection.noneOfType": [
@@ -122329,6 +122373,12 @@
       "value": "Voit tauottaa ja jatkaa toistoa"
     }
   ],
+  "web.player.watchTogether.redisRequired": [
+    {
+      "type": 0,
+      "value": "Watch Party vaatii Redisin, jota ei ole määritetty tälle palvelimelle. Pyydä palvelimen ylläpitäjää määrittämään se."
+    }
+  ],
   "web.player.watchTogether.selfName": [
     {
       "type": 1,
@@ -126279,6 +126329,86 @@
     {
       "type": 0,
       "value": "Hae kirjastosta tai etsi pyydettäviä nimikkeitä…"
+    }
+  ],
+  "web.search.results.allInLibrary": [
+    {
+      "type": 0,
+      "value": "Kaikki tulokset kirjastossasi"
+    }
+  ],
+  "web.search.results.atLeastCount": [
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "+"
+    }
+  ],
+  "web.search.results.backToRelevance": [
+    {
+      "type": 0,
+      "value": "Palaa osuvuusjärjestykseen"
+    }
+  ],
+  "web.search.results.bestMatches": [
+    {
+      "type": 0,
+      "value": "Parhaat osumat"
+    }
+  ],
+  "web.search.results.inLibrary": [
+    {
+      "type": 0,
+      "value": "Kirjastossasi"
+    }
+  ],
+  "web.search.results.moreResults": [
+    {
+      "type": 0,
+      "value": "Lisää tuloksia"
+    }
+  ],
+  "web.search.results.notInLibrary": [
+    {
+      "type": 0,
+      "value": "Ei kirjastossasi"
+    }
+  ],
+  "web.search.results.overview": [
+    {
+      "type": 0,
+      "value": "Yleiskatsaus"
+    }
+  ],
+  "web.search.results.requestToAdd": [
+    {
+      "type": 0,
+      "value": "Pyydä lisättäväksi"
+    }
+  ],
+  "web.search.results.showAll": [
+    {
+      "type": 0,
+      "value": "Näytä kaikki tulokset"
+    }
+  ],
+  "web.search.results.sortedBy": [
+    {
+      "type": 0,
+      "value": "Lajitteluperuste: "
+    },
+    {
+      "type": 1,
+      "value": "sort"
+    }
+  ],
+  "web.search.results.viewsLabel": [
+    {
+      "type": 0,
+      "value": "Tulosnäkymät"
     }
   ],
   "web.search.resultsLabel": [

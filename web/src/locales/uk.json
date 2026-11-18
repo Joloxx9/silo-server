@@ -64570,6 +64570,20 @@
       "value": "Не вдалося перевірити з’єднання."
     }
   ],
+  "web.admin.recommendations.embedding.lockConflictNoProvider": [
+    {
+      "type": 0,
+      "value": "Постачальника ембедингів не вибрано. Виберіть постачальника, який надає «"
+    },
+    {
+      "type": 1,
+      "value": "locked_model"
+    },
+    {
+      "type": 0,
+      "value": "», або скиньте ембединги, щоб використовувати іншу модель."
+    }
+  ],
   "web.admin.recommendations.embedding.model": [
     {
       "type": 0,
@@ -71878,6 +71892,18 @@
     {
       "type": 0,
       "value": "Autoscan"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrant": [
+    {
+      "type": 0,
+      "value": "Відтворювати без входу з тієї самої адреси"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrantDescription": [
+    {
+      "type": 0,
+      "value": "Деякі застосунки Jellyfin, як-от Findroid, відкривають посилання для прямого відтворення й завантаження без входу. Коли цей параметр увімкнено, Silo обслуговує такий запит, якщо застосунок із тієї самої мережевої адреси, у якому виконано вхід, запитував відтворення цього файлу протягом останніх двох годин. Тоді будь-хто з тією самою адресою, наприклад люди в тій самій домашній мережі, у того самого мобільного оператора чи VPN, також зможе відтворити цей файл. Вмикайте його, лише якщо використовуєте один із цих застосунків."
     }
   ],
   "web.admin.settings.compatibilityProxies.advanced.playbackTtl": [
@@ -105368,6 +105394,12 @@
       "value": "Порядок"
     }
   ],
+  "web.catalog.sort.relevance": [
+    {
+      "type": 0,
+      "value": "Релевантність"
+    }
+  ],
   "web.catalog.sort.sortBy": [
     {
       "type": 0,
@@ -125972,6 +126004,12 @@
       "value": "Колекція"
     }
   ],
+  "web.home.addRow.collection.library": [
+    {
+      "type": 0,
+      "value": "Бібліотека"
+    }
+  ],
   "web.home.addRow.collection.loading": [
     {
       "type": 0,
@@ -126020,6 +126058,12 @@
     {
       "type": 0,
       "value": "Колекцій ще немає. Спершу створіть колекцію в розділі «Колекції»."
+    }
+  ],
+  "web.home.addRow.collection.noneInLibrary": [
+    {
+      "type": 0,
+      "value": "У цій бібліотеці немає колекцій цього типу."
     }
   ],
   "web.home.addRow.collection.noneOfType": [
@@ -143777,6 +143821,12 @@
       "value": "Ви можете ставити на паузу й відновлювати"
     }
   ],
+  "web.player.watchTogether.redisRequired": [
+    {
+      "type": 0,
+      "value": "Для Watch Party потрібен Redis, але на цьому сервері його не налаштовано. Попросіть адміністратора сервера налаштувати його."
+    }
+  ],
   "web.player.watchTogether.selfName": [
     {
       "type": 1,
@@ -148147,6 +148197,86 @@
     {
       "type": 0,
       "value": "Шукайте в бібліотеці або знайдіть, що запитати…"
+    }
+  ],
+  "web.search.results.allInLibrary": [
+    {
+      "type": 0,
+      "value": "Усі результати у вашій бібліотеці"
+    }
+  ],
+  "web.search.results.atLeastCount": [
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "+"
+    }
+  ],
+  "web.search.results.backToRelevance": [
+    {
+      "type": 0,
+      "value": "Знову за релевантністю"
+    }
+  ],
+  "web.search.results.bestMatches": [
+    {
+      "type": 0,
+      "value": "Найкращі збіги"
+    }
+  ],
+  "web.search.results.inLibrary": [
+    {
+      "type": 0,
+      "value": "У вашій бібліотеці"
+    }
+  ],
+  "web.search.results.moreResults": [
+    {
+      "type": 0,
+      "value": "Інші результати"
+    }
+  ],
+  "web.search.results.notInLibrary": [
+    {
+      "type": 0,
+      "value": "Немає у вашій бібліотеці"
+    }
+  ],
+  "web.search.results.overview": [
+    {
+      "type": 0,
+      "value": "Огляд"
+    }
+  ],
+  "web.search.results.requestToAdd": [
+    {
+      "type": 0,
+      "value": "Запит на додавання"
+    }
+  ],
+  "web.search.results.showAll": [
+    {
+      "type": 0,
+      "value": "Показати всі результати"
+    }
+  ],
+  "web.search.results.sortedBy": [
+    {
+      "type": 0,
+      "value": "Сортування: "
+    },
+    {
+      "type": 1,
+      "value": "sort"
+    }
+  ],
+  "web.search.results.viewsLabel": [
+    {
+      "type": 0,
+      "value": "Подання результатів"
     }
   ],
   "web.search.resultsLabel": [

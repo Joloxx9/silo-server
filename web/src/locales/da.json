@@ -52727,6 +52727,20 @@
       "value": "Forbindelsestjekket mislykkedes."
     }
   ],
+  "web.admin.recommendations.embedding.lockConflictNoProvider": [
+    {
+      "type": 0,
+      "value": "Der er ikke valgt nogen embedding-udbyder. Vælg en udbyder, der leverer ”"
+    },
+    {
+      "type": 1,
+      "value": "locked_model"
+    },
+    {
+      "type": 0,
+      "value": "”, eller nulstil embeddings for at bruge en anden model."
+    }
+  ],
   "web.admin.recommendations.embedding.model": [
     {
       "type": 0,
@@ -58767,6 +58781,18 @@
     {
       "type": 0,
       "value": "Autoscan"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrant": [
+    {
+      "type": 0,
+      "value": "Afspil uden login fra samme adresse"
+    }
+  ],
+  "web.admin.settings.compatibilityProxies.advanced.addressStreamGrantDescription": [
+    {
+      "type": 0,
+      "value": "Nogle Jellyfin-apps, f.eks. Findroid, åbner links til direkte afspilning og download uden at logge ind. Når dette er slået til, imødekommer Silo en sådan forespørgsel, hvis en app, der er logget ind, på samme netværksadresse har bedt om at afspille filen inden for de seneste to timer. Alle, der deler den adresse, f.eks. personer på samme hjemmenetværk, hos samme mobiloperatør eller på samme VPN, kan så også afspille filen. Slå det kun til, hvis du bruger en af disse apps."
     }
   ],
   "web.admin.settings.compatibilityProxies.advanced.playbackTtl": [
@@ -89582,6 +89608,12 @@
       "value": "Rækkefølge"
     }
   ],
+  "web.catalog.sort.relevance": [
+    {
+      "type": 0,
+      "value": "Relevans"
+    }
+  ],
   "web.catalog.sort.sortBy": [
     {
       "type": 0,
@@ -106272,6 +106304,12 @@
       "value": "Samling"
     }
   ],
+  "web.home.addRow.collection.library": [
+    {
+      "type": 0,
+      "value": "Bibliotek"
+    }
+  ],
   "web.home.addRow.collection.loading": [
     {
       "type": 0,
@@ -106316,6 +106354,12 @@
     {
       "type": 0,
       "value": "Ingen samlinger endnu. Opret en under Samlinger først."
+    }
+  ],
+  "web.home.addRow.collection.noneInLibrary": [
+    {
+      "type": 0,
+      "value": "Ingen samlinger af denne type i dette bibliotek."
     }
   ],
   "web.home.addRow.collection.noneOfType": [
@@ -122021,6 +122065,12 @@
       "value": "Du kan sætte på pause og genoptage"
     }
   ],
+  "web.player.watchTogether.redisRequired": [
+    {
+      "type": 0,
+      "value": "Watch Party kræver Redis, som ikke er konfigureret på denne server. Bed din serveradministrator om at konfigurere det."
+    }
+  ],
   "web.player.watchTogether.selfName": [
     {
       "type": 1,
@@ -125935,6 +125985,86 @@
     {
       "type": 0,
       "value": "Søg i biblioteket, eller find titler at anmode om…"
+    }
+  ],
+  "web.search.results.allInLibrary": [
+    {
+      "type": 0,
+      "value": "Alle resultater i dit bibliotek"
+    }
+  ],
+  "web.search.results.atLeastCount": [
+    {
+      "type": 1,
+      "value": "count"
+    },
+    {
+      "type": 0,
+      "value": "+"
+    }
+  ],
+  "web.search.results.backToRelevance": [
+    {
+      "type": 0,
+      "value": "Tilbage til relevans"
+    }
+  ],
+  "web.search.results.bestMatches": [
+    {
+      "type": 0,
+      "value": "Bedste match"
+    }
+  ],
+  "web.search.results.inLibrary": [
+    {
+      "type": 0,
+      "value": "I dit bibliotek"
+    }
+  ],
+  "web.search.results.moreResults": [
+    {
+      "type": 0,
+      "value": "Flere resultater"
+    }
+  ],
+  "web.search.results.notInLibrary": [
+    {
+      "type": 0,
+      "value": "Ikke i dit bibliotek"
+    }
+  ],
+  "web.search.results.overview": [
+    {
+      "type": 0,
+      "value": "Oversigt"
+    }
+  ],
+  "web.search.results.requestToAdd": [
+    {
+      "type": 0,
+      "value": "Anmod om at tilføje"
+    }
+  ],
+  "web.search.results.showAll": [
+    {
+      "type": 0,
+      "value": "Vis alle resultater"
+    }
+  ],
+  "web.search.results.sortedBy": [
+    {
+      "type": 0,
+      "value": "Sorteret efter "
+    },
+    {
+      "type": 1,
+      "value": "sort"
+    }
+  ],
+  "web.search.results.viewsLabel": [
+    {
+      "type": 0,
+      "value": "Resultatvisninger"
     }
   ],
   "web.search.resultsLabel": [
