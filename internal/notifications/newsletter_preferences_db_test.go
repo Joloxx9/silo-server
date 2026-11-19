@@ -229,7 +229,7 @@ func TestNewsletterPluginImportArchiveDB(t *testing.T) {
 	system := &System{pool: pool, newsletterCipher: cipher}
 	state := plugins.NewInstanceStateStore(pool, cipher)
 	value := []byte(`[{"name":"Reader","email":"reader@example.test","user_id":"7","enabled":true,"verified":false,"mode":"weekly","token":"must-stay-secret","verify_token":"must-stay-secret"}]`)
-	if err = state.Write(ctx, 101, plugins.HostScopeAPI, "recipients", value); err != nil {
+	if _, err = state.Write(ctx, 101, plugins.HostScopeAPI, "recipients", value, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = system.ImportNewsletter(ctx, 101); err == nil {

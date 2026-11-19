@@ -184,11 +184,11 @@ func (s *System) ImportNewsletter(ctx context.Context, installation int) (Newsle
 	}
 	snapshot := newsletterSnapshot{State: map[string]json.RawMessage{}, Configs: map[string]map[string]any{}}
 	for _, key := range keys {
-		value, found, err := state.Read(ctx, installation, plugins.HostScopeAPI, key)
+		value, version, err := state.Read(ctx, installation, plugins.HostScopeAPI, key)
 		if err != nil {
 			return result, err
 		}
-		if found {
+		if version > 0 {
 			if !json.Valid(value) {
 				return result, fmt.Errorf("%w: invalid plugin state", ErrNewsletterImport)
 			}
