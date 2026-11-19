@@ -589,6 +589,7 @@ func registerAll(reg *Registry) {
 	registerNotificationEmailLinks(reg)
 	registerNotificationDiscordLinks(reg)
 	registerNotificationDestinations(reg)
+	registerNotificationPluginDestinations(reg)
 	registerNotificationDestinationTests(reg)
 	registerNotificationDestinationCreate(reg)
 	registerAdminUserAPIKeys(reg)

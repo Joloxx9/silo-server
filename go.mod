@@ -6,7 +6,7 @@ require (
 	filippo.io/age v1.3.2
 	github.com/DataDog/go-sqllexer v0.2.5
 	github.com/SherClockHolmes/webpush-go v1.4.0
-	github.com/Silo-Server/silo-plugin-sdk v0.31.0
+	github.com/Silo-Server/silo-plugin-sdk v0.35.0
 	github.com/abadojack/whatlanggo v1.0.1
 	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/andybalholm/brotli v1.2.8
@@ -222,4 +222,4 @@ require (
 
 replace github.com/zishang520/webtransport-go => ./internal/compat/zishang520-webtransport-go
 
-replace github.com/Silo-Server/silo-plugin-sdk => github.com/Joloxx9/silo-plugin-sdk v0.31.1-collections.1
+replace github.com/Silo-Server/silo-plugin-sdk => github.com/Joloxx9/silo-plugin-sdk v0.35.1-collections.1
