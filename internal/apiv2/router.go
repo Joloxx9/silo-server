@@ -32,6 +32,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/literaryworks"
 	"github.com/Silo-Server/silo-server/internal/metadata/translation"
 	"github.com/Silo-Server/silo-server/internal/models"
+	"github.com/Silo-Server/silo-server/internal/plugins"
 	"github.com/Silo-Server/silo-server/internal/ratingsources"
 	"github.com/Silo-Server/silo-server/internal/recommendations"
 	mediarequests "github.com/Silo-Server/silo-server/internal/requests"
@@ -234,6 +235,7 @@ type Dependencies struct {
 	AdminPluginRepositoryUpdates  AdminPluginRepositoryUpdateService
 	AdminPluginRepositoryDeletes  AdminPluginRepositoryDeleteService
 	AdminPluginInventory          AdminPluginInventoryService
+	AdminPluginProvisionStatus    func(context.Context) ([]plugins.ProvisionStatus, error)
 	AdminPluginConfiguration      AdminPluginConfigurationService
 	AdminPluginLifecycle          AdminPluginLifecycleService
 	AdminPluginUploads            AdminPluginUploadService
@@ -445,26 +447,31 @@ type Dependencies struct {
 	AdminProfileSections AdminProfileSectionService
 	// Requests serves media requests and the discovery surface
 	// (*requests.Service, the value *handlers.RequestsHandler wraps).
-	AdminSubtitleInspection            AdminSubtitleInspectionService
-	AdminRequests                      handlers.RequestService
-	Requests                           MediaRequestService
-	RequestLifecycle                   RequestLifecycleService
-	WatchProviders                     WatchProviderService
-	HistoryImports                     HistoryImportService
-	AdminHistoryImports                AdminHistoryImportService
-	AdminSubtitleList                  AdminSubtitleListService
-	AdminSubtitleMetadata              AdminSubtitleMetadataService
-	AdminSubtitleBytes                 AdminSubtitleBytesService
-	AdminSubtitleDelete                AdminSubtitleDeleteService
-	AdminAPIKeys                       AdminAPIKeyService
-	PersonalAPIKeys                    PersonalAPIKeyService
-	PolicyCapability                   PolicyCapabilityService
-	Branding                           BrandingService
-	OverlayImages                      OverlayImageService
-	ArtworkStore                       blobstore.Store
-	ArtworkBackend                     string
-	ArtworkSigner                      *artworkurl.Signer
-	ArtworkRepair                      ArtworkRepairService
+	AdminSubtitleInspection AdminSubtitleInspectionService
+	AdminRequests           handlers.RequestService
+	Requests                MediaRequestService
+	RequestLifecycle        RequestLifecycleService
+	WatchProviders          WatchProviderService
+	HistoryImports          HistoryImportService
+	AdminHistoryImports     AdminHistoryImportService
+	AdminSubtitleList       AdminSubtitleListService
+	AdminSubtitleMetadata   AdminSubtitleMetadataService
+	AdminSubtitleBytes      AdminSubtitleBytesService
+	AdminSubtitleDelete     AdminSubtitleDeleteService
+	AdminAPIKeys            AdminAPIKeyService
+	PersonalAPIKeys         PersonalAPIKeyService
+	PolicyCapability        PolicyCapabilityService
+	Branding                BrandingService
+	OverlayImages           OverlayImageService
+	ArtworkStore            blobstore.Store
+	ArtworkBackend          string
+	ArtworkSigner           *artworkurl.Signer
+	ArtworkRepair           ArtworkRepairService
+	// ItemPosters mints and checks the admin poster URLs (admin session rows,
+	// listAdminCatalogItems) that getItemPoster serves.
+	ItemPosters                        *artworkurl.ItemPosters
+	ItemPosterSource                   ItemPosterSource
+	RemotePosters                      RemotePosterFetcher
 	AdminInviteCodes                   AdminInviteCodeService
 	Invitations                        InvitationService
 	PasswordResets                     PasswordResetService
@@ -545,6 +552,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 	r.Use(joinPreconditionFields)
 	r.Use(rejectMalformedDeviceHeader)
 	r.Use(withRequest)
+	r.Use(playbackMediaCORS)
 	if deps.ActingAdmin != nil {
 		r.Use(apimw.ProvideActingAdmin(deps.ActingAdmin))
 	}
@@ -848,6 +856,11 @@ func (reg *Registry) methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 	methods := reg.AllowedMethods(r.URL.Path)
 	if len(methods) == 0 {
 		methods = pluginContentAllowedMethods(r.URL.Path)
+	}
+	// playbackMediaCORS answers OPTIONS on the media path before routing, so the
+	// registry does not declare it.
+	if isPlaybackMediaPath(r.URL.Path) {
+		methods = append(methods, http.MethodOptions)
 	}
 	if allow := strings.Join(methods, ", "); allow != "" {
 		p = p.WithHeader("Allow", allow)
@@ -1264,7 +1277,7 @@ var externalSignInProblemTypes = map[string]ProblemType{
 // tickets and provider logout.
 type OAuthService interface {
 	Complete(ctx context.Context, code, verifier, browser string) (auth.OAuthCompletion, error)
-	CallbackURL(prefix string, installID int) string
+	CallbackURL(prefix string, installID int, mode string) string
 	PublicURL(path string, query url.Values) string
 	NativeSignInAvailable() bool
 	ServeStart(w http.ResponseWriter, r *http.Request, req auth.OAuthStartRequest, bounceURL string, bounceStatus int)

@@ -242,7 +242,7 @@ func NewSystem(
 	if pushDeviceRepo != nil {
 		fanout.SetPushOutbox(pushDeviceRepo)
 	}
-	detector := NewAvailabilityDetector(releases, settings)
+	detector := NewAvailabilityDetector(releases)
 	detector.SetFanoutNudge(func() {
 		fanout.Nudge()
 		serverChannelSweep.Nudge() // nil-safe

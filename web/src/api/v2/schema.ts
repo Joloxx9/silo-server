@@ -3892,6 +3892,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/admin/plugins/capabilities": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Discover plugin administration features. */
+    get: operations["getAdminPluginCapabilities"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/admin/plugins/catalog": {
     parameters: {
       query?: never;
@@ -4076,7 +4093,7 @@ export interface paths {
       cookie?: never;
     };
     get?: never;
-    /** Replace the scheduled task binding for one capability and mark a server restart required. The whole row is assigned, so repeating the request converges on one stored binding. */
+    /** Replace the scheduled task binding for one capability and apply it on every API server: a disabled binding removes the task and cancels a run in progress, an enabled one registers it while its installation is enabled, and a changed trigger becomes its default schedule. The whole row is assigned, so repeating the request converges on one stored binding. */
     put: operations["updateAdminPluginTaskBinding"];
     post?: never;
     delete?: never;
@@ -4096,6 +4113,23 @@ export interface paths {
     put?: never;
     /** Install the recorded available version from the installation's repository, fetching over the network, and clear the marker. No applicable update is 409, as is an update that another install of the plugin replaced while its package downloaded. There is no replay identity: a lost response may follow a committed update; reconcile from the installation and never automatically retry. */
     post: operations["applyAdminPluginUpdate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/plugins/provisioning-status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read recorded environment provisioning status, including declarations with no installation. */
+    get: operations["listAdminPluginProvisioningStatus"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -5887,7 +5921,7 @@ export interface paths {
     };
     /** Read persisted schedule configuration and its canonical validator. */
     get: operations["getAdminTaskSchedule"];
-    /** Replace a captured schedule and apply it on this process. Other processes reload on restart. */
+    /** Replace a captured schedule and apply it on this process. Other processes install a plugin task's schedule at their next periodic plugin task sync, and a core task's when they restart. */
     put: operations["updateAdminTaskSchedule"];
     post?: never;
     delete?: never;
@@ -6800,6 +6834,26 @@ export interface paths {
      * @description Sets an HttpOnly, SameSite=Lax browser-binding cookie scoped to the callback path, then redirects to the provider. A browser on another origin than the public URL is first sent (302) to the same start there. A link_ticket is refused with 400: the web links with startAccountIdentityLink. Malformed parameters are plain-text 400s; a provider that cannot start the flow, or a missing public URL, sends the browser (302) to /login?error=oauth_failed&reason=provider_unavailable (login_failed for a server error), where the login page does not redirect to the provider again.
      */
     get: operations["startOAuthLogin"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/auth/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Continue the OAuth handshake at the provider's redirect back.
+     * @description Accepts only the browser holding the flow's binding cookie. A web sign-in continues to /login/oauth-complete?code=; a failure to /login?error=oauth_failed&reason=<reason> (not_permitted, account_required, email_in_use, identity_linked_elsewhere, account_disabled, provider_unavailable, state_invalid, session_expired, already_linked, login_failed). A web linking flow returns to its next path with linked=1 or error=oauth_link_failed&reason=<reason>; a native flow to the app redirect, which carries iss (see startNativeOAuthLogin).
+     */
+    get: operations["finishStableOAuthCallback"];
     put?: never;
     post?: never;
     delete?: never;
@@ -9233,6 +9287,23 @@ export interface paths {
     put?: never;
     /** Describe an invitation link for the claim screen. */
     post: operations["lookupInvitationLink"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/item-posters/{content_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read a catalog item's current poster from a signed link that admin reads return in poster_url. Cached art redirects to its stored object; art not cached yet is fetched from its provider through the server and queued for caching. */
+    get: operations["getItemPoster"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -15919,6 +15990,8 @@ export interface components {
       item_metadata: boolean;
       /** @description refreshAdminItemMetadata accepts mode reset, which resets an item, season or episode to its providers */
       item_metadata_reset: boolean;
+      /** @description listAdminCatalogItems returns poster_url, and admin poster URLs (here and on session rows) are always URLs this server issued */
+      item_posters: boolean;
       /** @description Opaque revision of this document */
       revision: string;
       /**
@@ -15984,6 +16057,11 @@ export interface components {
       library_ids: string[];
       /** @description Networks a series aired on; absent when there are none and for a movie or episode */
       networks?: string[];
+      /**
+       * Format: uri-reference
+       * @description Card-size poster of a movie or series, or of an episode's series, as a URL this server issued: the cached artwork's signed URL, or a signed getItemPoster link while the art is not cached yet. Never a metadata provider's URL. Absent when there is no poster, and on a server that cannot issue poster links (the capabilities then report item_posters false). The URL expires; read it again from a later page or session row
+       */
+      poster_url?: string;
       /**
        * Format: double
        * @description Stored IMDb rating of a movie or series on IMDb's 0-10 scale
@@ -17436,6 +17514,8 @@ export interface components {
        * @description RFC 3339 instant in UTC with millisecond precision
        */
       created_at: string;
+      /** @description Address the device registered the download from, as the trusted proxies resolve it; null when none was recorded, as for downloads registered before servers recorded it */
+      created_client_ip: string | null;
       delivery_format: string;
       device_id: string;
       device_name: string;
@@ -17457,6 +17537,8 @@ export interface components {
        * @example 1
        */
       id: string;
+      /** @description Address the device was last seen at for this download: set at registration, then by each accepted status report and by a file request from a new address, which replaces it at most once a minute, so it can be older than the latest file request; null when none was recorded */
+      last_client_ip: string | null;
       /** @description Where its prepared file is: server or node:<id>; absent when it has none */
       location?: string;
       location_name?: string;
@@ -17786,6 +17868,10 @@ export interface components {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
       available: boolean;
+      /** @description download.changed on the v2 events socket's admin downloads channel reports a managed download being created, changing status or revision, moving to another title in a catalog merge, or being removed. Delivery is at most once, so re-read the admin download routes on subscribe and reconnect */
+      change_events: boolean;
+      /** @description Download rows carry created_client_ip and last_client_ip */
+      client_ip: boolean;
       /** @description Device copies can be listed */
       devices: boolean;
       /** @description Admin realtime channel carrying download_storage.changed */
@@ -19903,6 +19989,41 @@ export interface components {
        * @description RFC 3339 instant in UTC with millisecond precision
        */
       started_at: string;
+      /** @description The subtitle the play's plan delivered when it ended, in the live session row's shape; null when it showed none, for a Jellyfin-protocol or Audiobookshelf play, and on rows recorded before the server kept it */
+      subtitle: {
+        /**
+         * @description The track's format in its source, as the inventory's codec names it; null when unknown
+         * @example subrip
+         */
+        codec: string | null;
+        /**
+         * @description How the plan delivers it: burned into the video (subtitle.mode burn_in), carried in the stream the client plays (subtitle.embedded), a WebVTT rendition of the HLS stream (subtitle.hls_rendition), or a sidecar file the client fetches (subtitle.artifact). Clients ignore values they do not know
+         * @enum {string}
+         */
+        delivery: "burn_in" | "embedded" | "hls_rendition" | "sidecar";
+        forced: boolean;
+        /**
+         * @description Format the client receives the track in: the sidecar artifact's or the HLS rendition's format. Null when it is burned in or carried in the stream as the source has it
+         * @example vtt
+         */
+        format: string | null;
+        hearing_impaired: boolean;
+        /**
+         * @description The track's language as the inventory names it (BCP 47; older rows may carry a legacy value); null when unknown
+         * @example en
+         */
+        language: string | null;
+        /**
+         * @description Where the track comes from, as the inventory's source names it: a track in the media file, a subtitle file beside it, or one the server downloaded or stored
+         * @enum {string}
+         */
+        source: "embedded" | "external" | "downloaded";
+        /**
+         * @description The track's inventory track_id, as the plan's subtitle.track_id names it
+         * @example file:42:subtitle:2
+         */
+        track_id: string;
+      } | null;
       /**
        * @description Opaque identifier
        * @example 1
@@ -19959,15 +20080,16 @@ export interface components {
       client_name?: string;
       client_user_agent?: string;
       client_version?: string;
-      content_id?: string;
       /** @description Device the client declared in X-Silo-Device-Id when playback started, the profile device registry's identity; a Jellyfin play carries the DeviceId of its MediaBrowser authorization. Absent when none was declared. */
       device_id?: string;
       /** @description Platform the client declared in X-Silo-Device-Platform when playback started; never derived from the user agent. Absent when none was declared, and always for a Jellyfin play. */
       device_platform?: string;
       /** @description Whole-session method: direct, remux, direct_stream (copied video, converted audio) or transcode; absent when unknown */
       effective_play_method?: string;
-      episode_name?: string;
-      /** Format: int64 */
+      /**
+       * Format: int64
+       * @description Episode number; absent when not an episode
+       */
       episode_number?: number;
       /**
        * Format: int64
@@ -19987,7 +20109,11 @@ export interface components {
        * @example 1
        */
       media_file_id: string;
+      /** @description Catalog content id of what is playing: the episode for an episode, as admin playback history's media_item_id. Absent when unknown */
+      media_item_id?: string;
+      /** @description Episode or item title, as admin playback history names it; empty when the item is no longer in the catalog */
       media_title: string;
+      /** @description episode, or the catalog item type; empty when unknown */
       media_type: string;
       node_display_name?: string;
       /** @description Container the serving transport produces: fmp4, mpegts, or the source container for direct play. Absent when the node did not report it; clients must not infer it from play_method or the source. */
@@ -19997,7 +20123,10 @@ export interface components {
       play_method: string;
       /** Format: double */
       position_seconds: number;
-      /** Format: uri-reference */
+      /**
+       * Format: uri-reference
+       * @description Card-size poster of the title (an episode's series poster) as a URL this server issued: the cached artwork's signed URL, or a signed getItemPoster link while the art is not cached yet. Never a metadata provider's URL. Absent when there is no poster, and for art that is not cached yet on a server that cannot issue poster links (the catalog capabilities then report item_posters false)
+       */
       poster_url?: string;
       profile_id: string;
       profile_name?: string;
@@ -20026,9 +20155,13 @@ export interface components {
       /** @description Access network selected for playback: empty means default; absent means unknown; otherwise the validated provider identifier. */
       routing_network_provider?: string;
       routing_workload?: string;
-      /** Format: int64 */
+      /**
+       * Format: int64
+       * @description Episode season; absent when not an episode
+       */
       season_number?: number;
-      series_name?: string;
+      /** @description Series title for an episode; absent otherwise */
+      series_title?: string;
       session_id: string;
       /** Format: int64 */
       source_audio_channels: number | null;
@@ -20059,6 +20192,41 @@ export interface components {
        * @enum {string}
        */
       stream_location: "local" | "remote";
+      /** @description The subtitle the session's current plan delivers, following each replan (a subtitle switch the client reports, a recovery); null when it shows none, for a session planned before the server recorded it, and for Jellyfin-protocol and Audiobookshelf sessions. A client that turns an already delivered sidecar on or off without a replan is not seen. */
+      subtitle: {
+        /**
+         * @description The track's format in its source, as the inventory's codec names it; null when unknown
+         * @example subrip
+         */
+        codec: string | null;
+        /**
+         * @description How the plan delivers it: burned into the video (subtitle.mode burn_in), carried in the stream the client plays (subtitle.embedded), a WebVTT rendition of the HLS stream (subtitle.hls_rendition), or a sidecar file the client fetches (subtitle.artifact). Clients ignore values they do not know
+         * @enum {string}
+         */
+        delivery: "burn_in" | "embedded" | "hls_rendition" | "sidecar";
+        forced: boolean;
+        /**
+         * @description Format the client receives the track in: the sidecar artifact's or the HLS rendition's format. Null when it is burned in or carried in the stream as the source has it
+         * @example vtt
+         */
+        format: string | null;
+        hearing_impaired: boolean;
+        /**
+         * @description The track's language as the inventory names it (BCP 47; older rows may carry a legacy value); null when unknown
+         * @example en
+         */
+        language: string | null;
+        /**
+         * @description Where the track comes from, as the inventory's source names it: a track in the media file, a subtitle file beside it, or one the server downloaded or stored
+         * @enum {string}
+         */
+        source: "embedded" | "external" | "downloaded";
+        /**
+         * @description The track's inventory track_id, as the plan's subtitle.track_id names it
+         * @example file:42:subtitle:2
+         */
+        track_id: string;
+      } | null;
       /** Format: int64 */
       target_audio_channels?: number;
       target_audio_codec?: string;
@@ -20114,6 +20282,8 @@ export interface components {
        */
       state: "available" | "disabled" | "not_configured" | "unsupported";
       stream_location: boolean;
+      /** @description Rows and admin playback history entries carry subtitle */
+      subtitle: boolean;
       summary: boolean;
       target_audio_channels: boolean;
       tone_map_mode: boolean;
@@ -20147,15 +20317,17 @@ export interface components {
       title?: string;
     };
     AdminPlaybackSummaryItem: {
-      episode_name?: string;
       /** Format: int64 */
       episode_number?: number;
       is_paused: boolean;
+      /** @description Episode or item title, as the session row names it */
       media_title: string;
+      /** @description episode, or the catalog item type; empty when unknown */
       media_type: string;
       /** Format: int64 */
       season_number?: number;
-      series_name?: string;
+      /** @description Series title for an episode; absent otherwise */
+      series_title?: string;
       /**
        * @description Opaque identifier
        * @example 1
@@ -20197,6 +20369,13 @@ export interface components {
     AdminPluginAuthBinding: {
       auto_provision: boolean;
       /**
+       * @description Redirect URI mode for OAuth sign-in
+       * @enum {string}
+       */
+      callback_mode?: "installation" | "stable";
+      /** @description True when an enabled OAuth binding is waiting for the public URL */
+      callback_pending?: boolean;
+      /**
        * Format: uri-reference
        * @description Redirect URI to register at the OAuth (OIDC) provider for this installation: the v2 callback on the public URL (server.public_url). Empty for a password (LDAP) provider and while no public URL is configured
        * @example https://silo.example.test/api/v2/auth/oauth/3/callback
@@ -20212,6 +20391,8 @@ export interface components {
       /** Format: int64 */
       display_order: number;
       enabled: boolean;
+      /** @description Binding fields owned by the deployment. */
+      env_managed?: string[];
       /**
        * Format: uri-reference
        * @description Post-logout redirect URI to register at the OAuth (OIDC) provider when provider logout is on: the login page on the public URL. Empty for a password (LDAP) provider and while no public URL is configured
@@ -20233,11 +20414,29 @@ export interface components {
     AdminPluginAuthBindingWrite: {
       /** @description Create an account for a person who passes the provider's rules on first sign-in; omitted means true */
       auto_provision?: boolean;
+      /**
+       * @description OAuth only. Omit to preserve the stored mode or to use installation for a new binding
+       * @enum {string}
+       */
+      callback_mode?: "installation" | "stable";
       capability_id: string;
       default_login: boolean;
       /** Format: int64 */
       display_order: number;
       enabled: boolean;
+    };
+    AdminPluginCapabilities: {
+      /** @description Whether the current principal may use the capability */
+      allowed: boolean;
+      /** @description Installation and binding reads can report env_managed ownership, mutations refuse changes to owned fields, and provisioning status is available. */
+      env_declarations: boolean;
+      /** @description Opaque revision of this document */
+      revision: string;
+      /**
+       * @description Support and configuration state, not health
+       * @enum {string}
+       */
+      state: "available" | "disabled" | "not_configured" | "unsupported";
     };
     AdminPluginCapability: {
       /**
@@ -20251,6 +20450,8 @@ export interface components {
       default_schedule?: components["schemas"]["AdminTaskTrigger"];
       description: string;
       display_name: string;
+      /** @description On an installed sign-in capability: the binding fields owned by the deployment. May appear before a binding exists. */
+      env_managed?: string[];
       id: string;
       metadata: {
         [key: string]: unknown;
@@ -20409,6 +20610,8 @@ export interface components {
        */
       created_at: string;
       enabled: boolean;
+      /** @description Present when the deployment owns this installation and its package source. */
+      env_managed?: components["schemas"]["AdminPluginProvisionOwnership"];
       global_config_schema: components["schemas"]["AdminPluginConfigSchema"][];
       global_configs: components["schemas"]["AdminPluginConfigValue"][];
       /**
@@ -20487,6 +20690,28 @@ export interface components {
       summary: string;
       /** Format: uri-reference */
       support_url: string;
+    };
+    AdminPluginProvisionOwnership: {
+      /** @description Binding fields owned by the deployment, keyed by capability ID. */
+      binding_fields: {
+        [key: string]: string[];
+      };
+      /** @description Top-level fields owned by the deployment, keyed by global configuration entry. */
+      config_fields: {
+        [key: string]: string[];
+      };
+      /** @description Exact package version the deployment pins, if any. */
+      version_pin?: string;
+    };
+    AdminPluginProvisionStatus: {
+      /** @description Redacted reason or status detail, empty when there is none. */
+      detail: string;
+      /** @description The declared manifest plugin ID. An installation need not exist. */
+      plugin_id: string;
+      /** @description The latest recorded provisioning outcome for the declaration. */
+      state: string;
+      /** @description Installed version when applied. Otherwise the requested version, if any. */
+      version: string;
     };
     AdminPluginRepository: {
       /**
@@ -20591,7 +20816,7 @@ export interface components {
       updated_at: string;
     };
     AdminPluginTaskBindingResult: {
-      /** @description Always true: bindings load at server start */
+      /** @description False when the binding applies without a restart: this server attempts a plugin task sync before answering and retries a failed one, and every other API server applies it at its next successful sync. True only on a server with no task scheduler, where it applies at the next start */
       restart_required: boolean;
     };
     AdminPluginTaskBindingWrite: {
@@ -23130,6 +23355,8 @@ export interface components {
        * @description RFC 3339 instant in UTC with millisecond precision
        */
       created_at: string;
+      /** @description Address the device registered the download from, as the trusted proxies resolve it; null when none was recorded, as for downloads registered before servers recorded it */
+      created_client_ip: string | null;
       delivery_format: string;
       device_id: string;
       effective_quality: string;
@@ -23150,6 +23377,8 @@ export interface components {
        * @example 1
        */
       id: string;
+      /** @description Address the device was last seen at for this download: set at registration, then by each accepted status report and by a file request from a new address, which replaces it at most once a minute, so it can be older than the latest file request; null when none was recorded */
+      last_client_ip: string | null;
       /** @description Catalog type of content_id (movie, series, …); empty when unknown */
       media_type: string;
       /**
@@ -23870,7 +24099,7 @@ export interface components {
     AuthConnectionTestResult: {
       /**
        * Format: uri-reference
-       * @description Redirect URI to register at an OAuth (OIDC) provider for this installation, on the public URL; empty when no public URL is configured. Password (LDAP) providers do not use it
+       * @description Redirect URI to register at the OAuth provider. Empty for password providers, when the public URL is unset, or when the binding mode is unavailable.
        * @example https://silo.example.test/api/v2/auth/oauth/3/callback
        */
       callback_url: string;
@@ -25484,6 +25713,12 @@ export interface components {
     CollectionAdminPluginInstallation: {
       /** @description The page's items; empty, never null */
       items: components["schemas"]["AdminPluginInstallation"][];
+      /** @description Cursor state; absent for bounded unpaginated collections */
+      page?: components["schemas"]["PageInfo"];
+    };
+    CollectionAdminPluginProvisionStatus: {
+      /** @description The page's items; empty, never null */
+      items: components["schemas"]["AdminPluginProvisionStatus"][];
       /** @description Cursor state; absent for bounded unpaginated collections */
       page?: components["schemas"]["PageInfo"];
     };
@@ -31169,6 +31404,8 @@ export interface components {
       revision: string;
       /** @description Whether startOAuthLogin, initOAuthLogin and startNativeOAuthLogin accept prompt=select_account, which asks the provider to let the person choose another provider account (a Switch account sign-in) */
       select_account: boolean;
+      /** @description Whether finishStableOAuthCallback accepts provider redirects for bindings using the stable callback mode */
+      stable_callback: boolean;
       /**
        * @description Support and configuration state, not health
        * @enum {string}
@@ -32240,20 +32477,10 @@ export interface components {
        */
       client_version: string;
       /**
-       * @description Catalog content id of the playing item; empty when unknown
-       * @example tt0111161
-       */
-      content_id: string;
-      /**
        * @description Bucketed method: direct, remux, direct_stream or transcode; empty when unknown
        * @example direct
        */
       effective_play_method: string;
-      /**
-       * @description Empty unless an episode
-       * @example
-       */
-      episode_name: string;
       /**
        * Format: int64
        * @description null unless an episode
@@ -32285,10 +32512,18 @@ export interface components {
        * @example 42
        */
       media_file_id: string;
-      /** @example The Shawshank Redemption */
+      /**
+       * @description Catalog content id of what is playing: the episode for an episode; empty when unknown
+       * @example tt0111161
+       */
+      media_item_id: string;
+      /**
+       * @description Episode or item title; empty when unknown
+       * @example The Shawshank Redemption
+       */
       media_title: string;
       /**
-       * @description Catalog item type; empty when unknown
+       * @description episode, or the catalog item type; empty when unknown
        * @example movie
        */
       media_type: string;
@@ -32385,10 +32620,10 @@ export interface components {
        */
       season_number: number | null;
       /**
-       * @description Empty unless an episode
+       * @description Series title for an episode; empty otherwise
        * @example
        */
-      series_name: string;
+      series_title: string;
       /**
        * Format: int64
        * @description null when unknown
@@ -32511,6 +32746,40 @@ export interface components {
       items: components["schemas"]["PlaybackSession"][];
       /** @description Cursor state; absent for bounded unpaginated collections */
       page?: components["schemas"]["PageInfo"];
+    };
+    PlaybackSessionSubtitle: {
+      /**
+       * @description The track's format in its source, as the inventory's codec names it; null when unknown
+       * @example subrip
+       */
+      codec: string | null;
+      /**
+       * @description How the plan delivers it: burned into the video (subtitle.mode burn_in), carried in the stream the client plays (subtitle.embedded), a WebVTT rendition of the HLS stream (subtitle.hls_rendition), or a sidecar file the client fetches (subtitle.artifact). Clients ignore values they do not know
+       * @enum {string}
+       */
+      delivery: "burn_in" | "embedded" | "hls_rendition" | "sidecar";
+      forced: boolean;
+      /**
+       * @description Format the client receives the track in: the sidecar artifact's or the HLS rendition's format. Null when it is burned in or carried in the stream as the source has it
+       * @example vtt
+       */
+      format: string | null;
+      hearing_impaired: boolean;
+      /**
+       * @description The track's language as the inventory names it (BCP 47; older rows may carry a legacy value); null when unknown
+       * @example en
+       */
+      language: string | null;
+      /**
+       * @description Where the track comes from, as the inventory's source names it: a track in the media file, a subtitle file beside it, or one the server downloaded or stored
+       * @enum {string}
+       */
+      source: "embedded" | "external" | "downloaded";
+      /**
+       * @description The track's inventory track_id, as the plan's subtitle.track_id names it
+       * @example file:42:subtitle:2
+       */
+      track_id: string;
     };
     PlaybackSource: {
       /** Format: int64 */
@@ -35592,6 +35861,8 @@ export interface components {
         [key: string]: string;
       };
       mime_type?: string;
+      /** Format: uri-reference */
+      parallel_range_url?: string;
       protocol: string;
       /** Format: uri-reference */
       url: string;
@@ -72648,6 +72919,138 @@ export interface operations {
       };
     };
   };
+  getAdminPluginCapabilities: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
+        "If-Match"?: string;
+        "If-None-Match"?: string;
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: string;
+          /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminPluginCapabilities"];
+        };
+      };
+      /** @description The representation named by If-None-Match is current; no body. */
+      304: {
+        headers: {
+          /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   listAdminPluginCatalog: {
     parameters: {
       query?: {
@@ -74613,6 +75016,112 @@ export interface operations {
       };
       /** @description Conflict */
       409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  listAdminPluginProvisioningStatus: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CollectionAdminPluginProvisionStatus"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
         headers: {
           [name: string]: unknown;
         };
@@ -98925,6 +99434,50 @@ export interface operations {
       };
     };
   };
+  finishStableOAuthCallback: {
+    parameters: {
+      query?: {
+        /** @description Provider redirect value; validated by the owning handshake. */
+        code?: string;
+        /** @description Provider redirect value; validated by the owning handshake. */
+        error?: string;
+        /** @description Provider redirect value; validated by the owning handshake. */
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirect: to the provider, to the same start on the public origin, or to the flow's completion or failure location. */
+      302: {
+        headers: {
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Plain-text handshake failure. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/plain": string;
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   getOAuthHandshakeCapabilities: {
     parameters: {
       query?: never;
@@ -120561,6 +121114,65 @@ export interface operations {
         content: {
           "application/problem+json": components["schemas"]["Problem"];
         };
+      };
+    };
+  };
+  getItemPoster: {
+    parameters: {
+      query: {
+        exp: number;
+        sig: string;
+      };
+      header?: never;
+      path: {
+        /** @description Content ID of the movie or series whose poster the link names. */
+        content_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Poster bytes of art not cached yet */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "image/*": string;
+        };
+      };
+      /** @description Redirect to the cached poster's signed URL */
+      302: {
+        headers: {
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Link invalid or expired, item gone, no poster, or the provider refused or failed */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Poster request rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Seconds to wait before retrying. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Poster fetches are busy or not configured; retry after Retry-After */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

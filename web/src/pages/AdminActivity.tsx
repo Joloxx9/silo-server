@@ -95,6 +95,22 @@ const SORT_ASC_MARK = "▲";
 const SORT_DESC_MARK = "▼";
 
 /**
+ * Links inside a row that itself toggles details, underlined on hover like the
+ * other admin tables while the row's highlight steps back (ROW_HOVER_CLASS).
+ * The default theme's primary matches its foreground, so the color alone
+ * shows nothing there.
+ */
+const ROW_LINK_CLASS =
+  "rounded-sm decoration-1 underline-offset-3 transition-colors hover:text-primary hover:underline active:underline focus-visible:text-primary focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+/**
+ * A clickable row's highlight and lit expand chevron, held back while the
+ * pointer is on a link or a button that does something else; the expand
+ * controls keep them. Uses the app's pointer-gated hover variant.
+ */
+const ROW_HOVER_CLASS =
+  "transition-colors hover:[&:not(:has(a:hover,button:not([data-row-toggle]):hover))]:bg-surface-hover hover:[&:not(:has(a:hover,button:not([data-row-toggle]):hover))_[data-row-chevron]]:text-foreground";
+
+/**
  * The stream table's two layouts. Rows and the header share one column
  * template; the route column only exists when routes differ between sessions
  * (see sessionRoutesVary). Below the container width the columns need, rows
@@ -333,8 +349,7 @@ export default function AdminActivity() {
           s.username?.toLowerCase().includes(q) ||
           s.profile_name?.toLowerCase().includes(q) ||
           s.media_title?.toLowerCase().includes(q) ||
-          s.series_name?.toLowerCase().includes(q) ||
-          s.episode_name?.toLowerCase().includes(q) ||
+          s.series_title?.toLowerCase().includes(q) ||
           // Search the exact label, not the compact one: "which sessions are on
           // build 5?" is the question this identity exists to answer, and the
           // compact label deliberately omits the build.
@@ -352,7 +367,15 @@ export default function AdminActivity() {
         getSessionRouteNodes(s).some((node) => node.key === nodeFilter),
       );
     }
-    if (typeFilter) result = result.filter((s) => s.media_type === typeFilter);
+    if (typeFilter) {
+      // A file linked to a show with no matching episode row is reported as
+      // the show itself, so the episode choice keeps both.
+      result = result.filter((s) =>
+        typeFilter === "episode"
+          ? s.media_type === "episode" || s.media_type === "series"
+          : s.media_type === typeFilter,
+      );
+    }
 
     return [...result].sort((a, b) => {
       let cmp = 0;
@@ -531,7 +554,7 @@ export default function AdminActivity() {
           </div>
         )}
         <div className={SEGMENTED_GROUP_CLASS}>
-          {(["movie", "series"] as const).map((type) => (
+          {(["movie", "episode"] as const).map((type) => (
             <button
               key={type}
               type="button"
@@ -695,6 +718,8 @@ function StreamRow({
 }) {
   const t = useT();
   const panelId = useId();
+  const username =
+    session.username || t("web.admin.activity.userFallback", { id: session.user_id });
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [ffmpegOpen, setFFmpegOpen] = useState(false);
   const logsHref = `/admin/logs?playback_session_id=${encodeURIComponent(session.session_id)}&focus=playback`;
@@ -770,16 +795,18 @@ function StreamRow({
   const expandButton = (
     <button
       type="button"
+      data-row-toggle
       onClick={toggleDetails}
       aria-expanded={expandedOpen}
       aria-controls={expandedOpen ? panelId : undefined}
       aria-label={t("web.admin.activity.row.details")}
       title={t("web.admin.activity.row.details")}
-      className="text-muted-foreground hover:text-foreground hover:bg-surface flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors"
+      className="text-muted-foreground hover:text-foreground hover:bg-surface-raised flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors"
     >
       <ChevronRight
         aria-hidden="true"
-        className={`h-4 w-4 transition-transform rtl:-scale-x-100 ${expandedOpen ? "rotate-90 rtl:-rotate-90" : ""}`}
+        data-row-chevron
+        className={`h-4 w-4 transition-[transform,color] rtl:-scale-x-100 ${expandedOpen ? "rotate-90 rtl:-rotate-90" : ""}`}
       />
     </button>
   );
@@ -789,7 +816,7 @@ function StreamRow({
       {/* Table row */}
       <div
         onClick={onRowClick}
-        className={`${layout.table} ${layout.columns} hover:bg-surface/40 cursor-pointer items-center gap-3 px-3 py-2 transition-colors`}
+        className={`${layout.table} ${layout.columns} ${ROW_HOVER_CLASS} cursor-pointer items-center gap-3 px-3 py-2`}
       >
         {expandButton}
         <MediaCell session={session} />
@@ -836,13 +863,16 @@ function StreamRow({
       </div>
 
       {/* Stacked card */}
-      <div onClick={onRowClick} className={`${layout.stacked} flex cursor-pointer gap-3 px-3 py-3`}>
+      <div
+        onClick={onRowClick}
+        className={`${layout.stacked} ${ROW_HOVER_CLASS} flex cursor-pointer gap-3 px-3 py-3`}
+      >
         <Poster session={session} size="stacked" />
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <TitleLink session={session} />
-              {session.series_name ? (
+              {session.series_title ? (
                 // An episode's own title doesn't say which show it is.
                 <div className="text-muted-foreground truncate text-[12px]">
                   {getPlaybackSessionSubtitle(session)}
@@ -851,10 +881,10 @@ function StreamRow({
               <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[12px]">
                 <Link
                   to={`/admin/users/${session.user_id}`}
-                  className="hover:text-primary shrink-0 transition-colors"
+                  title={username}
+                  className={`${ROW_LINK_CLASS} min-w-0 truncate`}
                 >
-                  {session.username ||
-                    t("web.admin.activity.userFallback", { id: session.user_id })}
+                  {username}
                 </Link>
                 <ProfilePill session={session} />
                 <JellyfinSessionPill session={session} />
@@ -924,12 +954,12 @@ function Poster({ session, size }: { session: AdminSession; size: "table" | "sta
 function TitleLink({ session }: { session: AdminSession }) {
   const t = useT();
   const title = getDisplayTitle(session, t);
-  const itemHref = session.content_id ? `/item/${session.content_id}` : "";
+  const itemHref = session.media_item_id ? `/item/${session.media_item_id}` : "";
   return itemHref ? (
     <Link
       to={itemHref}
       title={title}
-      className="hover:text-primary block truncate text-[13px] font-medium transition-colors"
+      className={`${ROW_LINK_CLASS} block w-fit max-w-full truncate text-[13px] font-medium`}
     >
       {title}
     </Link>
@@ -1032,7 +1062,8 @@ function ViewerCell({
       <div className="flex min-w-0 items-center gap-1.5">
         <Link
           to={`/admin/users/${session.user_id}`}
-          className="hover:text-primary truncate text-[13px] font-medium transition-colors"
+          title={username}
+          className={`${ROW_LINK_CLASS} truncate text-[13px] font-medium`}
         >
           {username}
         </Link>
@@ -1059,7 +1090,7 @@ function ViewerCell({
               type="button"
               onClick={() => onIPLookup(clientIP)}
               title={t("web.admin.activity.ipLookup.heading")}
-              className="hover:text-primary shrink-0 tabular-nums transition-colors"
+              className={`${ROW_LINK_CLASS} shrink-0 tabular-nums`}
             >
               {clientIP}
             </button>
@@ -1100,6 +1131,7 @@ function MethodLine({
       {rest.length > 0 ? (
         <button
           type="button"
+          data-row-toggle
           onClick={onMore}
           aria-expanded={expanded}
           aria-controls={expanded ? panelId : undefined}
@@ -1388,7 +1420,8 @@ function PlaybackExpandedPanel({
                 <button
                   type="button"
                   onClick={() => onIPLookup(clientIP)}
-                  className="hover:text-primary ms-1 tabular-nums transition-colors"
+                  title={t("web.admin.activity.ipLookup.heading")}
+                  className={`${ROW_LINK_CLASS} ms-1 tabular-nums`}
                 >
                   {clientIP}
                 </button>
@@ -1799,9 +1832,9 @@ function getDisplayTitle(
   session: AdminSession,
   t: (id: MessageKey, values?: TextValues) => string,
 ): string {
-  if (session.series_name && session.season_number != null && session.episode_number != null) {
+  if (session.series_title && session.season_number != null && session.episode_number != null) {
     return (
-      session.episode_name ||
+      session.media_title ||
       t("web.detail.episodeCode", {
         season: codeNumber(session.season_number),
         episode: codeNumber(session.episode_number),

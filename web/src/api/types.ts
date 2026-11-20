@@ -2807,11 +2807,14 @@ export interface AdminSession {
   profile_name?: string;
   media_file_id: number;
   requested_media_file_id: number;
-  content_id?: string;
+  /** Catalog content id of what is playing: the episode for an episode. */
+  media_item_id?: string;
+  /** Episode or item title, as admin playback history names it. */
   media_title: string;
+  /** `episode`, or the catalog item type. */
   media_type: string;
-  series_name?: string;
-  episode_name?: string;
+  /** Series title for an episode; absent otherwise. */
+  series_title?: string;
   season_number?: number | null;
   episode_number?: number | null;
   poster_url?: string;
@@ -3094,7 +3097,9 @@ export type EventChannel =
   | "settings"
   | "notifications"
   // Admin-only changes to the offline-download preparation queue.
-  | "download_preparations";
+  | "download_preparations"
+  // Admin-only download.changed for managed device downloads.
+  | "downloads";
 
 export interface NotificationReasonFlags {
   // episode.available reasons
@@ -3974,6 +3979,7 @@ export interface PluginAdminFormField {
 }
 
 export interface PluginCapability {
+  env_managed?: string[];
   type: string;
   id: string;
   display_name: string;
@@ -4018,6 +4024,9 @@ export interface PluginConfigValue {
 }
 
 export interface PluginAuthBinding {
+  env_managed?: string[];
+  callback_mode?: "installation" | "stable";
+  callback_pending?: boolean;
   capability_id: string;
   enabled: boolean;
   display_order: number;
@@ -4107,7 +4116,10 @@ export interface PluginUpdateFailure {
 
 export type PluginSignature = V2Components["schemas"]["AdminPluginSignature"];
 
+export type PluginProvisionOwnership = V2Components["schemas"]["AdminPluginProvisionOwnership"];
+
 export interface PluginInstallation {
+  env_managed?: PluginProvisionOwnership;
   id: number;
   repository_id?: number | null;
   plugin_id: string;

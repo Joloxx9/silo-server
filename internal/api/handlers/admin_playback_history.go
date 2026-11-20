@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/Silo-Server/silo-server/internal/playback"
 )
 
 // AdminPlaybackHistoryFilter narrows the finalized playback log the same way
@@ -83,6 +85,9 @@ type AdminPlaybackHistoryRow struct {
 	SeriesTitle   string
 	SeasonNumber  *int
 	EpisodeNumber *int
+	// Subtitle is the subtitle the play ended on; nil when it showed none or
+	// the row predates the record.
+	Subtitle *playback.SessionSubtitle
 }
 
 // AdminPlaybackHistoryPage is one keyset page plus whether more rows follow.
@@ -168,7 +173,8 @@ func (h *AdminHandler) ListAdminPlaybackHistoryPage(ctx context.Context, filter 
 			h.lifecycle_seq,
 			COALESCE(sm.title, ''),
 			ep.season_number,
-			ep.episode_number
+			ep.episode_number,
+			h.subtitle
 		FROM admin_playback_history h
 		LEFT JOIN users u ON u.id = h.user_id
 		LEFT JOIN user_profiles up ON up.user_id = h.user_id AND up.id = h.profile_id
@@ -200,7 +206,7 @@ func (h *AdminHandler) ListAdminPlaybackHistoryPage(ctx context.Context, filter 
 			&row.MeasuredSince, &row.MeasuredUntil, &row.ClientIP,
 			&row.DeviceID, &row.DevicePlatform, &row.ClientName, &row.ClientVersion,
 			&row.VideoDecision, &row.AudioDecision, &row.EndReason, &row.LifecycleSeq,
-			&row.SeriesTitle, &row.SeasonNumber, &row.EpisodeNumber,
+			&row.SeriesTitle, &row.SeasonNumber, &row.EpisodeNumber, &row.Subtitle,
 		); err != nil {
 			rows.Close()
 			return out, err

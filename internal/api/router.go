@@ -46,6 +46,7 @@ import (
 	evt "github.com/Silo-Server/silo-server/internal/events"
 	"github.com/Silo-Server/silo-server/internal/historyimport"
 	"github.com/Silo-Server/silo-server/internal/httpstream"
+	"github.com/Silo-Server/silo-server/internal/imagecache"
 	"github.com/Silo-Server/silo-server/internal/intromarkers"
 	"github.com/Silo-Server/silo-server/internal/invitations"
 	"github.com/Silo-Server/silo-server/internal/jellycompat"
@@ -281,6 +282,7 @@ type Dependencies struct {
 	WatchProviderRegistry   handlers.WatchProviderLister
 	WatchCompletionObserver watchstate.CompletionObserver
 	PluginService           *plugins.Service
+	PluginProvisionStatus   func(context.Context) ([]plugins.ProvisionStatus, error)
 	PluginHTTPProxy         *plugins.HTTPProxy
 	PluginUserConfig        *plugins.UserConfigStore
 	AuthProviders           []auth.RegisteredProvider
@@ -289,6 +291,9 @@ type Dependencies struct {
 	// after an auth binding write.
 	AuthProviderSource     auth.PluginProviderSource
 	OnAuthProvidersChanged func(context.Context)
+	// OnPluginTasksChanged re-syncs plugin tasks on every API server after a
+	// task binding write; nil leaves the binding to the next restart.
+	OnPluginTasksChanged func(context.Context)
 	// AuthProviderRecheck re-checks sessions opened through an external
 	// sign-in provider at refresh (nil skips it).
 	AuthProviderRecheck *auth.ProviderRecheck
@@ -755,6 +760,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 		authHandler = handlers.NewAuthHandler(authService, jwtService, deviceLoginService)
 		authHandler.SetPrimaryProfileChecker(checkPrimaryProfile)
+		authService.OnAuthProvidersChanged(deps.OnAuthProvidersChanged)
 		if accessGroupStore != nil {
 			authHandler.SetAccessGroupProvider(accessGroupStore)
 		}
@@ -844,6 +850,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 		libraryHandler.EventBus = deps.EventBus
 		libraryHandler.EventsHub = deps.EventsHub
+		libraryHandler.RealtimeHub = deps.RealtimeHub
 		libraryHandler.ScanRegistry = deps.ScanRegistry
 		libraryHandler.ScanQueue = deps.LibraryScanQueue
 		libraryHandler.RealtimeMonitor = deps.LibraryMonitor
@@ -1241,8 +1248,15 @@ func newChiRouter(deps Dependencies) chi.Router {
 			personalCollages.SetCollageGenerator(gen)
 		}
 	}
+	// Admin reads (session rows, the catalog listing) name posters by a URL
+	// this server issued, so a monitoring tool never needs a provider's host.
+	var itemPosters *artworkurl.ItemPosters
+	if cfg := deps.CurrentConfig(); detailSvc != nil && cfg != nil {
+		itemPosters = artworkurl.NewItemPosters(cfg.Auth.JWTSecret, cfg.S3.MetadataPresignExpiry, detailSvc)
+	}
 	if deps.DB != nil {
 		playbackSessionsLoader = handlers.NewPlaybackSessionsLoader(deps.DB, deps.UserStoreProvider, detailSvc)
+		playbackSessionsLoader.Posters = itemPosters
 	}
 
 	if deps.UserStoreProvider != nil {
@@ -2662,16 +2676,16 @@ func newChiRouter(deps Dependencies) chi.Router {
 		if deps.DB != nil && authService != nil && jwtService != nil {
 			stateSecret := auth.DeriveOAuthStateSecret([]byte(deps.Config.Auth.JWTSecret))
 			oauthStore := auth.NewPGOAuthStore(deps.DB, stateSecret)
-			resolveClient := func(ctx context.Context, installationID int) (auth.OAuthClient, string, error) {
+			resolveClient := func(ctx context.Context, installationID int) (auth.OAuthClient, string, string, error) {
 				pp := authService.FindOAuthInstallation(installationID)
 				if pp == nil {
-					return nil, "", auth.ErrUnknownAuthInstallation
+					return nil, "", "", auth.ErrUnknownAuthInstallation
 				}
 				c, err := pp.OAuthClient(ctx)
 				if err != nil {
-					return nil, "", err
+					return nil, "", "", err
 				}
-				return c, pp.CapabilityID(), nil
+				return c, pp.CapabilityID(), pp.CallbackMode(), nil
 			}
 			identity := serveridentity.New(catalog.NewServerSettingsRepo(deps.DB))
 			oauthHandler = auth.NewOAuthHandler(auth.OAuthHandlerDeps{
@@ -3218,6 +3232,11 @@ func newChiRouter(deps Dependencies) chi.Router {
 	if itemRepo != nil {
 		v2deps.AdminCatalogItems = itemRepo
 	}
+	if itemPosters != nil && deps.DB != nil {
+		v2deps.ItemPosters = itemPosters
+		v2deps.ItemPosterSource = metadata.NewImageCacheJobRepository(deps.DB)
+		v2deps.RemotePosters = imagecache.NewRemoteFetcher()
+	}
 	if adminImageHandler != nil {
 		v2deps.AdminCatalogImages = adminImageHandler
 	}
@@ -3236,7 +3255,13 @@ func newChiRouter(deps Dependencies) chi.Router {
 		v2deps.AdminDiagnosticReads = diagnosticsHandler
 		v2deps.AdminDiagnosticDeletes = diagnosticsHandler
 	}
+	v2deps.AdminPluginProvisionStatus = deps.PluginProvisionStatus
 	if deps.DB != nil {
+		if v2deps.AdminPluginProvisionStatus == nil {
+			v2deps.AdminPluginProvisionStatus = func(ctx context.Context) ([]plugins.ProvisionStatus, error) {
+				return plugins.ListProvisionStatus(ctx, deps.DB)
+			}
+		}
 		v2deps.AdminPluginCatalogSettings = plugins.NewRepositoryStore(deps.DB)
 		v2deps.AdminPluginRepositories = plugins.NewRepositoryStore(deps.DB)
 		v2deps.AdminPluginRepositoryCreation = plugins.NewRepositoryStore(deps.DB)
@@ -3257,6 +3282,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 			restartStatus,
 		)
 		v2PluginHandler.SetAuthProvidersChanged(deps.OnAuthProvidersChanged)
+		v2PluginHandler.SetPluginTasksChanged(deps.OnPluginTasksChanged)
 		v2deps.AdminPluginInventory = v2PluginHandler
 		v2deps.AdminPluginConfiguration = v2PluginHandler
 		v2deps.AdminPluginLifecycle = v2PluginHandler
