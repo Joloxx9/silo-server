@@ -89,6 +89,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/secret"
 	"github.com/Silo-Server/silo-server/internal/sections"
 	"github.com/Silo-Server/silo-server/internal/serveridentity"
+	"github.com/Silo-Server/silo-server/internal/serversettings"
 	"github.com/Silo-Server/silo-server/internal/settingscontract"
 	"github.com/Silo-Server/silo-server/internal/shuffle"
 	"github.com/Silo-Server/silo-server/internal/storagetransition"
@@ -603,9 +604,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 	// Build server settings repo if DB is available (needed by auth and admin).
 	// Wrap it in the encrypting decorator so sensitive keys rest as ciphertext
 	// and every consumer transparently reads plaintext.
-	var settingsRepo catalog.SettingsStore
+	var settingsRepo serversettings.SettingsStore
 	if deps.DB != nil {
-		settingsRepo = catalog.NewEncryptedSettingsRepo(catalog.NewServerSettingsRepo(deps.DB), deps.SecretCipher)
+		settingsRepo = serversettings.NewEncryptedSettingsRepo(serversettings.NewServerSettingsRepo(deps.DB), deps.SecretCipher)
 	}
 	// One reader for access.unrated_content shared by every resolver built here.
 	unratedContent := config.NewUnratedContentPolicy(settingsRepo)
@@ -1493,7 +1494,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 			if installationCtx == nil {
 				installationCtx = context.Background()
 			}
-			if installationID, err := diagnostics.ServerInstanceID(installationCtx, catalog.NewServerSettingsRepo(deps.DB)); err != nil {
+			if installationID, err := diagnostics.ServerInstanceID(installationCtx, serversettings.NewServerSettingsRepo(deps.DB)); err != nil {
 				slog.Warn("playback installation identity unavailable; v2 playback stays unconfigured", "component", "api", "error", err)
 			} else {
 				playbackHandler.InstallationID = installationID
@@ -2687,7 +2688,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 				}
 				return c, pp.CapabilityID(), pp.CallbackMode(), nil
 			}
-			identity := serveridentity.New(catalog.NewServerSettingsRepo(deps.DB))
+			identity := serveridentity.New(serversettings.NewServerSettingsRepo(deps.DB))
 			oauthHandler = auth.NewOAuthHandler(auth.OAuthHandlerDeps{
 				Store:           oauthStore,
 				CompletionStore: oauthStore,
@@ -2739,7 +2740,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 	// Server identity is public discovery data, so it reads through the raw
 	// settings repo: a SECRET_KEY rotation must not change who the server is.
 	if deps.DB != nil {
-		v2deps.ServerIdentity = serveridentity.New(catalog.NewServerSettingsRepo(deps.DB))
+		v2deps.ServerIdentity = serveridentity.New(serversettings.NewServerSettingsRepo(deps.DB))
 	}
 	v2deps.ServerConnections = apiv2.ServerConnections{
 		PublicURL: func() string {
@@ -3232,10 +3233,12 @@ func newChiRouter(deps Dependencies) chi.Router {
 	if itemRepo != nil {
 		v2deps.AdminCatalogItems = itemRepo
 	}
+	// Catalog poster links and request posters share one fetcher, so its
+	// download slots and result memory bound both.
+	v2deps.RemotePosters = imagecache.NewRemoteFetcher()
 	if itemPosters != nil && deps.DB != nil {
 		v2deps.ItemPosters = itemPosters
 		v2deps.ItemPosterSource = metadata.NewImageCacheJobRepository(deps.DB)
-		v2deps.RemotePosters = imagecache.NewRemoteFetcher()
 	}
 	if adminImageHandler != nil {
 		v2deps.AdminCatalogImages = adminImageHandler
@@ -3650,7 +3653,7 @@ func useBaseMiddleware(r chi.Router, deps Dependencies) {
 // configuration is built from, as an API server's configuration watcher reads
 // them: the staged storage transition belongs to storage recovery, not to
 // Config.
-func nodeConfigSettings(settings catalog.SettingsStore) func(context.Context) (map[string]string, error) {
+func nodeConfigSettings(settings serversettings.SettingsStore) func(context.Context) (map[string]string, error) {
 	return func(ctx context.Context) (map[string]string, error) {
 		all, err := settings.GetAll(ctx)
 		if err != nil {
@@ -4038,7 +4041,7 @@ func v2Dependencies(
 	actingAdmin apimw.ActingAdminDecider,
 	metadataCuration func(http.Handler) http.Handler,
 	markerEdit func(http.Handler) http.Handler,
-	settings catalog.SettingsStore,
+	settings serversettings.SettingsStore,
 ) apiv2.Dependencies {
 	out := apiv2.Dependencies{
 		Auth:            auth,

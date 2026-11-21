@@ -1,4 +1,4 @@
-import { memo, useId, useState } from "react";
+import { memo, useId, useLayoutEffect, useRef, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 
 import type { RestoreDataTypeId, RestoreItem, RestoreProfile } from "@/api/v2/adminBackupRestore";
@@ -11,7 +11,7 @@ import { SettingFieldStatus } from "@/pages/admin-settings/SettingField";
 
 import { RowDisclosure } from "./Disclosure";
 import { itemState } from "./restoreGroups";
-import { StateTag, type ToggleKeys } from "./RestoreRows";
+import { BreakableKey, StateTag, type ToggleKeys } from "./RestoreRows";
 import {
   REASON_SENTENCES,
   policyDifferenceSentence,
@@ -19,6 +19,7 @@ import {
   requiredPrimary,
   toggleKeys,
 } from "./restoreModel";
+import { useOverflowsInline } from "./useOverflowsInline";
 
 function droppedLibraries(t: Translate, count: number): string {
   return t("web.admin.backups.restore.users.droppedLibraries", {
@@ -76,6 +77,22 @@ function ProfileRow({
   const detail = same
     ? t("web.admin.backups.restore.users.matches")
     : [profileDetail(t, profile), pendingSummary(profile.data_types)].filter(Boolean).join(" · ");
+  // Only a name still wider than the row after wrapping is clipped: one with a run
+  // no line break can split, such as many joined emoji. Clipping a name that fits
+  // would trim letters whose ink reaches past their edge, such as a leading "j".
+  const nameRef = useRef<HTMLLabelElement>(null);
+  const [nameOverflows, setNameOverflows] = useState(false);
+  useLayoutEffect(() => {
+    const name = nameRef.current;
+    if (!name) return;
+    // A name that fits can measure a fraction of a pixel wider than its box.
+    const measure = () => setNameOverflows(name.scrollWidth > name.clientWidth + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(name);
+    return () => observer.disconnect();
+  }, [profile.name]);
   return (
     <li className="flex items-start gap-3 py-1.5">
       <Checkbox
@@ -86,10 +103,22 @@ function ProfileRow({
         onCheckedChange={(value) => onToggle(keys(value === true), value === true)}
       />
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-baseline gap-2">
+        {/* When the name and detail don't fit on one line, the detail moves under the
+            name, and a name wider than the row wraps; as a block, its words wrap at the
+            row's width. A name that still overflows is clipped sideways at the row's end
+            edge, and its title shows it in full. The start padding, offset by a negative
+            margin, keeps a first letter whole whose ink reaches before its box, such as
+            a leading "j". */}
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <Label
+            ref={nameRef}
             htmlFor={controlId}
-            className={cn("shrink-0 text-sm", !selectable && "text-muted-foreground")}
+            title={profile.name}
+            className={cn(
+              "block min-w-0 text-sm wrap-anywhere",
+              nameOverflows && "-ms-[0.25em] overflow-x-clip ps-[0.25em]",
+              !selectable && "text-muted-foreground",
+            )}
           >
             {profile.name}
           </Label>
@@ -97,24 +126,34 @@ function ProfileRow({
             {detail}
           </span>
         </div>
+        {/* Each status is a block of its own: SettingFieldStatus is inline, so
+            two side by side would share a line. */}
         {why ? (
-          <SettingFieldStatus tone={profile.selectable ? "muted" : "warn"}>
-            {why}
-          </SettingFieldStatus>
+          <div>
+            <SettingFieldStatus tone={profile.selectable ? "muted" : "warn"}>
+              {why}
+            </SettingFieldStatus>
+          </div>
         ) : null}
         {locked ? (
-          <SettingFieldStatus tone="muted">
-            {t("web.admin.backups.restore.users.lockedPrimary")}
-          </SettingFieldStatus>
+          <div>
+            <SettingFieldStatus tone="muted">
+              {t("web.admin.backups.restore.users.lockedPrimary")}
+            </SettingFieldStatus>
+          </div>
         ) : null}
         {profile.no_library_access ? (
-          <SettingFieldStatus tone="warn">
-            {t("web.admin.backups.restore.users.noLibraryAccess")}
-          </SettingFieldStatus>
+          <div>
+            <SettingFieldStatus tone="warn">
+              {t("web.admin.backups.restore.users.noLibraryAccess")}
+            </SettingFieldStatus>
+          </div>
         ) : profile.libraries_left_out > 0 ? (
-          <SettingFieldStatus tone="warn">
-            {droppedLibraries(t, profile.libraries_left_out)}
-          </SettingFieldStatus>
+          <div>
+            <SettingFieldStatus tone="warn">
+              {droppedLibraries(t, profile.libraries_left_out)}
+            </SettingFieldStatus>
+          </div>
         ) : null}
       </div>
     </li>
@@ -141,6 +180,9 @@ export const AccountRow = memo(function AccountRow({
   const controlId = useId();
   const detailsId = useId();
   const [open, setOpen] = useState(false);
+  const [nameRef, nameOverflows] = useOverflowsInline<HTMLLabelElement>(item.label);
+  // The merge line exists only while the details are open, so opening them measures it.
+  const [mergeRef, mergeOverflows] = useOverflowsInline<HTMLParagraphElement>(open && item);
   const account = item.account;
   if (!account) return null;
   const chosen = new Set(chosenProfiles ? chosenProfiles.split("\u0000") : []);
@@ -160,54 +202,89 @@ export const AccountRow = memo(function AccountRow({
             .flatMap((profile) => profile.data_types),
         )
       : null;
+  // The label can already be the email: an invited account's username is its address,
+  // and an account with no username is labeled by its email.
   const contact = [
     pending,
     account.username !== item.label ? account.username : null,
-    account.email || null,
+    account.email !== item.label ? account.email : null,
   ]
     .filter(Boolean)
     .join(" · ");
+  // With no username on either side, the name is the email the row is labelled with.
+  const destination = account.local_username || account.username || item.label;
   const status = !item.selectable
     ? null
     : merges
-      ? t("web.admin.backups.restore.users.mergeInto", {
-          name: account.local_username || account.username,
-        })
+      ? t("web.admin.backups.restore.users.mergeInto", { name: destination })
       : t("web.admin.backups.restore.users.newAccount");
+  const administrator = t("web.admin.backups.restore.users.administrator");
+  // Laid out like ItemRow (RestoreRows.tsx): a narrow row wraps the name above the
+  // contact line, and a one-line row shares its width 9:11 between them, so the name
+  // stops at 45% only when both are longer than their shares. The admin badge, profile
+  // count and merge status would leave a 42rem row's name and contact about 220 px, so
+  // below 52rem the row shows only the badge's icon, and the merge status only when it
+  // names another account; the details show the admin role and the status. The badge
+  // can cut a long merge destination short, so the details show a merge in full at
+  // every width. As in ItemRow, a name clips sideways only while part of it can't wrap
+  // to fit: in the label, and in the merge status, which names the account it merges
+  // into.
   return (
-    <li className="border-border/60 border-b last:border-b-0">
+    <li className="border-border/60 @container border-b last:border-b-0">
       <div className="flex min-h-10 items-center gap-3 py-1.5">
+        {/* Named from the plain label: Chromium reads a <wbr> in it as a space. */}
         <Checkbox
           id={controlId}
+          aria-label={item.label}
           checked={checked}
           disabled={!item.selectable}
           onCheckedChange={(value) => onToggle(toggleKeys("users", item), value === true)}
         />
-        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-x-2 gap-y-0.5 @2xl:flex-row @2xl:items-baseline">
           <Label
+            ref={nameRef}
             htmlFor={controlId}
             title={item.label}
             className={cn(
-              "max-w-[45%] shrink-0 truncate text-sm font-medium",
+              "block max-w-full shrink-0 text-sm font-medium wrap-anywhere",
+              contact && "@2xl:max-w-max @2xl:flex-9 @2xl:truncate @2xl:[&_wbr]:hidden",
+              nameOverflows && (contact ? "@max-2xl:overflow-x-clip" : "overflow-x-clip"),
               !item.selectable && "text-muted-foreground",
             )}
           >
-            {item.label}
+            {/* <bdi> reads the name in its own direction, so an address that starts
+                with digits stays in order on a right-to-left page. */}
+            <bdi>
+              <BreakableKey value={item.label} />
+            </bdi>
           </Label>
           {contact ? (
-            <span title={contact} className="text-muted-foreground min-w-0 truncate text-xs">
+            // Without the pending summary the line is the email (the label is the
+            // username), which reads left to right in any language and so keeps its
+            // start when cut short. With the summary first, the line follows the page.
+            // In a narrow row, w-fit keeps a short line under the name, on the page's
+            // start side; max-w-full stops a long one at the column's width so it is
+            // still cut short.
+            <span
+              title={contact}
+              dir={pending ? undefined : "ltr"}
+              className="text-muted-foreground w-fit max-w-full min-w-0 truncate text-xs @2xl:max-w-max @2xl:flex-11"
+            >
               {contact}
             </span>
           ) : null}
         </div>
         {account.admin ? (
-          <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-[11px] sm:inline-flex">
+          <span
+            title={administrator}
+            className="text-muted-foreground hidden shrink-0 items-center gap-1 text-[11px] @2xl:inline-flex"
+          >
             <ShieldCheck aria-hidden="true" className="size-3.5" />
-            {t("web.admin.backups.restore.users.administrator")}
+            <span className="sr-only @[52rem]:not-sr-only">{administrator}</span>
           </span>
         ) : null}
         {account.profiles.length > 0 ? (
-          <span className="text-muted-foreground hidden shrink-0 text-[11px] whitespace-nowrap md:inline">
+          <span className="text-muted-foreground hidden shrink-0 text-[11px] whitespace-nowrap @[52rem]:inline">
             {t("web.admin.backups.restore.users.profileCount", {
               count: account.profiles.length,
               count_text: account.profiles.length,
@@ -215,7 +292,13 @@ export const AccountRow = memo(function AccountRow({
           </span>
         ) : null}
         {status ? (
-          <span title={status} className="hidden max-w-40 shrink-0 truncate text-xs md:inline">
+          <span
+            title={status}
+            className={cn(
+              "hidden max-w-40 shrink-0 truncate text-xs @[52rem]:inline",
+              merges && destination !== item.label && "@2xl:inline",
+            )}
+          >
             {status}
           </span>
         ) : null}
@@ -234,16 +317,31 @@ export const AccountRow = memo(function AccountRow({
       </div>
       {open ? (
         <div id={detailsId} className="space-y-1 ps-7 pb-3">
-          {status ? <p className="text-[13px] md:hidden">{status}</p> : null}
-          {account.admin ? (
-            <p className="text-muted-foreground text-xs sm:hidden">
-              {t("web.admin.backups.restore.users.administrator")}
+          {status ? (
+            <p
+              ref={mergeRef}
+              title={status}
+              className={cn(
+                "text-[13px] wrap-anywhere",
+                !merges && "@[52rem]:hidden",
+                mergeOverflows && "overflow-x-clip",
+              )}
+            >
+              {status}
             </p>
           ) : null}
+          {account.admin ? (
+            <p className="text-muted-foreground text-xs @[52rem]:hidden">{administrator}</p>
+          ) : null}
+          {/* One block per status, as in ProfileRow. */}
           {why ? (
-            <SettingFieldStatus tone={item.selectable || item.reason === "same" ? "muted" : "warn"}>
-              {why}
-            </SettingFieldStatus>
+            <div>
+              <SettingFieldStatus
+                tone={item.selectable || item.reason === "same" ? "muted" : "warn"}
+              >
+                {why}
+              </SettingFieldStatus>
+            </div>
           ) : null}
           {!item.selectable
             ? account.policy_differences.map((difference) => (
@@ -255,19 +353,23 @@ export const AccountRow = memo(function AccountRow({
               ))
             : null}
           {account.libraries_left_out > 0 ? (
-            <SettingFieldStatus tone="warn">
-              {droppedLibraries(t, account.libraries_left_out)}
-            </SettingFieldStatus>
+            <div>
+              <SettingFieldStatus tone="warn">
+                {droppedLibraries(t, account.libraries_left_out)}
+              </SettingFieldStatus>
+            </div>
           ) : null}
           {item.selectable && newProfiles > account.profile_room ? (
-            <SettingFieldStatus tone="warn">
-              {account.profile_room === 0
-                ? t("web.admin.backups.restore.users.noRoom")
-                : t("web.admin.backups.restore.users.room", {
-                    count: account.profile_room,
-                    count_text: account.profile_room,
-                  })}
-            </SettingFieldStatus>
+            <div>
+              <SettingFieldStatus tone="warn">
+                {account.profile_room === 0
+                  ? t("web.admin.backups.restore.users.noRoom")
+                  : t("web.admin.backups.restore.users.room", {
+                      count: account.profile_room,
+                      count_text: account.profile_room,
+                    })}
+              </SettingFieldStatus>
+            </div>
           ) : null}
           {account.profiles.length > 0 ? (
             <ul aria-label={t("web.admin.backups.restore.users.profilesOf", { name: item.label })}>
@@ -313,19 +415,30 @@ export function DataTypesPanel({
           {DATA_TYPE_IDS.map((id) => {
             const controlId = `${baseId}-${id}`;
             const count = counts.get(id) ?? 0;
+            // The checkbox's box is one line tall. The label's text size replaces Label's
+            // leading-none, so it inherits the row's unitless line height. The text is in rem
+            // like the checkbox, so a larger browser font grows both and the line stays
+            // taller than the checkbox, and a minimum font size still spaces wrapped lines.
+            // The label is a block so its count wraps with its text, and text-pretty keeps
+            // the count off a last line of its own where the browser supports it.
             return (
-              <div key={id} className="flex items-center gap-2">
-                <Checkbox
-                  id={controlId}
-                  checked={dataTypes.has(id)}
-                  onCheckedChange={(value) => {
-                    const next = new Set(dataTypes);
-                    if (value === true) next.add(id);
-                    else next.delete(id);
-                    onChange(next);
-                  }}
-                />
-                <Label htmlFor={controlId} className="text-[13px] font-normal">
+              <div key={id} className="flex items-start gap-2 text-[0.8125rem] leading-normal">
+                <span className="flex min-h-lh shrink-0 items-center">
+                  <Checkbox
+                    id={controlId}
+                    checked={dataTypes.has(id)}
+                    onCheckedChange={(value) => {
+                      const next = new Set(dataTypes);
+                      if (value === true) next.add(id);
+                      else next.delete(id);
+                      onChange(next);
+                    }}
+                  />
+                </span>
+                <Label
+                  htmlFor={controlId}
+                  className="block text-[0.8125rem] font-normal text-pretty"
+                >
                   {count > 0
                     ? t("web.admin.backups.restore.users.dataTypeCount", {
                         label: DATA_TYPE_LABELS[id],
