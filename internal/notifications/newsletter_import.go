@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Silo-Server/silo-server/internal/catalog"
 	"github.com/Silo-Server/silo-server/internal/mail"
 	"github.com/Silo-Server/silo-server/internal/newsletter"
 	"github.com/Silo-Server/silo-server/internal/plugins"
 	"github.com/Silo-Server/silo-server/internal/secret"
+	"github.com/Silo-Server/silo-server/internal/serversettings"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -271,7 +271,7 @@ func (s *System) ImportNewsletter(ctx context.Context, installation int) (Newsle
 		}
 	}
 	if smtp := snapshot.Configs["smtp"]; smtp != nil {
-		settings := catalog.NewEncryptedSettingsRepo(catalog.NewServerSettingsRepo(s.pool), s.newsletterCipher)
+		settings := serversettings.NewEncryptedSettingsRepo(serversettings.NewServerSettingsRepo(s.pool), s.newsletterCipher)
 		err = settings.UpdateAtomicWithTx(ctx, tx, func(current map[string]string, _ pgx.Tx) (map[string]string, error) {
 			if current[mail.SettingSMTPHost] != "" {
 				return nil, nil
