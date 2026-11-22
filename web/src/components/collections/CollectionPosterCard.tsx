@@ -49,8 +49,14 @@ export function CollectionPosterCard({
   let subline: ReactNode = null;
   if (ownerName) {
     subline = (
-      <div className="text-muted-foreground truncate text-xs">
-        {t("web.collections.posterCard.byOwner", { owner: ownerName })}
+      <div className="text-muted-foreground flex overflow-hidden text-xs whitespace-pre">
+        {t("web.collections.posterCard.byOwner", {
+          owner: (
+            <span dir="auto" className="truncate">
+              {ownerName}
+            </span>
+          ),
+        })}
       </div>
     );
   } else if (meta === undefined && isUserCollection) {
@@ -87,7 +93,10 @@ export function CollectionPosterCard({
                   and above the count. With them the title never shrinks, so on a
                   card too short for all of it the spacers give way first. */}
               {showPin ? <div className="h-7 shrink" /> : null}
-              <span className={`line-clamp-3 font-medium ${showPin ? "shrink-0" : ""}`}>
+              <span
+                dir="auto"
+                className={`bidi-text line-clamp-3 font-medium ${showPin ? "shrink-0" : ""}`}
+              >
                 {collection.title}
               </span>
               {showPin && meta === undefined ? <div className="h-3 shrink" /> : null}
@@ -100,7 +109,9 @@ export function CollectionPosterCard({
           ) : null}
         </div>
         <div className="px-0.5 pt-2.5">
-          <div className="truncate text-[0.8125rem] font-semibold">{collection.title}</div>
+          <div dir="auto" className="bidi-text truncate text-[0.8125rem] font-semibold">
+            {collection.title}
+          </div>
           {subline}
         </div>
       </ViewTransitionLink>
