@@ -370,14 +370,11 @@ func sectionLayoutOf(view handlers.SectionLayoutView) SectionLayout {
 }
 
 func sectionOf(v handlers.SectionView, sel ratingsources.Selection) Section {
-	resumeRow := v.SectionType == string(sections.SectionContinueWatching) || v.SectionType == string(sections.SectionNextUp)
+	// Continue Watching and Next Up episode cards keep the backdrop their
+	// section chose: the episode still, else the series backdrop.
 	items := make([]CatalogItem, 0, len(v.Items))
 	for _, item := range v.Items {
-		card := catalogItemOfSection(item, sel)
-		if resumeRow {
-			withResumeEpisodeBackdrop(&card, item)
-		}
-		items = append(items, card)
+		items = append(items, catalogItemOfSection(item, sel))
 	}
 	return Section{ID: v.ID, SectionType: v.SectionType, Title: v.Title, Featured: v.Featured, ItemLimit: v.ItemLimit, TotalCount: v.TotalCount, IsCustom: v.IsCustom, Customized: v.Customized, SectionTitleKey: sectionTitleKeyOf(v.TitleKey, v.TitleArgs), Items: items, HasMore: v.HasMore, Collections: sectionCollectionCardsOf(v.Collections)}
 }
