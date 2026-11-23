@@ -79,7 +79,8 @@ type CatalogItem struct {
 	Authors                    []string            `json:"authors,omitempty" maxItems:"3" doc:"On an audiobook or ebook card in a catalog browse listing: up to three author names in credit order, the names the book's detail page lists under authors. Absent for other types, on other listings, and when the book credits no author" example:"[\"Frank Herbert\"]"`
 	// An episode card's parent artwork, so a client can draw a hero from the
 	// series backdrop without fetching the episode's detail. There is no
-	// season backdrop member.
+	// season backdrop member; Continue Watching and Next Up rows carry it as
+	// backdrop_url when the episode has no still (withResumeEpisodeBackdrop).
 	SeriesPosterURL         string `json:"series_poster_url,omitempty" format:"uri-reference" doc:"On an episode card: the series poster, at poster_url's size. Presigned, short-lived; absent when the series has none or the surface does not load it"`
 	SeriesPosterThumbhash   string `json:"series_poster_thumbhash,omitempty" doc:"On an episode card: the series poster's ThumbHash"`
 	SeriesBackdropURL       string `json:"series_backdrop_url,omitempty" format:"uri-reference" doc:"On an episode card: the series backdrop, at backdrop_url's size. Unlike backdrop_url it is never the episode still. Presigned, short-lived; absent when the series has none or the surface does not load it"`
@@ -237,6 +238,29 @@ func catalogItemOfSection(v handlers.SectionItemView, sel ratingsources.Selectio
 		item.RatingTMDB = v.EpisodeRatingTMDB
 	}
 	return withShownRatings(item, sel)
+}
+
+// withResumeEpisodeBackdrop gives an episode card in a Continue Watching or
+// Next Up row that has no episode still the season backdrop, else the series
+// backdrop. A card showing its episode still keeps it, and a card with neither
+// parent backdrop keeps the backdrop its section chose.
+func withResumeEpisodeBackdrop(item *CatalogItem, v handlers.SectionItemView) {
+	if v.Type != themeOwnerEpisode {
+		return
+	}
+	if item.BackdropURL != "" && (item.BackdropIsEpisodeStill == nil || *item.BackdropIsEpisodeStill) {
+		return
+	}
+	p := v.ParentArtwork
+	switch {
+	case p.SeasonBackdropURL != "":
+		item.BackdropURL, item.BackdropThumbhash = p.SeasonBackdropURL, p.SeasonBackdropThumbhash
+	case p.SeriesBackdropURL != "":
+		item.BackdropURL, item.BackdropThumbhash = p.SeriesBackdropURL, p.SeriesBackdropThumbhash
+	default:
+		return
+	}
+	item.BackdropIsEpisodeStill = new(false)
 }
 
 // catalogItemOfListing renders a listing (collection, browse) card.
