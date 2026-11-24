@@ -15705,7 +15705,7 @@
             "type": "number"
           },
           "end_reason": {
-            "description": "Why the attempt ended: stopped by the viewer's client, terminated by an administrator, expired after the client went quiet, aborted by the server, or replaced by a new session for the same play (a Jellyfin client switched play method). Null when unknown, which includes every attempt recorded before it existed and a server teardown the client never recovered from",
+            "description": "Why the attempt ended: stopped by the viewer's client, terminated by an administrator, expired after the client went quiet, aborted by the server, or replaced by a new session for the same play (a Jellyfin client switched play method or version). Null when unknown, which includes every attempt recorded before it existed and a server teardown the client never recovered from",
             "enum": [
               "stopped",
               "terminated",
@@ -255966,6 +255966,14 @@
           "started_at_unix_nano": {
             "format": "int64",
             "type": "integer"
+          },
+          "stream_end_seconds": {
+            "format": "double",
+            "type": "number"
+          },
+          "stream_planned_seconds": {
+            "format": "double",
+            "type": "number"
           },
           "tone_map_mode": {
             "type": "string"
