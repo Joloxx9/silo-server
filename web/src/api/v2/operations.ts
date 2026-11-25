@@ -187,6 +187,7 @@ export const v2Operations = {
   "GET /api/v2/admin/insights/bandwidth": "getAdminInsightsBandwidth",
   "GET /api/v2/admin/insights/capabilities": "getAdminInsightsCapabilities",
   "GET /api/v2/admin/insights/devices": "getAdminInsightsDevices",
+  "GET /api/v2/admin/insights/library": "getAdminInsightsLibrary",
   "GET /api/v2/admin/insights/people": "getAdminInsightsPeople",
   "GET /api/v2/admin/insights/titles": "getAdminInsightsTitles",
   "GET /api/v2/admin/insights/titles/{content_id}": "getAdminInsightsTitle",
@@ -325,6 +326,8 @@ export const v2Operations = {
   "GET /api/v2/admin/users/{id}/ips": "listAdminUserIPs",
   "GET /api/v2/admin/users/{id}/profiles": "listAdminUserProfiles",
   "GET /api/v2/admin/users/{id}/profiles/{profile_id}": "getAdminUserProfile",
+  "GET /api/v2/admin/users/{id}/profiles/{profile_id}/favorites": "listAdminUserProfileFavorites",
+  "GET /api/v2/admin/users/{id}/profiles/{profile_id}/progress": "listAdminUserProfileProgress",
   "GET /api/v2/admin/users/{id}/profiles/{profile_id}/sections":
     "listAdminUserProfileSectionOverrides",
   "GET /api/v2/admin/users/{id}/profiles/{profile_id}/sections/settings":

@@ -398,6 +398,28 @@ same structured audit record as an administrator's setting write (`settings chan
 for another profile`, identity only), with `setting_key` `profile_sections`, `scope`
 set to the page scope, and `library_id` for a library page. Account capabilities advertise `profile_sections`.
 
+### Profile viewer state
+
+Library maintenance tools decide what is safe to remove from what every profile
+has watched and kept. Playback history (`listAdminPlaybackHistory`) records plays
+only, so an administrator also reads each profile's own watch progress and
+favorites without impersonating the account:
+
+| Route below `/api/v2/admin/users/{id}/profiles/{profile_id}` | Response |
+| --- | --- |
+| `GET /progress` | The profile's watch progress (`listAdminUserProfileProgress`), with `listProgress`'s `status` and `library_id` filters, entry shape and cursor paging |
+| `GET /favorites` | The profile's favorites (`listAdminUserProfileFavorites`) as `item_id` and `added_at` entries, newest favorite first, in pages with an opaque cursor |
+
+Both read the same store seams as the profile's own `listProgress` and
+`listFavorites`. A `completed` entry is an item the profile watched, by playing
+it or by marking it watched; marking it unwatched removes it. Items the
+administrator's access filter hides and titles no longer in the catalog are left
+out. A profile that is not one of the account's answers 404, as does an unknown
+account, before any store is read. A cursor is bound to the account, the profile,
+the filters and the administrator's access filter. Both are reads, so they write no
+audit record. An API key with `admin:monitor:read` may call them. Account
+capabilities advertise `profile_progress` and `profile_favorites`.
+
 ### Account downloads
 
 The downloads list and summary cover managed device rows only; ephemeral web

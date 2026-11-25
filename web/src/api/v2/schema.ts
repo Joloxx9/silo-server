@@ -2384,6 +2384,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/admin/insights/library": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read how much of each movie and TV library was played, titles never started, plays by genre, decade and content rating, and how soon new titles get their first play. */
+    get: operations["getAdminInsightsLibrary"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/admin/insights/people": {
     parameters: {
       query?: never;
@@ -6421,6 +6438,46 @@ export interface paths {
      * @description Takes the updateProfile body, every member included. "pin": null removes the profile's PIN and a new value replaces it; either ends the profile tokens issued for the old PIN and clears its wrong-attempt lockout. A name another profile on the account uses is 409 conflict. 404 not_found when the profile does not belong to the account. Only the server Owner may change the Owner's or another admin account's profiles (403 permission_denied otherwise): a primary profile's PIN guards that account's admin access.
      */
     patch: operations["updateAdminUserProfile"];
+    trace?: never;
+  };
+  "/api/v2/admin/users/{id}/profiles/{profile_id}/favorites": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List one profile's favorites, newest favorite first.
+     * @description The entries listFavorites reports to the profile itself, as item ids with the time each became a favorite. Items the acting administrator may not see and removed titles are omitted. 404 not_found when the profile does not belong to the account.
+     */
+    get: operations["listAdminUserProfileFavorites"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/users/{id}/profiles/{profile_id}/progress": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List one profile's watch progress, newest change first.
+     * @description The entries listProgress reports to the profile itself: completed entries are what the profile watched, by playing or by marking it watched, and an item marked unwatched has no entry. Items the acting administrator may not see and removed titles are omitted. 404 not_found when the profile does not belong to the account.
+     */
+    get: operations["listAdminUserProfileProgress"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   "/api/v2/admin/users/{id}/profiles/{profile_id}/sections": {
@@ -14404,10 +14461,14 @@ export interface components {
       policy_defaults: boolean;
       /** @description Whether listAdminUserProfiles returns each profile's avatar, avatar_url and avatar_source as listProfiles does */
       profile_avatars: boolean;
+      /** @description Whether listAdminUserProfileFavorites can list one profile's favorites */
+      profile_favorites: boolean;
       /** @description Whether access groups and account policy overrides take max_profiles, the household profile limit; null on an account inherits its group's limit */
       profile_limits: boolean;
       /** @description Whether getAdminUserProfile, createAdminUserProfile, updateAdminUserProfile and deleteAdminUserProfile can read and change an account's profiles, including setting or removing a profile's PIN, and whether listAdminUserProfiles reports has_pin, is_primary and is_child */
       profile_management: boolean;
+      /** @description Whether listAdminUserProfileProgress can list one profile's watch progress, including what it marked watched */
+      profile_progress: boolean;
       /** @description Whether listAdminUserProfileSectionOverrides, getAdminUserProfileSectionSettings, replaceAdminUserProfileSectionOverrides and resetAdminUserProfileSectionOverrides can read and change one profile's page layout */
       profile_sections: boolean;
       /** @description Whether getAdminRequestUserUsage can report an account's request quota use */
@@ -18821,6 +18882,8 @@ export interface components {
       bucket_unit: "day" | "week" | "month";
       buckets: components["schemas"]["AdminInsightsActivityBucket"][];
       coverage: components["schemas"]["AdminInsightsCoverage"];
+      /** @description Sessions that started in the window by end reason (stopped, terminated, expired, aborted, replaced); unknown covers rows recorded before end reasons were */
+      end_reasons: components["schemas"]["AdminInsightsLabeledCount"][];
       /**
        * Format: date-time
        * @description RFC 3339 instant in UTC with millisecond precision
@@ -18837,6 +18900,16 @@ export interface components {
       tz: string;
     };
     AdminInsightsActivityBucket: {
+      /**
+       * Format: int64
+       * @description Distinct accounts with a session that started in the bucket
+       */
+      active_accounts: number;
+      /**
+       * Format: int64
+       * @description Distinct household profiles with a session that started in the bucket
+       */
+      active_profiles: number;
       /**
        * Format: date-time
        * @description RFC 3339 instant in UTC with millisecond precision
@@ -18913,6 +18986,19 @@ export interface components {
       sessions: number;
       /** Format: double */
       share_of_adapted: number;
+    };
+    AdminInsightsAudioUsage: {
+      /** @description Sessions by audio handling: direct, remux (copied into a new container) or transcode */
+      decisions: components["schemas"]["AdminInsightsLabeledCount"][];
+      /** @description Sessions by delivered channel layout: mono, stereo, surround or unknown */
+      delivered_channels: components["schemas"]["AdminInsightsLabeledCount"][];
+      /** @description Sessions by the played audio track's language */
+      languages: components["schemas"]["AdminInsightsLabeledCount"][];
+      /**
+       * Format: int64
+       * @description Sessions with route facts, the ones that record their audio track
+       */
+      sessions: number;
     };
     AdminInsightsBandwidth: {
       /**
@@ -19001,6 +19087,10 @@ export interface components {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
       available: boolean;
+      /** @description Activity carries per-bucket active accounts and profiles and end_reasons; Titles carries least_finished; Devices carries client_versions, protocol_buckets, subtitles and audio; People carries top_profiles */
+      breakdowns: boolean;
+      /** @description The Library read (getAdminInsightsLibrary) is served */
+      library: boolean;
       /** @description Long-term per-node daily egress archive survives past the 31-day minute-sample window */
       node_egress_daily: boolean;
       /** @description Activity, Devices, Titles and title detail accept profile_id together with user_id */
@@ -19044,6 +19134,19 @@ export interface components {
       /** Format: int64 */
       transcode_sessions: number;
     };
+    AdminInsightsClientVersionRow: {
+      client_name: string;
+      client_version: string;
+      device_platform: string;
+      is_jellyfin_client: boolean;
+      /**
+       * Format: date-time
+       * @description RFC 3339 instant in UTC with millisecond precision, or null
+       */
+      last_seen_at: string | null;
+      /** Format: int64 */
+      sessions: number;
+    };
     AdminInsightsCoverage: {
       /**
        * Format: int64
@@ -19083,6 +19186,14 @@ export interface components {
     };
     AdminInsightsDevices: {
       adaptation_reasons: components["schemas"]["AdminInsightsAdaptationReason"][];
+      audio: components["schemas"]["AdminInsightsAudioUsage"];
+      /**
+       * @description Bucket size of protocol_buckets
+       * @enum {string}
+       */
+      bucket_unit: "day" | "week" | "month";
+      /** @description Up to 50 reported client versions with the most sessions; sessions without a version are left out */
+      client_versions: components["schemas"]["AdminInsightsClientVersionRow"][];
       codecs: string[];
       coverage: components["schemas"]["AdminInsightsCoverage"];
       /** @description Sessions by delivered resolution class; transcodes recorded before route facts are unknown */
@@ -19095,11 +19206,14 @@ export interface components {
       hw_accel_breakdown: components["schemas"]["AdminInsightsLabeledCount"][];
       /** @description Client and platform pairs with at least min_sessions sessions, at most 200 (the ones with the most sessions) */
       matrix: components["schemas"]["AdminInsightsClientMatrixRow"][];
+      /** @description Sessions per bucket from Silo's own clients and from Jellyfin-protocol clients */
+      protocol_buckets: components["schemas"]["AdminInsightsProtocolBucket"][];
       /** @description Sessions delivered at a lower resolution class than their source, by source and delivered class */
       resolution_changes: components["schemas"]["AdminInsightsResolutionChange"][];
       /** @description Sessions by source resolution class (480p, 720p, 1080p, 2160p, 4320p, unknown), on the scale media_files.resolution uses */
       source_resolutions: components["schemas"]["AdminInsightsLabeledCount"][];
       subtitle_burn_in_codecs: components["schemas"]["AdminInsightsLabeledCount"][];
+      subtitles: components["schemas"]["AdminInsightsSubtitleUsage"];
       summary: components["schemas"]["AdminInsightsDevicesSummary"];
       /**
        * Format: date-time
@@ -19184,6 +19298,65 @@ export interface components {
       /** Format: int64 */
       sessions: number;
     };
+    AdminInsightsLabeledPlays: {
+      key: string;
+      /** Format: int64 */
+      plays: number;
+      /**
+       * Format: int64
+       * @description Distinct played titles behind the plays
+       */
+      titles: number;
+    };
+    AdminInsightsLibrary: {
+      /** @description Up to 15 content ratings by plays */
+      content_ratings: components["schemas"]["AdminInsightsLabeledPlays"][];
+      /** @description Plays by release decade (key is the decade's first year), oldest first, unknown last */
+      decades: components["schemas"]["AdminInsightsLabeledPlays"][];
+      /**
+       * Format: date-time
+       * @description RFC 3339 instant in UTC with millisecond precision
+       */
+      from: string;
+      /** @description Up to 20 genres by plays; a title counts in each of its genres */
+      genres: components["schemas"]["AdminInsightsLabeledPlays"][];
+      /** @description Libraries with movies or series, most titles first */
+      libraries: components["schemas"]["AdminInsightsLibraryCoverage"][];
+      /**
+       * Format: date-time
+       * @description RFC 3339 instant in UTC with millisecond precision, or null
+       */
+      oldest_history_at: string | null;
+      /** @description Up to 20 titles added in the window with no play yet, newest first */
+      recently_added_unplayed: components["schemas"]["AdminInsightsUnplayedTitle"][];
+      summary: components["schemas"]["AdminInsightsLibrarySummary"];
+      /** @description Titles added in the window by how long they waited for a first play: day, week, month, later or not_yet; sessions holds the title count */
+      time_to_first_play: components["schemas"]["AdminInsightsLabeledCount"][];
+      /**
+       * Format: date-time
+       * @description RFC 3339 instant in UTC with millisecond precision
+       */
+      to: string;
+      tz: string;
+    };
+    AdminInsightsLibraryCoverage: {
+      /** Format: int64 */
+      added_titles: number;
+      /**
+       * @description Opaque identifier
+       * @example 1
+       */
+      library_id: string;
+      name: string;
+      /** Format: int64 */
+      never_started: number;
+      /** Format: double */
+      played_share: number;
+      /** Format: int64 */
+      played_titles: number;
+      /** Format: int64 */
+      titles: number;
+    };
     AdminInsightsLibraryRow: {
       /**
        * @description Opaque identifier
@@ -19197,6 +19370,40 @@ export interface components {
       viewers: number;
       /** Format: int64 */
       watch_seconds: number;
+    };
+    AdminInsightsLibrarySummary: {
+      /**
+       * Format: int64
+       * @description Titles added in the window that have a play since, up to now
+       */
+      added_played: number;
+      /**
+       * Format: int64
+       * @description Titles first seen in the window
+       */
+      added_titles: number;
+      /**
+       * Format: double
+       * @description Median days from being added to the first play, over titles added in the window that have one
+       */
+      median_days_to_first_play: number | null;
+      /**
+       * Format: int64
+       * @description Titles with no playback session at all, up to now
+       */
+      never_started: number;
+      /** Format: double */
+      played_share: number;
+      /**
+       * Format: int64
+       * @description Titles with a play in the window; a series counts when any episode has one
+       */
+      played_titles: number;
+      /**
+       * Format: int64
+       * @description Distinct movies and series in scope; a title in two libraries counts once
+       */
+      titles: number;
     };
     AdminInsightsPeakStreamsPoint: {
       /**
@@ -19243,6 +19450,8 @@ export interface components {
        * @description RFC 3339 instant in UTC with millisecond precision
        */
       to: string;
+      /** @description Up to 10 household profiles across all accounts with the most plays, whatever the sort, search or page */
+      top_profiles: components["schemas"]["AdminInsightsTopProfile"][];
       /** Format: int64 */
       total_accounts: number;
       /** Format: int64 */
@@ -19344,6 +19553,22 @@ export interface components {
       /** Format: int64 */
       watch_seconds: number;
     };
+    AdminInsightsProtocolBucket: {
+      /**
+       * Format: date-time
+       * @description RFC 3339 instant in UTC with millisecond precision
+       */
+      bucket_start: string;
+      /** Format: int64 */
+      jellyfin_sessions: number;
+      /**
+       * Format: date
+       * @description Local bucket start date (YYYY-MM-DD in requested tz)
+       */
+      label_date: string;
+      /** Format: int64 */
+      native_sessions: number;
+    };
     AdminInsightsResolutionChange: {
       /** @description Source resolution class */
       from: string;
@@ -19351,6 +19576,23 @@ export interface components {
       sessions: number;
       /** @description Lower delivered resolution class */
       to: string;
+    };
+    AdminInsightsSubtitleUsage: {
+      /** @description Subtitled sessions by delivery: embedded, sidecar, hls_rendition or burn_in */
+      deliveries: components["schemas"]["AdminInsightsLabeledCount"][];
+      /** Format: int64 */
+      forced_sessions: number;
+      /** Format: int64 */
+      hearing_impaired_sessions: number;
+      /** @description Subtitled sessions by subtitle language (ISO 639-1 where one exists, unknown when untagged) */
+      languages: components["schemas"]["AdminInsightsLabeledCount"][];
+      /**
+       * Format: int64
+       * @description Sessions with route facts, the ones that record their subtitle
+       */
+      sessions: number;
+      /** Format: int64 */
+      subtitled_sessions: number;
     };
     AdminInsightsTitle: {
       /** @enum {string} */
@@ -19440,6 +19682,8 @@ export interface components {
        * @description RFC 3339 instant in UTC with millisecond precision
        */
       from: string;
+      /** @description Movies and series with at least 3 plays and at least one left unfinished, lowest completion rate first, up to limit */
+      least_finished: components["schemas"]["AdminInsightsTitleRow"][];
       libraries: components["schemas"]["AdminInsightsLibraryRow"][];
       movies: components["schemas"]["AdminInsightsTitleRow"][];
       shows: components["schemas"]["AdminInsightsTitleRow"][];
@@ -19498,6 +19742,24 @@ export interface components {
       /** Format: int64 */
       watch_seconds: number;
     };
+    AdminInsightsTopProfile: {
+      /** Format: int64 */
+      plays: number;
+      /**
+       * @description Opaque identifier
+       * @example 1
+       */
+      profile_id: string;
+      profile_name: string;
+      /**
+       * @description Opaque identifier
+       * @example 1
+       */
+      user_id: string;
+      username: string;
+      /** Format: int64 */
+      watch_seconds: number;
+    };
     AdminInsightsTranscoderRow: {
       client_name: string;
       device_platform: string;
@@ -19506,6 +19768,25 @@ export interface components {
       total_sessions: number;
       /** Format: int64 */
       transcode_sessions: number;
+    };
+    AdminInsightsUnplayedTitle: {
+      /**
+       * Format: date-time
+       * @description RFC 3339 instant in UTC with millisecond precision
+       */
+      added_at: string;
+      content_id: string;
+      /** @enum {string} */
+      kind: "movie" | "series";
+      /**
+       * @description Opaque identifier
+       * @example 1
+       */
+      library_id: string;
+      library_name: string;
+      title: string;
+      /** Format: int64 */
+      year: number | null;
     };
     AdminInvitation: {
       /**
@@ -22106,6 +22387,12 @@ export interface components {
       virtual_bytes?: number;
       /** Format: int64 */
       write_bytes?: number;
+    };
+    AdminProfileFavoriteCollection: {
+      /** @description The page's items; empty, never null */
+      items: components["schemas"]["FavoriteEntry"][];
+      /** @description Cursor state; absent for bounded unpaginated collections */
+      page?: components["schemas"]["PageInfo"];
     };
     AdminRateLimitAuthEndpoint: {
       /** Format: int64 */
@@ -27867,6 +28154,7 @@ export interface components {
       /** @enum {string} */
       feature:
         | "direct"
+        | "engine"
         | "nat_mapping"
         | "nat_hairpin"
         | "ipv4"
@@ -27897,7 +28185,14 @@ export interface components {
         | "no_gateway"
         | "gateway_unsupported"
         | "mapping_varies"
-        | "not_measured";
+        | "not_measured"
+        | "multiple_api_replicas"
+        | "replica_census_unavailable"
+        | "replica_lease_pending"
+        | "replica_lease_held"
+        | "udp_port_invalid"
+        | "udp_port_bind_failed"
+        | "engine_start_failed";
       requested?: string;
       /** @enum {string} */
       state: "on" | "off" | "capped" | "fallback" | "degraded" | "unknown";
@@ -27918,6 +28213,8 @@ export interface components {
       default: string;
       effective: string;
       env: string;
+      max?: string;
+      min?: string;
       reason?: string;
       requested?: string;
     };
@@ -61660,6 +61957,129 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AdminInsightsDevices"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  getAdminInsightsLibrary: {
+    parameters: {
+      query?: {
+        /** @description Inclusive local start date (YYYY-MM-DD in tz), required when range=custom */
+        from_date?: string;
+        /** @description Restrict playback analytics to media belonging to this library */
+        library_id?: string;
+        /** @description Restrict playback analytics to this household profile of user_id; requires user_id because profile ids repeat across accounts */
+        profile_id?: string;
+        /** @description Preset time window or custom */
+        range?: "7d" | "30d" | "90d" | "1y" | "all" | "custom";
+        /** @description Invalidate cached insights aggregates before reading; ignored for scoped API keys */
+        refresh?: boolean;
+        /** @description Inclusive local end date (YYYY-MM-DD in tz), required when range=custom */
+        to_date?: string;
+        /** @description IANA timezone identifier for day/week/month bucketing and heatmap alignment */
+        tz?: string;
+        /** @description Restrict playback analytics to this login account */
+        user_id?: string;
+      };
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminInsightsLibrary"];
         };
       };
       /** @description Bad Request */
@@ -97533,6 +97953,242 @@ export interface operations {
       };
       /** @description Unsupported Media Type */
       415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  listAdminUserProfileFavorites: {
+    parameters: {
+      query?: {
+        /** @description Opaque cursor from page.next_cursor */
+        cursor?: string;
+        /** @description Page size; default 50, maximum 200 */
+        limit?: number;
+      };
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The account */
+        id: string;
+        /** @description A profile of the account */
+        profile_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminProfileFavoriteCollection"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  listAdminUserProfileProgress: {
+    parameters: {
+      query?: {
+        /** @description Opaque cursor from page.next_cursor */
+        cursor?: string;
+        /** @description Only entries whose item is in this library */
+        library_id?: string;
+        /** @description Page size; default 50, maximum 200 */
+        limit?: number;
+        /** @description Only entries in this state; absent lists every entry */
+        status?: "in_progress" | "completed";
+      };
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The account */
+        id: string;
+        /** @description A profile of the account */
+        profile_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProgressCollection"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
         headers: {
           [name: string]: unknown;
         };
