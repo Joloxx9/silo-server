@@ -142,6 +142,7 @@ var apiKeyScopeRoutes = map[string][]scopeRoute{
 		{http.MethodGet, regexp.MustCompile(`^/api/v2/admin/users/capabilities$`)},
 		{http.MethodGet, regexp.MustCompile(`^/api/v2/admin/users/[0-9]+$`)},
 		{http.MethodGet, regexp.MustCompile(`^/api/v2/admin/users/[0-9]+/(profiles|devices|ips|downloads|downloads/summary|watch-summary)$`)},
+		{http.MethodGet, regexp.MustCompile(`^/api/v2/admin/users/[0-9]+/profiles/[^/]+/(progress|favorites)$`)},
 		{http.MethodGet, regexp.MustCompile(`^/api/v2/admin/devices$`)},
 		{http.MethodGet, regexp.MustCompile(`^/api/v2/admin/devices/capabilities$`)},
 		{http.MethodGet, regexp.MustCompile(`^/api/v2/admin/ips$`)},

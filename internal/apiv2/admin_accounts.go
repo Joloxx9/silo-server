@@ -70,6 +70,8 @@ type AdminAccountCapabilitiesOutputBody struct {
 	ProfileAvatars       bool `json:"profile_avatars" doc:"Whether listAdminUserProfiles returns each profile's avatar, avatar_url and avatar_source as listProfiles does"`
 	ProfileSections      bool `json:"profile_sections" doc:"Whether listAdminUserProfileSectionOverrides, getAdminUserProfileSectionSettings, replaceAdminUserProfileSectionOverrides and resetAdminUserProfileSectionOverrides can read and change one profile's page layout"`
 	ProfileManagement    bool `json:"profile_management" doc:"Whether getAdminUserProfile, createAdminUserProfile, updateAdminUserProfile and deleteAdminUserProfile can read and change an account's profiles, including setting or removing a profile's PIN, and whether listAdminUserProfiles reports has_pin, is_primary and is_child"`
+	ProfileProgress      bool `json:"profile_progress" doc:"Whether listAdminUserProfileProgress can list one profile's watch progress, including what it marked watched"`
+	ProfileFavorites     bool `json:"profile_favorites" doc:"Whether listAdminUserProfileFavorites can list one profile's favorites"`
 }
 
 type AdminAccountPolicyInput struct {
@@ -266,6 +268,8 @@ func registerAdminAccounts(reg *Registry) {
 		out.Body.ProfileAvatars = reg.deps.AdminAccounts != nil
 		out.Body.ProfileSections = reg.deps.AdminAccounts != nil && reg.deps.AdminProfileSections != nil
 		out.Body.ProfileManagement = reg.deps.AdminAccounts != nil && reg.deps.Profiles != nil
+		out.Body.ProfileProgress = out.Body.ProfileManagement && reg.deps.Progress != nil
+		out.Body.ProfileFavorites = out.Body.ProfileManagement && reg.deps.PersonalLists != nil
 		if resets := reg.deps.PasswordResets; resets != nil {
 			caps := resets.PasswordResetCapabilities(ctx)
 			out.Body.PasswordResetLink, out.Body.PasswordResetEmail = caps.Link, caps.Email

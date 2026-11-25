@@ -1,5 +1,5 @@
 {
-  "revision": "2abe3d7a286c970d2cb2d73918fca1583fd349ad6b8849686017077de46f2a71",
+  "revision": "719ddd3d140d0a5d87fb083ec0a0a5287b0ec62cdfe8f5e2d0f239e6903b5f6f",
   "state": "available",
   "allowed": true,
   "available": true,
@@ -19,5 +19,7 @@
   "policy_defaults": true,
   "profile_avatars": true,
   "profile_sections": true,
-  "profile_management": true
+  "profile_management": true,
+  "profile_progress": true,
+  "profile_favorites": true
 }
