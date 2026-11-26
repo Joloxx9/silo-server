@@ -36,6 +36,7 @@ import {
   formatShortCalendarDate,
   formatShortTimestamp,
   type InsightsFilterState,
+  insightRefreshProps,
 } from "./insightsHelpers";
 import { InsightKpiCard, InsightNoticeBanner, InsightSectionError } from "./insightsShared";
 
@@ -43,13 +44,13 @@ type VolumeMetric = "plays" | "watch_time";
 type VolumeSplit = "method" | "media";
 type PeakView = "lines" | "stacked" | "total";
 
-export function ActivityTab({ filters }: { filters: InsightsFilterState }) {
+export function PlaybackTab({ filters }: { filters: InsightsFilterState }) {
   const t = useT();
   const [volumeMetric, setVolumeMetric] = useState<VolumeMetric>("plays");
   const [volumeSplit, setVolumeSplit] = useState<VolumeSplit>("method");
   const [peakView, setPeakView] = useState<PeakView>("lines");
   const queryParams = useMemo(() => buildInsightsWindowQueryParams(filters), [filters]);
-  const query = useAdminInsightsActivity(queryParams);
+  const query = useAdminInsightsActivity(queryParams, { keepPrevious: true });
   const data = query.data;
 
   const peakSeries = useMemo(() => {
@@ -161,7 +162,7 @@ export function ActivityTab({ filters }: { filters: InsightsFilterState }) {
   const hasScopeFilter = filters.libraryId !== undefined || filters.userId !== undefined;
 
   return (
-    <div className="space-y-5">
+    <div {...insightRefreshProps(query.isPlaceholderData, "space-y-5")}>
       {showMeasuredBanner ? (
         <InsightNoticeBanner
           message={t("web.admin.insights.coverage.watchTimePartial", {

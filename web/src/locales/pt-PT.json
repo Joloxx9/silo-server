@@ -365,6 +365,30 @@
       "value": "Este valor está fora do intervalo permitido."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Inclua pelo menos um caráter especial, como ! ou #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Inclua pelo menos uma letra maiúscula."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Esta palavra-passe é demasiado longa."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Esta palavra-passe é demasiado curta."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8222,6 +8246,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Cartões"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Esquema"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tabela"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -55334,7 +55376,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Tendências de visualização, títulos populares, atividade do agregado, reprodução nos dispositivos e largura de banda."
+      "value": "Transmissões em direto, tendências de visualização, títulos populares, atividade do agregado, reprodução nos dispositivos e largura de banda."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -88896,7 +88938,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Tendências de visualização, títulos populares, contas, dispositivos e largura de banda."
+      "value": "Transmissões em direto, tendências de visualização, títulos populares, contas, dispositivos e largura de banda."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -110993,6 +111035,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Ocultar títulos vistos"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Cada perfil vê esta coleção sem os títulos que já viu, na respetiva página, nas filas e na contagem. Nada é removido. Uma coleção inteligente com limite de títulos escolhe primeiro os títulos, pelo que pode mostrar menos."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -132506,6 +132560,16 @@
     {
       "type": 0,
       "value": "Data da última emissão"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Bloquear "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

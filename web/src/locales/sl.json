@@ -365,6 +365,30 @@
       "value": "Ta vrednost je zunaj dovoljenega obsega."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Vključite vsaj en poseben znak, na primer ! ali #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Vključite vsaj eno veliko črko."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "To geslo je predolgo."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "To geslo je prekratko."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8519,6 +8543,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Kartice"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Postavitev"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tabela"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -60870,7 +60912,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Trendi ogledovanja, najbolj gledani naslovi, dejavnost gospodinjstva, predvajanje na napravah in pasovna širina."
+      "value": "Pretoki v živo, trendi ogledovanja, najbolj gledani naslovi, dejavnost gospodinjstva, predvajanje na napravah in pasovna širina."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -96001,7 +96043,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Trendi ogledovanja, najbolj gledani naslovi, računi, naprave in pasovna širina."
+      "value": "Pretoki v živo, trendi ogledovanja, najbolj gledani naslovi, računi, naprave in pasovna širina."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -120388,6 +120430,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Skrij ogledane naslove"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Vsak profil vidi to zbirko brez naslovov, ki si jih je ogledal – na strani zbirke, v njenih vrsticah in pri številu naslovov. Nič ni odstranjeno. Pametna zbirka z omejitvijo števila naslovov najprej izbere svoje naslove, zato lahko prikaže manj naslovov."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -143317,6 +143371,16 @@
     {
       "type": 0,
       "value": "Datum zadnjega predvajanja"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Zakleni polje "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

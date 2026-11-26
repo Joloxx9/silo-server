@@ -365,6 +365,30 @@
       "value": "此值超出範圍。"
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "請至少包含一個特殊字元，例如 ! 或 #。"
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "請至少包含一個大寫字母。"
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "此密碼太長。"
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "此密碼太短。"
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -7816,6 +7840,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "卡片"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "版面配置"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "表格"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -44041,7 +44083,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "觀看趨勢、熱門作品、家庭活動、裝置播放情形與頻寬。"
+      "value": "即時串流、觀看趨勢、熱門作品、家庭活動、裝置播放情形與頻寬。"
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -74733,7 +74775,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "觀看趨勢、熱門作品、帳號、裝置與頻寬。"
+      "value": "即時串流、觀看趨勢、熱門作品、帳號、裝置與頻寬。"
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -92827,6 +92869,18 @@
           "value": "選填"
         }
       ]
+    }
+  ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "隱藏已觀看的作品"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "每個個人檔案在這個合輯的頁面、列和數量中，都不會看到自己已觀看的作品。不會移除任何內容。設有作品數量上限的智慧合輯會先選出作品，因此顯示的作品可能較少。"
     }
   ],
   "web.collections.details.label": [
@@ -111828,6 +111882,16 @@
     {
       "type": 0,
       "value": "最後播出日期"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "鎖定 "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

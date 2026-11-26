@@ -365,6 +365,30 @@
       "value": "Значение вне допустимого диапазона."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Используйте хотя бы один специальный символ, например ! или #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Используйте хотя бы одну заглавную букву."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Слишком длинный пароль."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Слишком короткий пароль."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8575,6 +8599,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Карточки"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Вид"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Таблица"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -61848,7 +61890,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Тенденции просмотра, популярные позиции, активность семьи, воспроизведение на устройствах и трафик."
+      "value": "Активные потоки, тенденции просмотра, популярные позиции, активность семьи, воспроизведение на устройствах и трафик."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -97155,7 +97197,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Тенденции просмотра, популярные позиции, аккаунты, устройства и трафик."
+      "value": "Активные потоки, тенденции просмотра, популярные позиции, аккаунты, устройства и трафик."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -121650,6 +121692,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Скрывать просмотренное"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Каждый профиль видит эту коллекцию без фильмов и сериалов, которые он уже посмотрел: на странице коллекции, в своих рядах и в счётчике. Ничего не удаляется. Умная коллекция с ограничением числа фильмов и сериалов сначала отбирает их, поэтому может показать меньше."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -144735,6 +144789,20 @@
     {
       "type": 0,
       "value": "Дата последнего выхода в эфир"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Заблокировать поле «"
+    },
+    {
+      "type": 1,
+      "value": "field"
+    },
+    {
+      "type": 0,
+      "value": "»"
     }
   ],
   "web.item.editMetadata.locked": [

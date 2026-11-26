@@ -365,6 +365,30 @@
       "value": "Denne verdien er utenfor gyldig område."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Ta med minst ett spesialtegn, for eksempel ! eller #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Ta med minst én stor bokstav."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Dette passordet er for langt."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Dette passordet er for kort."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8013,6 +8037,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Kort"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Oppsett"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tabell"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -49321,7 +49363,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Seertrender, populære titler, aktivitet i husstanden, avspilling per enhet og båndbredde."
+      "value": "Aktive strømmer, seertrender, populære titler, aktivitet i husstanden, avspilling per enhet og båndbredde."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -81214,7 +81256,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Seertrender, populære titler, kontoer, enheter og båndbredde."
+      "value": "Aktive strømmer, seertrender, populære titler, kontoer, enheter og båndbredde."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -101316,6 +101358,18 @@
           "value": "Valgfritt"
         }
       ]
+    }
+  ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Skjul sette titler"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Hver profil ser denne samlingen uten titlene den har sett, på siden, i radene og i antallet. Ingenting blir fjernet. En smart samling med grense for antall titler velger titlene sine først, så den kan vise færre."
     }
   ],
   "web.collections.details.label": [
@@ -121433,6 +121487,16 @@
     {
       "type": 0,
       "value": "Siste sendedato"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Lås "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

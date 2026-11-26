@@ -365,6 +365,30 @@
       "value": "הערך הזה מחוץ לטווח."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "יש לכלול לפחות תו מיוחד אחד, כמו ! או #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "יש לכלול לפחות אות גדולה אחת."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "הסיסמה הזו ארוכה מדי."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "הסיסמה הזו קצרה מדי."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8173,6 +8197,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "כרטיסים"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "פריסה"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "טבלה"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -54452,7 +54494,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "מגמות צפייה, פריטים מובילים, פעילות במשק הבית, הפעלה במכשירים ורוחב פס."
+      "value": "הזרמות פעילות, מגמות צפייה, פריטים מובילים, פעילות במשק הבית, הפעלה במכשירים ורוחב פס."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -87988,7 +88030,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "מגמות צפייה, פריטים מובילים, חשבונות, מכשירים ורוחב פס."
+      "value": "הזרמות פעילות, מגמות צפייה, פריטים מובילים, חשבונות, מכשירים ורוחב פס."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -109813,6 +109855,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "הסתרת כותרים שנצפו"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "כל פרופיל רואה את האוסף הזה בלי הכותרים שצפה בהם: בדף האוסף, בשורות שלו ובספירת הכותרים שלו. שום דבר לא מוסר. אוסף חכם עם מגבלת כותרים בוחר קודם את הכותרים שלו, ולכן ייתכן שיוצגו בו פחות כותרים."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -131089,6 +131143,16 @@
     {
       "type": 0,
       "value": "תאריך השידור האחרון"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "נעילת השדה "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

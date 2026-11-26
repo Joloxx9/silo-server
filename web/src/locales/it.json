@@ -365,6 +365,30 @@
       "value": "Questo valore è fuori dall’intervallo consentito."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Includi almeno un carattere speciale, come ! o #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Includi almeno una lettera maiuscola."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Questa password è troppo lunga."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Questa password è troppo corta."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8226,6 +8250,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Schede"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Layout"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tabella"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -54966,7 +55008,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Tendenze di visione, titoli più visti, attività del nucleo familiare, riproduzione sui dispositivi e larghezza di banda."
+      "value": "Stream live, tendenze di visione, titoli più visti, attività del nucleo familiare, riproduzione sui dispositivi e larghezza di banda."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -88448,7 +88490,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Tendenze di visione, titoli più visti, account, dispositivi e larghezza di banda."
+      "value": "Stream live, tendenze di visione, titoli più visti, account, dispositivi e larghezza di banda."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -110635,6 +110677,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Nascondi i titoli visti"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Ogni profilo vede questa raccolta senza i titoli che ha visto, nella sua pagina, nelle sue righe e nel suo conteggio. Non viene rimosso nulla. Una raccolta smart con un limite di titoli sceglie prima i suoi titoli, quindi può mostrarne meno."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -132096,6 +132150,16 @@
     {
       "type": 0,
       "value": "Ultima messa in onda"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Blocca "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

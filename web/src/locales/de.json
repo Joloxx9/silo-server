@@ -365,6 +365,30 @@
       "value": "Dieser Wert liegt außerhalb des zulässigen Bereichs."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Verwende mindestens ein Sonderzeichen, zum Beispiel ! oder #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Verwende mindestens einen Großbuchstaben."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Dieses Passwort ist zu lang."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Dieses Passwort ist zu kurz."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -7989,6 +8013,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Karten"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Layout"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tabelle"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -49089,7 +49131,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Wiedergabetrends, beliebte Titel, Aktivität im Haushalt, Wiedergabe auf Geräten und Bandbreite."
+      "value": "Live-Streams, Wiedergabetrends, beliebte Titel, Aktivität im Haushalt, Wiedergabe auf Geräten und Bandbreite."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -81054,7 +81096,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Wiedergabetrends, beliebte Titel, Konten, Geräte und Bandbreite."
+      "value": "Live-Streams, Wiedergabetrends, beliebte Titel, Konten, Geräte und Bandbreite."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -100870,6 +100912,18 @@
           "value": "Optional"
         }
       ]
+    }
+  ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Gesehene Titel ausblenden"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Jedes Profil sieht diese Sammlung ohne die Titel, die es gesehen hat: auf ihrer Seite, in ihren Reihen und in ihrer Anzahl. Es wird nichts entfernt. Eine intelligente Sammlung mit Titelbegrenzung wählt zuerst ihre Titel aus und zeigt daher eventuell weniger an."
     }
   ],
   "web.collections.details.label": [
@@ -120851,6 +120905,16 @@
     {
       "type": 0,
       "value": "Letzte Ausstrahlung"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 1,
+      "value": "field"
+    },
+    {
+      "type": 0,
+      "value": " sperren"
     }
   ],
   "web.item.editMetadata.locked": [

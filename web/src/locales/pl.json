@@ -365,6 +365,30 @@
       "value": "Ta wartość jest poza zakresem."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Użyj co najmniej jednego znaku specjalnego, np. ! lub #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Użyj co najmniej jednej wielkiej litery."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "To hasło jest za długie."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "To hasło jest za krótkie."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8487,6 +8511,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Karty"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Układ"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tabela"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -61641,7 +61683,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Trendy oglądania, popularne tytuły, aktywność domowników, odtwarzanie na urządzeniach i przepustowość."
+      "value": "Strumienie na żywo, trendy oglądania, popularne tytuły, aktywność domowników, odtwarzanie na urządzeniach i przepustowość."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -96888,7 +96930,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Trendy oglądania, popularne tytuły, konta, urządzenia i przepustowość."
+      "value": "Strumienie na żywo, trendy oglądania, popularne tytuły, konta, urządzenia i przepustowość."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -121268,6 +121310,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Ukryj obejrzane tytuły"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Każdy profil widzi tę kolekcję bez obejrzanych przez siebie tytułów: na stronie kolekcji, w swoich rzędach i w liczbie tytułów. Nic nie jest usuwane. Inteligentna kolekcja z limitem tytułów najpierw wybiera tytuły, więc może ich pokazywać mniej."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -144157,6 +144211,16 @@
     {
       "type": 0,
       "value": "Data ostatniej emisji"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Zablokuj pole "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

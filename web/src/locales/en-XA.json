@@ -365,6 +365,30 @@
       "value": "⟦Ţĥîš ṽåļûé îš öûţ öƒ ŕåñĝé.~~~~~~~~~~~⟧"
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "⟦Îñçļûđé åţ ļéåšţ öñé šþéçîåļ çĥåŕåçţéŕ, šûçĥ åš ! öŕ #.~~~~~~~~~~~~~~~~~~~~~~⟧"
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "⟦Îñçļûđé åţ ļéåšţ öñé çåþîţåļ ļéţţéŕ.~~~~~~~~~~~~~~~⟧"
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "⟦Ţĥîš þåššŵöŕđ îš ţöö ļöñĝ.~~~~~~~~~~~⟧"
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "⟦Ţĥîš þåššŵöŕđ îš ţöö šĥöŕţ.~~~~~~~~~~~⟧"
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8409,6 +8433,24 @@
     {
       "type": 0,
       "value": "~~~⟧"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "⟦Çåŕđš~~⟧"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "⟦Ļåýöûţ~~~⟧"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "⟦Ţåƀļé~~⟧"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -53973,7 +54015,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "⟦Ŵåţçĥ ţŕéñđš, ţöþ ţîţļéš, ĥöûšéĥöļđ åçţîṽîţý, đéṽîçé þļåýƀåçķ, åñđ ƀåñđŵîđţĥ.~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~⟧"
+      "value": "⟦Ļîṽé šţŕéåɱš, ŵåţçĥ ţŕéñđš, ţöþ ţîţļéš, ĥöûšéĥöļđ åçţîṽîţý, đéṽîçé þļåýƀåçķ, åñđ ƀåñđŵîđţĥ.~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~⟧"
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -88338,7 +88380,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "⟦Ŵåţçĥ ţŕéñđš, ţöþ ţîţļéš, åççöûñţš, đéṽîçéš, åñđ ƀåñđŵîđţĥ.~~~~~~~~~~~~~~~~~~~~~~~~⟧"
+      "value": "⟦Ļîṽé šţŕéåɱš, ŵåţçĥ ţŕéñđš, ţöþ ţîţļéš, åççöûñţš, đéṽîçéš, åñđ ƀåñđŵîđţĥ.~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~⟧"
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -110032,6 +110074,18 @@
     {
       "type": 0,
       "value": "~~~~⟧"
+    }
+  ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "⟦Ĥîđé ŵåţçĥéđ ţîţļéš~~~~~~~~⟧"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "⟦Éåçĥ þŕöƒîļé šééš ţĥîš çöļļéçţîöñ ŵîţĥöûţ ţĥé ţîţļéš îţ ĥåš ŵåţçĥéđ, öñ îţš þåĝé, îñ îţš ŕöŵš åñđ îñ îţš çöûñţ. Ñöţĥîñĝ îš ŕéɱöṽéđ. Å šɱåŕţ çöļļéçţîöñ ŵîţĥ å ţîţļé ļîɱîţ þîçķš îţš ţîţļéš ƒîŕšţ, šö îţ çåñ šĥöŵ ƒéŵéŕ.~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~⟧"
     }
   ],
   "web.collections.details.label": [
@@ -132093,6 +132147,20 @@
     {
       "type": 0,
       "value": "⟦Ļåšţ Åîŕ Đåţé~~~~~~⟧"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "⟦Ļöçķ "
+    },
+    {
+      "type": 1,
+      "value": "field"
+    },
+    {
+      "type": 0,
+      "value": "~~⟧"
     }
   ],
   "web.item.editMetadata.locked": [

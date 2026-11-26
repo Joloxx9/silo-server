@@ -365,6 +365,30 @@
       "value": "Це значення поза допустимим діапазоном."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Додайте принаймні один спеціальний символ, наприклад ! або #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Додайте принаймні одну велику літеру."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Цей пароль задовгий."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Цей пароль закороткий."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8563,6 +8587,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Картки"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Макет"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Таблиця"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -60890,7 +60932,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Тенденції перегляду, популярні назви, активність домогосподарства, відтворення на пристроях і трафік."
+      "value": "Потоки наживо, тенденції перегляду, популярні назви, активність домогосподарства, відтворення на пристроях і трафік."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -95953,7 +95995,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Тенденції перегляду, популярні назви, облікові записи, пристрої та трафік."
+      "value": "Потоки наживо, тенденції перегляду, популярні назви, облікові записи, пристрої та трафік."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -120340,6 +120382,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Приховувати переглянуті фільми й серіали"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Кожен профіль бачить цю колекцію без фільмів і серіалів, які в ньому переглянуто: на сторінці колекції, у рядах і в лічильнику. Нічого не видаляється. Розумна колекція з обмеженням кількості спершу вибирає фільми й серіали, тому може показувати менше."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -143317,6 +143371,20 @@
     {
       "type": 0,
       "value": "Дата останнього ефіру"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Заблокувати поле «"
+    },
+    {
+      "type": 1,
+      "value": "field"
+    },
+    {
+      "type": 0,
+      "value": "»"
     }
   ],
   "web.item.editMetadata.locked": [

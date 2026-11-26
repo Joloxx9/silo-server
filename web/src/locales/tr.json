@@ -365,6 +365,30 @@
       "value": "Bu değer aralığın dışında."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "! veya # gibi en az bir özel karakter ekleyin."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "En az bir büyük harf ekleyin."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Bu parola çok uzun."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Bu parola çok kısa."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8025,6 +8049,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Kartlar"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Düzen"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tablo"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -48757,7 +48799,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "İzleme eğilimleri, popüler içerikler, hane etkinliği, cihazlarda oynatma ve bant genişliği."
+      "value": "Canlı akışlar, izleme eğilimleri, popüler içerikler, hane etkinliği, cihazlarda oynatma ve bant genişliği."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -80610,7 +80652,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "İzleme eğilimleri, popüler içerikler, hesaplar, cihazlar ve bant genişliği."
+      "value": "Canlı akışlar, izleme eğilimleri, popüler içerikler, hesaplar, cihazlar ve bant genişliği."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -100326,6 +100368,18 @@
           "value": "İsteğe bağlı"
         }
       ]
+    }
+  ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "İzlenen içerikleri gizle"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Her profil bu koleksiyonu, sayfasında, satırlarında ve içerik sayısında kendi izlediği içerikler olmadan görür. Hiçbir şey kaldırılmaz. İçerik sınırı olan akıllı bir koleksiyon önce içeriklerini seçer, bu yüzden daha az içerik gösterebilir."
     }
   ],
   "web.collections.details.label": [
@@ -120143,6 +120197,16 @@
     {
       "type": 0,
       "value": "Son yayın tarihi"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 1,
+      "value": "field"
+    },
+    {
+      "type": 0,
+      "value": " alanını kilitle"
     }
   ],
   "web.item.editMetadata.locked": [

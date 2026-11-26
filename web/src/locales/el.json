@@ -365,6 +365,30 @@
       "value": "Αυτή η τιμή είναι εκτός εύρους."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Συμπεριλάβετε τουλάχιστον έναν ειδικό χαρακτήρα, όπως ! ή #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Συμπεριλάβετε τουλάχιστον ένα κεφαλαίο γράμμα."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Αυτός ο κωδικός πρόσβασης είναι πολύ μεγάλος."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Αυτός ο κωδικός πρόσβασης είναι πολύ σύντομος."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8005,6 +8029,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Κάρτες"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Διάταξη"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Πίνακας"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -49469,7 +49511,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Τάσεις παρακολούθησης, δημοφιλείς τίτλοι, δραστηριότητα του νοικοκυριού, αναπαραγωγή ανά συσκευή και εύρος ζώνης."
+      "value": "Ζωντανές ροές, τάσεις παρακολούθησης, δημοφιλείς τίτλοι, δραστηριότητα του νοικοκυριού, αναπαραγωγή ανά συσκευή και εύρος ζώνης."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -81542,7 +81584,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Τάσεις παρακολούθησης, δημοφιλείς τίτλοι, λογαριασμοί, συσκευές και εύρος ζώνης."
+      "value": "Ζωντανές ροές, τάσεις παρακολούθησης, δημοφιλείς τίτλοι, λογαριασμοί, συσκευές και εύρος ζώνης."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -101658,6 +101700,18 @@
           "value": "Προαιρετικό"
         }
       ]
+    }
+  ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Απόκρυψη παρακολουθημένων τίτλων"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Κάθε προφίλ βλέπει αυτή τη συλλογή χωρίς τους τίτλους που έχει παρακολουθήσει, στη σελίδα της συλλογής, στις γραμμές της και στο πλήθος των τίτλων της. Δεν αφαιρείται τίποτα. Μια έξυπνη συλλογή με όριο τίτλων επιλέγει πρώτα τους τίτλους της, οπότε μπορεί να εμφανίζει λιγότερους."
     }
   ],
   "web.collections.details.label": [
@@ -121941,6 +121995,20 @@
     {
       "type": 0,
       "value": "Ημερομηνία τελευταίας προβολής"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Κλείδωμα του πεδίου «"
+    },
+    {
+      "type": 1,
+      "value": "field"
+    },
+    {
+      "type": 0,
+      "value": "»"
     }
   ],
   "web.item.editMetadata.locked": [

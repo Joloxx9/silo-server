@@ -365,6 +365,30 @@
       "value": "هذه القيمة خارج النطاق المسموح."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "أدرج رمزًا خاصًا واحدًا على الأقل، مثل ! أو #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "أدرج حرفًا لاتينيًا كبيرًا واحدًا على الأقل."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "كلمة المرور هذه طويلة جدًا."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "كلمة المرور هذه قصيرة جدًا."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8853,6 +8877,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "البطاقات"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "التخطيط"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "الجدول"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -71409,7 +71451,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "اتجاهات المشاهدة، والعناوين الأبرز، ونشاط الأسرة، والتشغيل على الأجهزة، وعرض النطاق."
+      "value": "عمليات البث المباشرة، واتجاهات المشاهدة، والعناوين الأبرز، ونشاط الأسرة، والتشغيل على الأجهزة، وعرض النطاق."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -108847,7 +108889,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "اتجاهات المشاهدة، والعناوين الأبرز، والحسابات، والأجهزة، وعرض النطاق."
+      "value": "عمليات البث المباشرة، واتجاهات المشاهدة، والعناوين الأبرز، والحسابات، والأجهزة، وعرض النطاق."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -137101,6 +137143,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "إخفاء العناوين التي تمت مشاهدتها"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "يرى كل ملف شخصي هذه المجموعة دون العناوين التي شاهدها، في صفحتها وفي صفوفها وفي عددها. لا يُحذف أي شيء. المجموعة الذكية التي لها حد للعناوين تختار عناوينها أولًا، لذا قد تعرض عددًا أقل."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -162227,6 +162281,16 @@
     {
       "type": 0,
       "value": "تاريخ آخر عرض"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "قفل "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

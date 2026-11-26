@@ -19,8 +19,14 @@ type ControlDB interface {
 	OID(ctx context.Context, name string) (oid uint32, found bool, err error)
 	// NameOf returns the current name of the database with oid.
 	NameOf(ctx context.Context, oid uint32) (name string, found bool, err error)
-	// OtherConnections counts sessions on name other than this command's.
+	// OtherConnections counts the sessions on name other than this
+	// command's (the control session and connections made under
+	// OwnApplicationName) and autovacuum workers.
 	OtherConnections(ctx context.Context, name string) (int, error)
+	// OwnApplicationName is the application name the restore gives its own
+	// connections to the live database so OtherConnections can leave them
+	// out; empty when the control does not tell them apart.
+	OwnApplicationName() string
 	// CheckPrivileges confirms the role can create and rename databases and
 	// change ALLOW_CONNECTIONS on live.
 	CheckPrivileges(ctx context.Context, live string) error
@@ -122,6 +128,13 @@ func RestoreSwap(ctx context.Context, src *Source, loader DatabaseLoader, ctl Co
 		return err
 	}
 	defer unlock(ctx)
+	// Every connection the restore opens from here carries its own name, so
+	// the checks for other clients don't count one it has just closed.
+	if own := ctl.OwnApplicationName(); own != "" {
+		if opts.LiveURL, err = WithApplicationName(opts.LiveURL, own); err != nil {
+			return err
+		}
+	}
 	// Step 1.
 	sameDeployment, err := validateForSwap(ctx, src, loader, opts, out)
 	if err != nil {
@@ -162,6 +175,14 @@ func RestoreSwap(ctx context.Context, src *Source, loader DatabaseLoader, ctl Co
 	if err != nil || !found {
 		return discard(fmt.Errorf("reading %s's oid: %w", restored, errors.Join(err, errIf(!found, "not found"))))
 	}
+	// The live server's own settings replace the backup's after the
+	// post-load steps clear what they cannot keep, so those steps do not
+	// report them. Read before the load, so this connection has long ended
+	// when carryLiveState checks the live database is idle.
+	liveOwn, err := loader.ServerSpecificSettingKeys(ctx, opts.LiveURL, opts.Cipher)
+	if err != nil {
+		return discard(fmt.Errorf("reading this server's own settings: %w", err))
+	}
 	_, _ = fmt.Fprintf(out, "Restoring into %s…\n", restored)
 	if err := loader.Load(ctx, restoredURL, src.path(DumpName)); err != nil {
 		return discard(err)
@@ -180,11 +201,12 @@ func RestoreSwap(ctx context.Context, src *Source, loader DatabaseLoader, ctl Co
 		}
 	}
 	post := newPostLoad(m, opts.Validate, out)
+	post.liveOwn = liveOwn
 	// New signing keys first, so the lost-settings pass does not list them.
 	if err := post.step(stepSigningKeys, rotateSigningSecrets(ctx, loader, restoredURL, opts.Cipher, out)); err != nil {
 		return discard(err)
 	}
-	if err := post.step(stepLostSettings, clearLostSettings(ctx, loader, restoredURL, m, opts.Validate, opts.Cipher, out)); err != nil {
+	if err := post.step(stepLostSettings, clearLostSettings(ctx, loader, restoredURL, m, opts.Validate, opts.Cipher, post.liveOwn, out)); err != nil {
 		return discard(err)
 	}
 	if err := carryLiveState(ctx, ctl, live, loader, restoredURL, opts, sameDeployment, m.CreatedAt, post); err != nil {

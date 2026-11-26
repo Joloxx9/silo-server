@@ -365,6 +365,30 @@
       "value": "Tato hodnota je mimo povolený rozsah."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Použijte alespoň jeden speciální znak, například ! nebo #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Použijte alespoň jedno velké písmeno."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Toto heslo je příliš dlouhé."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Toto heslo je příliš krátké."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8511,6 +8535,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Karty"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Rozložení"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tabulka"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -61131,7 +61173,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Trendy sledování, nejsledovanější tituly, aktivita domácnosti, přehrávání na zařízeních a šířka pásma."
+      "value": "Živé streamy, trendy sledování, nejsledovanější tituly, aktivita domácnosti, přehrávání na zařízeních a šířka pásma."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -96202,7 +96244,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Trendy sledování, nejsledovanější tituly, účty, zařízení a šířka pásma."
+      "value": "Živé streamy, trendy sledování, nejsledovanější tituly, účty, zařízení a šířka pásma."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -120682,6 +120724,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Skrýt zhlédnuté tituly"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Každý profil uvidí tuto kolekci bez titulů, které už zhlédl – na stránce kolekce, v řádcích i v počtu titulů. Nic se neodebere. Chytrá kolekce s omezením počtu titulů nejprve vybere své tituly, takže jich může zobrazit méně."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -143615,6 +143669,16 @@
     {
       "type": 0,
       "value": "Datum posledního vysílání"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Uzamknout pole "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

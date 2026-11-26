@@ -365,6 +365,30 @@
       "value": "यह वैल्यू सीमा से बाहर है।"
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "कम से कम एक विशेष वर्ण शामिल करें, जैसे ! या #।"
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "कम से कम एक कैपिटल अक्षर शामिल करें।"
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "यह पासवर्ड बहुत लंबा है।"
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "यह पासवर्ड बहुत छोटा है।"
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8005,6 +8029,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "कार्ड"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "लेआउट"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "टेबल"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -48905,7 +48947,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "देखने के रुझान, लोकप्रिय टाइटल, परिवार की गतिविधि, डिवाइस पर प्लेबैक और बैंडविड्थ।"
+      "value": "लाइव स्ट्रीम, देखने के रुझान, लोकप्रिय टाइटल, परिवार की गतिविधि, डिवाइस पर प्लेबैक और बैंडविड्थ।"
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -80906,7 +80948,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "देखने के रुझान, लोकप्रिय टाइटल, खाते, डिवाइस और बैंडविड्थ।"
+      "value": "लाइव स्ट्रीम, देखने के रुझान, लोकप्रिय टाइटल, खाते, डिवाइस और बैंडविड्थ।"
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -100708,6 +100750,18 @@
           "value": "वैकल्पिक"
         }
       ]
+    }
+  ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "देखे गए टाइटल छिपाएँ"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "हर प्रोफ़ाइल को यह कलेक्शन उन टाइटल के बिना दिखता है जो उस प्रोफ़ाइल ने देखे हैं: कलेक्शन के पेज पर, उसकी पंक्तियों में और उसकी गिनती में। कुछ भी हटाया नहीं जाता। टाइटल की सीमा वाला स्मार्ट कलेक्शन पहले अपने टाइटल चुनता है, इसलिए उसमें कम टाइटल दिख सकते हैं।"
     }
   ],
   "web.collections.details.label": [
@@ -120729,6 +120783,16 @@
     {
       "type": 0,
       "value": "आखिरी प्रसारण की तारीख"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 1,
+      "value": "field"
+    },
+    {
+      "type": 0,
+      "value": " लॉक करें"
     }
   ],
   "web.item.editMetadata.locked": [

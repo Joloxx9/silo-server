@@ -365,6 +365,30 @@
       "value": "Deze waarde valt buiten het bereik."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Gebruik minstens één speciaal teken, zoals ! of #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Gebruik minstens één hoofdletter."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Dit wachtwoord is te lang."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Dit wachtwoord is te kort."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -7977,6 +8001,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Kaarten"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Weergave"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tabel"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -49005,7 +49047,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Kijktrends, populaire titels, activiteit in het huishouden, afspelen per apparaat en bandbreedte."
+      "value": "Livestreams, kijktrends, populaire titels, activiteit in het huishouden, afspelen per apparaat en bandbreedte."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -80882,7 +80924,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Kijktrends, populaire titels, accounts, apparaten en bandbreedte."
+      "value": "Livestreams, kijktrends, populaire titels, accounts, apparaten en bandbreedte."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -100654,6 +100696,18 @@
           "value": "Optioneel"
         }
       ]
+    }
+  ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Bekeken titels verbergen"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Elk profiel ziet deze collectie zonder de titels die het heeft bekeken, op de pagina, in de rijen en in het aantal. Er wordt niets verwijderd. Een slimme collectie met een titellimiet kiest eerst de titels, dus kan er minder tonen."
     }
   ],
   "web.collections.details.label": [
@@ -120653,6 +120707,16 @@
     {
       "type": 0,
       "value": "Laatste uitzenddatum"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 1,
+      "value": "field"
+    },
+    {
+      "type": 0,
+      "value": " vergrendelen"
     }
   ],
   "web.item.editMetadata.locked": [

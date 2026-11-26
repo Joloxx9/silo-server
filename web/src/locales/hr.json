@@ -365,6 +365,30 @@
       "value": "Ova je vrijednost izvan raspona."
     }
   ],
+  "error.field.password_needs_special": [
+    {
+      "type": 0,
+      "value": "Uključite barem jedan poseban znak, primjerice ! ili #."
+    }
+  ],
+  "error.field.password_needs_uppercase": [
+    {
+      "type": 0,
+      "value": "Uključite barem jedno veliko slovo."
+    }
+  ],
+  "error.field.password_too_long": [
+    {
+      "type": 0,
+      "value": "Ova je lozinka predugačka."
+    }
+  ],
+  "error.field.password_too_short": [
+    {
+      "type": 0,
+      "value": "Ova je lozinka prekratka."
+    }
+  ],
   "error.field.required": [
     {
       "type": 0,
@@ -8250,6 +8274,24 @@
     {
       "type": 1,
       "value": "id"
+    }
+  ],
+  "web.admin.activity.view.cards": [
+    {
+      "type": 0,
+      "value": "Kartice"
+    }
+  ],
+  "web.admin.activity.view.label": [
+    {
+      "type": 0,
+      "value": "Raspored"
+    }
+  ],
+  "web.admin.activity.view.table": [
+    {
+      "type": 0,
+      "value": "Tablica"
     }
   ],
   "web.admin.apiKeys.access.full": [
@@ -55186,7 +55228,7 @@
   "web.admin.insights.subtitle": [
     {
       "type": 0,
-      "value": "Trendovi gledanja, popularni naslovi, aktivnost u kućanstvu, reprodukcija na uređajima i propusnost."
+      "value": "Streamovi uživo, trendovi gledanja, popularni naslovi, aktivnost u kućanstvu, reprodukcija na uređajima i propusnost."
     }
   ],
   "web.admin.insights.tabs.activity": [
@@ -88676,7 +88718,7 @@
   "web.admin.shell.nav.page.insights.description": [
     {
       "type": 0,
-      "value": "Trendovi gledanja, popularni naslovi, računi, uređaji i propusnost."
+      "value": "Streamovi uživo, trendovi gledanja, popularni naslovi, računi, uređaji i propusnost."
     }
   ],
   "web.admin.shell.nav.page.insights.label": [
@@ -110949,6 +110991,18 @@
       ]
     }
   ],
+  "web.collections.details.hideWatched": [
+    {
+      "type": 0,
+      "value": "Sakrij pogledane naslove"
+    }
+  ],
+  "web.collections.details.hideWatchedHelp": [
+    {
+      "type": 0,
+      "value": "Svaki profil vidi ovu kolekciju bez naslova koje je pogledao, na stranici kolekcije, u njezinim retcima i u broju naslova. Ništa se ne uklanja. Pametna kolekcija s ograničenjem broja naslova najprije odabire naslove, pa može prikazati manje."
+    }
+  ],
   "web.collections.details.label": [
     {
       "type": 0,
@@ -132517,6 +132571,16 @@
     {
       "type": 0,
       "value": "Datum zadnjeg emitiranja"
+    }
+  ],
+  "web.item.editMetadata.lockField": [
+    {
+      "type": 0,
+      "value": "Zaključaj polje "
+    },
+    {
+      "type": 1,
+      "value": "field"
     }
   ],
   "web.item.editMetadata.locked": [

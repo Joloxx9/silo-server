@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import {
   captureProfileRequestContext,
@@ -38,9 +38,10 @@ let authorityGeneration = 0;
 let refreshWindowUntil = 0;
 
 /**
- * Marks the next few seconds of Insights queries as user-triggered refreshes so
- * they pass `refresh=true` to bypass the server's 60s cache without changing
- * the React Query cache key.
+ * Marks the next few seconds of Insights queries, on the Insights page and the
+ * dashboard's Insights widgets, as user-triggered refreshes so they pass
+ * `refresh=true`, which drops the server's cached Insights and reads fresh
+ * data, without changing the React Query cache key.
  */
 export function markAdminInsightsRefresh(): void {
   refreshWindowUntil = Date.now() + 5_000;
@@ -79,13 +80,40 @@ async function readInsight<T>(
   return result;
 }
 
+/**
+ * Whether a tab may keep showing the previous result while a new sort, search,
+ * or filter loads, so it dims its old numbers instead of falling back to
+ * skeletons. Only a result read under the same signed-in profile carries over;
+ * the scope is the last key segment.
+ */
+function readInScope(previousQuery: { queryKey: readonly unknown[] } | undefined, scope: string) {
+  return previousQuery?.queryKey.at(-1) === scope;
+}
+
+interface InsightQueryOptions {
+  enabled?: boolean;
+  staleTime?: number;
+  refetchInterval?: number | false;
+  /**
+   * Show the previous result while a changed key loads. Tabs only: a detail
+   * sheet would show another person's or title's numbers.
+   */
+  keepPrevious?: boolean;
+}
+
+/** Options for an Insights read that a tab and a detail sheet both use. */
+export type InsightTabQueryOptions = Pick<InsightQueryOptions, "enabled" | "keepPrevious">;
+
 function useAdminInsightQuery<T>(
   key: readonly unknown[],
   read: (profileContext: ProfileRequestContextSnapshot, signal: AbortSignal) => Promise<T>,
-  enabled: boolean,
-  staleTime = INSIGHTS_STALE_TIME,
-  refetchInterval: number | false = false,
-) {
+  {
+    enabled = true,
+    staleTime = INSIGHTS_STALE_TIME,
+    refetchInterval = false,
+    keepPrevious = false,
+  }: InsightQueryOptions,
+): UseQueryResult<T> {
   const scope = insightsScope();
   return useQuery({
     queryKey: [...key, scope],
@@ -93,6 +121,9 @@ function useAdminInsightQuery<T>(
     enabled,
     staleTime,
     refetchInterval,
+    placeholderData: keepPrevious
+      ? (previous, previousQuery) => (readInScope(previousQuery, scope) ? previous : undefined)
+      : undefined,
     retry: false,
   });
 }
@@ -121,55 +152,67 @@ export function dashboardInsightsWindow(range: WidgetRange) {
 }
 
 export function useDashboardInsightsActivity(range: WidgetRange) {
-  const query = dashboardInsightsWindow(range);
+  const query: AdminInsightsActivityQuery = dashboardInsightsWindow(range);
   const interval = dashboardInsightsInterval(range);
   return useAdminInsightQuery(
     adminKeys.insightsActivity(query),
     (profileContext, signal) =>
-      v2("GET /api/v2/admin/insights/activity", { query, profileContext, signal }),
-    true,
-    interval,
-    interval,
+      v2("GET /api/v2/admin/insights/activity", {
+        query: withRefreshFlag(query),
+        profileContext,
+        signal,
+      }),
+    { staleTime: interval, refetchInterval: interval },
   );
 }
 
 export function useDashboardInsightsTitles(range: WidgetRange, limit: number) {
-  const query = { ...dashboardInsightsWindow(range), sort: "plays" as const, limit };
+  const query: AdminInsightsTitlesQuery = {
+    ...dashboardInsightsWindow(range),
+    sort: "plays" as const,
+    limit,
+  };
   const interval = dashboardInsightsInterval(range);
   return useAdminInsightQuery(
     adminKeys.insightsTitles(query),
     (profileContext, signal) =>
-      v2("GET /api/v2/admin/insights/titles", { query, profileContext, signal }),
-    true,
-    interval,
-    interval,
+      v2("GET /api/v2/admin/insights/titles", {
+        query: withRefreshFlag(query),
+        profileContext,
+        signal,
+      }),
+    { staleTime: interval, refetchInterval: interval },
   );
 }
 
 export function useDashboardInsightsLibrary(range: WidgetRange) {
-  const query = dashboardInsightsWindow(range);
+  const query: AdminInsightsLibraryQuery = dashboardInsightsWindow(range);
   const interval = dashboardInsightsInterval(range);
   return useAdminInsightQuery(
     adminKeys.insightsLibrary(query),
     (profileContext, signal) =>
-      v2("GET /api/v2/admin/insights/library", { query, profileContext, signal }),
-    true,
-    interval,
-    interval,
+      v2("GET /api/v2/admin/insights/library", {
+        query: withRefreshFlag(query),
+        profileContext,
+        signal,
+      }),
+    { staleTime: interval, refetchInterval: interval },
   );
 }
 
 /** People with one account row: the widget reads only `top_profiles`. */
 export function useDashboardInsightsPeople(range: WidgetRange) {
-  const query = { ...dashboardInsightsWindow(range), limit: 1 };
+  const query: AdminInsightsPeopleQuery = { ...dashboardInsightsWindow(range), limit: 1 };
   const interval = dashboardInsightsInterval(range);
   return useAdminInsightQuery(
     adminKeys.insightsPeople(query),
     (profileContext, signal) =>
-      v2("GET /api/v2/admin/insights/people", { query, profileContext, signal }),
-    true,
-    interval,
-    interval,
+      v2("GET /api/v2/admin/insights/people", {
+        query: withRefreshFlag(query),
+        profileContext,
+        signal,
+      }),
+    { staleTime: interval, refetchInterval: interval },
   );
 }
 
@@ -178,12 +221,14 @@ export function useAdminInsightsCapabilities(enabled = true) {
     adminKeys.insightsCapabilities(),
     (profileContext, signal) =>
       v2("GET /api/v2/admin/insights/capabilities", { profileContext, signal }),
-    enabled,
-    5 * 60_000,
+    { enabled, staleTime: 5 * 60_000 },
   );
 }
 
-export function useAdminInsightsActivity(query: AdminInsightsActivityQuery, enabled = true) {
+export function useAdminInsightsActivity(
+  query: AdminInsightsActivityQuery,
+  options: InsightTabQueryOptions = {},
+) {
   return useAdminInsightQuery(
     adminKeys.insightsActivity(query as Record<string, unknown>),
     (profileContext, signal) =>
@@ -192,11 +237,14 @@ export function useAdminInsightsActivity(query: AdminInsightsActivityQuery, enab
         profileContext,
         signal,
       }),
-    enabled,
+    options,
   );
 }
 
-export function useAdminInsightsPeople(query: AdminInsightsPeopleQuery, enabled = true) {
+export function useAdminInsightsPeople(
+  query: AdminInsightsPeopleQuery,
+  options: InsightTabQueryOptions = {},
+) {
   return useAdminInsightQuery(
     adminKeys.insightsPeople(query as Record<string, unknown>),
     (profileContext, signal) =>
@@ -205,7 +253,7 @@ export function useAdminInsightsPeople(query: AdminInsightsPeopleQuery, enabled 
         profileContext,
         signal,
       }),
-    enabled,
+    options,
   );
 }
 
@@ -240,11 +288,16 @@ export function useAdminInsightsPeopleInfinite(
     },
     enabled,
     staleTime: INSIGHTS_STALE_TIME,
+    placeholderData: (previous, previousQuery) =>
+      readInScope(previousQuery, scope) ? previous : undefined,
     retry: false,
   });
 }
 
-export function useAdminInsightsDevices(query: AdminInsightsDevicesQuery, enabled = true) {
+export function useAdminInsightsDevices(
+  query: AdminInsightsDevicesQuery,
+  options: InsightTabQueryOptions = {},
+) {
   return useAdminInsightQuery(
     adminKeys.insightsDevices(query as Record<string, unknown>),
     (profileContext, signal) =>
@@ -253,11 +306,14 @@ export function useAdminInsightsDevices(query: AdminInsightsDevicesQuery, enable
         profileContext,
         signal,
       }),
-    enabled,
+    options,
   );
 }
 
-export function useAdminInsightsBandwidth(query: AdminInsightsBandwidthQuery, enabled = true) {
+export function useAdminInsightsBandwidth(
+  query: AdminInsightsBandwidthQuery,
+  options: InsightTabQueryOptions = {},
+) {
   return useAdminInsightQuery(
     adminKeys.insightsBandwidth(query as Record<string, unknown>),
     (profileContext, signal) =>
@@ -266,11 +322,14 @@ export function useAdminInsightsBandwidth(query: AdminInsightsBandwidthQuery, en
         profileContext,
         signal,
       }),
-    enabled,
+    options,
   );
 }
 
-export function useAdminInsightsTitles(query: AdminInsightsTitlesQuery, enabled = true) {
+export function useAdminInsightsTitles(
+  query: AdminInsightsTitlesQuery,
+  options: InsightTabQueryOptions = {},
+) {
   return useAdminInsightQuery(
     adminKeys.insightsTitles(query as Record<string, unknown>),
     (profileContext, signal) =>
@@ -279,11 +338,14 @@ export function useAdminInsightsTitles(query: AdminInsightsTitlesQuery, enabled 
         profileContext,
         signal,
       }),
-    enabled,
+    options,
   );
 }
 
-export function useAdminInsightsLibrary(query: AdminInsightsLibraryQuery, enabled = true) {
+export function useAdminInsightsLibrary(
+  query: AdminInsightsLibraryQuery,
+  options: InsightTabQueryOptions = {},
+) {
   return useAdminInsightQuery(
     adminKeys.insightsLibrary(query as Record<string, unknown>),
     (profileContext, signal) =>
@@ -292,7 +354,7 @@ export function useAdminInsightsLibrary(query: AdminInsightsLibraryQuery, enable
         profileContext,
         signal,
       }),
-    enabled,
+    options,
   );
 }
 
@@ -311,6 +373,6 @@ export function useAdminInsightsTitle(
         profileContext,
         signal,
       }),
-    enabled && Boolean(contentId),
+    { enabled: enabled && Boolean(contentId) },
   );
 }
