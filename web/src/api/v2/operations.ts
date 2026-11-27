@@ -286,6 +286,7 @@ export const v2Operations = {
   "GET /api/v2/admin/settings/restart-keys": "getAdminRestartKeys",
   "GET /api/v2/admin/settings/sensitive-status": "getAdminSensitiveSettingsStatus",
   "GET /api/v2/admin/settings/{key}": "getAdminSetting",
+  "GET /api/v2/admin/sign-in/local-password-off/accounts": "listAdminLocalPasswordOffAccounts",
   "GET /api/v2/admin/stats": "getAdminDashboardStats",
   "GET /api/v2/admin/stats/api-clients": "getAdminDashboardAPIClients",
   "GET /api/v2/admin/stats/api-clients/{session_id}/endpoints":
@@ -339,6 +340,7 @@ export const v2Operations = {
   "GET /api/v2/api-keys/scopes": "getPersonalAPIKeyScopes",
   "GET /api/v2/artwork/{key}": "getArtwork",
   "GET /api/v2/audio-prefs/{series_id}": "getAudioPreference",
+  "GET /api/v2/auth/demo/capability": "getDemoLoginCapability",
   "GET /api/v2/auth/device": "getDeviceLogin",
   "GET /api/v2/auth/device/capability": "getDeviceLoginCapability",
   "GET /api/v2/auth/external-sign-in/capabilities": "getExternalSignInCapabilities",
@@ -806,6 +808,7 @@ export const v2Operations = {
   "POST /api/v2/admin/users/{id}/profiles": "createAdminUserProfile",
   "POST /api/v2/admin/users/{id}/transfer-ownership": "transferAdminUserOwnership",
   "POST /api/v2/api-keys": "createPersonalAPIKey",
+  "POST /api/v2/auth/demo": "demoLogin",
   "POST /api/v2/auth/device/approve": "approveDeviceLogin",
   "POST /api/v2/auth/device/approve-handoff": "approveDeviceHandoff",
   "POST /api/v2/auth/device/cancel": "cancelDeviceLogin",

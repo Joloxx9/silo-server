@@ -482,6 +482,7 @@ GET /api/v2/admin/settings/restart-keys	non-media
 GET /api/v2/admin/settings/sensitive-status	non-media
 GET /api/v2/admin/settings/{key}	non-media
 PUT /api/v2/admin/settings/{key}	non-media
+GET /api/v2/admin/sign-in/local-password-off/accounts	non-media
 GET /api/v2/admin/stats	non-media
 GET /api/v2/admin/stats/api-clients	non-media
 GET /api/v2/admin/stats/api-clients/{session_id}/endpoints	non-media
@@ -560,6 +561,8 @@ HEAD /api/v2/artwork/*	non-media
 DELETE /api/v2/audio-prefs/{series_id}	non-media
 GET /api/v2/audio-prefs/{series_id}	non-media
 PUT /api/v2/audio-prefs/{series_id}	non-media
+POST /api/v2/auth/demo	non-media
+GET /api/v2/auth/demo/capability	non-media
 GET /api/v2/auth/device	non-media
 POST /api/v2/auth/device/approve	non-media
 POST /api/v2/auth/device/approve-handoff	non-media
@@ -1578,6 +1581,7 @@ GET /api/v2/admin/settings/restart-keys	non-media
 GET /api/v2/admin/settings/sensitive-status	non-media
 GET /api/v2/admin/settings/{key}	non-media
 PUT /api/v2/admin/settings/{key}	non-media
+GET /api/v2/admin/sign-in/local-password-off/accounts	non-media
 GET /api/v2/admin/stats	non-media
 GET /api/v2/admin/stats/api-clients	non-media
 GET /api/v2/admin/stats/api-clients/{session_id}/endpoints	non-media
@@ -1656,6 +1660,8 @@ HEAD /api/v2/artwork/*	non-media
 DELETE /api/v2/audio-prefs/{series_id}	non-media
 GET /api/v2/audio-prefs/{series_id}	non-media
 PUT /api/v2/audio-prefs/{series_id}	non-media
+POST /api/v2/auth/demo	non-media
+GET /api/v2/auth/demo/capability	non-media
 GET /api/v2/auth/device	non-media
 POST /api/v2/auth/device/approve	non-media
 POST /api/v2/auth/device/approve-handoff	non-media

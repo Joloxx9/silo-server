@@ -2863,6 +2863,25 @@
       "body_file": "admin_playback_sessions.json"
     },
     {
+      "name": "admin_playback_sessions_egress",
+      "operation_id": "listAdminPlaybackSessions",
+      "scenario": "With include_egress, a row carries the viewer bytes the merged stream telemetry counted for it, without the relay hop between Silo's own nodes; a session telemetry has no record of omits egress.",
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/admin/sessions?include_egress=true",
+        "headers": {
+          "Authorization": "Bearer tok-admin"
+        }
+      },
+      "expected_status": 200,
+      "response_headers": {
+        "Content-Type": "application/json"
+      },
+      "response_media_type": "application/json",
+      "schema": "#/components/schemas/CollectionAdminPlaybackSession",
+      "body_file": "admin_playback_sessions_egress.json"
+    },
+    {
       "name": "admin_playback_summary",
       "operation_id": "getAdminPlaybackSummary",
       "scenario": "A bounded account activity sample omits diagnostic identifiers and network metadata.",
@@ -9892,6 +9911,27 @@
       "response_media_type": "application/json",
       "schema": "#/components/schemas/AdminCollectionList",
       "body_file": "list_admin_collections_ok.json"
+    },
+    {
+      "name": "list_admin_local_password_off_accounts_ok",
+      "operation_id": "listAdminLocalPasswordOffAccounts",
+      "scenario": "Before turning password sign-in off, an administrator reads the first accounts email auto-match can link, with both group totals.",
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/admin/sign-in/local-password-off/accounts?group=email_match&limit=1",
+        "headers": {
+          "Authorization": "Bearer tok-admin",
+          "X-Profile-Id": "p-primary"
+        }
+      },
+      "expected_status": 200,
+      "response_headers": {
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json"
+      },
+      "response_media_type": "application/json",
+      "schema": "#/components/schemas/AdminLocalPasswordOffAccounts",
+      "body_file": "list_admin_local_password_off_accounts_ok.json"
     },
     {
       "name": "list_admin_playback_history_ok",
