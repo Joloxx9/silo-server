@@ -14,6 +14,7 @@ import (
 
 	"github.com/Silo-Server/silo-server/internal/ai/llm"
 	aitranslate "github.com/Silo-Server/silo-server/internal/ai/translate"
+	"github.com/Silo-Server/silo-server/internal/lang"
 	"github.com/Silo-Server/silo-server/internal/playback"
 	"github.com/Silo-Server/silo-server/internal/subtitles"
 )
@@ -281,7 +282,7 @@ func (t *WhisperTranscriber) transcribeChunk(
 	tr, err := t.client.Transcribe(ctx, llm.TranscribeRequest{
 		Filename: filepath.Base(chunk.Path),
 		Audio:    data,
-		Language: languageHint,
+		Language: asrLanguageHint(languageHint),
 		Timeout:  timeout,
 	})
 	if err != nil {
@@ -499,6 +500,18 @@ func wrapCueText(text string, maxLen, maxLines int) []string {
 		}
 	}
 	return lines
+}
+
+// asrLanguageHint converts a language hint to the ISO 639-1 code
+// Whisper-compatible APIs require. Region and script subtags are dropped, and
+// hints with no two-letter code ("und", "fil") return "" so the model detects
+// the language instead of rejecting the request.
+func asrLanguageHint(hint string) string {
+	primary := lang.PrimaryLanguage(hint)
+	if len(primary) != 2 {
+		return ""
+	}
+	return primary
 }
 
 // normalizeDetectedLanguage maps a Whisper-reported language to an ISO 639-1

@@ -16,6 +16,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/ai/jobrunner"
 	"github.com/Silo-Server/silo-server/internal/ai/llm"
 	aitranslate "github.com/Silo-Server/silo-server/internal/ai/translate"
+	"github.com/Silo-Server/silo-server/internal/lang"
 	"github.com/Silo-Server/silo-server/internal/models"
 	"github.com/Silo-Server/silo-server/internal/playback"
 	"github.com/Silo-Server/silo-server/internal/subtitles"
@@ -822,7 +823,9 @@ func normalizeOptionalLanguageCode(value string) string {
 		return ""
 	}
 	code, err := subtitles.NormalizeLanguageCode(value)
-	if err != nil {
+	if err != nil || lang.PrimaryLanguage(code) == "" {
+		// Undefined ("und") and private-use tags name no language; treat
+		// them as unknown so callers fall back or let the model detect.
 		return ""
 	}
 	return code
