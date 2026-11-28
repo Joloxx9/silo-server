@@ -193,6 +193,11 @@ type Dependencies struct {
 	// show only uploaded and template posters.
 	CollectionPosters CollectionPosterResolver
 
+	// ArtworkEditor backs the admin-only image write routes (POST and DELETE
+	// /Items/{id}/Images/{type}, /Items/{id}/Refresh, /Items/{id}/RemoteImages)
+	// poster managers use. Nil leaves those routes unregistered.
+	ArtworkEditor ArtworkEditor
+
 	// Settings (optional; reads server_settings for watched threshold, etc.)
 	SettingsRepo SettingsReader
 

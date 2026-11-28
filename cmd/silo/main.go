@@ -4425,6 +4425,22 @@ func main() {
 			if deps.CollectionService != nil {
 				compatDeps.CollectionPosters = deps.CollectionService
 			}
+			// Image writes for Jellyfin poster managers go through the native
+			// admin image and collection handlers.
+			if imageSvc, ok := deps.MetadataService.(handlers.ImageService); ok && deps.PluginImageResolver != nil {
+				itemImages := handlers.NewAdminImageHandler(itemRepo, seasonRepo, episodeRepo, &handlers.PoolFolderLookup{Pool: deps.DB}, imageSvc, deps.PluginImageResolver, detailSvc, providerIDRepo)
+				itemImages.EventsHub = deps.EventsHub
+				itemImages.EventBus = deps.EventBus
+				editor := &compatArtworkEditor{items: itemImages, resolver: deps.PluginImageResolver}
+				if deps.CollectionService != nil {
+					collectionArtwork := handlers.NewLibraryCollectionHandler(catalog.NewLibraryCollectionRepository(deps.DB), deps.CollectionService, itemRepo, nil)
+					collectionArtwork.ArtworkStore = deps.Blobs.Assets
+					collectionArtwork.ArtworkResolver = deps.ArtworkResolver
+					collectionArtwork.FrontendFS = deps.FrontendFS
+					editor.collections = collectionArtwork
+				}
+				compatDeps.ArtworkEditor = editor
+			}
 			if watchProviderService != nil {
 				compatDeps.WatchScrobbler = watchProviderService
 			}

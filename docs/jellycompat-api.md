@@ -382,6 +382,27 @@ the primary first, and is empty when the item has no primary backdrop.
 An episode's `ParentThumbImageTag` still names its series' backdrop; the series'
 `Thumb` route serves its landscape thumb when it has one.
 
+### Artwork writes
+
+Poster managers written for Jellyfin, such as PosterFlow, replace artwork
+through these routes. They accept only an admin API key (`sa_…`) and go through
+the native admin image and collection services, so a change is stored, locked
+and published exactly like one made in the admin image picker. A movie or
+series takes `Primary`, `Backdrop` and `Logo`; a season takes `Primary` and
+`Backdrop`; a BoxSet takes `Primary` and `Backdrop`. Episodes and other image
+types answer 400.
+
+| Route | Behavior |
+|---|---|
+| `POST /Items/{id}/Images/{type}[/{index}]` | Uploads the body as the item's image of that type and locks the item's images. The body is base64, as Jellyfin expects; a body that is not base64 is read as the image bytes. JPEG, PNG or WebP, at most 10 MiB. Answers 204. |
+| `DELETE /Items/{id}/Images/{type}[/{index}]` | Silo keeps one image per slot, so this brings back the first non-uploaded image the item's list offers (its local sidecar artwork, else the providers' first choice); 404 when there is none. On a BoxSet it removes the uploaded image, and the poster falls back to the collection's collage. A `Backdrop` index above 0 names nothing and answers 204. |
+| `POST /Items/{id}/Refresh` | 204 without doing anything. Jellyfin clients call it after a delete so the server downloads new images; in Silo the delete already did. Metadata refreshes stay on the native API. |
+| `GET /Items/{id}/RemoteImages` | Jellyfin's `RemoteImageResult` for `Type` (default `Primary`): the providers' images in the picker's order, with full-size public URLs and `StartIndex`/`Limit` paging. Local sidecar files and uploads have no public URL and are left out. BoxSets list nothing. |
+
+A successful write drops the node's cached image URLs for that item, so the next
+untagged image request reads the new artwork; other nodes follow on the item's
+new image tags.
+
 | Routes | Behavior |
 |---|---|
 | `GET /Items/{id}/Ancestors` | Visible episode/season/series/library ancestry. When an item belongs to multiple libraries, chooses its first visible library parent. |

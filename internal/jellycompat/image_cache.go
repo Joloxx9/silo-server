@@ -109,6 +109,24 @@ func (c *ImageCache) RememberSizedUntil(routeID, imageType, imageURL, size strin
 	c.byRoute.put(routeKey, entry)
 }
 
+// ForgetRoute drops every cached image URL of a route, in all types and
+// sizes, after its artwork changed. Tag entries stay: a new image gets a new
+// tag.
+func (c *ImageCache) ForgetRoute(routeID string) {
+	if c == nil || routeID == "" {
+		return
+	}
+	prefix := routeID + "|"
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key, slot := range c.byRoute.entries {
+		if strings.HasPrefix(key, prefix) {
+			c.byRoute.order.Remove(slot.order)
+			delete(c.byRoute.entries, key)
+		}
+	}
+}
+
 // Lookup returns a cached image URL by tag or route using the default compat size bucket.
 func (c *ImageCache) Lookup(routeID, imageType, tag string) (string, bool) {
 	return c.LookupSized(routeID, imageType, tag, "")

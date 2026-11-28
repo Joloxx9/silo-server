@@ -145,6 +145,18 @@ func NewRouter(deps Dependencies) chi.Router {
 			Post("/Library/Media/Updated", autoscanHandler.HandleMediaUpdated)
 		autoscanVirtualFoldersRegistered = true
 	}
+	if deps.ArtworkEditor != nil && adminAPIKeyAuth != nil {
+		// Poster managers written for Jellyfin (PosterFlow and similar)
+		// replace artwork through these routes with an admin API key.
+		artworkEdit := NewArtworkEditHandler(deps.ArtworkEditor, deps.IDCodec, deps.ImageCache)
+		admin := r.With(adminAPIKeyAuth.RequireAdminAPIKey, rateLimit)
+		admin.Post(compatItemImageRoute, artworkEdit.HandleUploadImage)
+		admin.Post(compatItemImageIndexRoute, artworkEdit.HandleUploadImage)
+		admin.Delete(compatItemImageRoute, artworkEdit.HandleDeleteImage)
+		admin.Delete(compatItemImageIndexRoute, artworkEdit.HandleDeleteImage)
+		admin.Post("/Items/{id}/Refresh", artworkEdit.HandleRefresh)
+		admin.Get("/Items/{id}/RemoteImages", artworkEdit.HandleRemoteImages)
+	}
 	userDataHandler := NewUserDataHandler(deps.ContentService, deps.UserDataService, deps.IDCodec, deps.Config)
 	userDataHandler.mapper.ratings = shownRatings
 	if store, ok := deps.PlaybackStore.(*DurableCompatPlaybackStore); ok && store.pool != nil {
