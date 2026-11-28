@@ -88,7 +88,9 @@ func Preview(ctx context.Context, settings Settings) (*Rendered, error) {
 		polishSample(entries)
 	}
 	PrioritizeEntries(entries)
-	return Render(ctx, RenderEnv{Settings: settings, ServerName: "Silo", PublicURL: "https://example.test", Recipient: Recipient{Name: "Viewer"}, Mode: "preview", Now: time.Now(), Preview: true, Recap: sampleRecap(time.Now())}, entries, nil)
+	// Apply the same per-email limits as a real send, so the preview shows them.
+	entries, more := LimitEntries(entries, settings.Delivery)
+	return Render(ctx, RenderEnv{Settings: settings, ServerName: "Silo", PublicURL: "https://example.test", Recipient: Recipient{Name: "Viewer"}, Mode: "preview", Now: time.Now(), Preview: true, MoreCount: more, Recap: sampleRecap(time.Now())}, entries, nil)
 }
 
 // polishSample swaps the sample texts for Polish ones, as the catalog's

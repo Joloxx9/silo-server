@@ -273,10 +273,9 @@ func (s *System) composeNewsletter(ctx context.Context, tx pgx.Tx, k profileKey,
 		return nil, nil, err
 	}
 	newsletter.PrioritizeEntries(entries)
+	// Limits always apply; a burst that is still large after them is compacted.
+	entries, env.MoreCount = newsletter.LimitEntries(entries, c.Delivery)
 	env.Compact = c.Delivery.BurstThreshold > 0 && len(entries) > c.Delivery.BurstThreshold
-	if !env.Compact {
-		entries, env.MoreCount = newsletter.LimitEntries(entries, c.Delivery)
-	}
 	if digest {
 		env.Recap, err = s.newsletterRecap(ctx, tx, k, p, c, since, until)
 		if err != nil {
