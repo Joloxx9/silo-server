@@ -289,7 +289,7 @@ func pairVars(block map[string]any, items []map[string]any, half bool) {
 		for _, item := range items[start:min(start+2, len(items))] {
 			cells = append(cells, map[string]any{
 				"name": item["name"], "url": item["url"], "poster": item["poster"], "year": item["year"],
-				"pick_label": item["pick_short"], "badge": item["badge"],
+				"pick_label": item["pick_short"], "badge": item["badge_short"],
 				"has_ratings": item["has_ratings"], "imdb_rating": item["imdb_rating"],
 				"rt_critic": item["rt_critic"], "rt_critic_fresh": item["rt_critic_fresh"],
 			})
@@ -370,7 +370,7 @@ func designedItem(layout Layout, name, url, poster, backdropBG, year, detail, ov
 		"rt_critic_fresh": false, "rt_audience_fresh": false,
 		"episodes": []map[string]any{}, "has_episodes": false,
 		"pick_label": str(v["pick_label"]),
-		"pick_short": str(v["pick_short"]),
+		"pick_short": str(v["pick_short"]), "badge_short": "",
 	}
 	if layout.ShowYear {
 		item["year"] = year
@@ -410,6 +410,7 @@ func designedShow(s map[string]any, layout Layout) map[string]any {
 		str(s["show_year"]), detail, str(s["show_synopsis"]), s, "show_")
 	// The new episodes are what the email is about, so the badge stays.
 	item["badge"] = joinDot(str(s["episodes_label"]), str(s["episode_range"]))
+	item["badge_short"] = str(s["episode_range"])
 	if eps, ok := s["episodes"].([]map[string]any); ok && layout.ShowEpisodes && len(eps) > 0 {
 		lines := make([]map[string]any, 0, len(eps))
 		for _, ep := range eps {
