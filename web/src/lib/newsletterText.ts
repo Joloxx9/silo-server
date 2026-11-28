@@ -1,0 +1,213 @@
+import { useAppLanguage } from "@/i18n/hooks";
+
+// Fork-only newsletter screens are not in the shared translation catalog, so
+// their Polish text lives here, keyed by the English source. Other languages
+// show English.
+const polish: Record<string, string> = {
+  Newsletter: "Newsletter",
+  "Could not load newsletter settings.": "Nie udało się wczytać ustawień newslettera.",
+  Retry: "Spróbuj ponownie",
+  "Newsletter and new-release emails": "Newsletter i e-maile o nowościach",
+  "Built into Silo. Uses the shared outgoing-mail settings. Each profile chooses whether to subscribe and verifies its own address.":
+    "Wbudowany w Silo. Korzysta ze wspólnych ustawień poczty wychodzącej. Każdy profil sam decyduje o subskrypcji i weryfikuje swój adres.",
+  "Enable newsletters and new-release alerts": "Włącz newslettery i powiadomienia o nowościach",
+  "Pause scheduled delivery": "Wstrzymaj zaplanowaną wysyłkę",
+  Timezone: "Strefa czasowa",
+  Language: "Język",
+  "Daily send time": "Godzina wysyłki dziennej",
+  "Weekly send time": "Godzina wysyłki tygodniowej",
+  "Weekly send day": "Dzień wysyłki tygodniowej",
+  Sunday: "Niedziela",
+  Monday: "Poniedziałek",
+  Tuesday: "Wtorek",
+  Wednesday: "Środa",
+  Thursday: "Czwartek",
+  Friday: "Piątek",
+  Saturday: "Sobota",
+  "Maximum titles per email": "Maksymalna liczba tytułów w e-mailu",
+  Appearance: "Wygląd",
+  "Delivery limits and quiet hours": "Limity wysyłki i godziny ciszy",
+  "Embed artwork": "Osadzaj grafiki",
+  "Quiet hours for instant alerts": "Godziny ciszy dla natychmiastowych powiadomień",
+  "Quiet hours start (0–23)": "Początek godzin ciszy (0–23)",
+  "Quiet hours end (0–23)": "Koniec godzin ciszy (0–23)",
+  "Wait for new titles to settle (minutes)": "Odczekaj, aż nowe tytuły się ustabilizują (minuty)",
+  "Minimum interval between alerts (minutes)": "Minimalny odstęp między powiadomieniami (minuty)",
+  "Alerts per day (0 = unlimited)": "Powiadomień dziennie (0 = bez limitu)",
+  "Maximum age of new titles (hours)": "Maksymalny wiek nowych tytułów (godziny)",
+  "Artwork images per email": "Grafik w jednym e-mailu",
+  "Synopsis length (characters)": "Długość opisu (znaki)",
+  "Compact summaries above this many items (0 = off)":
+    "Skrócone podsumowanie powyżej tylu pozycji (0 = wyłączone)",
+  "Movie limit (0 = overall limit)": "Limit filmów (0 = limit ogólny)",
+  "Series limit (0 = overall limit)": "Limit seriali (0 = limit ogólny)",
+  "Delay between recipients (seconds)": "Odstęp między odbiorcami (sekundy)",
+  "Custom template variables": "Własne zmienne szablonu",
+  "Variable name": "Nazwa zmiennej",
+  "Variable value": "Wartość zmiennej",
+  "Remove variable": "Usuń zmienną",
+  "Add variable": "Dodaj zmienną",
+  "Email templates": "Szablony e-maili",
+  "Existing Email Alerts template variables are supported. Preview uses example titles and does not send email.":
+    "Obsługiwane są zmienne szablonów z wtyczki Email Alerts. Podgląd używa przykładowych tytułów i niczego nie wysyła.",
+  "Use my own HTML template instead of the Appearance layout":
+    "Użyj własnego szablonu HTML zamiast układu z sekcji Wygląd",
+  subject: "Temat",
+  html: "HTML",
+  text: "Wersja tekstowa",
+  "Save newsletter settings": "Zapisz ustawienia newslettera",
+  "Preview email": "Podgląd e-maila",
+  "Preview width": "Szerokość podglądu",
+  Desktop: "Komputer",
+  Phone: "Telefon",
+  "Updating…": "Odświeżanie…",
+  "Newsletter preview": "Podgląd newslettera",
+  "Newsletter settings saved": "Zapisano ustawienia newslettera",
+  "Import Email Alerts plugin": "Import z wtyczki Email Alerts",
+  "Disable the Email Alerts plugin and native newsletter delivery before importing. Settings, recipients and history are archived. Existing native settings and user choices are kept. Only subscribers with a matching verified profile address transfer automatically; other recipients must verify their address and choose delivery in their profile settings. Imported SMTP settings remain disabled until you enable outgoing mail.":
+    "Przed importem wyłącz wtyczkę Email Alerts i wbudowaną wysyłkę newslettera. Ustawienia, odbiorcy i historia trafią do archiwum. Obecne ustawienia i wybory użytkowników zostaną zachowane. Automatycznie przenoszeni są tylko subskrybenci ze zgodnym, zweryfikowanym adresem profilu; pozostali muszą zweryfikować adres i wybrać wysyłkę w ustawieniach profilu. Zaimportowane ustawienia SMTP pozostają wyłączone, dopóki nie włączysz poczty wychodzącej.",
+  "Could not load plugin imports.": "Nie udało się wczytać importów z wtyczki.",
+  "No Email Alerts installation or archive found.":
+    "Nie znaleziono instalacji ani archiwum Email Alerts.",
+  "Review archived subscribers and history": "Przejrzyj zarchiwizowanych subskrybentów i historię",
+  "Import plugin data": "Importuj dane wtyczki",
+  "Disable the plugin first.": "Najpierw wyłącz wtyczkę.",
+  "Could not load the import archive.": "Nie udało się wczytać archiwum importu.",
+  "Archived plugin subscriptions": "Zarchiwizowane subskrypcje wtyczki",
+  Name: "Nazwa",
+  Email: "E-mail",
+  Mode: "Tryb",
+  "Status at import": "Stan w chwili importu",
+  Enabled: "Włączona",
+  Off: "Wyłączone",
+  ", verified": ", zweryfikowany",
+  ", unverified": ", niezweryfikowany",
+  "Plugin send history": "Historia wysyłek wtyczki",
+  Time: "Czas",
+  Recipient: "Odbiorca",
+  Subject: "Temat",
+  Result: "Wynik",
+  "{n} items": "pozycji: {n}",
+  "{a} transferred; {b} need review.": "przeniesiono: {a}; do sprawdzenia: {b}.",
+  "Import saved: {a} subscriptions transferred, {b} recipients need review. Delivery remains off.":
+    "Zapisano import: przeniesiono subskrypcji: {a}, odbiorców do sprawdzenia: {b}. Wysyłka pozostaje wyłączona.",
+  Dark: "Ciemny",
+  Light: "Jasny",
+  Midnight: "Północ",
+  Warm: "Ciepły",
+  "Your week (personal summary)": "Twój tydzień (podsumowanie osobiste)",
+  "New movies": "Nowe filmy",
+  "New episodes and shows": "Nowe odcinki i seriale",
+  "Popular on the server": "Najpopularniejsze na serwerze",
+  "Your own HTML template is on (Email templates below), so the sections and details here do not change the email. Colors and texts still fill its variables.":
+    "Włączony jest własny szablon HTML (Szablony e-maili poniżej), więc sekcje i szczegóły tutaj nie zmieniają e-maila. Kolory i teksty nadal wypełniają jego zmienne.",
+  Colors: "Kolory",
+  Background: "Tło",
+  Cards: "Karty",
+  Text: "Tekst",
+  "Secondary text": "Tekst dodatkowy",
+  Accent: "Akcent",
+  "{label} hex": "{label} (hex)",
+  "Header and footer": "Nagłówek i stopka",
+  "Texts may use variables such as {a} and {b}. Leave a field empty to hide it.":
+    "W tekstach możesz używać zmiennych, np. {a} i {b}. Puste pole ukrywa dany element.",
+  "Logo URL": "Adres URL logo",
+  "Small line above the heading": "Mały napis nad nagłówkiem",
+  Heading: "Nagłówek",
+  Greeting: "Powitanie",
+  Introduction: "Wstęp",
+  "Button label": "Tekst przycisku",
+  Footer: "Stopka",
+  Sections: "Sekcje",
+  "Order them with the arrows. Two half-width sections in a row sit side by side and stack on phones.":
+    "Kolejność zmieniasz strzałkami. Dwie sekcje o połowie szerokości obok siebie stoją w jednym rzędzie, a na telefonie jedna pod drugą.",
+  "Show {name}": "Pokaż: {name}",
+  "Move up": "Przenieś wyżej",
+  "Move down": "Przenieś niżej",
+  Style: "Styl",
+  "List with small posters": "Lista z małymi plakatami",
+  "Poster grid": "Siatka plakatów",
+  "Large cards": "Duże karty",
+  "Items per row": "Pozycji w wierszu",
+  "2 (side by side on phones too)": "2 (obok siebie także na telefonie)",
+  "Posters per row": "Plakatów w wierszu",
+  Width: "Szerokość",
+  "Full width": "Pełna szerokość",
+  "Half width": "Połowa szerokości",
+  "Titles to list": "Liczba tytułów",
+  Details: "Szczegóły",
+  "Date and count of new titles under the heading": "Data i liczba nowych tytułów pod nagłówkiem",
+  "Year after the title": "Rok po tytule",
+  "Genres, runtime and network": "Gatunki, czas trwania i stacja",
+  "IMDb and Rotten Tomatoes ratings": "Oceny IMDb i Rotten Tomatoes",
+  Synopsis: "Opis",
+  "Episode list under each show": "Lista odcinków pod każdym serialem",
+  "Button to open the server": "Przycisk otwierający serwer",
+  "Send a viewing summary when no new titles arrived":
+    "Wysyłaj podsumowanie oglądania, gdy nie ma nowych tytułów",
+  "Nothing arrived in this window and there is no recap, so no email.":
+    "W tym okresie nic nie doszło i nie ma podsumowania, więc nie ma czego wysłać.",
+  "Test email sent to {email}": "Wysłano testowy e-mail na {email}",
+  "Recipients ({n})": "Odbiorcy ({n})",
+  "Profiles with a verified email address. Each profile chooses what it receives in its own notification settings.":
+    "Profile ze zweryfikowanym adresem e-mail. Każdy profil sam wybiera, co dostaje, w swoich ustawieniach powiadomień.",
+  "Could not load recipients.": "Nie udało się wczytać odbiorców.",
+  Profile: "Profil",
+  "New-release alerts": "Powiadomienia o nowościach",
+  "Last email": "Ostatni e-mail",
+  Never: "Nigdy",
+  "No profile has verified an email address yet.":
+    "Żaden profil nie zweryfikował jeszcze adresu e-mail.",
+  "Send a test email": "Wyślij testowy e-mail",
+  "Builds the newsletter one profile would get for the last day or week, from real titles, artwork and that profile's watchlist and history, using the settings on this page even before you save them. Sending a test does not change anyone's schedule.":
+    "Buduje newsletter, jaki dostałby wybrany profil za ostatni dzień lub tydzień: z prawdziwych tytułów, grafik oraz watchlisty i historii tego profilu, według ustawień z tej strony, nawet niezapisanych. Wysłanie testu nie zmienia niczyjego harmonogramu.",
+  "Build it for": "Dla profilu",
+  Me: "Ja",
+  Period: "Okres",
+  Weekly: "Tygodniowy",
+  Daily: "Dzienny",
+  "Send to": "Wyślij na",
+  "Preview with real data": "Podgląd z prawdziwymi danymi",
+  "Send test": "Wyślij test",
+  "Newsletter test preview": "Podgląd testowego newslettera",
+  off: "wyłączone",
+  daily: "codziennie",
+  weekly: "co tydzień",
+  instant: "na bieżąco",
+  "Could not load delivery preferences.": "Nie udało się wczytać ustawień powiadomień.",
+  "Loading delivery preferences…": "Wczytywanie ustawień powiadomień…",
+  "Push preferences": "Powiadomienia push",
+  "Shared across your devices. Each device also needs permission from its operating system.":
+    "Wspólne dla wszystkich Twoich urządzeń. Każde urządzenie potrzebuje też zgody systemu operacyjnego.",
+  "Receive push notifications": "Otrzymuj powiadomienia push",
+  "New episodes of shows you follow": "Nowe odcinki obserwowanych seriali",
+  "Updates to your requests": "Zmiany w Twoich prośbach",
+  "Other notifications": "Inne powiadomienia",
+  "New releases and newsletter": "Nowości i newsletter",
+  "Uses your verified notification email address below. Only titles available to this profile are included.":
+    "Korzysta z Twojego zweryfikowanego adresu e-mail do powiadomień (poniżej). Uwzględniane są tylko tytuły dostępne dla tego profilu.",
+  "Email alerts and newsletters are currently unavailable. Your choices are kept.":
+    "Powiadomienia e-mail i newslettery są teraz niedostępne. Twoje wybory zostają zapisane.",
+  "As new titles arrive": "Gdy pojawiają się nowe tytuły",
+  "Daily summary": "Dzienne podsumowanie",
+  "New episodes": "Nowe odcinki",
+  "My viewing summary": "Moje podsumowanie oglądania",
+  "Popular titles": "Popularne tytuły",
+  "Send times and newsletter design are set by the administrator. You can unsubscribe at any time.":
+    "Godziny wysyłki i wygląd newslettera ustawia administrator. Możesz zrezygnować w każdej chwili.",
+};
+
+export type NewsletterText = (english: string, values?: Record<string, string | number>) => string;
+
+/** Returns a translator that follows the app language. */
+export function useNewsletterText(): NewsletterText {
+  const language = useAppLanguage();
+  const pl = language.toLowerCase().startsWith("pl");
+  return (english, values) => {
+    let text = (pl && polish[english]) || english;
+    for (const [key, value] of Object.entries(values ?? {})) {
+      text = text.replaceAll(`{${key}}`, String(value));
+    }
+    return text;
+  };
+}

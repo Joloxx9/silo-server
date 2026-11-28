@@ -8,10 +8,12 @@ import {
 import { SettingsGroup } from "@/components/settings/SettingsGroup";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { useNewsletterText } from "@/lib/newsletterText";
 
 type Preferences = V2Result<"GET /api/v2/notifications/delivery-preferences">;
 
 export function DeliveryPreferencesSection() {
+  const tx = useNewsletterText();
   const authority = captureNotificationAuthority();
   const scope = notificationScope(authority);
   const key = ["notification-delivery-preferences", scope];
@@ -52,12 +54,12 @@ export function DeliveryPreferencesSection() {
   if (query.isError)
     return (
       <p role="alert">
-        Could not load delivery preferences.{" "}
-        <button onClick={() => void query.refetch()}>Retry</button>
+        {tx("Could not load delivery preferences.")}{" "}
+        <button onClick={() => void query.refetch()}>{tx("Retry")}</button>
       </p>
     );
   const prefs = query.data;
-  if (!prefs) return <p>Loading delivery preferences…</p>;
+  if (!prefs) return <p>{tx("Loading delivery preferences…")}</p>;
   const update = (patch: Partial<Preferences>) => save.mutate({ ...prefs, ...patch });
   const toggle = (
     field:
@@ -72,7 +74,7 @@ export function DeliveryPreferencesSection() {
     label: string,
   ) => (
     <label key={field} className="flex items-center justify-between gap-4">
-      <span>{label}</span>
+      <span>{tx(label)}</span>
       <Switch
         checked={prefs[field]}
         disabled={save.isPending}
@@ -83,8 +85,10 @@ export function DeliveryPreferencesSection() {
   return (
     <>
       <SettingsGroup
-        title="Push preferences"
-        description="Shared across your devices. Each device also needs permission from its operating system."
+        title={tx("Push preferences")}
+        description={tx(
+          "Shared across your devices. Each device also needs permission from its operating system.",
+        )}
       >
         {toggle("push", "Receive push notifications")}
         {toggle("push_episodes", "New episodes of shows you follow")}
@@ -92,38 +96,40 @@ export function DeliveryPreferencesSection() {
         {toggle("push_other", "Other notifications")}
       </SettingsGroup>
       <SettingsGroup
-        title="New releases and newsletter"
-        description="Uses your verified notification email address below. Only titles available to this profile are included."
+        title={tx("New releases and newsletter")}
+        description={tx(
+          "Uses your verified notification email address below. Only titles available to this profile are included.",
+        )}
       >
         {!capability.data.available && (
           <p className="text-muted-foreground">
-            Email alerts and newsletters are currently unavailable. Your choices are kept.
+            {tx("Email alerts and newsletters are currently unavailable. Your choices are kept.")}
           </p>
         )}
         <label className="flex items-center justify-between gap-4">
-          New-release alerts
+          {tx("New-release alerts")}
           <select
             className="bg-background rounded border p-2"
             value={prefs.alerts}
             disabled={save.isPending}
             onChange={(e) => update({ alerts: e.target.value as Preferences["alerts"] })}
           >
-            <option value="off">Off</option>
-            <option value="instant">As new titles arrive</option>
-            <option value="daily">Daily summary</option>
+            <option value="off">{tx("Off")}</option>
+            <option value="instant">{tx("As new titles arrive")}</option>
+            <option value="daily">{tx("Daily summary")}</option>
           </select>
         </label>
         <label className="flex items-center justify-between gap-4">
-          Newsletter
+          {tx("Newsletter")}
           <select
             className="bg-background rounded border p-2"
             value={prefs.newsletter}
             disabled={save.isPending}
             onChange={(e) => update({ newsletter: e.target.value as Preferences["newsletter"] })}
           >
-            <option value="off">Off</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
+            <option value="off">{tx("Off")}</option>
+            <option value="daily">{tx("Daily")}</option>
+            <option value="weekly">{tx("Weekly")}</option>
           </select>
         </label>
         {toggle("movies", "New movies")}
@@ -131,8 +137,9 @@ export function DeliveryPreferencesSection() {
         {toggle("personal", "My viewing summary")}
         {toggle("popular", "Popular titles")}
         <p className="text-muted-foreground text-sm">
-          Send times and newsletter design are set by the administrator. You can unsubscribe at any
-          time.
+          {tx(
+            "Send times and newsletter design are set by the administrator. You can unsubscribe at any time.",
+          )}
         </p>
       </SettingsGroup>
     </>

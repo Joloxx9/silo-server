@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { NewsletterAppearance } from "./NewsletterAppearance";
 import { NewsletterRecipients } from "./NewsletterRecipients";
+import { useNewsletterText } from "@/lib/newsletterText";
 
 type Config = V2Result<"GET /api/v2/admin/notifications/newsletter">;
 
@@ -21,6 +22,7 @@ export function NewsletterAdminSettings() {
 }
 
 function NewsletterAdminForm() {
+  const tx = useNewsletterText();
   const authority = captureNotificationAuthority();
   const query = useQuery({
     queryKey: ["newsletter-settings", notificationScope(authority)],
@@ -65,7 +67,10 @@ function NewsletterAdminForm() {
       void query.refetch();
       void sources.refetch();
       toast.success(
-        `Import saved: ${result.subscriptions} subscriptions transferred, ${result.needs_review} recipients need review. Delivery remains off.`,
+        tx(
+          "Import saved: {a} subscriptions transferred, {b} recipients need review. Delivery remains off.",
+          { a: result.subscriptions, b: result.needs_review },
+        ),
       );
     },
     onError: (e) => toast.error(e.message),
@@ -83,7 +88,7 @@ function NewsletterAdminForm() {
     },
     onSuccess: (result) => {
       setDraft(result);
-      toast.success("Newsletter settings saved");
+      toast.success(tx("Newsletter settings saved"));
     },
     onError: (e) => toast.error(e.message),
   });
@@ -110,9 +115,9 @@ function NewsletterAdminForm() {
   }, [contentKey, showingPreview]);
   if (query.isError)
     return (
-      <SettingsGroup title="Newsletter">
-        <p role="alert">Could not load newsletter settings.</p>
-        <Button onClick={() => void query.refetch()}>Retry</Button>
+      <SettingsGroup title={tx("Newsletter")}>
+        <p role="alert">{tx("Could not load newsletter settings.")}</p>
+        <Button onClick={() => void query.refetch()}>{tx("Retry")}</Button>
       </SettingsGroup>
     );
   if (!config) return null;
@@ -121,19 +126,21 @@ function NewsletterAdminForm() {
   const schedule = config.content.schedule;
   return (
     <SettingsGroup
-      title="Newsletter and new-release emails"
-      description="Built into Silo. Uses the shared outgoing-mail settings. Each profile chooses whether to subscribe and verifies its own address."
+      title={tx("Newsletter and new-release emails")}
+      description={tx(
+        "Built into Silo. Uses the shared outgoing-mail settings. Each profile chooses whether to subscribe and verifies its own address.",
+      )}
     >
       <fieldset disabled={save.isPending || migrate.isPending} className="space-y-4">
         <label className="flex items-center justify-between">
-          Enable newsletters and new-release alerts
+          {tx("Enable newsletters and new-release alerts")}
           <Switch
             checked={config.enabled}
             onCheckedChange={(enabled) => setDraft({ ...config, enabled })}
           />
         </label>
         <label className="flex items-center justify-between">
-          Pause scheduled delivery
+          {tx("Pause scheduled delivery")}
           <Switch
             checked={config.content.delivery.paused}
             onCheckedChange={(paused) =>
@@ -143,7 +150,7 @@ function NewsletterAdminForm() {
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <label>
-            Timezone
+            {tx("Timezone")}
             <Input
               value={schedule.timezone}
               placeholder="Europe/Warsaw"
@@ -151,7 +158,7 @@ function NewsletterAdminForm() {
             />
           </label>
           <label>
-            Language
+            {tx("Language")}
             <select
               className="bg-background block w-full rounded border p-2"
               value={config.content.language}
@@ -162,7 +169,7 @@ function NewsletterAdminForm() {
             </select>
           </label>
           <label>
-            Daily send time
+            {tx("Daily send time")}
             <Input
               type="time"
               value={`${String(schedule.daily_hour).padStart(2, "0")}:${String(schedule.daily_minute).padStart(2, "0")}`}
@@ -173,7 +180,7 @@ function NewsletterAdminForm() {
             />
           </label>
           <label>
-            Weekly send time
+            {tx("Weekly send time")}
             <Input
               type="time"
               value={`${String(schedule.weekly_hour).padStart(2, "0")}:${String(schedule.weekly_minute).padStart(2, "0")}`}
@@ -184,7 +191,7 @@ function NewsletterAdminForm() {
             />
           </label>
           <label>
-            Weekly send day
+            {tx("Weekly send day")}
             <select
               className="bg-background block w-full rounded border p-2"
               value={schedule.weekly_day}
@@ -195,14 +202,14 @@ function NewsletterAdminForm() {
               {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map(
                 (day, i) => (
                   <option key={day} value={i}>
-                    {day}
+                    {tx(day)}
                   </option>
                 ),
               )}
             </select>
           </label>
           <label>
-            Maximum titles per email
+            {tx("Maximum titles per email")}
             <Input
               type="number"
               min={1}
@@ -217,15 +224,15 @@ function NewsletterAdminForm() {
           </label>
         </div>
         <details open className="rounded border p-4">
-          <summary className="cursor-pointer font-medium">Appearance</summary>
+          <summary className="cursor-pointer font-medium">{tx("Appearance")}</summary>
           <div className="mt-4">
             <NewsletterAppearance content={config.content} change={change} />
           </div>
         </details>
         <details>
-          <summary className="cursor-pointer">Delivery limits and quiet hours</summary>
+          <summary className="cursor-pointer">{tx("Delivery limits and quiet hours")}</summary>
           <label className="my-3 flex items-center justify-between">
-            Embed artwork
+            {tx("Embed artwork")}
             <Switch
               checked={config.content.delivery.embed_images}
               onCheckedChange={(embed_images) =>
@@ -234,7 +241,7 @@ function NewsletterAdminForm() {
             />
           </label>
           <label className="my-3 flex items-center justify-between">
-            Quiet hours for instant alerts
+            {tx("Quiet hours for instant alerts")}
             <Switch
               checked={config.content.delivery.quiet_enabled}
               onCheckedChange={(quiet_enabled) =>
@@ -260,7 +267,7 @@ function NewsletterAdminForm() {
               ] as const
             ).map(([field, label, min, max]) => (
               <label key={field}>
-                {label}
+                {tx(label)}
                 <Input
                   type="number"
                   min={min}
@@ -277,11 +284,11 @@ function NewsletterAdminForm() {
           </div>
         </details>
         <details>
-          <summary className="cursor-pointer">Custom template variables</summary>
+          <summary className="cursor-pointer">{tx("Custom template variables")}</summary>
           {config.content.custom_vars.map((variable, i) => (
             <div key={i} className="my-3 flex flex-wrap gap-2">
               <Input
-                aria-label="Variable name"
+                aria-label={tx("Variable name")}
                 value={variable.key}
                 onChange={(e) =>
                   change({
@@ -292,7 +299,7 @@ function NewsletterAdminForm() {
                 }
               />
               <Input
-                aria-label="Variable value"
+                aria-label={tx("Variable value")}
                 value={variable.value}
                 onChange={(e) =>
                   change({
@@ -308,7 +315,7 @@ function NewsletterAdminForm() {
                   change({ custom_vars: config.content.custom_vars.filter((_, n) => n !== i) })
                 }
               >
-                Remove variable
+                {tx("Remove variable")}
               </Button>
             </div>
           ))}
@@ -318,17 +325,18 @@ function NewsletterAdminForm() {
               change({ custom_vars: [...config.content.custom_vars, { key: "", value: "" }] })
             }
           >
-            Add variable
+            {tx("Add variable")}
           </Button>
         </details>
         <details>
-          <summary className="cursor-pointer">Email templates</summary>
+          <summary className="cursor-pointer">{tx("Email templates")}</summary>
           <p className="text-muted-foreground my-3 text-sm">
-            Existing Email Alerts template variables are supported. Preview uses example titles and
-            does not send email.
+            {tx(
+              "Existing Email Alerts template variables are supported. Preview uses example titles and does not send email.",
+            )}
           </p>
           <label className="my-3 flex items-center justify-between gap-4">
-            Use my own HTML template instead of the Appearance layout
+            {tx("Use my own HTML template instead of the Appearance layout")}
             <Switch
               checked={config.content.layout.custom_html}
               onCheckedChange={(custom_html) =>
@@ -337,8 +345,8 @@ function NewsletterAdminForm() {
             />
           </label>
           {(["subject", "html", "text"] as const).map((field) => (
-            <label key={field} className="my-3 block capitalize">
-              {field}
+            <label key={field} className="my-3 block">
+              {tx(field)}
               <textarea
                 className="bg-background mt-1 min-h-28 w-full rounded border p-2 font-mono text-sm disabled:opacity-50"
                 disabled={field === "html" && !config.content.layout.custom_html}
@@ -352,16 +360,17 @@ function NewsletterAdminForm() {
         </details>
         <div className="flex flex-wrap gap-2">
           <Button disabled={save.isPending} onClick={() => save.mutate()}>
-            Save newsletter settings
+            {tx("Save newsletter settings")}
           </Button>
           <Button variant="outline" disabled={render.isPending} onClick={() => render.mutate()}>
-            Preview email
+            {tx("Preview email")}
           </Button>
         </div>
+        <NewsletterRecipients config={config} authority={authority} />
         {preview && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
-              Preview width
+              {tx("Preview width")}
               {(
                 [
                   [680, "Desktop"],
@@ -374,13 +383,13 @@ function NewsletterAdminForm() {
                   variant={previewWidth === width ? "default" : "outline"}
                   onClick={() => setPreviewWidth(width)}
                 >
-                  {label}
+                  {tx(label)}
                 </Button>
               ))}
-              {render.isPending && <span className="text-muted-foreground">Updating…</span>}
+              {render.isPending && <span className="text-muted-foreground">{tx("Updating…")}</span>}
             </div>
             <iframe
-              title="Newsletter preview"
+              title={tx("Newsletter preview")}
               sandbox=""
               srcDoc={preview}
               style={{ maxWidth: previewWidth }}
@@ -388,53 +397,55 @@ function NewsletterAdminForm() {
             />
           </div>
         )}
-        <NewsletterRecipients config={config} authority={authority} />
       </fieldset>
       <details>
-        <summary className="cursor-pointer">Import Email Alerts plugin</summary>
+        <summary className="cursor-pointer">{tx("Import Email Alerts plugin")}</summary>
         <p className="text-muted-foreground my-3 text-sm">
-          Disable the Email Alerts plugin and native newsletter delivery before importing. Settings,
-          recipients and history are archived. Existing native settings and user choices are kept.
-          Only subscribers with a matching verified profile address transfer automatically; other
-          recipients must verify their address and choose delivery in their profile settings.
-          Imported SMTP settings remain disabled until you enable outgoing mail.
+          {tx(
+            "Disable the Email Alerts plugin and native newsletter delivery before importing. Settings, recipients and history are archived. Existing native settings and user choices are kept. Only subscribers with a matching verified profile address transfer automatically; other recipients must verify their address and choose delivery in their profile settings. Imported SMTP settings remain disabled until you enable outgoing mail.",
+          )}
         </p>
-        {sources.isError && <p role="alert">Could not load plugin imports.</p>}
-        {sources.data?.items.length === 0 && <p>No Email Alerts installation or archive found.</p>}
+        {sources.isError && <p role="alert">{tx("Could not load plugin imports.")}</p>}
+        {sources.data?.items.length === 0 && (
+          <p>{tx("No Email Alerts installation or archive found.")}</p>
+        )}
         {sources.data?.items.map((source) => (
           <div key={source.installation_id} className="my-3 flex flex-wrap items-center gap-3">
             <span>Email Alerts {source.version}</span>
             {source.imported ? (
               <Button variant="outline" onClick={() => setArchiveID(source.installation_id)}>
-                Review archived subscribers and history
+                {tx("Review archived subscribers and history")}
               </Button>
             ) : (
               <Button
                 disabled={source.enabled || config.enabled || migrate.isPending || save.isPending}
                 onClick={() => migrate.mutate(source.installation_id)}
               >
-                Import plugin data
+                {tx("Import plugin data")}
               </Button>
             )}
-            {source.enabled && <span>Disable the plugin first.</span>}
+            {source.enabled && <span>{tx("Disable the plugin first.")}</span>}
             {source.result && (
               <span>
-                {source.result.subscriptions} transferred; {source.result.needs_review} need review.
+                {tx("{a} transferred; {b} need review.", {
+                  a: source.result.subscriptions,
+                  b: source.result.needs_review,
+                })}
               </span>
             )}
           </div>
         ))}
-        {archive.isError && <p role="alert">Could not load the import archive.</p>}
+        {archive.isError && <p role="alert">{tx("Could not load the import archive.")}</p>}
         {archive.data && (
           <div className="space-y-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <caption className="text-left">Archived plugin subscriptions</caption>
+              <caption className="text-left">{tx("Archived plugin subscriptions")}</caption>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Mode</th>
-                  <th>Status at import</th>
+                  <th>{tx("Name")}</th>
+                  <th>{tx("Email")}</th>
+                  <th>{tx("Mode")}</th>
+                  <th>{tx("Status at import")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -444,21 +455,21 @@ function NewsletterAdminForm() {
                     <td>{r.email}</td>
                     <td>{r.mode}</td>
                     <td>
-                      {r.enabled ? "Enabled" : "Off"}
-                      {r.verified ? ", verified" : ", unverified"}
+                      {r.enabled ? tx("Enabled") : tx("Off")}
+                      {r.verified ? tx(", verified") : tx(", unverified")}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <table className="w-full text-left text-sm">
-              <caption className="text-left">Plugin send history</caption>
+              <caption className="text-left">{tx("Plugin send history")}</caption>
               <thead>
                 <tr>
-                  <th>Time</th>
-                  <th>Recipient</th>
-                  <th>Subject</th>
-                  <th>Result</th>
+                  <th>{tx("Time")}</th>
+                  <th>{tx("Recipient")}</th>
+                  <th>{tx("Subject")}</th>
+                  <th>{tx("Result")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -467,7 +478,7 @@ function NewsletterAdminForm() {
                     <td>{h.time}</td>
                     <td>{h.recipient}</td>
                     <td>{h.subject}</td>
-                    <td>{h.error || `${h.items} items`}</td>
+                    <td>{h.error || tx("{n} items", { n: h.items })}</td>
                   </tr>
                 ))}
               </tbody>

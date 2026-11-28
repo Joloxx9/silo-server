@@ -3,6 +3,7 @@ import type { V2Result } from "@/api/v2/request";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useNewsletterText } from "@/lib/newsletterText";
 
 type Config = V2Result<"GET /api/v2/admin/notifications/newsletter">;
 type Content = Config["content"];
@@ -61,6 +62,7 @@ export function NewsletterAppearance({
   change: (content: Partial<Content>) => void;
 }) {
   const { theme, layout, recap } = content;
+  const tx = useNewsletterText();
   const setTheme = (patch: Partial<Theme>) => change({ theme: { ...theme, ...patch } });
   const setLayout = (patch: Partial<Layout>) => change({ layout: { ...layout, ...patch } });
   const setSection = (index: number, patch: Partial<Section>) =>
@@ -84,12 +86,13 @@ export function NewsletterAppearance({
     <div className="space-y-6">
       {layout.custom_html && (
         <p className="text-muted-foreground text-sm" role="status">
-          Your own HTML template is on (Email templates below), so the sections and details here do
-          not change the email. Colors and texts still fill its variables.
+          {tx(
+            "Your own HTML template is on (Email templates below), so the sections and details here do not change the email. Colors and texts still fill its variables.",
+          )}
         </p>
       )}
       <div>
-        <h4 className="mb-2 font-medium">Colors</h4>
+        <h4 className="mb-2 font-medium">{tx("Colors")}</h4>
         <div className="mb-3 flex flex-wrap gap-2">
           {Object.entries(themes).map(([name, colors]) => (
             <Button key={name} variant="outline" size="sm" onClick={() => setTheme(colors)}>
@@ -98,7 +101,7 @@ export function NewsletterAppearance({
                 className="mr-2 inline-block size-3 rounded-full border"
                 style={{ background: colors.background_color, borderColor: colors.accent_color }}
               />
-              {name}
+              {tx(name)}
             </Button>
           ))}
         </div>
@@ -113,7 +116,7 @@ export function NewsletterAppearance({
             ] as const
           ).map(([field, label]) => (
             <label key={field} className="text-sm">
-              {label}
+              {tx(label)}
               <span className="mt-1 flex items-center gap-2">
                 <input
                   type="color"
@@ -122,7 +125,7 @@ export function NewsletterAppearance({
                   onChange={(e) => setTheme({ [field]: e.target.value })}
                 />
                 <Input
-                  aria-label={`${label} hex`}
+                  aria-label={tx("{label} hex", { label: tx(label) })}
                   className="font-mono"
                   value={theme[field]}
                   onChange={(e) => setTheme({ [field]: e.target.value })}
@@ -134,14 +137,16 @@ export function NewsletterAppearance({
       </div>
 
       <div>
-        <h4 className="mb-2 font-medium">Header and footer</h4>
+        <h4 className="mb-2 font-medium">{tx("Header and footer")}</h4>
         <p className="text-muted-foreground mb-3 text-sm">
-          Texts may use variables such as {"{{server_name}}"} and {"{{recipient_first_name}}"}.
-          Leave a field empty to hide it.
+          {tx("Texts may use variables such as {a} and {b}. Leave a field empty to hide it.", {
+            a: "{{server_name}}",
+            b: "{{recipient_first_name}}",
+          })}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <label>
-            Logo URL
+            {tx("Logo URL")}
             <Input
               value={theme.logo_url}
               placeholder="https://…/logo.png"
@@ -149,39 +154,39 @@ export function NewsletterAppearance({
             />
           </label>
           <label>
-            Small line above the heading
+            {tx("Small line above the heading")}
             <Input
               value={layout.eyebrow}
               onChange={(e) => setLayout({ eyebrow: e.target.value })}
             />
           </label>
           <label>
-            Heading
+            {tx("Heading")}
             <Input
               value={theme.header_title}
               onChange={(e) => setTheme({ header_title: e.target.value })}
             />
           </label>
           <label>
-            Greeting
+            {tx("Greeting")}
             <Input
               value={layout.greeting}
               onChange={(e) => setLayout({ greeting: e.target.value })}
             />
           </label>
           <label className="sm:col-span-2">
-            Introduction
+            {tx("Introduction")}
             <Input value={theme.intro} onChange={(e) => setTheme({ intro: e.target.value })} />
           </label>
           <label>
-            Button label
+            {tx("Button label")}
             <Input
               value={theme.button_text}
               onChange={(e) => setTheme({ button_text: e.target.value })}
             />
           </label>
           <label>
-            Footer
+            {tx("Footer")}
             <Input
               value={theme.footer_text}
               onChange={(e) => setTheme({ footer_text: e.target.value })}
@@ -191,10 +196,11 @@ export function NewsletterAppearance({
       </div>
 
       <div>
-        <h4 className="mb-2 font-medium">Sections</h4>
+        <h4 className="mb-2 font-medium">{tx("Sections")}</h4>
         <p className="text-muted-foreground mb-3 text-sm">
-          Order them with the arrows. Two half-width sections in a row sit side by side and stack on
-          phones.
+          {tx(
+            "Order them with the arrows. Two half-width sections in a row sit side by side and stack on phones.",
+          )}
         </p>
         <ol className="space-y-2">
           {layout.sections.map((section, i) => {
@@ -203,15 +209,19 @@ export function NewsletterAppearance({
               <li key={section.id} className="rounded border p-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <Switch
-                    aria-label={`Show ${sectionNames[section.id]}`}
+                    aria-label={tx("Show {name}", {
+                      name: tx(sectionNames[section.id] ?? section.id),
+                    })}
                     checked={enabled(section)}
                     onCheckedChange={(value) => setEnabled(i, section, value)}
                   />
-                  <span className="min-w-0 flex-1 font-medium">{sectionNames[section.id]}</span>
+                  <span className="min-w-0 flex-1 font-medium">
+                    {tx(sectionNames[section.id] ?? section.id)}
+                  </span>
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label="Move up"
+                    aria-label={tx("Move up")}
                     disabled={i === 0}
                     onClick={() => move(i, -1)}
                   >
@@ -220,7 +230,7 @@ export function NewsletterAppearance({
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label="Move down"
+                    aria-label={tx("Move down")}
                     disabled={i === layout.sections.length - 1}
                     onClick={() => move(i, 1)}
                   >
@@ -230,34 +240,34 @@ export function NewsletterAppearance({
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   {catalog && (
                     <label className="text-sm">
-                      Style
+                      {tx("Style")}
                       <select
                         className={selectClass}
                         value={section.style}
                         onChange={(e) => setSection(i, { style: e.target.value })}
                       >
-                        <option value="list">List with small posters</option>
-                        <option value="grid">Poster grid</option>
-                        <option value="cards">Large cards</option>
+                        <option value="list">{tx("List with small posters")}</option>
+                        <option value="grid">{tx("Poster grid")}</option>
+                        <option value="cards">{tx("Large cards")}</option>
                       </select>
                     </label>
                   )}
                   {catalog && section.style !== "grid" && (
                     <label className="text-sm">
-                      Items per row
+                      {tx("Items per row")}
                       <select
                         className={selectClass}
                         value={section.per_row ?? 1}
                         onChange={(e) => setSection(i, { per_row: Number(e.target.value) })}
                       >
                         <option value={1}>1</option>
-                        <option value={2}>2 (side by side on phones too)</option>
+                        <option value={2}>{tx("2 (side by side on phones too)")}</option>
                       </select>
                     </label>
                   )}
                   {catalog && section.style === "grid" && (
                     <label className="text-sm">
-                      Posters per row
+                      {tx("Posters per row")}
                       <select
                         className={selectClass}
                         value={section.columns}
@@ -272,19 +282,19 @@ export function NewsletterAppearance({
                     </label>
                   )}
                   <label className="text-sm">
-                    Width
+                    {tx("Width")}
                     <select
                       className={selectClass}
                       value={section.width}
                       onChange={(e) => setSection(i, { width: e.target.value })}
                     >
-                      <option value="full">Full width</option>
-                      <option value="half">Half width</option>
+                      <option value="full">{tx("Full width")}</option>
+                      <option value="half">{tx("Half width")}</option>
                     </select>
                   </label>
                   {section.id === "popular" && (
                     <label className="text-sm">
-                      Titles to list
+                      {tx("Titles to list")}
                       <Input
                         type="number"
                         min={1}
@@ -304,7 +314,7 @@ export function NewsletterAppearance({
       </div>
 
       <div>
-        <h4 className="mb-2 font-medium">Details</h4>
+        <h4 className="mb-2 font-medium">{tx("Details")}</h4>
         <div className="grid gap-x-6 sm:grid-cols-2">
           {(
             [
@@ -318,7 +328,7 @@ export function NewsletterAppearance({
             ] as const
           ).map(([field, label]) => (
             <label key={field} className="my-2 flex items-center justify-between gap-4">
-              {label}
+              {tx(label)}
               <Switch
                 checked={layout[field]}
                 onCheckedChange={(value) => setLayout({ [field]: value })}
@@ -326,7 +336,7 @@ export function NewsletterAppearance({
             </label>
           ))}
           <label className="my-2 flex items-center justify-between gap-4">
-            Send a viewing summary when no new titles arrived
+            {tx("Send a viewing summary when no new titles arrived")}
             <Switch
               checked={recap.weekly_when_empty}
               onCheckedChange={(weekly_when_empty) =>
