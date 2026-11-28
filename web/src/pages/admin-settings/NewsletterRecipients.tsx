@@ -36,6 +36,7 @@ export function NewsletterRecipients({
   const [target, setTarget] = useState("");
   const [email, setEmail] = useState("");
   const [html, setHtml] = useState<string>();
+  const [width, setWidth] = useState(680);
   const run = useMutation({
     mutationFn: async (send: boolean) => {
       requireNotificationAuthority(authority);
@@ -112,12 +113,33 @@ export function NewsletterRecipients({
           </Button>
         </div>
         {html && (
-          <iframe
-            title={tx("Newsletter test preview")}
-            sandbox=""
-            srcDoc={html}
-            className="mt-3 h-[48rem] w-full max-w-[680px] rounded border"
-          />
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm">
+              {tx("Preview width")}
+              {(
+                [
+                  [680, "Desktop"],
+                  [380, "Phone"],
+                ] as const
+              ).map(([w, label]) => (
+                <Button
+                  key={w}
+                  size="sm"
+                  variant={width === w ? "default" : "outline"}
+                  onClick={() => setWidth(w)}
+                >
+                  {tx(label)}
+                </Button>
+              ))}
+            </div>
+            <iframe
+              title={tx("Newsletter test preview")}
+              sandbox=""
+              srcDoc={html}
+              style={{ maxWidth: width }}
+              className="h-[48rem] w-full rounded border"
+            />
+          </div>
         )}
       </details>
       <details open className="rounded border p-4">
