@@ -294,6 +294,9 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 	if req.MetadataLanguage != nil && *req.MetadataLanguage != "" && !validMetadataLanguages[*req.MetadataLanguage] {
 		return LibraryView{}, fieldError("metadata_language", "Invalid metadata_language; must be a valid ISO 639-1 code")
 	}
+	if req.ArtworkLanguage != nil && *req.ArtworkLanguage != "" && !validMetadataLanguages[*req.ArtworkLanguage] {
+		return LibraryView{}, fieldError("artwork_language", "Invalid artwork_language; must be a valid ISO 639-1 code")
+	}
 	if req.ChapterThumbnailsEnabled != nil && *req.ChapterThumbnailsEnabled && h.ArtworkStore == nil {
 		return LibraryView{}, fieldError("chapter_thumbnails_enabled", "Chapter thumbnails require configured artwork storage")
 	}
@@ -325,6 +328,7 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 		Name:                     req.Name,
 		Enabled:                  req.Enabled,
 		MetadataLanguage:         req.MetadataLanguage,
+		ArtworkLanguage:          req.ArtworkLanguage,
 		AutoTranslateMetadata:    req.AutoTranslateMetadata,
 		ChapterThumbnailsEnabled: req.ChapterThumbnailsEnabled,
 		IntroDetectionEnabled:    req.IntroDetectionEnabled,

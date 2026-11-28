@@ -779,10 +779,13 @@ func (s *MetadataService) Process(ctx context.Context, req ProcessRequest) (*Pro
 		}
 	}
 
+	artworkLanguage := s.resolveArtworkLanguage(ctx, req.ContentID, folderID)
+
 	var final ProcessResult
 	for _, language := range languages {
 		langReq := req
 		langReq.Language = language
+		langReq.ArtworkLanguage = artworkLanguage
 		langReq.AdoptLanguage = adoptTarget != "" && strings.EqualFold(language, adoptTarget)
 		result, err := s.processInternal(ctx, langReq, resolveChain)
 		if err != nil {
@@ -915,6 +918,40 @@ func (s *MetadataService) resolveProcessLanguages(ctx context.Context, req Proce
 		}
 	}
 	return []string{"en"}, nil
+}
+
+// resolveArtworkLanguage returns the artwork language of the library the
+// process is scoped to or, for an item-scoped process, the one every library
+// holding the item agrees on. Empty, also when the libraries disagree or a
+// lookup fails, makes artwork follow each pass's metadata language.
+func (s *MetadataService) resolveArtworkLanguage(ctx context.Context, contentID string, folderID int) string {
+	if s.folderRepo == nil {
+		return ""
+	}
+	folderIDs := []int{folderID}
+	if folderID <= 0 {
+		if contentID == "" || s.libraryRepo == nil {
+			return ""
+		}
+		ids, err := s.libraryRepo.GetFolderIDsForItem(ctx, contentID)
+		if err != nil || len(ids) == 0 {
+			return ""
+		}
+		folderIDs = ids
+	}
+	artwork := ""
+	for i, id := range folderIDs {
+		folder, err := s.folderRepo.GetByID(ctx, id)
+		if err != nil || folder == nil {
+			return ""
+		}
+		language := strings.ToLower(strings.TrimSpace(folder.ArtworkLanguage))
+		if i > 0 && language != artwork {
+			return ""
+		}
+		artwork = language
+	}
+	return artwork
 }
 
 func (s *MetadataService) resolveFolderLanguage(ctx context.Context, folderID int) string {
@@ -2213,7 +2250,7 @@ func (s *MetadataService) processInternal(ctx context.Context, req ProcessReques
 		images, err := ip.GetImages(ctx, ImageRequest{
 			ProviderIDs:               accumulatedIDs,
 			ContentType:               contentType,
-			Language:                  req.Language,
+			Language:                  req.imageLanguage(),
 			RepresentativeFilePath:    representativeFilePath,
 			AllGroupFilePaths:         allGroupFilePaths,
 			PrimarySidecarSearchPaths: primarySidecarSearchPaths,
@@ -3154,7 +3191,7 @@ func (s *MetadataService) mergeAndPersist(
 			// So does a poster taken from the video.
 			stored = clearFramePoster(item, existingItem)
 		}
-		applyBestImages(item, images, imageMode, req.Language, fallbackLanguage)
+		applyBestImages(item, images, imageMode, req.imageLanguage(), fallbackLanguage)
 		stored.restoreUnfilled(item)
 		if s.localArtworkUsable() || artworkLocked(item) {
 			// With local art unusable a pending local source is dropped too,
@@ -3255,7 +3292,7 @@ func (s *MetadataService) mergeAndPersist(
 		}
 		loc := buildItemLocalizationRecord(
 			existingLoc, contentID, req.Language, contentType, localizedItemText(fetchedText, accumulator, locked), copiesOf,
-			images, mergeMode, req.Language, fallbackLanguage,
+			images, mergeMode, req.imageLanguage(), fallbackLanguage,
 			isFieldLocked(locked, FieldName),
 			keepStored, req.Mode == ModeIdentify,
 		)

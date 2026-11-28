@@ -30,6 +30,7 @@ type Library struct {
 	Name                       string   `json:"name" example:"Movies"`
 	Enabled                    bool     `json:"enabled" example:"true"`
 	MetadataLanguage           string   `json:"metadata_language" pattern:"^(?:[a-z]{2})?$" doc:"Lowercase ISO 639-1 code metadata is fetched in; empty when an update cleared it, and fetches then use en" example:"en"`
+	ArtworkLanguage            string   `json:"artwork_language" pattern:"^(?:[a-z]{2})?$" doc:"Lowercase ISO 639-1 code posters, logos and other artwork with text are picked in; empty follows metadata_language" example:"en"`
 	AutoTranslateMetadata      bool     `json:"auto_translate_metadata" doc:"Translate descriptions when providers lack the language" example:"false"`
 	ChapterThumbnailsEnabled   bool     `json:"chapter_thumbnails_enabled" example:"false"`
 	ChapterThumbnailsSupported bool     `json:"chapter_thumbnails_supported" doc:"Whether the server can produce chapter thumbnails (public asset storage is configured)" example:"true"`
@@ -73,6 +74,7 @@ type LibraryUpdate struct {
 	Name                     *string   `json:"name,omitempty" nullable:"false" minLength:"1" example:"Movies"`
 	Enabled                  *bool     `json:"enabled,omitempty" nullable:"false" example:"true"`
 	MetadataLanguage         *string   `json:"metadata_language,omitempty" nullable:"false" pattern:"^(?:[a-z]{2})?$" doc:"Lowercase ISO 639-1 code from the supported list; a change queues a quick metadata refresh" example:"en"`
+	ArtworkLanguage          *string   `json:"artwork_language,omitempty" nullable:"false" pattern:"^(?:[a-z]{2})?$" doc:"Lowercase ISO 639-1 code from the supported list that artwork with text is picked in; empty follows metadata_language. Existing artwork changes on the next full metadata refresh" example:"en"`
 	AutoTranslateMetadata    *bool     `json:"auto_translate_metadata,omitempty" nullable:"false" example:"false"`
 	ChapterThumbnailsEnabled *bool     `json:"chapter_thumbnails_enabled,omitempty" nullable:"false" example:"false"`
 	IntroDetectionEnabled    *bool     `json:"intro_detection_enabled,omitempty" nullable:"false" example:"false"`
@@ -1130,6 +1132,7 @@ func (reg *Registry) updateLibrary(ctx context.Context, in *LibraryUpdateInput) 
 		Name:                     in.Body.Name,
 		Enabled:                  in.Body.Enabled,
 		MetadataLanguage:         in.Body.MetadataLanguage,
+		ArtworkLanguage:          in.Body.ArtworkLanguage,
 		AutoTranslateMetadata:    in.Body.AutoTranslateMetadata,
 		ChapterThumbnailsEnabled: in.Body.ChapterThumbnailsEnabled,
 		IntroDetectionEnabled:    in.Body.IntroDetectionEnabled,
@@ -1559,6 +1562,7 @@ func libraryOf(v handlers.LibraryView) Library {
 		Name:                       v.Name,
 		Enabled:                    v.Enabled,
 		MetadataLanguage:           v.MetadataLanguage,
+		ArtworkLanguage:            v.ArtworkLanguage,
 		AutoTranslateMetadata:      v.AutoTranslateMetadata,
 		ChapterThumbnailsEnabled:   v.ChapterThumbnailsEnabled,
 		ChapterThumbnailsSupported: v.ChapterThumbnailsSupported,

@@ -51,6 +51,10 @@ function libraryMetadataLanguages() {
   return languageOptions().filter((lang) => /^[a-z]{2}$/.test(lang.code));
 }
 
+// Radix Select items cannot carry an empty value, so this stands for the
+// empty artwork_language: artwork follows the metadata language.
+const ARTWORK_FOLLOWS_METADATA = "follow";
+
 // Widens a switch's hit area to 44px on a phone without changing how it looks.
 const SWITCH_TOUCH_TARGET =
   "relative max-sm:after:absolute max-sm:after:-inset-x-2 max-sm:after:-inset-y-3.5";
@@ -477,6 +481,36 @@ function BoxSetFields({ form }: { form: LibraryFormController }) {
   );
 }
 
+function ArtworkLanguageField({ form }: { form: LibraryFormController }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>Artwork language</Label>
+      <Select
+        value={form.artworkLanguage || ARTWORK_FOLLOWS_METADATA}
+        onValueChange={(value) =>
+          form.setArtworkLanguage(value === ARTWORK_FOLLOWS_METADATA ? "" : value)
+        }
+      >
+        <SelectTrigger className="w-full data-[size=default]:h-11 sm:w-64 sm:data-[size=default]:h-9">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ARTWORK_FOLLOWS_METADATA}>Same as metadata language</SelectItem>
+          {libraryMetadataLanguages().map((lang) => (
+            <SelectItem key={lang.code} value={lang.code}>
+              {lang.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-muted-foreground text-xs">
+        Posters, logos and banners with text are picked in this language. Existing artwork changes
+        on the next full metadata refresh of the library.
+      </p>
+    </div>
+  );
+}
+
 export function MetadataFields({ form }: { form: LibraryFormController }) {
   const t = useT();
   return (
@@ -499,6 +533,7 @@ export function MetadataFields({ form }: { form: LibraryFormController }) {
           {t("web.admin.common.libraryEditor.metadata.languageHelp")}
         </p>
       </div>
+      {form.library && <ArtworkLanguageField form={form} />}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-0.5">
           <Label htmlFor="auto-translate-metadata">

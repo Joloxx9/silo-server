@@ -43,6 +43,7 @@ export function libraryFromV2(library: LibraryV2): Library {
     name: library.name,
     enabled: library.enabled,
     metadata_language: library.metadata_language,
+    artwork_language: library.artwork_language,
     auto_translate_metadata: library.auto_translate_metadata,
     chapter_thumbnails_enabled: library.chapter_thumbnails_enabled,
     chapter_thumbnails_supported: library.chapter_thumbnails_supported,

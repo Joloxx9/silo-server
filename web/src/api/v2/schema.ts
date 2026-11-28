@@ -30884,6 +30884,11 @@ export interface components {
     };
     Library: {
       /**
+       * @description Lowercase ISO 639-1 code posters, logos and other artwork with text are picked in; empty follows metadata_language
+       * @example en
+       */
+      artwork_language: string;
+      /**
        * @description Translate descriptions when providers lack the language
        * @example false
        */
@@ -31467,6 +31472,11 @@ export interface components {
       total: number;
     };
     LibraryUpdate: {
+      /**
+       * @description Lowercase ISO 639-1 code from the supported list that artwork with text is picked in; empty follows metadata_language. Existing artwork changes on the next full metadata refresh
+       * @example en
+       */
+      artwork_language?: string;
       /** @example false */
       auto_translate_metadata?: boolean;
       /**

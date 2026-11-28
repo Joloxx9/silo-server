@@ -3575,6 +3575,8 @@ export interface Library {
   name: string;
   enabled: boolean;
   metadata_language: string;
+  /** Language posters and other artwork with text are picked in; empty follows metadata_language. Absent from servers without it. */
+  artwork_language?: string;
   auto_translate_metadata: boolean;
   chapter_thumbnails_enabled: boolean;
   chapter_thumbnails_supported: boolean;
@@ -3735,6 +3737,8 @@ export interface CreateLibraryRequest {
   name: string;
   enabled?: boolean;
   metadata_language?: string;
+  /** Update only, and sent only when it changes; createLibrary does not take it. */
+  artwork_language?: string;
   auto_translate_metadata?: boolean;
   chapter_thumbnails_enabled?: boolean;
   intro_detection_enabled?: boolean;

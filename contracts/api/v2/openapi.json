@@ -41760,6 +41760,14 @@
       "Library": {
         "additionalProperties": false,
         "properties": {
+          "artwork_language": {
+            "description": "Lowercase ISO 639-1 code posters, logos and other artwork with text are picked in; empty follows metadata_language",
+            "examples": [
+              "en"
+            ],
+            "pattern": "^(?:[a-z]{2})?$",
+            "type": "string"
+          },
           "auto_translate_metadata": {
             "description": "Translate descriptions when providers lack the language",
             "examples": [
@@ -41934,6 +41942,7 @@
           "name",
           "enabled",
           "metadata_language",
+          "artwork_language",
           "auto_translate_metadata",
           "chapter_thumbnails_enabled",
           "chapter_thumbnails_supported",
@@ -43018,6 +43027,14 @@
       "LibraryUpdate": {
         "additionalProperties": false,
         "properties": {
+          "artwork_language": {
+            "description": "Lowercase ISO 639-1 code from the supported list that artwork with text is picked in; empty follows metadata_language. Existing artwork changes on the next full metadata refresh",
+            "examples": [
+              "en"
+            ],
+            "pattern": "^(?:[a-z]{2})?$",
+            "type": "string"
+          },
           "auto_translate_metadata": {
             "examples": [
               false

@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"strings"
 
 	"github.com/Silo-Server/silo-server/internal/bookid"
 	"github.com/Silo-Server/silo-server/internal/models"
@@ -65,6 +66,10 @@ type ProcessRequest struct {
 	FolderID    string            // Which library folder
 	Language    string            // ISO 639-1 metadata language (resolved from folder)
 	Mode        RefreshMode
+	// ArtworkLanguage is the library's artwork language: posters, logos and
+	// other artwork with text are fetched and picked in it. Empty follows
+	// Language.
+	ArtworkLanguage string
 	// AdoptLanguage makes Language the item's new canonical metadata
 	// language: the base row is rewritten in Language and
 	// default_metadata_language is restamped, instead of routing a
@@ -631,4 +636,12 @@ type EpisodeResult struct {
 	// titleLocal marks a title from the library's own files, which stands
 	// even when it looks like a numbered stand-in.
 	titleLocal bool
+}
+
+// imageLanguage is the language artwork with text is fetched and picked in.
+func (r ProcessRequest) imageLanguage() string {
+	if language := strings.TrimSpace(r.ArtworkLanguage); language != "" {
+		return language
+	}
+	return r.Language
 }

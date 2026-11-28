@@ -247,14 +247,17 @@ type createLibraryRequest struct {
 
 // updateLibraryRequest represents the JSON body for PUT /libraries/{id}.
 type updateLibraryRequest struct {
-	Paths                    *[]string `json:"paths,omitempty"`
-	Type                     *string   `json:"type,omitempty"`
-	Name                     *string   `json:"name,omitempty"`
-	Enabled                  *bool     `json:"enabled,omitempty"`
-	MetadataLanguage         *string   `json:"metadata_language,omitempty"`
-	AutoTranslateMetadata    *bool     `json:"auto_translate_metadata,omitempty"`
-	ChapterThumbnailsEnabled *bool     `json:"chapter_thumbnails_enabled,omitempty"`
-	IntroDetectionEnabled    *bool     `json:"intro_detection_enabled,omitempty"`
+	Paths                 *[]string `json:"paths,omitempty"`
+	Type                  *string   `json:"type,omitempty"`
+	Name                  *string   `json:"name,omitempty"`
+	Enabled               *bool     `json:"enabled,omitempty"`
+	MetadataLanguage      *string   `json:"metadata_language,omitempty"`
+	AutoTranslateMetadata *bool     `json:"auto_translate_metadata,omitempty"`
+	// ArtworkLanguage is set only by the v2 updateLibrary operation; ""
+	// makes artwork follow the metadata language again.
+	ArtworkLanguage          *string `json:"-"`
+	ChapterThumbnailsEnabled *bool   `json:"chapter_thumbnails_enabled,omitempty"`
+	IntroDetectionEnabled    *bool   `json:"intro_detection_enabled,omitempty"`
 	// TrailerKinds is the allow-list of remote video kinds fetched during
 	// metadata refresh (ExtraKind values); empty array disables remote videos.
 	TrailerKinds *[]string `json:"trailer_kinds,omitempty"`
@@ -315,6 +318,8 @@ type libraryResponse struct {
 	// RealtimeMonitoring is read by the v2 library view only; the frozen
 	// /api/v1 response does not carry it.
 	RealtimeMonitoring bool `json:"-"`
+	// ArtworkLanguage is read by the v2 library view only.
+	ArtworkLanguage string `json:"-"`
 	// TrickplayEnabled and TrickplaySupported are read by the v2 library
 	// view only.
 	TrickplayEnabled   bool `json:"-"`
@@ -458,6 +463,7 @@ func toLibraryResponse(f *models.MediaFolder) libraryResponse {
 		ScanWarningMessage:         f.ScanWarningMessage,
 		ScanWarningAt:              f.ScanWarningAt,
 		RealtimeMonitoring:         f.RealtimeMonitoring,
+		ArtworkLanguage:            f.ArtworkLanguage,
 		TrickplayEnabled:           f.TrickplayEnabled,
 		BoxSetsEnabled:             f.BoxSetsEnabled,
 		BoxSetMinMovies:            f.BoxSetMinMovies,

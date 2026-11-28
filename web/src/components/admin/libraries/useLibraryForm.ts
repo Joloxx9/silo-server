@@ -189,6 +189,8 @@ export function useLibraryForm({
   const settingSupport = librarySettingSupport(type);
   const [enabled, setEnabled] = useState(library?.enabled ?? true);
   const [metadataLanguage, setMetadataLanguage] = useState(library?.metadata_language ?? "en");
+  const savedArtworkLanguage = library?.artwork_language ?? "";
+  const [artworkLanguage, setArtworkLanguage] = useState(savedArtworkLanguage);
   const [autoTranslateMetadata, setAutoTranslateMetadata] = useState(
     library?.auto_translate_metadata ?? false,
   );
@@ -355,6 +357,10 @@ export function useLibraryForm({
       trailer_kinds: settingSupport.trailers ? trailerKinds : [],
       realtime_monitoring: realtimeMonitoring,
     };
+    // Sent only when it changes, on an update: createLibrary does not take it.
+    if (library && artworkLanguage !== savedArtworkLanguage) {
+      body.artwork_language = artworkLanguage;
+    }
     // Sent only when it changes: servers without seek previews reject the
     // member, and a web build can reach one during a rolling upgrade.
     const trickplay = settingSupport.trickplay && trickplayEnabled;
@@ -429,6 +435,8 @@ export function useLibraryForm({
     setEnabled,
     metadataLanguage,
     setMetadataLanguage,
+    artworkLanguage,
+    setArtworkLanguage,
     autoTranslateMetadata,
     setAutoTranslateMetadata,
     chapterThumbnailsEnabled,

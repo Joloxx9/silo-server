@@ -21,6 +21,7 @@ type MediaFolder struct {
 	Name                     string
 	Enabled                  bool
 	MetadataLanguage         string // ISO 639-1 code (e.g. "en", "ja")
+	ArtworkLanguage          string // ISO 639-1 code for posters/logos with text; "" follows MetadataLanguage
 	AutoTranslateMetadata    bool   // AI-translate descriptions when providers lack this language
 	ChapterThumbnailsEnabled bool
 	IntroDetectionEnabled    bool
