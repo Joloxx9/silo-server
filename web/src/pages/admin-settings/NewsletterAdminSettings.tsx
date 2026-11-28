@@ -208,20 +208,27 @@ function NewsletterAdminForm() {
               )}
             </select>
           </label>
-          <label>
-            {tx("Maximum titles per email")}
-            <Input
-              type="number"
-              min={1}
-              max={500}
-              value={config.content.delivery.max_items}
-              onChange={(e) =>
-                change({
-                  delivery: { ...config.content.delivery, max_items: Number(e.target.value) },
-                })
-              }
-            />
-          </label>
+          {(
+            [
+              ["max_movies", "Movies per email"],
+              ["max_shows", "Shows per email"],
+            ] as const
+          ).map(([field, label]) => (
+            <label key={field}>
+              {tx(label)}
+              <Input
+                type="number"
+                min={1}
+                max={500}
+                value={config.content.delivery[field]}
+                onChange={(e) =>
+                  change({
+                    delivery: { ...config.content.delivery, [field]: Number(e.target.value) },
+                  })
+                }
+              />
+            </label>
+          ))}
         </div>
         <details open className="rounded border p-4">
           <summary className="cursor-pointer font-medium">{tx("Appearance")}</summary>
@@ -261,8 +268,6 @@ function NewsletterAdminForm() {
                 ["max_images", "Artwork images per email", 0, 150],
                 ["synopsis_length", "Synopsis length (characters)", 0, 10000],
                 ["burst_threshold", "Compact summaries above this many items (0 = off)", 0, 500],
-                ["max_movies", "Movie limit (0 = overall limit)", 0, 500],
-                ["max_shows", "Series limit (0 = overall limit)", 0, 500],
                 ["send_delay_seconds", "Delay between recipients (seconds)", 0, 600],
               ] as const
             ).map(([field, label, min, max]) => (

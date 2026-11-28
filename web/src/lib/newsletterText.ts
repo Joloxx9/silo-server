@@ -4,6 +4,8 @@ import { useAppLanguage } from "@/i18n/hooks";
 // their Polish text lives here, keyed by the English source. Other languages
 // show English.
 const polish: Record<string, string> = {
+  "Movies per email": "Filmów w e-mailu",
+  "Shows per email": "Seriali w e-mailu",
   "Enter an email address to turn on the newsletter.":
     "Wpisz adres e-mail, żeby włączyć newsletter.",
   "Every profile on the server. Give a profile an email address here, for example a household profile that never signs in, and turn its weekly newsletter on. New-release alerts are each profile's own choice in its notification settings. Child profiles cannot receive email.":

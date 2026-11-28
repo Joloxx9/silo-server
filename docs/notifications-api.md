@@ -79,7 +79,7 @@ at-least-once semantics when acceptance succeeds but the final database commit
 is lost. The source read is bounded to the most recent 2,000 events per window;
 template limits and burst compaction apply after access filtering.
 
-The newsletter is weekly: a saved `daily` newsletter choice reads and sends as `weekly`, and daily email is the alerts summary. Tests always build the last week. Movies and episodes the recipient has already watched to the end are left out. Each recipient's titles come first when they matter to that profile: movies
+Each email holds at most `max_movies` movies and `max_shows` shows (1-500, 10 by default); `max_items` is always their sum. The newsletter is weekly: a saved `daily` newsletter choice reads and sends as `weekly`, and daily email is the alerts summary. Tests always build the last week. Movies and episodes the recipient has already watched to the end are left out. Each recipient's titles come first when they matter to that profile: movies
 and shows on its watchlist, and shows it has watched or has progress in
 (Continue Watching). The limits cut the other titles first, and the designed
 layout labels the picks. Titles and synopses use the catalog's localization

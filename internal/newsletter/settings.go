@@ -100,8 +100,9 @@ type Delivery struct {
 	// compact summary (a card per show, no episode lists, no cap) instead of
 	// a long email. 0 turns it off.
 	BurstThreshold int `json:"burst_threshold"`
-	// MaxMovies and MaxShows cap movies and shows in one email separately;
-	// 0 means only MaxItems applies. Anything cut is counted in more_count.
+	// MaxMovies and MaxShows cap movies and shows in one email, 1-500 each,
+	// 10 by default. MaxItems is always their sum. Anything cut is counted in
+	// more_count.
 	MaxMovies int `json:"max_movies"`
 	MaxShows  int `json:"max_shows"`
 	// SendDelaySeconds is the pause between two recipients' emails, for mail
@@ -163,7 +164,9 @@ func defaultSettingsFor(l string) Settings {
 		Schedule: Schedule{DailyHour: 18, WeeklyDay: 5, WeeklyHour: 18, WeeklyDays: 7},
 		Delivery: Delivery{
 			SettleMinutes:     5,
-			MaxItems:          60,
+			MaxItems:          20,
+			MaxMovies:         10,
+			MaxShows:          10,
 			EmbedImages:       true,
 			MaxImages:         40,
 			SynopsisLength:    320,
@@ -258,8 +261,16 @@ func (s *Settings) normalize() {
 		s.Schedule.WeeklyDays = 7
 	}
 	s.Schedule.WeeklyDays = clamp(s.Schedule.WeeklyDays, 1, 60)
-	s.Delivery.MaxMovies = clamp(s.Delivery.MaxMovies, 0, 500)
-	s.Delivery.MaxShows = clamp(s.Delivery.MaxShows, 0, 500)
+	// Movies and shows each have their own limit; the overall one follows.
+	if s.Delivery.MaxMovies <= 0 {
+		s.Delivery.MaxMovies = def.Delivery.MaxMovies
+	}
+	if s.Delivery.MaxShows <= 0 {
+		s.Delivery.MaxShows = def.Delivery.MaxShows
+	}
+	s.Delivery.MaxMovies = clamp(s.Delivery.MaxMovies, 1, 500)
+	s.Delivery.MaxShows = clamp(s.Delivery.MaxShows, 1, 500)
+	s.Delivery.MaxItems = s.Delivery.MaxMovies + s.Delivery.MaxShows
 	s.Delivery.SendDelaySeconds = clamp(s.Delivery.SendDelaySeconds, 0, 600)
 	s.Schedule.WeeklyDay = clamp(s.Schedule.WeeklyDay, 0, 6)
 	cleaned := s.CustomVars[:0]
