@@ -273,16 +273,10 @@ func layoutVars(data map[string]any, l lang, layout Layout, movies, shows []map[
 }
 
 // pairVars puts list or card items two to a row as even cards: poster,
-// label, title, episode badge and ratings, each line at a fixed height and
-// without synopses or episode lists, so every card in the section matches.
-// A line no item in the section uses is left out.
+// label, title, episode range (runtime for a movie) and ratings, each line
+// at a fixed height and without synopses or episode lists, so every card
+// matches, also across movie and show sections side by side.
 func pairVars(block map[string]any, items []map[string]any, half bool) {
-	pick, badge, ratings := false, false, false
-	for _, item := range items {
-		pick = pick || str(item["pick_label"]) != ""
-		badge = badge || str(item["badge"]) != ""
-		ratings = ratings || item["has_ratings"] == true
-	}
 	var rows []map[string]any
 	for start := 0; start < len(items); start += 2 {
 		cells := make([]map[string]any, 0, 2)
@@ -301,7 +295,8 @@ func pairVars(block map[string]any, items []map[string]any, half bool) {
 		rows = append(rows, map[string]any{"cells": cells, "fill": fill})
 	}
 	block["pair_rows"] = rows
-	block["pair_pick_line"], block["pair_badge_line"], block["pair_ratings_line"] = pick, badge, ratings
+	// Every line is always there, so movie and show cards side by side match.
+	block["pair_pick_line"], block["pair_badge_line"], block["pair_ratings_line"] = true, true, true
 	// Cell width inside the 600px email, for posterless placeholders.
 	width := (designedRowWidth-20)/2 - 20
 	title, titleLine, small := 15, 20, 12
@@ -401,6 +396,7 @@ func designedMovie(m map[string]any, layout Layout) map[string]any {
 	if layout.ShowDetail {
 		item["cast"] = str(m["cast"])
 	}
+	item["badge_short"] = str(m["runtime"])
 	return item
 }
 

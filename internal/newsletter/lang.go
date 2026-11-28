@@ -207,7 +207,7 @@ func (l lang) newOn(server string) string {
 func (l lang) pickLabel(pick string, show bool) string {
 	switch {
 	case pick == PickWatchlist && l == langPL:
-		return "Z Twojej listy do obejrzenia"
+		return "Z Twojej watchlisty"
 	case pick == PickWatchlist:
 		return "From your watchlist"
 	case pick == PickWatching && l == langPL && show:
@@ -222,7 +222,7 @@ func (l lang) pickLabel(pick string, show bool) string {
 func (l lang) pickShort(pick string) string {
 	switch {
 	case pick == PickWatchlist && l == langPL:
-		return "Na liście"
+		return "Na watchliście"
 	case pick == PickWatchlist:
 		return "Watchlist"
 	case pick == PickWatching && l == langPL:
