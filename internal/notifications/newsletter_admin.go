@@ -212,6 +212,11 @@ func (s *System) NewsletterTestSend(ctx context.Context, t NewsletterTest) (News
 	env := newsletter.RenderEnv{Settings: t.Settings, ServerName: s.emailBrand.Load(ctx).Name, PublicURL: base,
 		Recipient: newsletter.Recipient{Name: s.lookupProfileName(ctx, t.UserID, t.ProfileID), Email: t.To}, Mode: t.Mode, Now: now,
 		ManageURL: base + "/settings/notifications", Preview: !send}
+	var token string
+	if err = tx.QueryRow(ctx, `SELECT unsubscribe_token FROM notification_email_prefs WHERE user_id=$1 AND profile_id=$2`, t.UserID, t.ProfileID).Scan(&token); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return result, err
+	}
+	env.UnsubscribeURL = channelUnsubscribeURL(base, token, "newsletter")
 	rendered, entries, err := s.composeNewsletter(ctx, tx, k, p, env, true, since, now)
 	if err != nil {
 		return result, err

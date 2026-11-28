@@ -224,7 +224,7 @@ func (s *System) sendNewsletter(ctx context.Context, k profileKey, c NewsletterS
 	}
 	env := newsletter.RenderEnv{Settings: c.Content, ServerName: s.emailBrand.Load(ctx).Name, PublicURL: base,
 		Recipient: newsletter.Recipient{Name: s.lookupProfileName(ctx, k.userID, k.profileID), Email: address}, Mode: mode, Now: now,
-		ManageURL: base + "/settings/notifications", UnsubscribeURL: emailUnsubscribeURL(base, token)}
+		ManageURL: base + "/settings/notifications", UnsubscribeURL: channelUnsubscribeURL(base, token, channel)}
 	rendered, entries, err := s.composeNewsletter(ctx, tx, k, p, env, channel == "newsletter", since, until)
 	if err != nil {
 		return err
@@ -304,4 +304,14 @@ func newsletterMessage(address string, rendered *newsletter.Rendered, unsubscrib
 		msg.Headers = map[string]string{"List-Unsubscribe": "<" + unsubscribeURL + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
 	}
 	return msg
+}
+
+// channelUnsubscribeURL is the unsubscribe link of a newsletter or alert
+// email; following it stops only that channel.
+func channelUnsubscribeURL(base, token, channel string) string {
+	u := emailUnsubscribeURL(base, token)
+	if u == "" {
+		return ""
+	}
+	return u + "&channel=" + channel
 }

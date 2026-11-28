@@ -91,6 +91,16 @@ func (s *System) UnsubscribeEmail(ctx context.Context, token string) (ok bool, e
 	return s.EmailPrefs.UnsubscribeByToken(ctx, token)
 }
 
+// UnsubscribeEmailChannel handles an unsubscribe link from a newsletter or
+// alert email: only that channel switches off. Any other channel name stops
+// all of the profile's notification email, as UnsubscribeEmail does.
+func (s *System) UnsubscribeEmailChannel(ctx context.Context, token, channel string) (ok bool, err error) {
+	if s == nil || s.EmailPrefs == nil || token == "" {
+		return false, nil
+	}
+	return s.EmailPrefs.UnsubscribeChannelByToken(ctx, token, channel)
+}
+
 // composeVerificationEmail renders the address-confirmation message.
 func composeVerificationEmail(brand mail.Brand, profileName, verifyURL string) emailContent {
 	who := "your profile"

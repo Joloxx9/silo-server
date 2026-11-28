@@ -301,6 +301,30 @@ func (r *EmailPrefsRepository) ClearCustomAddress(ctx context.Context, userID in
 	return nil
 }
 
+// UnsubscribeChannelByToken switches off one delivery channel, "newsletter"
+// or "alerts", for the profile that owns the token, and leaves its other
+// email choices alone. ok is false when no row carries the token.
+func (r *EmailPrefsRepository) UnsubscribeChannelByToken(ctx context.Context, token, channel string) (ok bool, err error) {
+	if channel != "newsletter" && channel != "alerts" {
+		return r.UnsubscribeByToken(ctx, token)
+	}
+	var user int
+	var profile string
+	err = r.pool.QueryRow(ctx, `SELECT user_id,profile_id FROM notification_email_prefs WHERE unsubscribe_token=$1 AND unsubscribe_token<>''`, token).Scan(&user, &profile)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("unsubscribe channel: %w", err)
+	}
+	// The channel name is one of the two fixed keys checked above.
+	if _, err = r.pool.Exec(ctx, `UPDATE notification_delivery_preferences SET preferences=preferences || jsonb_build_object($3::text,'off')
+		WHERE user_id=$1 AND profile_id=$2`, user, profile, channel); err != nil {
+		return false, fmt.Errorf("unsubscribe channel: %w", err)
+	}
+	return true, nil
+}
+
 // UnsubscribeByToken switches the matching profile's email mode off. ok is
 // false when no row carries the token.
 func (r *EmailPrefsRepository) UnsubscribeByToken(ctx context.Context, token string) (ok bool, err error) {
