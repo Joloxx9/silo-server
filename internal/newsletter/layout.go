@@ -305,7 +305,9 @@ func pairVars(block map[string]any, items []map[string]any, half bool) {
 		title, titleLine, small = 13, 17, 11
 	}
 	block["pair_width"] = width
-	block["pair_poster_height"] = width * 3 / 2
+	// The frame follows the 2:3 poster at the cell's real width, which runs
+	// a few pixels wider than the estimate above.
+	block["pair_poster_height"] = (width + 8) * 3 / 2
 	block["pair_title_px"], block["pair_title_height"] = title, titleLine*2
 	block["pair_title_line"], block["pair_small_px"] = titleLine, small
 }
