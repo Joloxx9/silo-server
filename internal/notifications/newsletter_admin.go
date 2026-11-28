@@ -102,6 +102,7 @@ func (s *System) NewsletterRecipients(ctx context.Context) ([]NewsletterRecipien
 					return nil, err
 				}
 			}
+			p.weeklyNewsletter()
 			out = append(out, NewsletterRecipient{UserID: a.id, Account: a.name, ProfileID: profile.ID, ProfileName: profile.Name,
 				IsChild: profile.IsChild, IsPrimary: profile.IsPrimary, AccountEmail: a.email, Email: st.email, Newsletter: p.Newsletter, Alerts: p.Alerts, LastSentAt: st.last})
 		}
@@ -174,9 +175,8 @@ var ErrNewsletterTest = errors.New("invalid newsletter test")
 // the recipient's schedule and watermarks stay as they are.
 func (s *System) NewsletterTestSend(ctx context.Context, t NewsletterTest) (NewsletterTestResult, error) {
 	var result NewsletterTestResult
-	if t.Mode != "daily" {
-		t.Mode = "weekly"
-	}
+	// The newsletter is weekly; a test shows the same week a send would.
+	t.Mode = "weekly"
 	send := t.To != ""
 	if send {
 		addr, err := netmail.ParseAddress(t.To)
@@ -207,9 +207,6 @@ func (s *System) NewsletterTestSend(ctx context.Context, t NewsletterTest) (News
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 	now := time.Now()
 	since := now.AddDate(0, 0, -t.Settings.Schedule.WeeklyDays)
-	if t.Mode == "daily" {
-		since = now.AddDate(0, 0, -1)
-	}
 	k := profileKey{userID: t.UserID, profileID: t.ProfileID}
 	env := newsletter.RenderEnv{Settings: t.Settings, ServerName: s.emailBrand.Load(ctx).Name, PublicURL: base,
 		Recipient: newsletter.Recipient{Name: s.lookupProfileName(ctx, t.UserID, t.ProfileID), Email: t.To}, Mode: t.Mode, Now: now,

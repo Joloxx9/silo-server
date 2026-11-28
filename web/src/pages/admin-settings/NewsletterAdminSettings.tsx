@@ -169,7 +169,7 @@ function NewsletterAdminForm() {
             </select>
           </label>
           <label>
-            {tx("Daily send time")}
+            {tx("Daily alert summary time")}
             <Input
               type="time"
               value={`${String(schedule.daily_hour).padStart(2, "0")}:${String(schedule.daily_minute).padStart(2, "0")}`}
@@ -180,7 +180,7 @@ function NewsletterAdminForm() {
             />
           </label>
           <label>
-            {tx("Weekly send time")}
+            {tx("Weekly newsletter time")}
             <Input
               type="time"
               value={`${String(schedule.weekly_hour).padStart(2, "0")}:${String(schedule.weekly_minute).padStart(2, "0")}`}
@@ -191,7 +191,7 @@ function NewsletterAdminForm() {
             />
           </label>
           <label>
-            {tx("Weekly send day")}
+            {tx("Newsletter day")}
             <select
               className="bg-background block w-full rounded border p-2"
               value={schedule.weekly_day}

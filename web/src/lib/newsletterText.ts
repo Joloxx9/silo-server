@@ -4,6 +4,9 @@ import { useAppLanguage } from "@/i18n/hooks";
 // their Polish text lives here, keyed by the English source. Other languages
 // show English.
 const polish: Record<string, string> = {
+  "Daily alert summary time": "Godzina dziennego podsumowania powiadomień",
+  "Weekly newsletter time": "Godzina wysyłki newslettera",
+  "Newsletter day": "Dzień wysyłki newslettera",
   "No address": "Brak adresu",
   "Profiles ({total}), with an address: {n}": "Profile ({total}), z adresem: {n}",
   "Child profiles cannot receive email.": "Profile dziecięce nie mogą dostawać e-maili.",

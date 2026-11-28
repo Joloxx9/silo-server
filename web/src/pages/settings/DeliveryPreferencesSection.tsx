@@ -123,12 +123,11 @@ export function DeliveryPreferencesSection() {
           {tx("Newsletter")}
           <select
             className="bg-background rounded border p-2"
-            value={prefs.newsletter}
+            value={prefs.newsletter === "daily" ? "weekly" : prefs.newsletter}
             disabled={save.isPending}
             onChange={(e) => update({ newsletter: e.target.value as Preferences["newsletter"] })}
           >
             <option value="off">{tx("Off")}</option>
-            <option value="daily">{tx("Daily")}</option>
             <option value="weekly">{tx("Weekly")}</option>
           </select>
         </label>

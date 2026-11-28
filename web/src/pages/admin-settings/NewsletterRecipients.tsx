@@ -34,7 +34,6 @@ export function NewsletterRecipients({
   });
   // "" means the signed-in profile; otherwise "<user_id>:<profile_id>".
   const [target, setTarget] = useState("");
-  const [mode, setMode] = useState<"weekly" | "daily">("weekly");
   const [email, setEmail] = useState("");
   const [html, setHtml] = useState<string>();
   const run = useMutation({
@@ -44,7 +43,7 @@ export function NewsletterRecipients({
       const result = await v2("POST /api/v2/admin/notifications/newsletter/test", {
         body: {
           settings: config,
-          mode,
+          mode: "weekly",
           ...(target ? { user_id: Number(user), profile_id: profile.join(":") } : {}),
           ...(send ? { email: email.trim() } : {}),
         },
@@ -94,17 +93,6 @@ export function NewsletterRecipients({
                   {r.email ? ` (${r.email})` : ""}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {tx("Period")}
-            <select
-              className={selectClass}
-              value={mode}
-              onChange={(e) => setMode(e.target.value as "weekly" | "daily")}
-            >
-              <option value="weekly">{tx("Weekly")}</option>
-              <option value="daily">{tx("Daily")}</option>
             </select>
           </label>
           <label className="flex min-w-60 flex-1 flex-col gap-1 text-sm">
@@ -196,7 +184,9 @@ function RecipientRow({
     onError: (e) => toast.error(e.message),
   });
   const noEmail = !email.trim() || r.is_child;
-  const [open, setOpen] = useState(() => rememberedOpen(r) ?? ((!!r.email || r.is_primary) && !r.is_child));
+  const [open, setOpen] = useState(
+    () => rememberedOpen(r) ?? ((!!r.email || r.is_primary) && !r.is_child),
+  );
   const summary = r.is_child
     ? tx("Child profile")
     : r.email
@@ -241,7 +231,6 @@ function RecipientRow({
             onChange={(e) => setNewsletter(e.target.value as Recipient["newsletter"])}
           >
             <option value="off">{tx("off")}</option>
-            <option value="daily">{tx("daily")}</option>
             <option value="weekly">{tx("weekly")}</option>
           </select>
         </label>

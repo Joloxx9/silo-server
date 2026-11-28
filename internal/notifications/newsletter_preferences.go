@@ -40,6 +40,14 @@ func (p DeliveryPreferences) valid() bool {
 		(p.Newsletter == "off" || p.Newsletter == "daily" || p.Newsletter == "weekly")
 }
 
+// weeklyNewsletter folds the retired daily newsletter into the weekly one:
+// the newsletter is a weekly digest, and daily mail is the alerts summary.
+func (p *DeliveryPreferences) weeklyNewsletter() {
+	if p.Newsletter == "daily" {
+		p.Newsletter = "weekly"
+	}
+}
+
 func (p DeliveryPreferences) allowsPush(kind string) bool {
 	if !p.Push {
 		return false
@@ -65,6 +73,7 @@ func (s *System) DeliveryPreferences(ctx context.Context, user int, profile stri
 		return p, err
 	}
 	err = json.Unmarshal(raw, &p)
+	p.weeklyNewsletter()
 	return p, err
 }
 
@@ -72,6 +81,7 @@ func (s *System) SetDeliveryPreferences(ctx context.Context, user int, profile s
 	if !p.valid() {
 		return ErrDeliveryPreferences
 	}
+	p.weeklyNewsletter()
 	raw, err := json.Marshal(p)
 	if err != nil {
 		return err

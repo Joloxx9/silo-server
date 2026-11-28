@@ -145,6 +145,7 @@ func (s *System) sendNewsletter(ctx context.Context, k profileKey, c NewsletterS
 	if err = json.Unmarshal(raw, &p); err != nil {
 		return err
 	}
+	p.weeklyNewsletter()
 	now := time.Now()
 	if !channelRetryEligible(now, attempt, failures) {
 		return nil
