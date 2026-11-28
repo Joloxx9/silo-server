@@ -73,7 +73,7 @@ type NewsletterTestInput struct {
 		Settings  NewsletterAdminSettings `json:"settings"`
 		UserID    int                     `json:"user_id,omitempty" doc:"Account of the profile whose newsletter is built; defaults to the caller."`
 		ProfileID string                  `json:"profile_id,omitempty" doc:"Profile whose catalog access and history the newsletter uses; defaults to the caller's profile."`
-		Mode      string                  `json:"mode" enum:"daily,weekly"`
+		Mode      string                  `json:"mode" enum:"daily,weekly" doc:"weekly builds the newsletter for the last week; daily builds the daily new-release alert summary for the last day."`
 		Email     string                  `json:"email,omitempty" doc:"Send the test here. Empty renders the email without sending it."`
 	}
 }

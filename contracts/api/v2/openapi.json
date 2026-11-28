@@ -46041,6 +46041,7 @@
             "type": "string"
           },
           "mode": {
+            "description": "weekly builds the newsletter for the last week; daily builds the daily new-release alert summary for the last day.",
             "enum": [
               "daily",
               "weekly"

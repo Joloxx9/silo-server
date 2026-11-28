@@ -37,6 +37,7 @@ export function NewsletterRecipients({
   const [email, setEmail] = useState("");
   const [html, setHtml] = useState<string>();
   const [width, setWidth] = useState(680);
+  const [kind, setKind] = useState<"weekly" | "daily">("weekly");
   const run = useMutation({
     mutationFn: async (send: boolean) => {
       requireNotificationAuthority(authority);
@@ -44,7 +45,7 @@ export function NewsletterRecipients({
       const result = await v2("POST /api/v2/admin/notifications/newsletter/test", {
         body: {
           settings: config,
-          mode: "weekly",
+          mode: kind,
           ...(target ? { user_id: Number(user), profile_id: profile.join(":") } : {}),
           ...(send ? { email: email.trim() } : {}),
         },
@@ -94,6 +95,17 @@ export function NewsletterRecipients({
                   {r.email ? ` (${r.email})` : ""}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            {tx("Email type")}
+            <select
+              className={selectClass}
+              value={kind}
+              onChange={(e) => setKind(e.target.value as "weekly" | "daily")}
+            >
+              <option value="weekly">{tx("Weekly newsletter")}</option>
+              <option value="daily">{tx("Daily new-release summary")}</option>
             </select>
           </label>
           <label className="flex min-w-60 flex-1 flex-col gap-1 text-sm">

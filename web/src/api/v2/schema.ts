@@ -32777,7 +32777,10 @@ export interface components {
     NewsletterTestInputBody: {
       /** @description Send the test here. Empty renders the email without sending it. */
       email?: string;
-      /** @enum {string} */
+      /**
+       * @description weekly builds the newsletter for the last week; daily builds the daily new-release alert summary for the last day.
+       * @enum {string}
+       */
       mode: "daily" | "weekly";
       /** @description Profile whose catalog access and history the newsletter uses; defaults to the caller's profile. */
       profile_id?: string;

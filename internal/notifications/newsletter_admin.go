@@ -159,8 +159,10 @@ type NewsletterTest struct {
 	Settings  newsletter.Settings // the admin's draft, saved or not
 	UserID    int
 	ProfileID string
-	Mode      string // daily or weekly; it sets the window and the recap
-	To        string // address to send to; empty renders without sending
+	// Mode is "weekly" for the newsletter (last week, with the recap) or
+	// "daily" for the daily new-release alert summary (last day, no recap).
+	Mode string
+	To   string // address to send to; empty renders without sending
 }
 
 type NewsletterTestResult struct {
@@ -176,8 +178,10 @@ var ErrNewsletterTest = errors.New("invalid newsletter test")
 // the recipient's schedule and watermarks stay as they are.
 func (s *System) NewsletterTestSend(ctx context.Context, t NewsletterTest) (NewsletterTestResult, error) {
 	var result NewsletterTestResult
-	// The newsletter is weekly; a test shows the same week a send would.
-	t.Mode = "weekly"
+	if t.Mode != "daily" {
+		t.Mode = "weekly"
+	}
+	digest := t.Mode == "weekly"
 	send := t.To != ""
 	if send {
 		addr, err := netmail.ParseAddress(t.To)
@@ -208,6 +212,10 @@ func (s *System) NewsletterTestSend(ctx context.Context, t NewsletterTest) (News
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 	now := time.Now()
 	since := now.AddDate(0, 0, -t.Settings.Schedule.WeeklyDays)
+	channel := "newsletter"
+	if !digest {
+		since, channel = now.AddDate(0, 0, -1), "alerts"
+	}
 	k := profileKey{userID: t.UserID, profileID: t.ProfileID}
 	env := newsletter.RenderEnv{Settings: t.Settings, ServerName: s.emailBrand.Load(ctx).Name, PublicURL: base,
 		Recipient: newsletter.Recipient{Name: s.lookupProfileName(ctx, t.UserID, t.ProfileID), Email: t.To}, Mode: t.Mode, Now: now,
@@ -216,8 +224,8 @@ func (s *System) NewsletterTestSend(ctx context.Context, t NewsletterTest) (News
 	if err = tx.QueryRow(ctx, `SELECT unsubscribe_token FROM notification_email_prefs WHERE user_id=$1 AND profile_id=$2`, t.UserID, t.ProfileID).Scan(&token); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return result, err
 	}
-	env.UnsubscribeURL = channelUnsubscribeURL(base, token, "newsletter")
-	rendered, entries, err := s.composeNewsletter(ctx, tx, k, p, env, true, since, now)
+	env.UnsubscribeURL = channelUnsubscribeURL(base, token, channel)
+	rendered, entries, err := s.composeNewsletter(ctx, tx, k, p, env, digest, since, now)
 	if err != nil {
 		return result, err
 	}
