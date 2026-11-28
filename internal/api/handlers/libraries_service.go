@@ -383,9 +383,12 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 	if languageChanged {
 		h.wakeMetadataMatcher(ctx, folder.ID)
 	}
-	// A changed artwork language re-picks every item's artwork, so it needs
+	// Setting the artwork language re-picks every item's artwork, so it needs
 	// the full refresh: the quick one only lists items with something missing.
-	artworkChanged := !strings.EqualFold(strings.TrimSpace(oldFolder.ArtworkLanguage), strings.TrimSpace(folder.ArtworkLanguage))
+	// The editor sends the member only when the admin changed the choice, so
+	// a save queues the refresh even when the stored value already matched,
+	// for example one saved by a build that did not queue it.
+	artworkChanged := req.ArtworkLanguage != nil
 	refreshMode, refreshReason := adminjob.LibraryRefreshModeQuick, "Queued metadata refresh after library language change"
 	if artworkChanged {
 		refreshMode, refreshReason = adminjob.LibraryRefreshModeFull, "Queued metadata refresh after library artwork language change"

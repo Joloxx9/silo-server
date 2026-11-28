@@ -74,7 +74,7 @@ type LibraryUpdate struct {
 	Name                     *string   `json:"name,omitempty" nullable:"false" minLength:"1" example:"Movies"`
 	Enabled                  *bool     `json:"enabled,omitempty" nullable:"false" example:"true"`
 	MetadataLanguage         *string   `json:"metadata_language,omitempty" nullable:"false" pattern:"^(?:[a-z]{2})?$" doc:"Lowercase ISO 639-1 code from the supported list; a change queues a quick metadata refresh" example:"en"`
-	ArtworkLanguage          *string   `json:"artwork_language,omitempty" nullable:"false" pattern:"^(?:[a-z]{2})?$" doc:"Lowercase ISO 639-1 code from the supported list that artwork with text is picked in; empty follows metadata_language. A change queues a full metadata refresh that re-picks the artwork" example:"en"`
+	ArtworkLanguage          *string   `json:"artwork_language,omitempty" nullable:"false" pattern:"^(?:[a-z]{2})?$" doc:"Lowercase ISO 639-1 code from the supported list that artwork with text is picked in; empty follows metadata_language. Sending it queues a full metadata refresh that re-picks the artwork" example:"en"`
 	AutoTranslateMetadata    *bool     `json:"auto_translate_metadata,omitempty" nullable:"false" example:"false"`
 	ChapterThumbnailsEnabled *bool     `json:"chapter_thumbnails_enabled,omitempty" nullable:"false" example:"false"`
 	IntroDetectionEnabled    *bool     `json:"intro_detection_enabled,omitempty" nullable:"false" example:"false"`
