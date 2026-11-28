@@ -4,6 +4,7 @@ import { useAppLanguage } from "@/i18n/hooks";
 // their Polish text lives here, keyed by the English source. Other languages
 // show English.
 const polish: Record<string, string> = {
+  "No address": "Brak adresu",
   "Profiles ({total}), with an address: {n}": "Profile ({total}), z adresem: {n}",
   "Child profiles cannot receive email.": "Profile dziecięce nie mogą dostawać e-maili.",
   "Enter an email address to turn on the newsletter and alerts.":

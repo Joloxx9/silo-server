@@ -196,18 +196,32 @@ function RecipientRow({
     onError: (e) => toast.error(e.message),
   });
   const noEmail = !email.trim() || r.is_child;
+  const [open, setOpen] = useState(() => rememberedOpen(r) ?? ((!!r.email || r.is_primary) && !r.is_child));
+  const summary = r.is_child
+    ? tx("Child profile")
+    : r.email
+      ? `${r.email} · ${tx("Newsletter")}: ${tx(r.newsletter)} · ${tx("New-release alerts")}: ${tx(r.alerts)}`
+      : tx("No address");
   return (
-    <div className="rounded border p-3">
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-2 text-sm">
+    <details
+      className="rounded border p-3"
+      open={open}
+      onToggle={(e) => {
+        const next = e.currentTarget.open;
+        setOpen(next);
+        rememberOpen(r, next);
+      }}
+    >
+      <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2 text-sm">
         <span className="font-medium">{r.profile_name || r.profile_id}</span>
         {r.account && <span className="text-muted-foreground">{r.account}</span>}
-        {r.is_child && <span className="text-muted-foreground">{tx("Child profile")}</span>}
+        <span className="text-muted-foreground min-w-0 truncate">{summary}</span>
         <span className="text-muted-foreground ms-auto">
           {tx("Last email")}:{" "}
           {r.last_sent_at ? new Date(r.last_sent_at).toLocaleString() : tx("Never")}
         </span>
-      </div>
-      <div className="flex flex-wrap items-end gap-2">
+      </summary>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
         <label className="flex min-w-56 flex-1 flex-col gap-1 text-sm">
           {tx("Email")}
           <Input
@@ -264,6 +278,29 @@ function RecipientRow({
           {tx("Suggested from the account's sign-in address. Press Save to use it.")}
         </p>
       )}
-    </div>
+    </details>
   );
+}
+
+// Which profile rows the admin collapsed or expanded, per browser. A missing
+// or blocked store falls back to the default.
+const openKey = "silo.newsletter.recipientOpen";
+
+function rememberedOpen(r: Recipient): boolean | undefined {
+  try {
+    const saved = JSON.parse(localStorage.getItem(openKey) ?? "{}") as Record<string, boolean>;
+    return saved[`${r.user_id}:${r.profile_id}`];
+  } catch {
+    return undefined;
+  }
+}
+
+function rememberOpen(r: Recipient, open: boolean) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(openKey) ?? "{}") as Record<string, boolean>;
+    saved[`${r.user_id}:${r.profile_id}`] = open;
+    localStorage.setItem(openKey, JSON.stringify(saved));
+  } catch {
+    // Remembering is a convenience; the row still works without it.
+  }
 }
