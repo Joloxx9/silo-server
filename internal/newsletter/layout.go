@@ -242,7 +242,7 @@ func layoutVars(data map[string]any, l lang, layout Layout, movies, shows []map[
 			block["columns"] = s.Columns
 			if s.Style != StyleGrid && s.PerRow == 2 {
 				block["is_pairs"] = true
-				block["pair_rows"] = pairRows(items)
+				pairVars(block, items, s.Width == "half")
 				break
 			}
 			block["is_"+s.Style] = true
@@ -272,19 +272,27 @@ func layoutVars(data map[string]any, l lang, layout Layout, movies, shows []map[
 	data["layout_rows"] = rows
 }
 
-// pairRows puts list or card items two to a row, with a short synopsis so
-// the half-width cards stay even.
-func pairRows(items []map[string]any) []map[string]any {
+// pairVars puts list or card items two to a row as even cards: poster,
+// label, title, episode badge and ratings, each line at a fixed height and
+// without synopses or episode lists, so every card in the section matches.
+// A line no item in the section uses is left out.
+func pairVars(block map[string]any, items []map[string]any, half bool) {
+	pick, badge, ratings := false, false, false
+	for _, item := range items {
+		pick = pick || str(item["pick_label"]) != ""
+		badge = badge || str(item["badge"]) != ""
+		ratings = ratings || item["has_ratings"] == true
+	}
 	var rows []map[string]any
 	for start := 0; start < len(items); start += 2 {
 		cells := make([]map[string]any, 0, 2)
 		for _, item := range items[start:min(start+2, len(items))] {
-			cell := map[string]any{}
-			for k, v := range item {
-				cell[k] = v
-			}
-			cell["overview"] = truncate(str(item["overview"]), 140)
-			cells = append(cells, cell)
+			cells = append(cells, map[string]any{
+				"name": item["name"], "url": item["url"], "poster": item["poster"], "year": item["year"],
+				"pick_label": item["pick_short"], "badge": item["badge"],
+				"has_ratings": item["has_ratings"], "imdb_rating": item["imdb_rating"],
+				"rt_critic": item["rt_critic"], "rt_critic_fresh": item["rt_critic_fresh"],
+			})
 		}
 		fill := []map[string]any{}
 		if len(cells) == 1 {
@@ -292,7 +300,19 @@ func pairRows(items []map[string]any) []map[string]any {
 		}
 		rows = append(rows, map[string]any{"cells": cells, "fill": fill})
 	}
-	return rows
+	block["pair_rows"] = rows
+	block["pair_pick_line"], block["pair_badge_line"], block["pair_ratings_line"] = pick, badge, ratings
+	// Cell width inside the 600px email, for posterless placeholders.
+	width := (designedRowWidth-20)/2 - 20
+	title, titleLine, small := 15, 20, 12
+	if half {
+		width = ((designedRowWidth-12)/2-20)/2 - 20
+		title, titleLine, small = 13, 17, 11
+	}
+	block["pair_width"] = width
+	block["pair_poster_height"] = width * 3 / 2
+	block["pair_title_px"], block["pair_title_height"] = title, titleLine*2
+	block["pair_title_line"], block["pair_small_px"] = titleLine, small
 }
 
 // gridVars splits items into poster rows sized for the block's width.
@@ -350,6 +370,7 @@ func designedItem(layout Layout, name, url, poster, backdropBG, year, detail, ov
 		"rt_critic_fresh": false, "rt_audience_fresh": false,
 		"episodes": []map[string]any{}, "has_episodes": false,
 		"pick_label": str(v["pick_label"]),
+		"pick_short": str(v["pick_short"]),
 	}
 	if layout.ShowYear {
 		item["year"] = year

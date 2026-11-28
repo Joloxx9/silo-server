@@ -439,6 +439,7 @@ func itemVars(env RenderEnv, e Entry, img func(string) string, loc *time.Locatio
 		"has_backdrop":    false,
 		"pick":            e.Pick,
 		"pick_label":      l.pickLabel(e.Pick, c.Type == "episode"),
+		"pick_short":      l.pickShort(e.Pick),
 		"is_pick":         e.Pick != "",
 	}
 	if c.Type == "episode" {
@@ -557,6 +558,7 @@ func showVars(env RenderEnv, e Entry, img func(string) string) map[string]any {
 		"show_backdrop": "",
 		"pick":          e.Pick,
 		"pick_label":    lang(env.Settings.Language).pickLabel(e.Pick, true),
+		"pick_short":    lang(env.Settings.Language).pickShort(e.Pick),
 		"is_pick":       e.Pick != "",
 	}
 	if e.Series != nil {

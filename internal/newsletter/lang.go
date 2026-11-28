@@ -217,3 +217,18 @@ func (l lang) pickLabel(pick string, show bool) string {
 	}
 	return ""
 }
+
+// pickShort is pickLabel for narrow cards, short enough for one line.
+func (l lang) pickShort(pick string) string {
+	switch {
+	case pick == PickWatchlist && l == langPL:
+		return "Na liście"
+	case pick == PickWatchlist:
+		return "Watchlist"
+	case pick == PickWatching && l == langPL:
+		return "Oglądasz"
+	case pick == PickWatching:
+		return "Watching"
+	}
+	return ""
+}

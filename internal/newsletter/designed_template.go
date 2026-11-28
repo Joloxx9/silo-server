@@ -95,15 +95,14 @@ const designedHTMLTemplate = `<!doctype html>
 <tr>
   {{#cells}}
   <td width="50%" valign="top" style="padding:0 5px 10px 5px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{{card_color}};border-radius:14px;">
-    <tr><td style="padding:10px;">
-      {{#poster}}{{#url}}<a href="{{url}}">{{/url}}<img src="{{poster}}" width="270" alt="" style="display:block;width:100%;height:auto;border-radius:10px;border:0;">{{#url}}</a>{{/url}}{{/poster}}
-      {{#pick_label}}<div style="margin-top:10px;"><span style="display:inline-block;padding:2px 8px;border-radius:999px;background:{{accent_color}};color:{{accent_text_color}};font-size:11px;font-weight:700;">{{pick_label}}</span></div>{{/pick_label}}
-      <div style="font-size:15px;font-weight:700;line-height:1.3;margin-top:8px;">{{#url}}<a href="{{url}}" style="color:{{text_color}};text-decoration:none;">{{/url}}{{name}}{{#url}}</a>{{/url}}{{#year}} <span style="color:{{muted_color}};font-weight:400;">({{year}})</span>{{/year}}</div>
-      {{#badge}}<div style="font-size:12px;color:{{accent_color}};font-weight:600;margin-top:4px;">{{badge}}</div>{{/badge}}
-      {{#detail}}<div style="font-size:12px;color:{{muted_color}};margin-top:4px;">{{detail}}</div>{{/detail}}
-      {{#has_ratings}}<div style="font-size:12px;margin-top:5px;">{{#imdb_rating}}<span style="background:#f5c518;color:#000000;font-weight:700;border-radius:4px;padding:0 4px;">IMDb</span> {{imdb_rating}} {{/imdb_rating}}{{#rt_critic}}{{#rt_critic_fresh}}🍅{{/rt_critic_fresh}}{{^rt_critic_fresh}}🤢{{/rt_critic_fresh}} {{rt_critic}}% {{/rt_critic}}</div>{{/has_ratings}}
-      {{#overview}}<div style="font-size:12px;line-height:1.45;color:{{muted_color}};margin-top:6px;">{{overview}}</div>{{/overview}}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{{card_color}};border-radius:12px;">
+    <tr><td style="padding:8px;">
+      {{#poster}}{{#url}}<a href="{{url}}">{{/url}}<img src="{{poster}}" width="{{pair_width}}" alt="" style="display:block;width:100%;height:auto;aspect-ratio:2/3;object-fit:cover;border-radius:8px;border:0;">{{#url}}</a>{{/url}}{{/poster}}
+      {{^poster}}<div style="height:{{pair_poster_height}}px;border-radius:8px;background:{{background_color}};"></div>{{/poster}}
+      {{#pair_pick_line}}<div style="height:20px;overflow:hidden;margin-top:8px;">{{#pick_label}}<span style="display:inline-block;padding:1px 7px;border-radius:999px;background:{{accent_color}};color:{{accent_text_color}};font-size:10px;line-height:16px;font-weight:700;white-space:nowrap;">{{pick_label}}</span>{{/pick_label}}</div>{{/pair_pick_line}}
+      <div style="height:{{pair_title_height}}px;overflow:hidden;margin-top:6px;font-size:{{pair_title_px}}px;line-height:{{pair_title_line}}px;font-weight:700;">{{#url}}<a href="{{url}}" style="color:{{text_color}};text-decoration:none;">{{/url}}{{name}}{{#url}}</a>{{/url}}{{#year}} <span style="color:{{muted_color}};font-weight:400;">({{year}})</span>{{/year}}</div>
+      {{#pair_badge_line}}<div style="height:16px;overflow:hidden;margin-top:4px;font-size:{{pair_small_px}}px;line-height:16px;color:{{accent_color}};font-weight:600;white-space:nowrap;">{{badge}}</div>{{/pair_badge_line}}
+      {{#pair_ratings_line}}<div style="height:18px;overflow:hidden;margin-top:4px;font-size:{{pair_small_px}}px;line-height:18px;white-space:nowrap;">{{#has_ratings}}{{#imdb_rating}}<span style="background:#f5c518;color:#000000;font-weight:700;border-radius:4px;padding:0 4px;">IMDb</span> {{imdb_rating}} {{/imdb_rating}}{{#rt_critic}}{{#rt_critic_fresh}}🍅{{/rt_critic_fresh}}{{^rt_critic_fresh}}🤢{{/rt_critic_fresh}} {{rt_critic}}%{{/rt_critic}}{{/has_ratings}}</div>{{/pair_ratings_line}}
     </td></tr>
     </table>
   </td>
