@@ -257,7 +257,7 @@ func (s *System) newsletterRecap(ctx context.Context, tx pgx.Tx, k profileKey, p
  LEFT JOIN media_items m ON m.content_id=h.media_item_id LEFT JOIN media_items series ON series.content_id=e.series_id
  WHERE h.ended_at>=$1 AND h.ended_at<$2 AND (h.watched_seconds>=300 OR h.completed)
  AND COALESCE(e.series_id,m.content_id) IS NOT NULL
- GROUP BY 1,2 HAVING COUNT(DISTINCT (h.user_id,h.profile_id))>=$3 ORDER BY 3 DESC,1 LIMIT 100`, from, to, max(2, settings.Recap.PopularMinViewers))
+ GROUP BY 1,2 HAVING COUNT(DISTINCT (h.user_id,h.profile_id))>=$3 ORDER BY 3 DESC,COUNT(*) DESC,1 LIMIT 100`, from, to, max(1, settings.Recap.PopularMinViewers))
 		if err != nil {
 			return nil, err
 		}

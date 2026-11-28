@@ -30,8 +30,8 @@ type Recap struct {
 	Popular bool `json:"popular"`
 	// PopularCount is how many popular titles are listed.
 	PopularCount int `json:"popular_count"`
-	// PopularMinViewers is how many accounts must have watched a title for
-	// it to be listed. Never below 2, so one person's viewing is never shown.
+	// PopularMinViewers is how many profiles must have watched a title for
+	// it to count as popular, 1-50. Ties go to the title played most.
 	PopularMinViewers int `json:"popular_min_viewers"`
 	// WeeklyWhenEmpty sends the weekly digest even when nothing new arrived,
 	// as long as the recap has something to show.
@@ -213,7 +213,7 @@ func (s *Settings) normalize() {
 	s.Layout.normalize()
 	s.followLanguageDefaults()
 	s.Recap.PopularCount = clamp(s.Recap.PopularCount, 1, 20)
-	s.Recap.PopularMinViewers = clamp(s.Recap.PopularMinViewers, 2, 50)
+	s.Recap.PopularMinViewers = clamp(s.Recap.PopularMinViewers, 1, 50)
 	if strings.TrimSpace(s.Templates.Subject) == "" {
 		s.Templates.Subject = def.Templates.Subject
 	}

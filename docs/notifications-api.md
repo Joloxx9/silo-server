@@ -71,7 +71,7 @@ Household-wide recap options are replaced by profile-only personal statistics.
 Native newsletter delivery reads committed availability events and checks
 current catalog access for every included title, including personal and
 popular summaries. Personal viewing belongs only to the receiving profile.
-Popularity requires at least two distinct profiles, so household members on one account count separately. Calendar schedules and
+Popularity counts viewing profiles, so household members on one account count separately; `popular_min_viewers` (1-50, default 2) sets how many must have watched a title, and ties go to the title played most. Calendar schedules and
 quiet hours use the configured timezone, defaulting to UTC. Workers serialize
 each recipient with PostgreSQL row locks and retain independent alert and
 newsletter watermarks. Delivery failures retry with backoff. SMTP has

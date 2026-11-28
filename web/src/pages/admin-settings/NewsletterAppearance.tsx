@@ -306,6 +306,27 @@ export function NewsletterAppearance({
                       />
                     </label>
                   )}
+                  {section.id === "popular" && (
+                    <label className="text-sm">
+                      {tx("Minimum viewers per title")}
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={recap.popular_min_viewers}
+                        onChange={(e) =>
+                          change({
+                            recap: { ...recap, popular_min_viewers: Number(e.target.value) },
+                          })
+                        }
+                      />
+                      <span className="text-muted-foreground mt-1 block text-xs">
+                        {tx(
+                          "Viewers are profiles. With 1, everyone sees titles that only one profile watched.",
+                        )}
+                      </span>
+                    </label>
+                  )}
                 </div>
               </li>
             );

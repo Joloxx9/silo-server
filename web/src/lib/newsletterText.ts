@@ -4,6 +4,9 @@ import { useAppLanguage } from "@/i18n/hooks";
 // their Polish text lives here, keyed by the English source. Other languages
 // show English.
 const polish: Record<string, string> = {
+  "Minimum viewers per title": "Minimalna liczba widzów tytułu",
+  "Viewers are profiles. With 1, everyone sees titles that only one profile watched.":
+    "Widz to profil. Przy 1 wszyscy zobaczą tytuły, które obejrzał tylko jeden profil.",
   "Email type": "Rodzaj e-maila",
   "Weekly newsletter": "Newsletter tygodniowy",
   "Daily new-release summary": "Dzienne podsumowanie nowości",
