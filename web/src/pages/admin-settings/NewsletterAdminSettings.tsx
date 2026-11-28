@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { NewsletterAppearance } from "./NewsletterAppearance";
+import { NewsletterRecipients } from "./NewsletterRecipients";
 
 type Config = V2Result<"GET /api/v2/admin/notifications/newsletter">;
 
@@ -387,6 +388,7 @@ function NewsletterAdminForm() {
             />
           </div>
         )}
+        <NewsletterRecipients config={config} authority={authority} />
       </fieldset>
       <details>
         <summary className="cursor-pointer">Import Email Alerts plugin</summary>

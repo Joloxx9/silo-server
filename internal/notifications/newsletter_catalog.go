@@ -11,17 +11,25 @@ import (
 
 // newsletterEntries reads committed availability events, not metadata dates:
 // an episode can exist in the catalog months before its file arrives.
-func (s *System) newsletterEntries(ctx context.Context, tx pgx.Tx, k profileKey, p DeliveryPreferences, from, to time.Time) ([]newsletter.Entry, error) {
+// Titles and synopses come in the newsletter's language when the catalog has
+// them, and each entry is marked with the recipient's reason to care.
+func (s *System) newsletterEntries(ctx context.Context, tx pgx.Tx, k profileKey, p DeliveryPreferences, language string, from, to time.Time) ([]newsletter.Entry, error) {
 	rows, err := tx.Query(ctx, `SELECT r.kind,COALESCE(r.item_id,''),COALESCE(r.series_id,''),COALESCE(r.episode_id,''),r.library_id,
  COALESCE(f.name,''),COALESCE(r.season_number,0),COALESCE(r.episode_number,0),r.created_at,
- m.title,COALESCE(m.year,0),COALESCE(m.overview,''),COALESCE(m.rating_imdb,0),COALESCE(m.rating_tmdb,0),
+ COALESCE(ml.title,m.title),COALESCE(m.year,0),COALESCE(ml.overview,m.overview,''),COALESCE(m.rating_imdb,0),COALESCE(m.rating_tmdb,0),
  COALESCE(m.rating_rt_critic,0),COALESCE(m.rating_rt_audience,0),COALESCE(m.poster_path,''),
- COALESCE(e.title,''),COALESCE(e.overview,''),COALESCE(e.still_path,'')
+ COALESCE(el.title,e.title,''),COALESCE(el.overview,e.overview,''),COALESCE(e.still_path,'')
  FROM release_events r JOIN media_folders f ON f.id=r.library_id
  JOIN media_items m ON m.content_id=CASE WHEN r.kind='episode' THEN r.series_id ELSE r.item_id END
  LEFT JOIN episodes e ON e.content_id=r.episode_id
+ LEFT JOIN LATERAL (SELECT NULLIF(l.title,'') AS title,NULLIF(l.overview,'') AS overview FROM media_item_localizations l
+  WHERE l.content_id=m.content_id AND (lower(l.language)=$5::text OR lower(l.language) LIKE $5::text||'-%')
+  ORDER BY lower(l.language)=$5::text DESC LIMIT 1) ml ON true
+ LEFT JOIN LATERAL (SELECT NULLIF(l.title,'') AS title,NULLIF(l.overview,'') AS overview FROM episode_localizations l
+  WHERE l.episode_content_id=e.content_id AND (lower(l.language)=$5::text OR lower(l.language) LIKE $5::text||'-%')
+  ORDER BY lower(l.language)=$5::text DESC LIMIT 1) el ON true
  WHERE r.created_at>$1 AND r.created_at<=$2 AND ((r.kind='movie' AND $3) OR (r.kind='episode' AND $4))
- ORDER BY r.created_at DESC,r.id DESC LIMIT 2000`, from, to, p.Movies, p.Episodes)
+ ORDER BY r.created_at DESC,r.id DESC LIMIT 2000`, from, to, p.Movies, p.Episodes, language)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +94,76 @@ func (s *System) newsletterEntries(ctx context.Context, tx pgx.Tx, k profileKey,
 		}
 		out = append(out, c.entry)
 	}
+	if err = s.markNewsletterPicks(ctx, tx, k, out); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// markNewsletterPicks sets Entry.Pick: movies and shows on the recipient's
+// watchlist, and shows the recipient has watched, started or finished.
+func (s *System) markNewsletterPicks(ctx context.Context, tx pgx.Tx, k profileKey, entries []newsletter.Entry) error {
+	var movieIDs, seriesIDs []string
+	for _, e := range entries {
+		if e.Card.Type == "episode" {
+			seriesIDs = append(seriesIDs, e.Card.SeriesID)
+		} else {
+			movieIDs = append(movieIDs, e.Card.ContentID)
+		}
+	}
+	if len(movieIDs) == 0 && len(seriesIDs) == 0 {
+		return nil
+	}
+	picks := map[string]string{}
+	rows, err := tx.Query(ctx, `SELECT media_item_id FROM user_watchlist WHERE user_id=$1 AND profile_id=$2 AND media_item_id=ANY($3)`,
+		k.userID, k.profileID, append(append([]string{}, movieIDs...), seriesIDs...))
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		picks[id] = newsletter.PickWatchlist
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	if len(seriesIDs) > 0 {
+		// A show counts as watched once any of its episodes, or the show
+		// itself, is in the history or has progress (Continue Watching).
+		rows, err = tx.Query(ctx, `WITH seen AS (
+ SELECT media_item_id FROM user_watch_history WHERE user_id=$1 AND profile_id=$2
+ UNION SELECT media_item_id FROM user_watch_progress WHERE user_id=$1 AND profile_id=$2 AND (completed OR position_seconds>0))
+ SELECT DISTINCT COALESCE(e.series_id,seen.media_item_id) FROM seen LEFT JOIN episodes e ON e.content_id=seen.media_item_id
+ WHERE COALESCE(e.series_id,seen.media_item_id)=ANY($3)`, k.userID, k.profileID, seriesIDs)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var id string
+			if err = rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			picks[id] = newsletter.PickWatching
+		}
+		rows.Close()
+		if err = rows.Err(); err != nil {
+			return err
+		}
+	}
+	for i := range entries {
+		id := entries[i].Card.ContentID
+		if entries[i].Card.Type == "episode" {
+			id = entries[i].Card.SeriesID
+		}
+		entries[i].Pick = picks[id]
+	}
+	return nil
 }
 
 func (s *System) newsletterRecap(ctx context.Context, tx pgx.Tx, k profileKey, p DeliveryPreferences, settings newsletter.Settings, from, to time.Time) (*newsletter.RecapView, error) {

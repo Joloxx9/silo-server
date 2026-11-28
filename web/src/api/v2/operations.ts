@@ -231,6 +231,7 @@ export const v2Operations = {
   "GET /api/v2/admin/notifications/newsletter/import": "getNewsletterImportSources",
   "GET /api/v2/admin/notifications/newsletter/import/{installation_id}":
     "getNewsletterImportArchive",
+  "GET /api/v2/admin/notifications/newsletter/recipients": "getNewsletterRecipients",
   "GET /api/v2/admin/notifications/server-channels": "listAdminNotificationServerChannels",
   "GET /api/v2/admin/playback-history": "listAdminPlaybackHistory",
   "GET /api/v2/admin/playback-history/capabilities": "getAdminPlaybackHistoryCapabilities",
@@ -748,6 +749,7 @@ export const v2Operations = {
   "POST /api/v2/admin/notifications/discord/test": "testAdminDiscordNotification",
   "POST /api/v2/admin/notifications/newsletter/import": "importNewsletterPlugin",
   "POST /api/v2/admin/notifications/newsletter/preview": "previewNewsletter",
+  "POST /api/v2/admin/notifications/newsletter/test": "testNewsletter",
   "POST /api/v2/admin/notifications/push/apple/test": "testAdminApplePushNotification",
   "POST /api/v2/admin/notifications/push/fcm/test": "testAdminAndroidPushNotification",
   "POST /api/v2/admin/notifications/push/relay/register": "registerAdminNotificationRelay",

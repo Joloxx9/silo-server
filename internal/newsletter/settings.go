@@ -208,6 +208,7 @@ func (s *Settings) normalize() {
 		}
 	}
 	s.Layout.normalize()
+	s.followLanguageDefaults()
 	s.Recap.PopularCount = clamp(s.Recap.PopularCount, 1, 20)
 	s.Recap.PopularMinViewers = clamp(s.Recap.PopularMinViewers, 2, 50)
 	if strings.TrimSpace(s.Templates.Subject) == "" {
@@ -269,6 +270,30 @@ func (s *Settings) normalize() {
 		}
 	}
 	s.CustomVars = cleaned
+}
+
+// followLanguageDefaults rewrites the texts still at the other language's
+// default into this language, so switching the language translates every
+// text the admin has not edited. Edited texts stay as they are.
+func (s *Settings) followLanguageDefaults() {
+	other := langPL
+	if s.Language == langPL {
+		other = langEN
+	}
+	from, to := defaultSettingsFor(other), defaultSettingsFor(s.Language)
+	swap := func(field *string, old, current string) {
+		if strings.TrimSpace(*field) == strings.TrimSpace(old) {
+			*field = current
+		}
+	}
+	swap(&s.Templates.Subject, from.Templates.Subject, to.Templates.Subject)
+	swap(&s.Templates.HTML, from.Templates.HTML, to.Templates.HTML)
+	swap(&s.Templates.Text, from.Templates.Text, to.Templates.Text)
+	swap(&s.Theme.HeaderTitle, from.Theme.HeaderTitle, to.Theme.HeaderTitle)
+	swap(&s.Theme.Intro, from.Theme.Intro, to.Theme.Intro)
+	swap(&s.Theme.FooterText, from.Theme.FooterText, to.Theme.FooterText)
+	swap(&s.Theme.ButtonText, from.Theme.ButtonText, to.Theme.ButtonText)
+	swap(&s.Layout.Greeting, from.Layout.Greeting, to.Layout.Greeting)
 }
 
 func (s Settings) location() *time.Location {

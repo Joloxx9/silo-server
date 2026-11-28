@@ -19,6 +19,24 @@ type Entry struct {
 	Series  *Detail // nil for movies, or when the series could not be read
 	Episode *Detail // episode detail (still, air date) when available
 	Movie   *Detail // movie detail (tagline, cast) when available
+	// Pick says why the recipient cares about this item: PickWatchlist,
+	// PickWatching, or "" for everything else.
+	Pick string
+}
+
+// Reasons an item matters to the recipient. Picked items lead their section.
+const (
+	PickWatchlist = "watchlist" // the movie or show is on the recipient's watchlist
+	PickWatching  = "watching"  // the recipient has watched or started the show
+)
+
+// PrioritizeEntries moves the recipient's picks ahead of the other items,
+// keeping the newest-first order within each group. Call it before
+// LimitEntries so the limits cut the items the recipient cares least about.
+func PrioritizeEntries(entries []Entry) {
+	sort.SliceStable(entries, func(a, b int) bool {
+		return entries[a].Pick != "" && entries[b].Pick == ""
+	})
 }
 
 type LibraryRef struct {
@@ -419,6 +437,9 @@ func itemVars(env RenderEnv, e Entry, img func(string) string, loc *time.Locatio
 		"backdrop":        "",
 		"has_poster":      false,
 		"has_backdrop":    false,
+		"pick":            e.Pick,
+		"pick_label":      l.pickLabel(e.Pick, c.Type == "episode"),
+		"is_pick":         e.Pick != "",
 	}
 	if c.Type == "episode" {
 		season, episode := 0, 0
@@ -534,6 +555,9 @@ func showVars(env RenderEnv, e Entry, img func(string) string) map[string]any {
 		"show_synopsis": "",
 		"show_poster":   "",
 		"show_backdrop": "",
+		"pick":          e.Pick,
+		"pick_label":    lang(env.Settings.Language).pickLabel(e.Pick, true),
+		"is_pick":       e.Pick != "",
 	}
 	if e.Series != nil {
 		d := e.Series

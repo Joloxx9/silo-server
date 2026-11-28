@@ -221,37 +221,15 @@ func (s *System) sendNewsletter(ctx context.Context, k profileKey, c NewsletterS
 	if since.Before(oldest) {
 		since = oldest
 	}
-	entries, err := s.newsletterEntries(ctx, tx, k, p, since, until)
+	env := newsletter.RenderEnv{Settings: c.Content, ServerName: s.emailBrand.Load(ctx).Name, PublicURL: base,
+		Recipient: newsletter.Recipient{Name: s.lookupProfileName(ctx, k.userID, k.profileID), Email: address}, Mode: mode, Now: now,
+		ManageURL: base + "/settings/notifications", UnsubscribeURL: emailUnsubscribeURL(base, token)}
+	rendered, entries, err := s.composeNewsletter(ctx, tx, k, p, env, channel == "newsletter", since, until)
 	if err != nil {
 		return err
 	}
-	compact := c.Content.Delivery.BurstThreshold > 0 && len(entries) > c.Content.Delivery.BurstThreshold
-	more := 0
-	if !compact {
-		entries, more = newsletter.LimitEntries(entries, c.Content.Delivery)
-	}
-	env := newsletter.RenderEnv{Compact: compact, MoreCount: more, Settings: c.Content, ServerName: s.emailBrand.Load(ctx).Name, PublicURL: base,
-		Recipient: newsletter.Recipient{Name: s.lookupProfileName(ctx, k.userID, k.profileID), Email: address}, Mode: mode, Now: now,
-		ManageURL: base + "/settings/notifications", UnsubscribeURL: emailUnsubscribeURL(base, token)}
-	if channel == "newsletter" {
-		env.Recap, err = s.newsletterRecap(ctx, tx, k, p, c.Content, since, until)
-		if err != nil {
-			return err
-		}
-	}
-	if len(entries) > 0 || channel == "newsletter" && c.Content.Recap.WeeklyWhenEmpty && !env.Recap.Empty() {
-		env.Settings.Theme.LogoURL = s.absoluteArtworkURL(ctx, env.Settings.Theme.LogoURL)
-		rendered, renderErr := newsletter.Render(ctx, env, entries, newsletter.ArtworkFetcher(entries, base, env.Settings.Theme.LogoURL))
-		if renderErr != nil {
-			return renderErr
-		}
-		msg := mail.Message{To: []string{address}, Subject: rendered.Subject, HTMLBody: rendered.HTML, TextBody: rendered.Text}
-		for _, img := range rendered.Images {
-			msg.Inline = append(msg.Inline, mail.InlineImage{ContentID: img.CID, Filename: img.CID + ".jpg", ContentType: img.ContentType, Data: img.Data})
-		}
-		if env.UnsubscribeURL != "" {
-			msg.Headers = map[string]string{"List-Unsubscribe": "<" + env.UnsubscribeURL + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
-		}
+	if rendered != nil {
+		msg := newsletterMessage(address, rendered, env.UnsubscribeURL)
 		if err = s.mailSender.Send(ctx, msg); err != nil {
 			// Keep the window for a later attempt. SMTP acceptance may be uncertain;
 			// this has the same at-least-once semantics as notification email.
@@ -282,4 +260,48 @@ func (s *System) sendNewsletter(ctx context.Context, k profileKey, c NewsletterS
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// composeNewsletter renders one recipient's email for [since, until]. It
+// returns a nil message when there is nothing to send: no new items, and for
+// a newsletter digest no recap worth sending on its own. env carries the
+// recipient, links and mode; its settings, recap and artwork are filled in.
+func (s *System) composeNewsletter(ctx context.Context, tx pgx.Tx, k profileKey, p DeliveryPreferences, env newsletter.RenderEnv, digest bool, since, until time.Time) (*newsletter.Rendered, []newsletter.Entry, error) {
+	c := env.Settings
+	entries, err := s.newsletterEntries(ctx, tx, k, p, c.Language, since, until)
+	if err != nil {
+		return nil, nil, err
+	}
+	newsletter.PrioritizeEntries(entries)
+	env.Compact = c.Delivery.BurstThreshold > 0 && len(entries) > c.Delivery.BurstThreshold
+	if !env.Compact {
+		entries, env.MoreCount = newsletter.LimitEntries(entries, c.Delivery)
+	}
+	if digest {
+		env.Recap, err = s.newsletterRecap(ctx, tx, k, p, c, since, until)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	if len(entries) == 0 && !(digest && c.Recap.WeeklyWhenEmpty && !env.Recap.Empty()) {
+		return nil, entries, nil
+	}
+	env.Settings.Theme.LogoURL = s.absoluteArtworkURL(ctx, env.Settings.Theme.LogoURL)
+	var fetch func(context.Context, string) ([]byte, string, error)
+	if !env.Preview {
+		fetch = newsletter.ArtworkFetcher(entries, env.PublicURL, env.Settings.Theme.LogoURL)
+	}
+	rendered, err := newsletter.Render(ctx, env, entries, fetch)
+	return rendered, entries, err
+}
+
+func newsletterMessage(address string, rendered *newsletter.Rendered, unsubscribeURL string) mail.Message {
+	msg := mail.Message{To: []string{address}, Subject: rendered.Subject, HTMLBody: rendered.HTML, TextBody: rendered.Text}
+	for _, img := range rendered.Images {
+		msg.Inline = append(msg.Inline, mail.InlineImage{ContentID: img.CID, Filename: img.CID + ".jpg", ContentType: img.ContentType, Data: img.Data})
+	}
+	if unsubscribeURL != "" {
+		msg.Headers = map[string]string{"List-Unsubscribe": "<" + unsubscribeURL + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
+	}
+	return msg
 }

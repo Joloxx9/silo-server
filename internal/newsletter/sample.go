@@ -37,6 +37,7 @@ func sampleEntries() []Entry {
 			},
 			Library: LibraryRef{ID: "tv", Name: "TV Shows"},
 			Series:  series,
+			Pick:    PickWatching,
 		},
 		{
 			Card: Card{
@@ -47,6 +48,7 @@ func sampleEntries() []Entry {
 			},
 			Library: LibraryRef{ID: "tv", Name: "TV Shows"},
 			Series:  series,
+			Pick:    PickWatching,
 		},
 		{
 			Card: Card{
@@ -66,6 +68,7 @@ func sampleEntries() []Entry {
 				PosterURL: samplePoster("Night Ferry", "#3d3a6b", "#0e0d1f"),
 			},
 			Library: LibraryRef{ID: "movies", Name: "Movies"},
+			Pick:    PickWatchlist,
 		},
 		{
 			Card: Card{
@@ -80,5 +83,48 @@ func sampleEntries() []Entry {
 }
 
 func Preview(ctx context.Context, settings Settings) (*Rendered, error) {
-	return Render(ctx, RenderEnv{Settings: settings, ServerName: "Silo", PublicURL: "https://example.test", Recipient: Recipient{Name: "Viewer"}, Mode: "preview", Now: time.Now(), Preview: true, Recap: sampleRecap(time.Now())}, sampleEntries(), nil)
+	entries := sampleEntries()
+	if settings.Language == langPL {
+		polishSample(entries)
+	}
+	PrioritizeEntries(entries)
+	return Render(ctx, RenderEnv{Settings: settings, ServerName: "Silo", PublicURL: "https://example.test", Recipient: Recipient{Name: "Viewer"}, Mode: "preview", Now: time.Now(), Preview: true, Recap: sampleRecap(time.Now())}, entries, nil)
+}
+
+// polishSample swaps the sample texts for Polish ones, as the catalog's
+// Polish metadata would.
+func polishSample(entries []Entry) {
+	overviews := map[string]string{
+		"series:sample-harbour-lights": "W spowitym mgłą miasteczku rybackim nowa kapitan portu odkrywa sprawę zaginięcia sprzed dekad, o której mieszkańcy woleliby zapomnieć.",
+		"episode:sample-1":             "Mara wreszcie dostaje się do latarni, a to, co znajduje w pomieszczeniu z laterną, zmienia wszystko, co wiedziała o nocy sztormu.",
+		"episode:sample-2":             "Poranny przypływ wyrzuca na brzeg ciało, a miasteczko zamyka się w sobie.",
+		"movie:sample-3":               "Dwie skłócone siostry jadą starym kamperem zmarłego ojca z Kornwalii na przylądek Wrath, by rozsypać jego prochy, i odkrywają, że zostawił im po drodze ostatnią zagadkę.",
+		"movie:sample-4":               "Podczas ostatniego rejsu przed sztormem, który zamknie port, ochmistrzyni odkrywa, że jednej z pasażerek nigdy nie było na liście.",
+		"movie:sample-5":               "Emerytowany iluzjonista zgadza się przyjąć ostatniego ucznia, który okazuje się polować na sekret jego najsłynniejszej sztuczki.",
+	}
+	genres := map[string]string{"Drama": "Dramat", "Mystery": "Tajemnica", "Comedy": "Komedia", "Thriller": "Thriller"}
+	translate := func(c *Card) {
+		if o, ok := overviews[c.ContentID]; ok {
+			c.Overview = o
+		}
+		g := make([]string, len(c.Genres))
+		for i, name := range c.Genres {
+			g[i] = genres[name]
+		}
+		c.Genres = g
+	}
+	series := entries[0].Series
+	translate(&series.Card)
+	for i := range entries {
+		e := &entries[i]
+		translate(&e.Card)
+		if e.Movie != nil {
+			e.Movie.Tagline = "Niektóre podróże trwają całe życie."
+		}
+		if e.Card.Type == "episode" {
+			e.Library.Name = "Seriale"
+		} else {
+			e.Library.Name = "Filmy"
+		}
+	}
 }

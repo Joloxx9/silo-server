@@ -33,13 +33,16 @@ Acting administrators have these operations under
 | `GET /` | Native delivery enablement, templates, theme, layout, schedule and delivery settings |
 | `PUT /` | Validated replacement; naturally idempotent |
 | `POST /preview` | Subject, HTML and text rendered from synthetic titles; sends no email |
+| `GET /recipients` | Profiles with a verified address on enabled accounts, their newsletter and alert choices, and when each last got an email |
+| `POST /test` | Body `{ "settings": {...}, "mode": "weekly", "user_id": 1, "profile_id": "...", "email": "..." }`; renders that profile's real newsletter for the last day or week from the draft settings and, with `email`, sends it there with a `[Test]` subject. Defaults to the caller's profile. Changes no watermarks; non-retryable |
 | `GET /import` | Email Alerts installations and retained import summaries |
 | `POST /import` | Body `{ "installation_id": 123 }`; imports a disabled `community.email-alerts` installation |
 | `GET /import/{installation_id}` | Archived subscriber choices and send history, excluding credentials and capability tokens |
 
 `content.layout` designs the HTML email: section order, per-section style
-(`list`, `grid`, `cards`), grid columns (2-5), full or half width, and which
-title details show. `custom_html: true` renders `content.templates.html`
+(`list`, `grid`, `cards`), grid columns (2-5), list and card items per row
+(`per_row`, 1 or 2; two stay side by side on phones), full or half width, and
+which title details show. `custom_html: true` renders `content.templates.html`
 instead. Settings saved before the layout existed keep an edited HTML template
 as `custom_html`; a stock template moves to the layout.
 
@@ -74,6 +77,13 @@ newsletter watermarks. Delivery failures retry with backoff. SMTP has
 at-least-once semantics when acceptance succeeds but the final database commit
 is lost. The source read is bounded to the most recent 2,000 events per window;
 template limits and burst compaction apply after access filtering.
+
+Each recipient's titles come first when they matter to that profile: movies
+and shows on its watchlist, and shows it has watched or has progress in
+(Continue Watching). The limits cut the other titles first, and the designed
+layout labels the picks. Titles and synopses use the catalog's localization
+for the newsletter language when one exists. Texts left at one language's
+default follow a language switch; edited texts stay as written.
 
 These subscriptions are a native Silo email channel. They do not change the
 Jellyfin protocol surface or require a plugin installation after import.

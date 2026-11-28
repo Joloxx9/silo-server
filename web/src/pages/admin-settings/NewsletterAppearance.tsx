@@ -242,6 +242,19 @@ export function NewsletterAppearance({
                       </select>
                     </label>
                   )}
+                  {catalog && section.style !== "grid" && (
+                    <label className="text-sm">
+                      Items per row
+                      <select
+                        className={selectClass}
+                        value={section.per_row ?? 1}
+                        onChange={(e) => setSection(i, { per_row: Number(e.target.value) })}
+                      >
+                        <option value={1}>1</option>
+                        <option value={2}>2 (side by side on phones too)</option>
+                      </select>
+                    </label>
+                  )}
                   {catalog && section.style === "grid" && (
                     <label className="text-sm">
                       Posters per row

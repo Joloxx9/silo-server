@@ -36,6 +36,44 @@ type NewsletterPreviewOutput struct {
 		Text    string `json:"text"`
 	}
 }
+type newsletterAdminService interface {
+	NewsletterRecipients(context.Context) ([]notifications.NewsletterRecipient, error)
+	NewsletterTestSend(context.Context, notifications.NewsletterTest) (notifications.NewsletterTestResult, error)
+}
+type NewsletterRecipientView struct {
+	UserID      int             `json:"user_id"`
+	Account     string          `json:"account"`
+	ProfileID   string          `json:"profile_id"`
+	ProfileName string          `json:"profile_name"`
+	Email       string          `json:"email"`
+	Newsletter  string          `json:"newsletter" enum:"off,daily,weekly"`
+	Alerts      string          `json:"alerts" enum:"off,instant,daily"`
+	LastSentAt  NullableInstant `json:"last_sent_at"`
+}
+type NewsletterRecipientsOutput struct {
+	Body struct {
+		Items []NewsletterRecipientView `json:"items"`
+	}
+}
+type NewsletterTestInput struct {
+	Body struct {
+		Settings  NewsletterAdminSettings `json:"settings"`
+		UserID    int                     `json:"user_id,omitempty" doc:"Account of the profile whose newsletter is built; defaults to the caller."`
+		ProfileID string                  `json:"profile_id,omitempty" doc:"Profile whose catalog access and history the newsletter uses; defaults to the caller's profile."`
+		Mode      string                  `json:"mode" enum:"daily,weekly"`
+		Email     string                  `json:"email,omitempty" doc:"Send the test here. Empty renders the email without sending it."`
+	}
+}
+type NewsletterTestOutput struct {
+	Body struct {
+		Subject   string `json:"subject"`
+		HTML      string `json:"html"`
+		Text      string `json:"text"`
+		ItemCount int    `json:"item_count"`
+		Empty     bool   `json:"empty" doc:"Nothing arrived in the window and there is no recap to send."`
+		Sent      bool   `json:"sent"`
+	}
+}
 type NewsletterCapability struct {
 	Capability
 	Available   bool `json:"available"`
@@ -76,6 +114,9 @@ type NewsletterImportOutput struct {
 func newsletterProblem(err error) error {
 	if errors.Is(err, notifications.ErrNewsletterImport) {
 		return NewProblem(TypeValidationFailed, "Disable the Email Alerts plugin and native newsletter delivery before importing. A valid installation and server encryption key are required.")
+	}
+	if errors.Is(err, notifications.ErrNewsletterTest) {
+		return NewProblem(TypeValidationFailed, err.Error())
 	}
 	if errors.Is(err, notifications.ErrDeliveryPreferences) {
 		return NewProblem(TypeValidationFailed, "Check the delivery settings and templates.")
@@ -226,6 +267,51 @@ func registerNotificationNewsletter(reg *Registry) {
 		out.Body.Subject = r.Subject
 		out.Body.HTML = r.HTML
 		out.Body.Text = r.Text
+		return out, nil
+	})
+	Register(reg, admin(http.MethodGet, "/recipients", "getNewsletterRecipients"), func(ctx context.Context, _ *struct{}) (*NewsletterRecipientsOutput, error) {
+		svc, ok := reg.deps.NotificationDelivery.(newsletterAdminService)
+		if !ok {
+			return nil, unavailable("newsletter")
+		}
+		items, err := svc.NewsletterRecipients(ctx)
+		if err != nil {
+			return nil, serviceProblem(err)
+		}
+		out := &NewsletterRecipientsOutput{}
+		out.Body.Items = make([]NewsletterRecipientView, 0, len(items))
+		for _, r := range items {
+			out.Body.Items = append(out.Body.Items, NewsletterRecipientView{UserID: r.UserID, Account: r.Account, ProfileID: r.ProfileID,
+				ProfileName: r.ProfileName, Email: r.Email, Newsletter: r.Newsletter, Alerts: r.Alerts, LastSentAt: nullableInstantOf(r.LastSentAt)})
+		}
+		return out, nil
+	})
+	// Each call sends another email, so a client must not repeat it blindly.
+	testOp := admin(http.MethodPost, "/test", "testNewsletter")
+	testOp.RetrySafety = RetrySafetyNonRetryable
+	Register(reg, testOp, func(ctx context.Context, in *NewsletterTestInput) (*NewsletterTestOutput, error) {
+		svc, ok := reg.deps.NotificationDelivery.(newsletterAdminService)
+		if !ok {
+			return nil, unavailable("newsletter")
+		}
+		user, profile := in.Body.UserID, in.Body.ProfileID
+		if profile == "" {
+			user, profile = claimsFrom(ctx).UserID, profileFrom(ctx)
+		}
+		result, err := svc.NewsletterTestSend(ctx, notifications.NewsletterTest{Settings: in.Body.Settings.domain().Content,
+			UserID: user, ProfileID: profile, Mode: in.Body.Mode, To: in.Body.Email})
+		if err != nil {
+			var tmpl *newsletter.TemplateError
+			if errors.As(err, &tmpl) {
+				return nil, NewProblem(TypeValidationFailed, "The newsletter template could not be rendered.")
+			}
+			return nil, newsletterProblem(err)
+		}
+		out := &NewsletterTestOutput{}
+		out.Body.ItemCount, out.Body.Sent, out.Body.Empty = result.ItemCount, result.Sent, result.Rendered == nil
+		if r := result.Rendered; r != nil {
+			out.Body.Subject, out.Body.HTML, out.Body.Text = r.Subject, r.HTML, r.Text
+		}
 		return out, nil
 	})
 }

@@ -202,3 +202,18 @@ func (l lang) newOn(server string) string {
 	}
 	return "New on " + server
 }
+
+// pickLabel says why an item is in the recipient's part of the email.
+func (l lang) pickLabel(pick string, show bool) string {
+	switch {
+	case pick == PickWatchlist && l == langPL:
+		return "Z Twojej listy do obejrzenia"
+	case pick == PickWatchlist:
+		return "From your watchlist"
+	case pick == PickWatching && l == langPL && show:
+		return "Oglądasz ten serial"
+	case pick == PickWatching && show:
+		return "A show you watch"
+	}
+	return ""
+}

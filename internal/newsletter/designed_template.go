@@ -75,6 +75,7 @@ const designedHTMLTemplate = `<!doctype html>
 <tr>
   {{#poster}}<td width="112" valign="top" style="padding:12px;"><img src="{{poster}}" width="100" alt="" style="display:block;width:100px;border-radius:8px;border:0;"></td>{{/poster}}
   <td valign="top" style="padding:14px 14px 14px {{#poster}}2px{{/poster}}{{^poster}}14px{{/poster}};">
+    {{#pick_label}}<div style="margin-bottom:6px;"><span style="display:inline-block;padding:2px 9px;border-radius:999px;background:{{accent_color}};color:{{accent_text_color}};font-size:11px;font-weight:700;letter-spacing:0.3px;">{{pick_label}}</span></div>{{/pick_label}}
     <div style="font-size:17px;font-weight:700;line-height:1.3;">{{#url}}<a href="{{url}}" style="color:{{text_color}};text-decoration:none;">{{/url}}{{name}}{{#url}}</a>{{/url}}{{#year}} <span style="color:{{muted_color}};font-weight:400;">({{year}})</span>{{/year}}</div>
     {{#badge}}<div style="font-size:13px;color:{{accent_color}};font-weight:600;margin-top:4px;">{{badge}}</div>{{/badge}}
     {{#detail}}<div style="font-size:13px;color:{{muted_color}};margin-top:4px;">{{detail}}</div>{{/detail}}
@@ -87,6 +88,33 @@ const designedHTMLTemplate = `<!doctype html>
 </td></tr>
 {{/items}}{{/is_list}}
 
+{{#is_pairs}}
+<tr><td style="padding:0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">
+{{#pair_rows}}
+<tr>
+  {{#cells}}
+  <td width="50%" valign="top" style="padding:0 5px 10px 5px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{{card_color}};border-radius:14px;">
+    <tr><td style="padding:10px;">
+      {{#poster}}{{#url}}<a href="{{url}}">{{/url}}<img src="{{poster}}" width="270" alt="" style="display:block;width:100%;height:auto;border-radius:10px;border:0;">{{#url}}</a>{{/url}}{{/poster}}
+      {{#pick_label}}<div style="margin-top:10px;"><span style="display:inline-block;padding:2px 8px;border-radius:999px;background:{{accent_color}};color:{{accent_text_color}};font-size:11px;font-weight:700;">{{pick_label}}</span></div>{{/pick_label}}
+      <div style="font-size:15px;font-weight:700;line-height:1.3;margin-top:8px;">{{#url}}<a href="{{url}}" style="color:{{text_color}};text-decoration:none;">{{/url}}{{name}}{{#url}}</a>{{/url}}{{#year}} <span style="color:{{muted_color}};font-weight:400;">({{year}})</span>{{/year}}</div>
+      {{#badge}}<div style="font-size:12px;color:{{accent_color}};font-weight:600;margin-top:4px;">{{badge}}</div>{{/badge}}
+      {{#detail}}<div style="font-size:12px;color:{{muted_color}};margin-top:4px;">{{detail}}</div>{{/detail}}
+      {{#has_ratings}}<div style="font-size:12px;margin-top:5px;">{{#imdb_rating}}<span style="background:#f5c518;color:#000000;font-weight:700;border-radius:4px;padding:0 4px;">IMDb</span> {{imdb_rating}} {{/imdb_rating}}{{#rt_critic}}{{#rt_critic_fresh}}🍅{{/rt_critic_fresh}}{{^rt_critic_fresh}}🤢{{/rt_critic_fresh}} {{rt_critic}}% {{/rt_critic}}</div>{{/has_ratings}}
+      {{#overview}}<div style="font-size:12px;line-height:1.45;color:{{muted_color}};margin-top:6px;">{{overview}}</div>{{/overview}}
+    </td></tr>
+    </table>
+  </td>
+  {{/cells}}
+  {{#fill}}<td width="50%"></td>{{/fill}}
+</tr>
+{{/pair_rows}}
+</table>
+</td></tr>
+{{/is_pairs}}
+
 {{#is_grid}}
 <tr><td style="padding:0;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="{{gap}}" style="table-layout:fixed;border-collapse:separate;">
@@ -97,6 +125,7 @@ const designedHTMLTemplate = `<!doctype html>
     {{#url}}<a href="{{url}}" style="text-decoration:none;color:{{text_color}};">{{/url}}
     {{#poster}}<img src="{{poster}}" width="{{cell_width}}" alt="" style="display:block;width:100%;height:auto;border-radius:8px;border:0;">{{/poster}}
     {{^poster}}<div style="height:{{cell_height}}px;border-radius:8px;background:{{background_color}};"></div>{{/poster}}
+    {{#pick_label}}<div style="margin-top:8px;"><span style="display:inline-block;padding:1px 7px;border-radius:999px;background:{{accent_color}};color:{{accent_text_color}};font-size:10px;font-weight:700;">{{pick_label}}</span></div>{{/pick_label}}
     <div style="font-size:14px;font-weight:700;line-height:1.3;color:{{text_color}};margin-top:8px;">{{name}}{{#year}} <span style="color:{{muted_color}};font-weight:400;">({{year}})</span>{{/year}}</div>
     {{#url}}</a>{{/url}}
     {{#badge}}<div style="font-size:12px;color:{{accent_color}};font-weight:600;margin-top:3px;">{{badge}}</div>{{/badge}}
@@ -116,6 +145,7 @@ const designedHTMLTemplate = `<!doctype html>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{{card_color}};border-radius:14px;overflow:hidden;">
   <tr><td {{#backdrop_bg}}background="{{backdrop_bg}}" {{/backdrop_bg}}style="padding:20px;background-color:{{card_color}};{{#backdrop_bg}}background-image:url('{{backdrop_bg}}');background-size:cover;background-position:center;{{/backdrop_bg}}">
     {{#poster}}<img src="{{poster}}" alt="" width="112" style="display:block;width:112px;border-radius:8px;border:0;margin-bottom:14px;">{{/poster}}
+    {{#pick_label}}<div style="margin-bottom:6px;"><span style="display:inline-block;padding:2px 9px;border-radius:999px;background:{{accent_color}};color:{{accent_text_color}};font-size:11px;font-weight:700;letter-spacing:0.3px;">{{pick_label}}</span></div>{{/pick_label}}
     <div style="font-size:20px;font-weight:700;line-height:1.3;">{{#url}}<a href="{{url}}" style="color:{{text_color}};text-decoration:none;">{{/url}}{{name}}{{#url}}</a>{{/url}}{{#year}} <span style="font-weight:400;color:{{muted_color}};">({{year}})</span>{{/year}}</div>
     {{#detail}}<div style="font-size:13px;color:{{muted_color}};margin-top:4px;">{{detail}}</div>{{/detail}}
     {{#has_ratings}}<div style="font-size:13px;margin-top:8px;">{{#imdb_rating}}<span style="background:#f5c518;color:#000000;font-weight:700;border-radius:4px;padding:1px 5px;">IMDb</span> {{imdb_rating}}&nbsp;&nbsp;{{/imdb_rating}}{{#rt_critic}}{{#rt_critic_fresh}}🍅{{/rt_critic_fresh}}{{^rt_critic_fresh}}🤢{{/rt_critic_fresh}} {{rt_critic}}%&nbsp;&nbsp;{{/rt_critic}}{{#rt_audience}}{{#rt_audience_fresh}}🍿{{/rt_audience_fresh}}{{^rt_audience_fresh}}🥤{{/rt_audience_fresh}} {{rt_audience}}%{{/rt_audience}}</div>{{/has_ratings}}

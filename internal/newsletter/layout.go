@@ -57,6 +57,9 @@ type Section struct {
 	Columns int `json:"columns"`
 	// Width is full or half; two half sections in a row sit side by side.
 	Width string `json:"width"`
+	// PerRow is how many list or card items share a row: 1 or 2. Two stay
+	// side by side on phones too.
+	PerRow int `json:"per_row,omitempty"`
 }
 
 func defaultLayout(l string) Layout {
@@ -106,6 +109,9 @@ func (l *Layout) normalize() {
 		}
 		if s.Width != "half" {
 			s.Width = "full"
+		}
+		if s.PerRow != 2 {
+			s.PerRow = 1
 		}
 	}
 	l.Sections = sections
@@ -193,7 +199,7 @@ func layoutVars(data map[string]any, l lang, layout Layout, movies, shows []map[
 	var blocks []map[string]any
 	for _, s := range layout.Sections {
 		block := map[string]any{"half": s.Width == "half", "is_personal": false, "is_popular": false,
-			"is_catalog": false, "is_quiet": false, "is_list": false, "is_grid": false, "is_cards": false,
+			"is_catalog": false, "is_quiet": false, "is_list": false, "is_grid": false, "is_cards": false, "is_pairs": false,
 			"heading": "", "items": []map[string]any{}, "grid_rows": []map[string]any{}}
 		switch s.ID {
 		case SectionPersonal:
@@ -233,8 +239,13 @@ func layoutVars(data map[string]any, l lang, layout Layout, movies, shows []map[
 			}
 			block["is_catalog"] = true
 			block["items"] = items
-			block["is_"+s.Style] = true
 			block["columns"] = s.Columns
+			if s.Style != StyleGrid && s.PerRow == 2 {
+				block["is_pairs"] = true
+				block["pair_rows"] = pairRows(items)
+				break
+			}
+			block["is_"+s.Style] = true
 		}
 		blocks = append(blocks, block)
 	}
@@ -259,6 +270,29 @@ func layoutVars(data map[string]any, l lang, layout Layout, movies, shows []map[
 		}
 	}
 	data["layout_rows"] = rows
+}
+
+// pairRows puts list or card items two to a row, with a short synopsis so
+// the half-width cards stay even.
+func pairRows(items []map[string]any) []map[string]any {
+	var rows []map[string]any
+	for start := 0; start < len(items); start += 2 {
+		cells := make([]map[string]any, 0, 2)
+		for _, item := range items[start:min(start+2, len(items))] {
+			cell := map[string]any{}
+			for k, v := range item {
+				cell[k] = v
+			}
+			cell["overview"] = truncate(str(item["overview"]), 140)
+			cells = append(cells, cell)
+		}
+		fill := []map[string]any{}
+		if len(cells) == 1 {
+			fill = append(fill, map[string]any{})
+		}
+		rows = append(rows, map[string]any{"cells": cells, "fill": fill})
+	}
+	return rows
 }
 
 // gridVars splits items into poster rows sized for the block's width.
@@ -315,6 +349,7 @@ func designedItem(layout Layout, name, url, poster, backdropBG, year, detail, ov
 		"has_ratings": false, "imdb_rating": "", "rt_critic": "", "rt_audience": "",
 		"rt_critic_fresh": false, "rt_audience_fresh": false,
 		"episodes": []map[string]any{}, "has_episodes": false,
+		"pick_label": str(v["pick_label"]),
 	}
 	if layout.ShowYear {
 		item["year"] = year
