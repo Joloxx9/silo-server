@@ -250,12 +250,14 @@ func (s *System) newsletterRecap(ctx context.Context, tx pgx.Tx, k profileKey, p
 	}
 	popular := []newsletter.PopularTitle{}
 	if p.Popular && settings.Recap.Popular {
-		rows, err := tx.Query(ctx, `SELECT COALESCE(e.series_id,m.content_id),COALESCE(series.title,m.title),COUNT(DISTINCT h.user_id)
+		// Viewers are profiles, so household members on one account count
+		// separately; a title still needs at least two of them.
+		rows, err := tx.Query(ctx, `SELECT COALESCE(e.series_id,m.content_id),COALESCE(series.title,m.title),COUNT(DISTINCT (h.user_id,h.profile_id))
  FROM admin_playback_history h LEFT JOIN episodes e ON e.content_id=h.media_item_id
  LEFT JOIN media_items m ON m.content_id=h.media_item_id LEFT JOIN media_items series ON series.content_id=e.series_id
  WHERE h.ended_at>=$1 AND h.ended_at<$2 AND (h.watched_seconds>=300 OR h.completed)
  AND COALESCE(e.series_id,m.content_id) IS NOT NULL
- GROUP BY 1,2 HAVING COUNT(DISTINCT h.user_id)>=$3 ORDER BY 3 DESC,1 LIMIT 100`, from, to, max(2, settings.Recap.PopularMinViewers))
+ GROUP BY 1,2 HAVING COUNT(DISTINCT (h.user_id,h.profile_id))>=$3 ORDER BY 3 DESC,1 LIMIT 100`, from, to, max(2, settings.Recap.PopularMinViewers))
 		if err != nil {
 			return nil, err
 		}

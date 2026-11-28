@@ -14,6 +14,7 @@ const designedHTMLTemplate = `<!doctype html>
   @media only screen and (max-width: 600px) {
     .half { display: block !important; width: 100% !important; padding: 0 !important; }
     .wrap { padding: 16px 8px !important; }
+    .pair-poster { height: 230px !important; }
   }
   a { color: {{accent_color}}; }
 </style>
@@ -97,8 +98,7 @@ const designedHTMLTemplate = `<!doctype html>
   <td width="50%" valign="top" style="padding:0 5px 10px 5px;overflow:hidden;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{{card_color}};border-radius:12px;">
     <tr><td style="padding:8px;">
-      {{#poster}}{{#url}}<a href="{{url}}">{{/url}}<img src="{{poster}}" width="{{pair_width}}" alt="" style="display:block;width:100%;max-width:100%;height:auto;aspect-ratio:2/3;object-fit:cover;border-radius:8px;border:0;">{{#url}}</a>{{/url}}{{/poster}}
-      {{^poster}}<div style="height:{{pair_poster_height}}px;border-radius:8px;background:{{background_color}};"></div>{{/poster}}
+      <div class="pair-poster" style="height:{{pair_poster_height}}px;overflow:hidden;border-radius:8px;background:{{background_color}};">{{#poster}}{{#url}}<a href="{{url}}">{{/url}}<img src="{{poster}}" width="{{pair_width}}" height="{{pair_poster_height}}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;border:0;">{{#url}}</a>{{/url}}{{/poster}}</div>
       {{#pair_pick_line}}<div style="height:20px;overflow:hidden;margin-top:8px;">{{#pick_label}}<span style="display:inline-block;padding:1px 7px;border-radius:999px;background:{{accent_color}};color:{{accent_text_color}};font-size:10px;line-height:16px;font-weight:700;">{{pick_label}}</span>{{/pick_label}}</div>{{/pair_pick_line}}
       <div style="height:{{pair_title_height}}px;overflow:hidden;overflow-wrap:anywhere;margin-top:6px;font-size:{{pair_title_px}}px;line-height:{{pair_title_line}}px;font-weight:700;">{{#url}}<a href="{{url}}" style="color:{{text_color}};text-decoration:none;">{{/url}}{{name}}{{#url}}</a>{{/url}}{{#year}} <span style="color:{{muted_color}};font-weight:400;">({{year}})</span>{{/year}}</div>
       {{#pair_badge_line}}<div style="height:16px;overflow:hidden;margin-top:4px;font-size:{{pair_small_px}}px;line-height:16px;color:{{accent_color}};font-weight:600;word-break:break-all;">{{badge}}</div>{{/pair_badge_line}}
