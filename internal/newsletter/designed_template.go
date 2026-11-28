@@ -66,7 +66,7 @@ const designedHTMLTemplate = `<!doctype html>
 {{/is_popular}}
 
 {{#is_catalog}}
-<tr><td style="padding:16px 4px 8px 4px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:{{accent_color}};font-weight:700;">{{heading}}</td></tr>
+<tr><td align="center" style="text-align:center;padding:16px 4px 8px 4px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:{{accent_color}};font-weight:700;">{{heading}}</td></tr>
 {{/is_catalog}}
 
 {{#is_list}}{{#items}}
