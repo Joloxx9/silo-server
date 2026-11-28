@@ -504,8 +504,8 @@ function ArtworkLanguageField({ form }: { form: LibraryFormController }) {
         </SelectContent>
       </Select>
       <p className="text-muted-foreground text-xs">
-        Posters, logos and banners with text are picked in this language. Existing artwork changes
-        on the next full metadata refresh of the library.
+        Posters, logos and banners with text are picked in this language. Saving a change starts a
+        full metadata refresh of the library that fetches the artwork again.
       </p>
     </div>
   );

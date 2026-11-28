@@ -383,12 +383,19 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 	if languageChanged {
 		h.wakeMetadataMatcher(ctx, folder.ID)
 	}
-	if h.JobRepo != nil && languageChanged {
+	// A changed artwork language re-picks every item's artwork, so it needs
+	// the full refresh: the quick one only lists items with something missing.
+	artworkChanged := !strings.EqualFold(strings.TrimSpace(oldFolder.ArtworkLanguage), strings.TrimSpace(folder.ArtworkLanguage))
+	refreshMode, refreshReason := adminjob.LibraryRefreshModeQuick, "Queued metadata refresh after library language change"
+	if artworkChanged {
+		refreshMode, refreshReason = adminjob.LibraryRefreshModeFull, "Queued metadata refresh after library artwork language change"
+	}
+	if h.JobRepo != nil && (languageChanged || artworkChanged) {
 		job, jobErr := h.JobRepo.CreateLibraryRefresh(ctx, userID, adminjob.LibraryRefreshRequest{
 			LibraryID:   folder.ID,
 			LibraryName: folder.Name,
-			Mode:        adminjob.LibraryRefreshModeQuick,
-		}, "Queued metadata refresh after library language change")
+			Mode:        refreshMode,
+		}, refreshReason)
 		if jobErr != nil {
 			var conflict *adminjob.ActiveJobConflictError
 			if !errors.As(jobErr, &conflict) {

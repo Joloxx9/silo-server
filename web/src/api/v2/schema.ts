@@ -31473,7 +31473,7 @@ export interface components {
     };
     LibraryUpdate: {
       /**
-       * @description Lowercase ISO 639-1 code from the supported list that artwork with text is picked in; empty follows metadata_language. Existing artwork changes on the next full metadata refresh
+       * @description Lowercase ISO 639-1 code from the supported list that artwork with text is picked in; empty follows metadata_language. A change queues a full metadata refresh that re-picks the artwork
        * @example en
        */
       artwork_language?: string;
