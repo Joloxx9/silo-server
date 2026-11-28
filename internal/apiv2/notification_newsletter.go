@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/Silo-Server/silo-server/internal/newsletter"
 	"github.com/Silo-Server/silo-server/internal/notifications"
@@ -39,13 +40,15 @@ type NewsletterPreviewOutput struct {
 type newsletterAdminService interface {
 	NewsletterRecipients(context.Context) ([]notifications.NewsletterRecipient, error)
 	NewsletterTestSend(context.Context, notifications.NewsletterTest) (notifications.NewsletterTestResult, error)
+	SetNewsletterRecipient(ctx context.Context, userID int, profileID, address, newsletter, alerts string) error
 }
 type NewsletterRecipientView struct {
 	UserID      int             `json:"user_id"`
 	Account     string          `json:"account"`
 	ProfileID   string          `json:"profile_id"`
 	ProfileName string          `json:"profile_name"`
-	Email       string          `json:"email"`
+	IsChild     bool            `json:"is_child"`
+	Email       string          `json:"email" doc:"Verified address; empty when the profile has none."`
 	Newsletter  string          `json:"newsletter" enum:"off,daily,weekly"`
 	Alerts      string          `json:"alerts" enum:"off,instant,daily"`
 	LastSentAt  NullableInstant `json:"last_sent_at"`
@@ -53,6 +56,15 @@ type NewsletterRecipientView struct {
 type NewsletterRecipientsOutput struct {
 	Body struct {
 		Items []NewsletterRecipientView `json:"items"`
+	}
+}
+type NewsletterRecipientInput struct {
+	UserID    int    `path:"user_id" minimum:"1"`
+	ProfileID string `path:"profile_id"`
+	Body      struct {
+		Email      string `json:"email" doc:"Address the admin vouches for; stored as verified. Empty removes it and stops email."`
+		Newsletter string `json:"newsletter" enum:"off,daily,weekly"`
+		Alerts     string `json:"alerts" enum:"off,instant,daily"`
 	}
 }
 type NewsletterTestInput struct {
@@ -282,9 +294,26 @@ func registerNotificationNewsletter(reg *Registry) {
 		out.Body.Items = make([]NewsletterRecipientView, 0, len(items))
 		for _, r := range items {
 			out.Body.Items = append(out.Body.Items, NewsletterRecipientView{UserID: r.UserID, Account: r.Account, ProfileID: r.ProfileID,
-				ProfileName: r.ProfileName, Email: r.Email, Newsletter: r.Newsletter, Alerts: r.Alerts, LastSentAt: nullableInstantOf(r.LastSentAt)})
+				ProfileName: r.ProfileName, IsChild: r.IsChild, Email: r.Email, Newsletter: r.Newsletter, Alerts: r.Alerts, LastSentAt: nullableInstantOf(r.LastSentAt)})
 		}
 		return out, nil
+	})
+	setRecipient := admin(http.MethodPut, "/recipients/{user_id}/{profile_id}", "setNewsletterRecipient")
+	setRecipient.RetrySafety = RetrySafetyNaturalIdempotent
+	setRecipient.DefaultStatus = http.StatusNoContent
+	Register(reg, setRecipient, func(ctx context.Context, in *NewsletterRecipientInput) (*struct{}, error) {
+		svc, ok := reg.deps.NotificationDelivery.(newsletterAdminService)
+		if !ok {
+			return nil, unavailable("newsletter")
+		}
+		b := in.Body
+		if b.Email == "" {
+			b.Newsletter, b.Alerts = "off", "off"
+		}
+		if err := svc.SetNewsletterRecipient(ctx, in.UserID, in.ProfileID, strings.TrimSpace(b.Email), b.Newsletter, b.Alerts); err != nil {
+			return nil, newsletterProblem(err)
+		}
+		return nil, nil
 	})
 	// Each call sends another email, so a client must not repeat it blindly.
 	testOp := admin(http.MethodPost, "/test", "testNewsletter")

@@ -81,12 +81,17 @@ export function NewsletterRecipients({
             <select
               className={selectClass}
               value={target}
-              onChange={(e) => setTarget(e.target.value)}
+              onChange={(e) => {
+                setTarget(e.target.value);
+                const picked = items.find((r) => `${r.user_id}:${r.profile_id}` === e.target.value);
+                if (picked?.email) setEmail(picked.email);
+              }}
             >
               <option value="">{tx("Me")}</option>
               {items.map((r) => (
                 <option key={`${r.user_id}:${r.profile_id}`} value={`${r.user_id}:${r.profile_id}`}>
-                  {r.profile_name || r.profile_id} ({r.email})
+                  {r.profile_name || r.profile_id}
+                  {r.email ? ` (${r.email})` : ""}
                 </option>
               ))}
             </select>
@@ -127,49 +132,117 @@ export function NewsletterRecipients({
           />
         )}
       </details>
-      <details>
-        <summary className="cursor-pointer">{tx("Recipients ({n})", { n: items.length })}</summary>
+      <details open className="rounded border p-4">
+        <summary className="cursor-pointer font-medium">
+          {tx("Recipients ({n})", { n: items.filter((r) => r.email).length })}
+        </summary>
         <p className="text-muted-foreground my-3 text-sm">
           {tx(
-            "Profiles with a verified email address. Each profile chooses what it receives in its own notification settings.",
+            "Every profile on the server. Give a profile an email address here, for example a household profile that never signs in, and choose what it receives. Child profiles cannot receive email.",
           )}
         </p>
         {recipients.isError && <p role="alert">{tx("Could not load recipients.")}</p>}
-        {items.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="py-1 pr-3 font-medium">{tx("Profile")}</th>
-                  <th className="py-1 pr-3 font-medium">{tx("Email")}</th>
-                  <th className="py-1 pr-3 font-medium">{tx("Newsletter")}</th>
-                  <th className="py-1 pr-3 font-medium">{tx("New-release alerts")}</th>
-                  <th className="py-1 font-medium">{tx("Last email")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((r) => (
-                  <tr key={`${r.user_id}:${r.profile_id}`} className="border-t">
-                    <td className="py-1 pr-3">
-                      {r.profile_name || r.profile_id}
-                      {r.account && <span className="text-muted-foreground"> · {r.account}</span>}
-                    </td>
-                    <td className="py-1 pr-3">{r.email}</td>
-                    <td className="py-1 pr-3">{tx(r.newsletter)}</td>
-                    <td className="py-1 pr-3">{tx(r.alerts)}</td>
-                    <td className="py-1">
-                      {r.last_sent_at ? new Date(r.last_sent_at).toLocaleString() : tx("Never")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {recipients.isSuccess && items.length === 0 && (
-          <p className="text-sm">{tx("No profile has verified an email address yet.")}</p>
-        )}
+        <div className="space-y-2">
+          {items.map((r) => (
+            <RecipientRow
+              key={`${r.user_id}:${r.profile_id}`}
+              recipient={r}
+              authority={authority}
+              onSaved={() => void recipients.refetch()}
+            />
+          ))}
+        </div>
       </details>
     </>
+  );
+}
+
+type Recipient = V2Result<"GET /api/v2/admin/notifications/newsletter/recipients">["items"][number];
+
+function RecipientRow({
+  recipient: r,
+  authority,
+  onSaved,
+}: {
+  recipient: Recipient;
+  authority: Authority;
+  onSaved: () => void;
+}) {
+  const tx = useNewsletterText();
+  const [email, setEmail] = useState(r.email);
+  const [newsletter, setNewsletter] = useState(r.newsletter);
+  const [alerts, setAlerts] = useState(r.alerts);
+  const dirty = email.trim() !== r.email || newsletter !== r.newsletter || alerts !== r.alerts;
+  const save = useMutation({
+    mutationFn: async () => {
+      requireNotificationAuthority(authority);
+      await v2("PUT /api/v2/admin/notifications/newsletter/recipients/{user_id}/{profile_id}", {
+        path: { user_id: r.user_id, profile_id: r.profile_id },
+        body: { email: email.trim(), newsletter, alerts },
+        profileContext: authority,
+        retryAuthentication: false,
+      });
+      requireNotificationAuthority(authority);
+    },
+    onSuccess: () => {
+      toast.success(tx("Saved {name}", { name: r.profile_name || r.profile_id }));
+      onSaved();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const noEmail = !email.trim() || r.is_child;
+  return (
+    <div className="rounded border p-3">
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-2 text-sm">
+        <span className="font-medium">{r.profile_name || r.profile_id}</span>
+        {r.account && <span className="text-muted-foreground">{r.account}</span>}
+        {r.is_child && <span className="text-muted-foreground">{tx("Child profile")}</span>}
+        <span className="text-muted-foreground ms-auto">
+          {tx("Last email")}:{" "}
+          {r.last_sent_at ? new Date(r.last_sent_at).toLocaleString() : tx("Never")}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex min-w-56 flex-1 flex-col gap-1 text-sm">
+          {tx("Email")}
+          <Input
+            type="email"
+            placeholder="name@example.com"
+            value={email}
+            disabled={r.is_child}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          {tx("Newsletter")}
+          <select
+            className={selectClass}
+            value={noEmail ? "off" : newsletter}
+            disabled={noEmail}
+            onChange={(e) => setNewsletter(e.target.value as Recipient["newsletter"])}
+          >
+            <option value="off">{tx("off")}</option>
+            <option value="daily">{tx("daily")}</option>
+            <option value="weekly">{tx("weekly")}</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          {tx("New-release alerts")}
+          <select
+            className={selectClass}
+            value={noEmail ? "off" : alerts}
+            disabled={noEmail}
+            onChange={(e) => setAlerts(e.target.value as Recipient["alerts"])}
+          >
+            <option value="off">{tx("off")}</option>
+            <option value="instant">{tx("instant")}</option>
+            <option value="daily">{tx("daily")}</option>
+          </select>
+        </label>
+        <Button disabled={!dirty || save.isPending || r.is_child} onClick={() => save.mutate()}>
+          {tx("Save")}
+        </Button>
+      </div>
+    </div>
   );
 }

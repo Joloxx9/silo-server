@@ -33,7 +33,8 @@ Acting administrators have these operations under
 | `GET /` | Native delivery enablement, templates, theme, layout, schedule and delivery settings |
 | `PUT /` | Validated replacement; naturally idempotent |
 | `POST /preview` | Subject, HTML and text rendered from synthetic titles; sends no email |
-| `GET /recipients` | Profiles with a verified address on enabled accounts, their newsletter and alert choices, and when each last got an email |
+| `GET /recipients` | Every profile of every enabled account, its verified address (empty when none), whether it is a child profile, its newsletter and alert choices, and when it last got an email |
+| `PUT /recipients/{user_id}/{profile_id}` | Body `{ "email": "...", "newsletter": "weekly", "alerts": "off" }`; the admin gives a profile an address, stored as verified, and sets what it receives. An empty address removes it and stops email. Child profiles cannot receive email; an address another profile or account holds is refused. 204 |
 | `POST /test` | Body `{ "settings": {...}, "mode": "weekly", "user_id": 1, "profile_id": "...", "email": "..." }`; renders that profile's real newsletter for the last day or week from the draft settings and, with `email`, sends it there with a `[Test]` subject. Defaults to the caller's profile. Changes no watermarks; non-retryable |
 | `GET /import` | Email Alerts installations and retained import summaries |
 | `POST /import` | Body `{ "installation_id": 123 }`; imports a disabled `community.email-alerts` installation |
@@ -78,7 +79,7 @@ at-least-once semantics when acceptance succeeds but the final database commit
 is lost. The source read is bounded to the most recent 2,000 events per window;
 template limits and burst compaction apply after access filtering.
 
-Each recipient's titles come first when they matter to that profile: movies
+Movies and episodes the recipient has already watched to the end are left out. Each recipient's titles come first when they matter to that profile: movies
 and shows on its watchlist, and shows it has watched or has progress in
 (Continue Watching). The limits cut the other titles first, and the designed
 layout labels the picks. Titles and synopses use the catalog's localization

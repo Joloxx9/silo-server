@@ -94,10 +94,50 @@ func (s *System) newsletterEntries(ctx context.Context, tx pgx.Tx, k profileKey,
 		}
 		out = append(out, c.entry)
 	}
+	if out, err = s.dropWatchedEntries(ctx, tx, k, out); err != nil {
+		return nil, err
+	}
 	if err = s.markNewsletterPicks(ctx, tx, k, out); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// dropWatchedEntries leaves out the movies and episodes the recipient has
+// already watched to the end, from the history or marked as watched.
+func (s *System) dropWatchedEntries(ctx context.Context, tx pgx.Tx, k profileKey, entries []newsletter.Entry) ([]newsletter.Entry, error) {
+	if len(entries) == 0 {
+		return entries, nil
+	}
+	ids := make([]string, 0, len(entries))
+	for _, e := range entries {
+		ids = append(ids, e.Card.ContentID)
+	}
+	rows, err := tx.Query(ctx, `SELECT media_item_id FROM user_watch_progress WHERE user_id=$1 AND profile_id=$2 AND completed AND media_item_id=ANY($3)
+ UNION SELECT media_item_id FROM user_watch_history WHERE user_id=$1 AND profile_id=$2 AND completed AND media_item_id=ANY($3)`, k.userID, k.profileID, ids)
+	if err != nil {
+		return nil, err
+	}
+	watched := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		watched[id] = true
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	kept := entries[:0]
+	for _, e := range entries {
+		if !watched[e.Card.ContentID] {
+			kept = append(kept, e)
+		}
+	}
+	return kept, nil
 }
 
 // markNewsletterPicks sets Entry.Pick: movies and shows on the recipient's

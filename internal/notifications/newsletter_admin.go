@@ -12,57 +12,139 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// NewsletterRecipient is one profile with a verified email address, and what
-// it has chosen to receive.
+// NewsletterRecipient is one profile on an enabled account, its email
+// address if it has one, and what it has chosen to receive.
 type NewsletterRecipient struct {
 	UserID      int
 	Account     string
 	ProfileID   string
 	ProfileName string
-	Email       string
+	IsChild     bool
+	Email       string // verified address, or "" when the profile has none
 	Newsletter  string // off, daily, weekly
 	Alerts      string // off, instant, daily
 	LastSentAt  *time.Time
 }
 
-// NewsletterRecipients lists every profile with a verified address on an
-// enabled account, including those that receive nothing, so the admin sees
-// who could be sent mail and who is.
+// NewsletterRecipients lists every profile of every enabled account, with or
+// without an address, so the admin can give household profiles an address.
 func (s *System) NewsletterRecipients(ctx context.Context) ([]NewsletterRecipient, error) {
-	rows, err := s.pool.Query(ctx, `SELECT e.user_id,COALESCE(u.username,u.email,''),e.profile_id,e.custom_email,p.preferences,
- (SELECT max(h.sent_at) FROM notification_newsletter_history h WHERE h.user_id=e.user_id AND h.profile_id=e.profile_id)
- FROM notification_email_prefs e JOIN users u ON u.id=e.user_id AND u.enabled=true
- LEFT JOIN notification_delivery_preferences p ON p.user_id=e.user_id AND p.profile_id=e.profile_id
- WHERE e.custom_email<>'' ORDER BY e.user_id,e.profile_id`)
+	type account struct {
+		id   int
+		name string
+	}
+	rows, err := s.pool.Query(ctx, `SELECT id,COALESCE(NULLIF(username,''),email,'') FROM users WHERE enabled=true ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
-	var out []NewsletterRecipient
+	var accounts []account
 	for rows.Next() {
-		var r NewsletterRecipient
-		var raw []byte
-		if err = rows.Scan(&r.UserID, &r.Account, &r.ProfileID, &r.Email, &raw, &r.LastSentAt); err != nil {
+		var a account
+		if err = rows.Scan(&a.id, &a.name); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		p := defaultDeliveryPreferences()
-		if len(raw) > 0 {
-			if err = json.Unmarshal(raw, &p); err != nil {
-				rows.Close()
-				return nil, err
-			}
-		}
-		r.Newsletter, r.Alerts = p.Newsletter, p.Alerts
-		out = append(out, r)
+		accounts = append(accounts, a)
 	}
 	rows.Close()
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	for i := range out {
-		out[i].ProfileName = s.lookupProfileName(ctx, out[i].UserID, out[i].ProfileID)
+	type state struct {
+		email string
+		prefs []byte
+		last  *time.Time
+	}
+	states := map[profileKey]state{}
+	rows, err = s.pool.Query(ctx, `SELECT k.user_id,k.profile_id,COALESCE(e.custom_email,''),p.preferences,
+ (SELECT max(h.sent_at) FROM notification_newsletter_history h WHERE h.user_id=k.user_id AND h.profile_id=k.profile_id)
+ FROM (SELECT user_id,profile_id FROM notification_email_prefs UNION SELECT user_id,profile_id FROM notification_delivery_preferences) k
+ LEFT JOIN notification_email_prefs e ON e.user_id=k.user_id AND e.profile_id=k.profile_id
+ LEFT JOIN notification_delivery_preferences p ON p.user_id=k.user_id AND p.profile_id=k.profile_id`)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var k profileKey
+		var st state
+		if err = rows.Scan(&k.userID, &k.profileID, &st.email, &st.prefs, &st.last); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		states[k] = st
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	out := []NewsletterRecipient{}
+	for _, a := range accounts {
+		if s.stores == nil {
+			break
+		}
+		store, err := s.stores.ForUser(ctx, a.id)
+		if err != nil {
+			return nil, err
+		}
+		profiles, err := store.ListProfiles(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, profile := range profiles {
+			st := states[profileKey{userID: a.id, profileID: profile.ID}]
+			p := defaultDeliveryPreferences()
+			if len(st.prefs) > 0 {
+				if err = json.Unmarshal(st.prefs, &p); err != nil {
+					return nil, err
+				}
+			}
+			out = append(out, NewsletterRecipient{UserID: a.id, Account: a.name, ProfileID: profile.ID, ProfileName: profile.Name,
+				IsChild: profile.IsChild, Email: st.email, Newsletter: p.Newsletter, Alerts: p.Alerts, LastSentAt: st.last})
+		}
 	}
 	return out, nil
+}
+
+// SetNewsletterRecipient lets the admin give a profile an address and choose
+// what it receives, for household profiles that never sign in on their own.
+// The admin vouches for the address, so it is stored as verified. An empty
+// address removes it and stops that profile's email.
+func (s *System) SetNewsletterRecipient(ctx context.Context, userID int, profileID, address, newsletterMode, alerts string) error {
+	if s.lookupProfile(ctx, userID, profileID) == nil {
+		return fmt.Errorf("%w: profile", ErrNewsletterTest)
+	}
+	if address == "" {
+		return s.EmailPrefs.ClearCustomAddress(ctx, userID, profileID)
+	}
+	parsed, err := netmail.ParseAddress(address)
+	if err != nil {
+		return fmt.Errorf("%w: address", ErrNewsletterTest)
+	}
+	address = parsed.Address
+	if (newsletterMode != "off" || alerts != "off") && s.profileIsChild(ctx, userID, profileID) {
+		return ErrEmailChildProfile
+	}
+	inUse, err := addressInUse(ctx, s.pool, address, profileID, userID)
+	if err != nil {
+		return err
+	}
+	if inUse {
+		return fmt.Errorf("%w: this address already belongs to another profile or account", ErrNewsletterTest)
+	}
+	if _, err = s.pool.Exec(ctx, `INSERT INTO notification_email_prefs(profile_id,user_id,mode,custom_email) VALUES($1,$2,'off',$3)
+ ON CONFLICT(user_id,profile_id) DO UPDATE SET custom_email=EXCLUDED.custom_email,pending_email='',pending_token_hash='',pending_expires_at=NULL,updated_at=now()`,
+		profileID, userID, address); err != nil {
+		if isUniqueViolation(err) {
+			return fmt.Errorf("%w: this address already belongs to another profile", ErrNewsletterTest)
+		}
+		return err
+	}
+	p, err := s.DeliveryPreferences(ctx, userID, profileID)
+	if err != nil {
+		return err
+	}
+	p.Newsletter, p.Alerts = newsletterMode, alerts
+	return s.SetDeliveryPreferences(ctx, userID, profileID, p)
 }
 
 // NewsletterTest asks for one recipient's real newsletter, built from the
