@@ -32736,11 +32736,14 @@ export interface components {
     };
     NewsletterRecipientView: {
       account: string;
+      /** @description The login account's address, offered as a suggestion for the primary profile. Never used for delivery. */
+      account_email: string;
       /** @enum {string} */
       alerts: "off" | "instant" | "daily";
       /** @description Verified address; empty when the profile has none. */
       email: string;
       is_child: boolean;
+      is_primary: boolean;
       /**
        * Format: date-time
        * @description RFC 3339 instant in UTC with millisecond precision, or null

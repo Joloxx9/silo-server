@@ -43,15 +43,17 @@ type newsletterAdminService interface {
 	SetNewsletterRecipient(ctx context.Context, userID int, profileID, address, newsletter, alerts string) error
 }
 type NewsletterRecipientView struct {
-	UserID      int             `json:"user_id"`
-	Account     string          `json:"account"`
-	ProfileID   string          `json:"profile_id"`
-	ProfileName string          `json:"profile_name"`
-	IsChild     bool            `json:"is_child"`
-	Email       string          `json:"email" doc:"Verified address; empty when the profile has none."`
-	Newsletter  string          `json:"newsletter" enum:"off,daily,weekly"`
-	Alerts      string          `json:"alerts" enum:"off,instant,daily"`
-	LastSentAt  NullableInstant `json:"last_sent_at"`
+	UserID       int             `json:"user_id"`
+	Account      string          `json:"account"`
+	ProfileID    string          `json:"profile_id"`
+	ProfileName  string          `json:"profile_name"`
+	IsChild      bool            `json:"is_child"`
+	IsPrimary    bool            `json:"is_primary"`
+	AccountEmail string          `json:"account_email" doc:"The login account's address, offered as a suggestion for the primary profile. Never used for delivery."`
+	Email        string          `json:"email" doc:"Verified address; empty when the profile has none."`
+	Newsletter   string          `json:"newsletter" enum:"off,daily,weekly"`
+	Alerts       string          `json:"alerts" enum:"off,instant,daily"`
+	LastSentAt   NullableInstant `json:"last_sent_at"`
 }
 type NewsletterRecipientsOutput struct {
 	Body struct {
@@ -294,7 +296,7 @@ func registerNotificationNewsletter(reg *Registry) {
 		out.Body.Items = make([]NewsletterRecipientView, 0, len(items))
 		for _, r := range items {
 			out.Body.Items = append(out.Body.Items, NewsletterRecipientView{UserID: r.UserID, Account: r.Account, ProfileID: r.ProfileID,
-				ProfileName: r.ProfileName, IsChild: r.IsChild, Email: r.Email, Newsletter: r.Newsletter, Alerts: r.Alerts, LastSentAt: nullableInstantOf(r.LastSentAt)})
+				ProfileName: r.ProfileName, IsChild: r.IsChild, IsPrimary: r.IsPrimary, AccountEmail: r.AccountEmail, Email: r.Email, Newsletter: r.Newsletter, Alerts: r.Alerts, LastSentAt: nullableInstantOf(r.LastSentAt)})
 		}
 		return out, nil
 	})

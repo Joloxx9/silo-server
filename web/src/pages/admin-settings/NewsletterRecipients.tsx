@@ -134,7 +134,10 @@ export function NewsletterRecipients({
       </details>
       <details open className="rounded border p-4">
         <summary className="cursor-pointer font-medium">
-          {tx("Recipients ({n})", { n: items.filter((r) => r.email).length })}
+          {tx("Profiles ({total}), with an address: {n}", {
+            total: items.length,
+            n: items.filter((r) => r.email).length,
+          })}
         </summary>
         <p className="text-muted-foreground my-3 text-sm">
           {tx(
@@ -169,7 +172,9 @@ function RecipientRow({
   onSaved: () => void;
 }) {
   const tx = useNewsletterText();
-  const [email, setEmail] = useState(r.email);
+  // The primary profile is offered the account's own address; it is saved
+  // only when the admin presses Save.
+  const [email, setEmail] = useState(r.email || (r.is_primary ? r.account_email : ""));
   const [newsletter, setNewsletter] = useState(r.newsletter);
   const [alerts, setAlerts] = useState(r.alerts);
   const dirty = email.trim() !== r.email || newsletter !== r.newsletter || alerts !== r.alerts;
@@ -243,6 +248,22 @@ function RecipientRow({
           {tx("Save")}
         </Button>
       </div>
+      {r.is_child ? (
+        <p className="text-muted-foreground mt-2 text-xs">
+          {tx("Child profiles cannot receive email.")}
+        </p>
+      ) : (
+        !email.trim() && (
+          <p className="text-muted-foreground mt-2 text-xs">
+            {tx("Enter an email address to turn on the newsletter and alerts.")}
+          </p>
+        )
+      )}
+      {!r.email && r.is_primary && email.trim() && email.trim() === r.account_email && (
+        <p className="text-muted-foreground mt-2 text-xs">
+          {tx("Suggested from the account's sign-in address. Press Save to use it.")}
+        </p>
+      )}
     </div>
   );
 }

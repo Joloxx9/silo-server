@@ -20,27 +20,31 @@ type NewsletterRecipient struct {
 	ProfileID   string
 	ProfileName string
 	IsChild     bool
-	Email       string // verified address, or "" when the profile has none
-	Newsletter  string // off, daily, weekly
-	Alerts      string // off, instant, daily
-	LastSentAt  *time.Time
+	IsPrimary   bool
+	// AccountEmail is the login account's address, a suggestion for the
+	// primary profile; it is never used for delivery.
+	AccountEmail string
+	Email        string // verified address, or "" when the profile has none
+	Newsletter   string // off, daily, weekly
+	Alerts       string // off, instant, daily
+	LastSentAt   *time.Time
 }
 
 // NewsletterRecipients lists every profile of every enabled account, with or
 // without an address, so the admin can give household profiles an address.
 func (s *System) NewsletterRecipients(ctx context.Context) ([]NewsletterRecipient, error) {
 	type account struct {
-		id   int
-		name string
+		id          int
+		name, email string
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id,COALESCE(NULLIF(username,''),email,'') FROM users WHERE enabled=true ORDER BY id`)
+	rows, err := s.pool.Query(ctx, `SELECT id,COALESCE(NULLIF(username,''),email,''),COALESCE(email,'') FROM users WHERE enabled=true ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
 	var accounts []account
 	for rows.Next() {
 		var a account
-		if err = rows.Scan(&a.id, &a.name); err != nil {
+		if err = rows.Scan(&a.id, &a.name, &a.email); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -99,7 +103,7 @@ func (s *System) NewsletterRecipients(ctx context.Context) ([]NewsletterRecipien
 				}
 			}
 			out = append(out, NewsletterRecipient{UserID: a.id, Account: a.name, ProfileID: profile.ID, ProfileName: profile.Name,
-				IsChild: profile.IsChild, Email: st.email, Newsletter: p.Newsletter, Alerts: p.Alerts, LastSentAt: st.last})
+				IsChild: profile.IsChild, IsPrimary: profile.IsPrimary, AccountEmail: a.email, Email: st.email, Newsletter: p.Newsletter, Alerts: p.Alerts, LastSentAt: st.last})
 		}
 	}
 	return out, nil

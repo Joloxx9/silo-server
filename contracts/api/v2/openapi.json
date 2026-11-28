@@ -45900,6 +45900,10 @@
           "account": {
             "type": "string"
           },
+          "account_email": {
+            "description": "The login account's address, offered as a suggestion for the primary profile. Never used for delivery.",
+            "type": "string"
+          },
           "alerts": {
             "enum": [
               "off",
@@ -45913,6 +45917,9 @@
             "type": "string"
           },
           "is_child": {
+            "type": "boolean"
+          },
+          "is_primary": {
             "type": "boolean"
           },
           "last_sent_at": {
@@ -45950,6 +45957,8 @@
           "profile_id",
           "profile_name",
           "is_child",
+          "is_primary",
+          "account_email",
           "email",
           "newsletter",
           "alerts",

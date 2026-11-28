@@ -4,6 +4,12 @@ import { useAppLanguage } from "@/i18n/hooks";
 // their Polish text lives here, keyed by the English source. Other languages
 // show English.
 const polish: Record<string, string> = {
+  "Profiles ({total}), with an address: {n}": "Profile ({total}), z adresem: {n}",
+  "Child profiles cannot receive email.": "Profile dziecięce nie mogą dostawać e-maili.",
+  "Enter an email address to turn on the newsletter and alerts.":
+    "Wpisz adres e-mail, żeby włączyć newsletter i powiadomienia.",
+  "Suggested from the account's sign-in address. Press Save to use it.":
+    "Podpowiedź z adresu logowania konta. Kliknij Zapisz, żeby go użyć.",
   "Every profile on the server. Give a profile an email address here, for example a household profile that never signs in, and choose what it receives. Child profiles cannot receive email.":
     "Wszystkie profile na serwerze. Tutaj możesz nadać profilowi adres e-mail, np. profilowi domowemu, który sam się nie loguje, i wybrać, co ma dostawać. Profile dziecięce nie mogą dostawać e-maili.",
   "Saved {name}": "Zapisano: {name}",
