@@ -129,7 +129,7 @@ export function NewsletterRecipients({
         </summary>
         <p className="text-muted-foreground my-3 text-sm">
           {tx(
-            "Every profile on the server. Give a profile an email address here, for example a household profile that never signs in, and choose what it receives. Child profiles cannot receive email.",
+            "Every profile on the server. Give a profile an email address here, for example a household profile that never signs in, and turn its weekly newsletter on. New-release alerts are each profile's own choice in its notification settings. Child profiles cannot receive email.",
           )}
         </p>
         {recipients.isError && <p role="alert">{tx("Could not load recipients.")}</p>}
@@ -164,14 +164,13 @@ function RecipientRow({
   // only when the admin presses Save.
   const [email, setEmail] = useState(r.email || (r.is_primary ? r.account_email : ""));
   const [newsletter, setNewsletter] = useState(r.newsletter);
-  const [alerts, setAlerts] = useState(r.alerts);
-  const dirty = email.trim() !== r.email || newsletter !== r.newsletter || alerts !== r.alerts;
+  const dirty = email.trim() !== r.email || newsletter !== r.newsletter;
   const save = useMutation({
     mutationFn: async () => {
       requireNotificationAuthority(authority);
       await v2("PUT /api/v2/admin/notifications/newsletter/recipients/{user_id}/{profile_id}", {
         path: { user_id: r.user_id, profile_id: r.profile_id },
-        body: { email: email.trim(), newsletter, alerts },
+        body: { email: email.trim(), newsletter: newsletter === "weekly" ? "weekly" : "off" },
         profileContext: authority,
         retryAuthentication: false,
       });
@@ -190,7 +189,7 @@ function RecipientRow({
   const summary = r.is_child
     ? tx("Child profile")
     : r.email
-      ? `${r.email} · ${tx("Newsletter")}: ${tx(r.newsletter)} · ${tx("New-release alerts")}: ${tx(r.alerts)}`
+      ? `${r.email} · ${tx("Newsletter")}: ${tx(r.newsletter)}`
       : tx("No address");
   return (
     <details
@@ -234,19 +233,6 @@ function RecipientRow({
             <option value="weekly">{tx("weekly")}</option>
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          {tx("New-release alerts")}
-          <select
-            className={selectClass}
-            value={noEmail ? "off" : alerts}
-            disabled={noEmail}
-            onChange={(e) => setAlerts(e.target.value as Recipient["alerts"])}
-          >
-            <option value="off">{tx("off")}</option>
-            <option value="instant">{tx("instant")}</option>
-            <option value="daily">{tx("daily")}</option>
-          </select>
-        </label>
         <Button disabled={!dirty || save.isPending || r.is_child} onClick={() => save.mutate()}>
           {tx("Save")}
         </Button>
@@ -258,7 +244,7 @@ function RecipientRow({
       ) : (
         !email.trim() && (
           <p className="text-muted-foreground mt-2 text-xs">
-            {tx("Enter an email address to turn on the newsletter and alerts.")}
+            {tx("Enter an email address to turn on the newsletter.")}
           </p>
         )
       )}

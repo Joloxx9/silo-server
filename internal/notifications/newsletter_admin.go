@@ -110,11 +110,12 @@ func (s *System) NewsletterRecipients(ctx context.Context) ([]NewsletterRecipien
 	return out, nil
 }
 
-// SetNewsletterRecipient lets the admin give a profile an address and choose
-// what it receives, for household profiles that never sign in on their own.
+// SetNewsletterRecipient lets the admin give a profile an address and turn its
+// newsletter on or off, for household profiles that never sign in on their
+// own. New-release alerts stay the profile's own choice and are not touched.
 // The admin vouches for the address, so it is stored as verified. An empty
 // address removes it and stops that profile's email.
-func (s *System) SetNewsletterRecipient(ctx context.Context, userID int, profileID, address, newsletterMode, alerts string) error {
+func (s *System) SetNewsletterRecipient(ctx context.Context, userID int, profileID, address, newsletterMode string) error {
 	if s.lookupProfile(ctx, userID, profileID) == nil {
 		return fmt.Errorf("%w: profile", ErrNewsletterTest)
 	}
@@ -126,7 +127,7 @@ func (s *System) SetNewsletterRecipient(ctx context.Context, userID int, profile
 		return fmt.Errorf("%w: address", ErrNewsletterTest)
 	}
 	address = parsed.Address
-	if (newsletterMode != "off" || alerts != "off") && s.profileIsChild(ctx, userID, profileID) {
+	if newsletterMode != "off" && s.profileIsChild(ctx, userID, profileID) {
 		return ErrEmailChildProfile
 	}
 	inUse, err := addressInUse(ctx, s.pool, address, profileID, userID)
@@ -148,7 +149,7 @@ func (s *System) SetNewsletterRecipient(ctx context.Context, userID int, profile
 	if err != nil {
 		return err
 	}
-	p.Newsletter, p.Alerts = newsletterMode, alerts
+	p.Newsletter = newsletterMode
 	return s.SetDeliveryPreferences(ctx, userID, profileID, p)
 }
 

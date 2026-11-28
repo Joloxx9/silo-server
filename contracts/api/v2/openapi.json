@@ -45866,14 +45866,6 @@
       "NewsletterRecipientInputBody": {
         "additionalProperties": false,
         "properties": {
-          "alerts": {
-            "enum": [
-              "off",
-              "instant",
-              "daily"
-            ],
-            "type": "string"
-          },
           "email": {
             "description": "Address the admin vouches for; stored as verified. Empty removes it and stops email.",
             "type": "string"
@@ -45881,7 +45873,6 @@
           "newsletter": {
             "enum": [
               "off",
-              "daily",
               "weekly"
             ],
             "type": "string"
@@ -45889,8 +45880,7 @@
         },
         "required": [
           "email",
-          "newsletter",
-          "alerts"
+          "newsletter"
         ],
         "type": "object"
       },

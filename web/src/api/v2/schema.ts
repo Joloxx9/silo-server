@@ -32724,12 +32724,10 @@ export interface components {
       weekly_when_empty: boolean;
     };
     NewsletterRecipientInputBody: {
-      /** @enum {string} */
-      alerts: "off" | "instant" | "daily";
       /** @description Address the admin vouches for; stored as verified. Empty removes it and stops email. */
       email: string;
       /** @enum {string} */
-      newsletter: "off" | "daily" | "weekly";
+      newsletter: "off" | "weekly";
     };
     NewsletterRecipientsOutputBody: {
       items: components["schemas"]["NewsletterRecipientView"][];

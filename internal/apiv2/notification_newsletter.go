@@ -40,7 +40,7 @@ type NewsletterPreviewOutput struct {
 type newsletterAdminService interface {
 	NewsletterRecipients(context.Context) ([]notifications.NewsletterRecipient, error)
 	NewsletterTestSend(context.Context, notifications.NewsletterTest) (notifications.NewsletterTestResult, error)
-	SetNewsletterRecipient(ctx context.Context, userID int, profileID, address, newsletter, alerts string) error
+	SetNewsletterRecipient(ctx context.Context, userID int, profileID, address, newsletter string) error
 }
 type NewsletterRecipientView struct {
 	UserID       int             `json:"user_id"`
@@ -65,8 +65,7 @@ type NewsletterRecipientInput struct {
 	ProfileID string `path:"profile_id"`
 	Body      struct {
 		Email      string `json:"email" doc:"Address the admin vouches for; stored as verified. Empty removes it and stops email."`
-		Newsletter string `json:"newsletter" enum:"off,daily,weekly"`
-		Alerts     string `json:"alerts" enum:"off,instant,daily"`
+		Newsletter string `json:"newsletter" enum:"off,weekly"`
 	}
 }
 type NewsletterTestInput struct {
@@ -310,9 +309,9 @@ func registerNotificationNewsletter(reg *Registry) {
 		}
 		b := in.Body
 		if b.Email == "" {
-			b.Newsletter, b.Alerts = "off", "off"
+			b.Newsletter = "off"
 		}
-		if err := svc.SetNewsletterRecipient(ctx, in.UserID, in.ProfileID, strings.TrimSpace(b.Email), b.Newsletter, b.Alerts); err != nil {
+		if err := svc.SetNewsletterRecipient(ctx, in.UserID, in.ProfileID, strings.TrimSpace(b.Email), b.Newsletter); err != nil {
 			return nil, newsletterProblem(err)
 		}
 		return nil, nil

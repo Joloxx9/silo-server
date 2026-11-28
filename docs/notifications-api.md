@@ -34,7 +34,7 @@ Acting administrators have these operations under
 | `PUT /` | Validated replacement; naturally idempotent |
 | `POST /preview` | Subject, HTML and text rendered from synthetic titles; sends no email |
 | `GET /recipients` | Every profile of every enabled account, its verified address (empty when none), whether it is a child profile, its newsletter and alert choices, and when it last got an email |
-| `PUT /recipients/{user_id}/{profile_id}` | Body `{ "email": "...", "newsletter": "weekly", "alerts": "off" }`; the admin gives a profile an address, stored as verified, and sets what it receives. An empty address removes it and stops email. Child profiles cannot receive email; an address another profile or account holds is refused. 204 |
+| `PUT /recipients/{user_id}/{profile_id}` | Body `{ "email": "...", "newsletter": "weekly" }`; the admin gives a profile an address, stored as verified, and turns its weekly newsletter on or off. New-release alerts stay the profile's own choice. An empty address removes it and stops email. Child profiles cannot receive email; an address another profile or account holds is refused. 204 |
 | `POST /test` | Body `{ "settings": {...}, "mode": "weekly", "user_id": 1, "profile_id": "...", "email": "..." }`; renders that profile's real newsletter for the last day or week from the draft settings and, with `email`, sends it there with a `[Test]` subject. Defaults to the caller's profile. Changes no watermarks; non-retryable |
 | `GET /import` | Email Alerts installations and retained import summaries |
 | `POST /import` | Body `{ "installation_id": 123 }`; imports a disabled `community.email-alerts` installation |
